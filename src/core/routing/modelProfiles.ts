@@ -109,7 +109,7 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
   if (config.providers.kimi?.enabled) {
     profiles.push({
       provider: "kimi",
-      model: configuredModel(config, "kimi", "KIMI_MODEL", "kimi-k2"),
+      model: configuredModel(config, "kimi", "KIMI_MODEL", "kimi-k2.6"),
       label: "Kimi-compatible long-context model",
       strengths: ["long_context", "coding", "reasoning", "multilingual", "cheap"],
       inputPricePerMTok: 0.5,

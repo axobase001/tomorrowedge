@@ -62,6 +62,14 @@ export type CoreReview = {
   deliverySummary: string;
 };
 
+type WorkflowProviders = {
+  architect?: ModelProvider;
+  implementer?: ModelProvider;
+  docs?: ModelProvider;
+  judge?: ModelProvider;
+  available: ModelProvider[];
+};
+
 const maxWorkflowTokens = 900;
 
 export async function runWorkflowSimulation(cwd: string, task: string, config: TomorrowEdgeConfig, options: WorkflowOptions = {}): Promise<WorkflowResult> {
@@ -152,18 +160,20 @@ function buildCorePlan(task: string): CorePlan {
   };
 }
 
-function selectProviders(providers: ModelProvider[], requested?: string[]): { openrouter?: ModelProvider; deepseek?: ModelProvider; mimo?: ModelProvider } {
-  const selected = new Map(providers.map((provider) => [provider.id, provider]));
+function selectProviders(providers: ModelProvider[], requested?: string[]): WorkflowProviders {
   const allowed = requested?.length ? new Set(requested) : undefined;
-  if (allowed?.has("mock")) {
-    const mock = selected.get("mock");
-    return { openrouter: mock, deepseek: mock, mimo: mock };
-  }
+  const available = providers.filter((provider) => provider.id !== "fixture" && (!allowed || allowed.has(provider.id)));
   return {
-    openrouter: (!allowed || allowed.has("openrouter")) ? selected.get("openrouter") : undefined,
-    deepseek: (!allowed || allowed.has("deepseek")) ? selected.get("deepseek") : undefined,
-    mimo: (!allowed || allowed.has("mimo")) ? selected.get("mimo") : undefined
+    architect: chooseProvider(available, ["openrouter", "kimi", "deepseek", "openai_compatible", "mimo", "ollama", "mock"]),
+    implementer: chooseProvider(available, ["deepseek", "kimi", "openai_compatible", "openrouter", "mimo", "ollama", "mock"]),
+    docs: chooseProvider(available, ["mimo", "kimi", "openrouter", "deepseek", "openai_compatible", "ollama", "mock"]),
+    judge: chooseProvider(available, ["openrouter", "kimi", "deepseek", "openai_compatible", "mimo", "ollama", "mock"]),
+    available
   };
+}
+
+function chooseProvider(available: ModelProvider[], preferredOrder: string[]): ModelProvider | undefined {
+  return preferredOrder.map((id) => available.find((provider) => provider.id === id)).find((provider): provider is ModelProvider => Boolean(provider)) ?? available[0];
 }
 
 async function askProvider(provider: ModelProvider | undefined, phase: WorkflowTurn["phase"], round: number, role: string, prompt: string): Promise<WorkflowTurn> {
@@ -223,26 +233,26 @@ type WorkflowCallPlan = {
 function buildDebatePlans(
   plan: CorePlan,
   context: string,
-  providers: { openrouter?: ModelProvider; deepseek?: ModelProvider; mimo?: ModelProvider },
+  providers: WorkflowProviders,
   priorDebate: WorkflowTurn[],
   round: number
 ): WorkflowCallPlan[] {
   if (round === 1) {
     return [
       {
-        provider: providers.openrouter,
+        provider: providers.architect,
         role: "Architect/Judge",
         prompt: buildDebatePrompt(plan, context, "challenge the plan, agent graph, and approval boundaries"),
         maxOutputTokens: maxWorkflowTokens
       },
       {
-        provider: providers.deepseek,
+        provider: providers.implementer,
         role: "Implementer",
         prompt: buildDebatePrompt(plan, context, "argue for the concrete implementation path and likely code risks"),
         maxOutputTokens: maxWorkflowTokens
       },
       {
-        provider: providers.mimo,
+        provider: providers.docs,
         role: "Docs/Localization",
         prompt: buildDebatePrompt(plan, context, "argue for Chinese UX, docs, and developer ergonomics"),
         maxOutputTokens: maxWorkflowTokens
@@ -253,19 +263,19 @@ function buildDebatePlans(
   const transcript = renderTurns(priorDebate);
   return [
     {
-      provider: providers.openrouter,
+      provider: providers.architect,
       role: "Architect/Judge",
       prompt: buildCrossExaminationPrompt(plan, transcript, "identify contradictions in implementation and docs proposals; decide what needs Core approval"),
       maxOutputTokens: maxWorkflowTokens
     },
     {
-      provider: providers.deepseek,
+      provider: providers.implementer,
       role: "Implementer",
       prompt: buildCrossExaminationPrompt(plan, transcript, "respond to risks raised by other agents and refine the landing sequence"),
       maxOutputTokens: maxWorkflowTokens
     },
     {
-      provider: providers.mimo,
+      provider: providers.docs,
       role: "Docs/Localization",
       prompt: buildCrossExaminationPrompt(plan, transcript, "challenge unclear Chinese operator UX and propose concise cockpit copy"),
       maxOutputTokens: maxWorkflowTokens
@@ -273,22 +283,22 @@ function buildDebatePlans(
   ];
 }
 
-function buildExecutionPlans(plan: CorePlan, context: string, providers: { openrouter?: ModelProvider; deepseek?: ModelProvider; mimo?: ModelProvider }): WorkflowCallPlan[] {
+function buildExecutionPlans(plan: CorePlan, context: string, providers: WorkflowProviders): WorkflowCallPlan[] {
   return [
     {
-      provider: providers.deepseek,
+      provider: providers.implementer,
       role: "Implementation Agent",
       prompt: buildExecutionPrompt(plan, context, "Produce a concise implementation patch plan and test strategy. Do not claim files were changed."),
       maxOutputTokens: maxWorkflowTokens
     },
     {
-      provider: providers.mimo,
+      provider: providers.docs,
       role: "Docs and UX Agent",
       prompt: buildExecutionPrompt(plan, context, "Produce Chinese-facing TUI copy, docs wording, and operator workflow notes."),
       maxOutputTokens: maxWorkflowTokens
     },
     {
-      provider: providers.openrouter,
+      provider: providers.judge,
       role: "Final Judge Agent",
       prompt: buildExecutionPrompt(plan, context, "Review the other roles' expected outputs and name approval gates before delivery."),
       maxOutputTokens: maxWorkflowTokens
@@ -333,11 +343,11 @@ function preflightWorkflowBatch(plans: WorkflowCallPlan[], maxCostUsd: number, s
   };
 }
 
-function buildAssignments(providers: { openrouter?: ModelProvider; deepseek?: ModelProvider; mimo?: ModelProvider }): WorkflowAssignment[] {
+function buildAssignments(providers: WorkflowProviders): WorkflowAssignment[] {
   return [
-    { role: "Architect/Judge", provider: providers.openrouter?.id ?? "unavailable", deliverable: "Risk critique, approval gate review, final judge notes." },
-    { role: "Implementation Agent", provider: providers.deepseek?.id ?? "unavailable", deliverable: "Implementation patch plan and test strategy." },
-    { role: "Docs/UX Agent", provider: providers.mimo?.id ?? "unavailable", deliverable: "Chinese UX copy, docs updates, operator workflow notes." }
+    { role: "Architect/Judge", provider: providers.architect?.id ?? "unavailable", deliverable: "Risk critique, approval gate review, final judge notes." },
+    { role: "Implementation Agent", provider: providers.implementer?.id ?? "unavailable", deliverable: "Implementation patch plan and test strategy." },
+    { role: "Docs/UX Agent", provider: providers.docs?.id ?? "unavailable", deliverable: "Chinese UX copy, docs updates, operator workflow notes." }
   ];
 }
 

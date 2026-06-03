@@ -48,6 +48,7 @@ npm run dev -- tui
 ```
 
 默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用；启用后 `tedge run` 会优先尝试非破坏性 live 候选，必要时仍可用 `--offline` 回到纯离线 fixture/mock 路径。
+`npm run dev` 在 WSL 且临时目录落到 Windows mount 时会自动把 `TMPDIR` 切到 `/tmp`，避免 `tsx` IPC socket 失败。
 
 ## 核心能力
 
@@ -186,7 +187,7 @@ Image / Screenshot / Diagram
 | DeepSeek | OpenAI-compatible | no | yes, with key | no/limited | usable |
 | MiMo | OpenAI-compatible | no | yes, with key | supported when model supports images | usable |
 | OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
-| Kimi | Moonshot OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| Kimi | Moonshot OpenAI-compatible (`kimi-k2.6`) | no | yes, with key | model-dependent | usable |
 | Ollama | local | yes | local daemon | model-dependent | usable/local |
 | Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
 | Gemini | placeholder | no | no | no | planned/native adapter not implemented |
@@ -263,6 +264,7 @@ All default tests and demos run offline without API keys. Cloud providers are
 disabled unless explicitly configured with environment variables; once enabled,
 `tedge run` prefers non-mutating live candidates, and `--offline` returns to the
 pure fixture/mock path.
+On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherited temp directory points at a Windows mount, avoiding `tsx` IPC socket failures.
 
 ## Core Features
 
@@ -391,7 +393,7 @@ requests. TomorrowEdge routes capabilities. See
 | DeepSeek | OpenAI-compatible | no | yes, with key | no/limited | usable |
 | MiMo | OpenAI-compatible | no | yes, with key | supported when model supports images | usable |
 | OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
-| Kimi | Moonshot OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| Kimi | Moonshot OpenAI-compatible (`kimi-k2.6`) | no | yes, with key | model-dependent | usable |
 | Ollama | local | yes | local daemon | model-dependent | usable/local |
 | Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
 | Gemini | placeholder | no | no | no | planned/native adapter not implemented |

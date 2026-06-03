@@ -15,12 +15,16 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 tedge workflow "design and land a real multi-model orchestration workflow" --providers openrouter,deepseek,mimo --rounds 2
 ```
 
-Default role mapping:
+Default role preferences:
 
 - Core Planner/Reviewer: local River/TomorrowEdge
-- Architect/Judge: OpenRouter
-- Implementation Agent: DeepSeek
-- Docs/UX Agent: MiMo
+- Architect/Judge: OpenRouter, then Kimi/DeepSeek/OpenAI-compatible/MiMo/local/mock
+- Implementation Agent: DeepSeek, then Kimi/OpenAI-compatible/OpenRouter/MiMo/local/mock
+- Docs/UX Agent: MiMo, then Kimi/OpenRouter/DeepSeek/OpenAI-compatible/local/mock
+
+`--providers` is treated as the allowed provider set. If a preferred provider is
+not available, TomorrowEdge reassigns that workflow role to the closest
+available provider instead of emitting `Provider unavailable` for the role.
 
 The command saves a Markdown report under `.tomorrowedge/workflows/`.
 It does not apply patches or run shell commands proposed by models.

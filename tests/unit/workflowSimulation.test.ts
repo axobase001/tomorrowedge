@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -61,6 +61,42 @@ describe("workflow simulation", () => {
       else process.env.MOCK_INPUT_PRICE_PER_MTOK = originalInputPrice;
       if (originalOutputPrice === undefined) delete process.env.MOCK_OUTPUT_PRICE_PER_MTOK;
       else process.env.MOCK_OUTPUT_PRICE_PER_MTOK = originalOutputPrice;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reassigns workflow roles to available requested providers", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-workflow-fallback-"));
+    const originalKimiKey = process.env.KIMI_TEST_KEY;
+    process.env.KIMI_TEST_KEY = "test-key";
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id: "ok", choices: [{ message: { content: "fallback role output with risk and test plan" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    try {
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          kimi: {
+            ...defaultConfig.providers.kimi,
+            enabled: true,
+            api_key_env: "KIMI_TEST_KEY"
+          }
+        }
+      };
+      const result = await runWorkflowSimulation(cwd, "simulate fallback orchestration", config, {
+        providers: ["kimi"],
+        rounds: 1
+      });
+
+      expect(result.assignments.map((assignment) => assignment.provider)).toEqual(["kimi", "kimi", "kimi"]);
+      expect([...result.debate, ...result.executions].every((turn) => turn.provider === "kimi")).toBe(true);
+      expect(result.review.gaps.join("\n")).not.toContain("Provider unavailable");
+    } finally {
+      if (originalKimiKey === undefined) delete process.env.KIMI_TEST_KEY;
+      else process.env.KIMI_TEST_KEY = originalKimiKey;
+      vi.unstubAllGlobals();
       await rm(cwd, { recursive: true, force: true });
     }
   });

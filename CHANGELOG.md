@@ -7,7 +7,22 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
-- Track future changes here before cutting the next version.
+### Added
+
+- WSL-safe `tsx` dev wrapper for `npm run dev`, `doctor`, `tui`, and
+  `smoke:real`.
+
+### Changed
+
+- Kimi/Moonshot default model is now `kimi-k2.6` with
+  `https://api.moonshot.ai/v1`.
+- `tedge workflow` now reassigns roles to available requested providers instead
+  of hardcoding OpenRouter/DeepSeek/MiMo.
+
+### Fixed
+
+- Workflow runs no longer produce unavailable role gaps when the requested
+  provider set omits OpenRouter or MiMo but includes another usable provider.
 
 ## [0.3.0] - 2026-06-03
 

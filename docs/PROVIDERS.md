@@ -14,7 +14,7 @@ OPENROUTER_MODEL=openai/gpt-5.2
 MIMO_MODEL=mimo-v2.5-pro
 DEEPSEEK_MODEL=deepseek-v4-pro
 OPENAI_COMPATIBLE_MODEL=gpt-4o-mini
-KIMI_MODEL=kimi-k2
+KIMI_MODEL=kimi-k2.6
 OLLAMA_MODEL=local-auto
 OPENROUTER_INPUT_PRICE_PER_MTOK=
 OPENROUTER_OUTPUT_PRICE_PER_MTOK=
@@ -32,6 +32,7 @@ Current configured endpoints:
 
 - OpenRouter: `https://openrouter.ai/api/v1`
 - DeepSeek: `https://api.deepseek.com`
+- Kimi/Moonshot: `https://api.moonshot.ai/v1` with default model `kimi-k2.6`
 - Xiaomi MiMo Token Plan OpenAI-compatible: `https://token-plan-sgp.xiaomimimo.com/v1`
 
 MiMo has two key families:
@@ -108,9 +109,9 @@ providers:
   kimi:
     enabled: true
     api_key_env: KIMI_API_KEY
-    base_url: https://api.moonshot.cn/v1
-    model: kimi-k2
-    api_format: legacy_chat
+    base_url: https://api.moonshot.ai/v1
+    model: kimi-k2.6
+    api_format: openai_chat
     auth_header: bearer
     extra_headers: {}
   openai_compatible:

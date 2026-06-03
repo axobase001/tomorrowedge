@@ -19,7 +19,8 @@ describe("config loader", () => {
     expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
-    expect(config.providers.kimi.base_url).toBe("https://api.moonshot.cn/v1");
+    expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
+    expect(config.providers.kimi.model).toBe("kimi-k2.6");
   });
 
   it("does not overwrite an existing config unless force is explicit", async () => {

@@ -64,7 +64,7 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
 
   const kimi = config.providers.kimi;
   if (isRegistrable(config, "kimi")) {
-    registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2"), kimi.api_format, kimi.auth_header, kimi.extra_headers));
+    registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2.6"), kimi.api_format, kimi.auth_header, kimi.extra_headers));
   }
 
   if (config.providers.anthropic?.enabled) registry.register(createAnthropicPlaceholder());

@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx src/cli/index.ts",
+    "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "site:serve": "node scripts/serve-site.mjs",
@@ -20,9 +20,9 @@
     "secrets:scan": "tsx scripts/secret-scan.ts",
     "prepack": "npm test && npm run build",
     "pack:dry": "npm pack --dry-run",
-    "doctor": "tsx src/cli/index.ts doctor",
-    "tui": "tsx src/cli/index.ts tui",
-    "smoke:real": "tsx src/cli/index.ts models --real-smoke"
+    "doctor": "node scripts/tsx-dev.mjs doctor",
+    "tui": "node scripts/tsx-dev.mjs tui",
+    "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke"
   },
   "files": [
     "dist",
