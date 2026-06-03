@@ -8,6 +8,9 @@ TomorrowEdge avoids hidden high-risk behavior:
 - no shell execution without approval
 - no patch application without approval
 - no destructive operations by default
+- no shell metacharacter execution or unsafe executable routing by default
+- no artifact persistence without secret redaction
+- no half-applied multi-file patch when a later write fails
 
 Access modes:
 
@@ -30,3 +33,19 @@ Patch safety validation blocks:
 - sensitive targets such as `.env`, key files, local databases, and credential-like paths
 
 Undo snapshots are stored under `.tomorrowedge/undo/` before patch writes.
+Multi-file patch writes are transactional: if a later write fails, previously
+written files in the same apply operation are restored or removed.
+
+Shell safety validation blocks:
+
+- shell metacharacters and command chaining
+- dangerous executables such as delete, shutdown, downloader, and shell-spawn commands
+- commands outside the safe verification allowlist
+
+Approved shell commands are executed with direct executable invocation instead
+of `shell: true`, so the command string is not passed through an interactive
+shell.
+
+Trace and artifact persistence redacts common secret formats and high-entropy
+tokens before writing `.tomorrowedge/sessions/<session-id>/events.jsonl` or
+artifact files.

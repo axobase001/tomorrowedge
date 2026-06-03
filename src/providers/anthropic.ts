@@ -1,10 +1,5 @@
-import { OpenAICompatibleProvider } from "./openaiCompatible.js";
+import { PlaceholderProvider } from "./placeholderProvider.js";
 
-export function createAnthropicPlaceholder(apiKey?: string): OpenAICompatibleProvider {
-  return new OpenAICompatibleProvider({
-    id: "anthropic",
-    name: "Anthropic placeholder",
-    apiKey,
-    baseUrl: ""
-  });
+export function createAnthropicPlaceholder(): PlaceholderProvider {
+  return new PlaceholderProvider("anthropic", "Anthropic native adapter", "claude-opus-4.1", "Anthropic Messages API support is planned but not implemented in this build.");
 }

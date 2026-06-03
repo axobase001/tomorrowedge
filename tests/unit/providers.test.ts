@@ -72,4 +72,28 @@ describe("provider registry", () => {
     expect(observedBody?.max_tokens).toBe(32);
     expect(observedBody?.max_completion_tokens).toBeUndefined();
   });
+
+  it("registers Anthropic and Gemini as explicit placeholders instead of OpenAI-compatible shims", async () => {
+    const registry = createProviderRegistry({
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        anthropic: { ...defaultConfig.providers.anthropic, enabled: true },
+        gemini: { ...defaultConfig.providers.gemini, enabled: true }
+      }
+    });
+
+    await expect(
+      registry.get("anthropic")?.chat({
+        model: "claude-opus-4.1",
+        messages: [{ role: "user", content: "hello" }]
+      })
+    ).rejects.toThrow("placeholder");
+    await expect(
+      registry.get("gemini")?.chat({
+        model: "gemini-2.5-pro",
+        messages: [{ role: "user", content: "hello" }]
+      })
+    ).rejects.toThrow("placeholder");
+  });
 });

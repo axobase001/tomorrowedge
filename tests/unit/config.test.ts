@@ -3,6 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getConfigPath, loadConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
+import { initCommand } from "../../src/cli/commands/init.js";
+import { doctorCommand } from "../../src/cli/commands/doctor.js";
 
 describe("config loader", () => {
   it("loads safe offline defaults without a config file", async () => {
@@ -37,4 +39,60 @@ describe("config loader", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("supports first-run init options and prints next steps", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-init-"));
+    try {
+      const output = await captureStdout(() =>
+        initCommand(cwd, {
+          accessMode: "restricted",
+          routingMode: "privacy",
+          testCommand: "npm test",
+          allowCloudRepoContext: "false"
+        })
+      );
+      const config = loadConfig(cwd);
+
+      expect(output).toContain("First run next steps");
+      expect(config.project.access_mode).toBe("restricted");
+      expect(config.routing.mode).toBe("privacy");
+      expect(config.privacy.allow_cloud_repo_context).toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("prints actionable doctor diagnostics as JSON", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-"));
+    const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
+    try {
+      delete process.env.OPENROUTER_API_KEY;
+      await captureStdout(() => initCommand(cwd, { provider: "openrouter" }));
+      const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
+      const parsed = JSON.parse(output) as { providerDiagnostics: Array<{ id: string; status: string; fix?: string }> };
+      const openrouter = parsed.providerDiagnostics.find((item) => item.id === "openrouter");
+
+      expect(openrouter?.status).toBe("error");
+      expect(openrouter?.fix).toContain("OPENROUTER_API_KEY");
+    } finally {
+      if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
+      else process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
+
+async function captureStdout(fn: () => Promise<void>): Promise<string> {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return output;
+}

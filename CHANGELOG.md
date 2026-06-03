@@ -9,6 +9,40 @@ Changelog: newest changes first, grouped by release and by change type.
 
 - Track future changes here before cutting the next version.
 
+## [0.2.0] - 2026-06-03
+
+### Added
+
+- First-run init options for access mode, routing mode, test command,
+  provider/model enablement, and cloud repo-context policy.
+- Productized `tedge doctor --json` diagnostics with provider status, fix hints,
+  placeholder detection, URL validation, and price visibility.
+- Shell execution guard for full/partial mode that blocks metacharacters,
+  dangerous executables, and commands outside the verification allowlist.
+- Event/artifact redaction layer with expanded token detection for common
+  provider and platform secrets.
+- Task-relevant context selection based on goal/plan keywords, path/content
+  matches, source/test metadata, and expected file hints.
+- Patch application rollback when a later file write fails.
+- Productization baseline and milestone roadmap docs.
+- Package metadata, `typecheck`, CLI smoke script, and CI smoke/typecheck steps.
+
+### Changed
+
+- Version bumped to `0.2.0`.
+- Shell commands now run through `execa(file, args, { shell: false })` instead
+  of `shell: true`.
+- IDs are generated with `crypto.randomUUID()` instead of `Math.random()`.
+- Anthropic and Gemini now register as explicit placeholder providers with clear
+  errors instead of pretending to be OpenAI-compatible adapters.
+
+### Fixed
+
+- Secrets in prompts, responses, stdout, stderr, provider errors, and exported
+  artifacts are redacted before they are persisted.
+- Multi-file patch application no longer leaves already-written files modified
+  when a later write fails.
+
 ## [0.1.1] - 2026-06-03
 
 ### Added

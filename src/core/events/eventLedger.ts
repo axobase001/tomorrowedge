@@ -1,4 +1,5 @@
 import type { AccessMode } from "../../config/schema.js";
+import { redactText, redactValue } from "../../safety/secretScanner.js";
 import { makeId } from "../../utils/ids.js";
 import type { BaseEvent, EventArtifact, EventPhase, TomorrowEdgeEvent } from "./eventTypes.js";
 
@@ -18,7 +19,7 @@ export class EventLedger {
 
   append(event: EventInput): TomorrowEdgeEvent {
     const fullEvent = {
-      ...event,
+      ...redactValue(event),
       id: makeId(event.type),
       timestamp: new Date().toISOString(),
       sessionId: this.sessionId,
@@ -30,7 +31,7 @@ export class EventLedger {
 
   writeArtifact(kind: string, content: string, extension = "txt"): string {
     const ref = `artifacts/${kind}/${makeId(kind)}.${extension}`;
-    this.artifacts.push({ ref, content });
+    this.artifacts.push({ ref, content: redactText(content) });
     return ref;
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A TUI cockpit for multi-model coding agents.",
   "type": "module",
   "bin": {
@@ -11,10 +11,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "site:serve": "node scripts/serve-site.mjs",
+    "smoke:cli": "tsx src/cli/index.ts --help && tsx src/cli/index.ts doctor --json",
     "prepack": "npm test && npm run build",
     "pack:dry": "npm pack --dry-run",
     "doctor": "tsx src/cli/index.ts doctor",
@@ -35,6 +37,15 @@
     "agent-orchestration"
   ],
   "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axobase001/tomorrowedge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/axobase001/tomorrowedge/issues"
+  },
+  "homepage": "https://github.com/axobase001/tomorrowedge#readme",
+  "packageManager": "npm@11.8.0",
   "license": "MIT",
   "dependencies": {
     "chalk": "^5.4.1",

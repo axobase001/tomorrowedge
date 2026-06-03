@@ -48,6 +48,7 @@ npm run dev -- tui
 - 多模型 drill：Core/River 作为 planner/reviewer，比较不同模型完成同一任务的能力
 - Core-led workflow：任务拆分、多轮模型辩论、角色执行、Core 审核、报告落盘
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
+- 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
 - TUI 驾驶舱：agent 状态、路由、辩论、diff、shell、证据、记忆、帮助面板
 
 ## 常用命令
@@ -152,6 +153,9 @@ Image / Screenshot / Diagram
 - patch 和 shell 默认都需要显式授权
 - ignored/sensitive 文件不会进入上下文选择
 - suspected secrets 上传云模型前会被拦截
+- shell 命令不再通过 `shell: true` 执行；危险命令和 shell 元字符会被拦截
+- 事件 artifact 默认脱敏后再保存和导出
+- 多文件 patch 写入失败时会回滚已写入文件
 - telemetry 默认关闭
 - `.env` 和 `.tomorrowedge/` 本地运行态被 git 忽略
 - provider fallback 会显式记录，不会伪装成主 provider 成功
@@ -237,6 +241,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 - Multi-model capability drills with Core/River as planner/reviewer
 - Core-led workflow with decomposition, multi-round debate, role execution, Core review, and saved reports
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
+- Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
 - Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
@@ -327,6 +332,9 @@ requests. TomorrowEdge routes capabilities. See
 - Patch and shell actions require approval by default
 - Ignored and sensitive files are excluded from context selection
 - Suspected secrets are blocked before cloud upload
+- Shell commands run without `shell: true`; metacharacters and dangerous executables are blocked
+- Event artifacts are redacted before persistence/export
+- Multi-file patch writes roll back if a later write fails
 - Telemetry is disabled by default
 - `.env` and local `.tomorrowedge/` runtime state are git-ignored
 - Provider fallback is explicit; it does not hide the failed primary route

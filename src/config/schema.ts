@@ -20,6 +20,7 @@ export const providerConfigSchema = z.object({
   auth_header: providerAuthHeaderSchema.default("bearer"),
   extra_headers: z.record(z.string()).default({})
 });
+export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),

@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
+
 export function makeId(prefix: string): string {
-  const suffix = Math.random().toString(36).slice(2, 10);
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
   return `${prefix}_${suffix}`;
 }

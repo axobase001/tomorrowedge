@@ -17,6 +17,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run typecheck
       - run: npm run build
+      - run: npm run smoke:cli
       - run: npm audit --audit-level=high
       - run: npm run pack:dry

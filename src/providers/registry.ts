@@ -67,8 +67,8 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
     registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2"), kimi.api_format, kimi.auth_header, kimi.extra_headers));
   }
 
-  if (config.providers.anthropic?.enabled) registry.register(createAnthropicPlaceholder(process.env.ANTHROPIC_API_KEY));
-  if (config.providers.gemini?.enabled) registry.register(createGeminiPlaceholder(process.env.GEMINI_API_KEY));
+  if (config.providers.anthropic?.enabled) registry.register(createAnthropicPlaceholder());
+  if (config.providers.gemini?.enabled) registry.register(createGeminiPlaceholder());
 
   if (config.providers.ollama?.enabled) {
     registry.register(new OllamaProvider(config.providers.ollama.base_url));

@@ -22,7 +22,17 @@ const cwd = process.cwd();
 
 program.name("tedge").description("TomorrowEdge multi-model coding agent cockpit").version("0.1.0");
 
-program.command("init").description("Create .tomorrowedge/config.yaml").option("--force", "overwrite an existing config with defaults").action((options: { force?: boolean }) => initCommand(cwd, options));
+program
+  .command("init")
+  .description("Create .tomorrowedge/config.yaml")
+  .option("--force", "overwrite an existing config with defaults")
+  .option("--access-mode <mode>", "initial access mode: restricted, partial, or full")
+  .option("--routing-mode <mode>", "initial routing mode")
+  .option("--test-command <command>", "default verification command")
+  .option("--provider <id>", "enable a provider by id in generated config")
+  .option("--model <model>", "model to assign to --provider")
+  .option("--allow-cloud-repo-context <value>", "true/false: allow repo context in cloud prompts")
+  .action((options: { force?: boolean; accessMode?: string; routingMode?: string; testCommand?: string; provider?: string; model?: string; allowCloudRepoContext?: string }) => initCommand(cwd, options));
 
 program
   .command("run")
@@ -88,7 +98,7 @@ program
   .option("--smoke-suite", "run text/json/vision smoke checks for configured cloud providers; reports failures without throwing")
   .action((options: { realSmoke?: boolean; smokeSuite?: boolean }) => modelsCommand(cwd, options));
 
-program.command("doctor").description("Check local configuration and provider readiness").action(() => doctorCommand(cwd));
+program.command("doctor").description("Check local configuration and provider readiness").option("--json", "print machine-readable diagnostics").action((options: { json?: boolean }) => doctorCommand(cwd, options));
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 

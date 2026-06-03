@@ -100,4 +100,33 @@ literal 0
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("rolls back already-written files when a later file write fails", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-patch-rollback-"));
+    try {
+      await writeFile(path.join(cwd, "a.txt"), "old\n", "utf8");
+      await writeFile(path.join(cwd, "blocker"), "not a directory\n", "utf8");
+
+      await expect(
+        applyUnifiedDiff(
+          cwd,
+          `--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-old
++new
+--- /dev/null
++++ b/blocker/new.txt
+@@ -0,0 +1 @@
++hello
+`,
+          true
+        )
+      ).rejects.toThrow();
+
+      expect(await readFile(path.join(cwd, "a.txt"), "utf8")).toBe("old\n");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
