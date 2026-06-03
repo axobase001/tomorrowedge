@@ -1,5 +1,6 @@
 import { loadConfig, writeConfig } from "../../config/configLoader.js";
 import { accessModeSchema, type AccessMode } from "../../config/schema.js";
+import { loadProjectPreferences, saveProjectPreferences } from "../../core/memory/preferences.js";
 
 export async function modeCommand(cwd: string, mode?: string): Promise<void> {
   const config = loadConfig(cwd);
@@ -22,6 +23,8 @@ export async function modeCommand(cwd: string, mode?: string): Promise<void> {
     }
   };
   const path = await writeConfig(cwd, next);
+  await saveProjectPreferences(cwd, { ...loadProjectPreferences(cwd), accessMode: parsed.data as AccessMode });
   process.stdout.write(`access_mode set to ${parsed.data}\n`);
   process.stdout.write(`updated ${path}\n`);
+  process.stdout.write("project preference accessMode synchronized\n");
 }

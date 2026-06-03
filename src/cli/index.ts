@@ -22,7 +22,7 @@ const cwd = process.cwd();
 
 program.name("tedge").description("TomorrowEdge multi-model coding agent cockpit").version("0.1.0");
 
-program.command("init").description("Create .tomorrowedge/config.yaml").action(() => initCommand(cwd));
+program.command("init").description("Create .tomorrowedge/config.yaml").option("--force", "overwrite an existing config").action((options: { force?: boolean }) => initCommand(cwd, options));
 
 program
   .command("run")

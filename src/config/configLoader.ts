@@ -23,10 +23,13 @@ export function loadConfig(cwd: string): TomorrowEdgeConfig {
   return configSchema.parse(deepMerge(defaultConfig, parsed));
 }
 
-export async function writeDefaultConfig(cwd: string): Promise<string> {
+export async function writeDefaultConfig(cwd: string, options: { force?: boolean } = {}): Promise<string> {
   const dir = path.join(cwd, configDirName);
   await mkdir(dir, { recursive: true });
   const configPath = getConfigPath(cwd);
+  if (existsSync(configPath) && !options.force) {
+    throw new Error(`Config already exists at ${configPath}. Use init --force to overwrite it.`);
+  }
   await writeFile(configPath, YAML.stringify(defaultConfig), "utf8");
   return configPath;
 }
