@@ -47,6 +47,10 @@ export async function runAgentDrill(cwd: string, task: string, config: TomorrowE
   const prompt = await buildPrompt(fixtureRoot, task);
   const registry = createProviderRegistry(config);
   const providers = await selectProviders(registry.list(), options);
+  if (!providers.length) {
+    const requested = options.providers?.join(",") ?? "openrouter,deepseek,mimo";
+    throw new Error(`No configured drill providers are available for: ${requested}. Enable providers in config or pass --include-mock --providers mock.`);
+  }
   const budgetStatus = preflightBudget(
     providers.map((provider) => ({ provider: provider.id, prompt, maxOutputTokens: maxDrillCompletionTokens })),
     config.routing.max_cost_usd

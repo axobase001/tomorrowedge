@@ -49,4 +49,11 @@ describe("cost accounting", () => {
     expect(status.status).toBe("price_unknown");
     expect(status.estimatedCostUsd).toBeUndefined();
   });
+
+  it("uses default cloud provider prices when env prices are absent", () => {
+    const status = preflightBudget([{ provider: "openrouter", prompt: "hello", maxOutputTokens: 100 }], 1);
+
+    expect(status.status).toBe("within_budget");
+    expect(status.estimatedCostUsd).toBeGreaterThan(0);
+  });
 });

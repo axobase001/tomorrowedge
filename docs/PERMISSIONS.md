@@ -16,7 +16,7 @@ Patch application also runs safety validation before approval can apply anything
 In headless fixture runs, approvals are explicit flags:
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell
+tedge run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 ```
 
 Omit either flag to keep that action blocked.

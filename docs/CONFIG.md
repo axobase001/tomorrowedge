@@ -14,6 +14,13 @@ This creates:
 
 The default config enables safe mode, disables telemetry, and leaves cloud providers off unless configured.
 
+`tedge init` never overwrites an existing config. Use `tedge init --force` only
+when you intentionally want to replace the current config with defaults.
+
+Project preferences are inspectable with `tedge prefs`; use
+`tedge prefs --list-keys` for available keys and `tedge prefs --json` for raw
+machine-readable output.
+
 ## Model and role configuration
 
 TomorrowEdge does not require hardcoded model ownership. Providers define how to

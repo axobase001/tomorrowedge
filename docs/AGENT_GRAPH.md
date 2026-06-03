@@ -41,6 +41,7 @@ Use:
 ```bash
 tedge trace latest
 tedge export latest --format markdown
+tedge export latest --brief
 tedge export latest --format json
 ```
 
@@ -51,5 +52,5 @@ kept visible in the review and TUI debate pane.
 Fixture demo:
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
+tedge run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
 ```

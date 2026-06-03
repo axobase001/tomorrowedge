@@ -14,4 +14,8 @@ describe("agent capability drill", () => {
     expect(result.runs[0]?.provider).toBe("mock");
     expect(result.runs[0]?.score).toBeGreaterThanOrEqual(0);
   });
+
+  it("fails when the requested drill providers are unavailable", async () => {
+    await expect(runAgentDrill(process.cwd(), "fix failing test", defaultConfig, { providers: ["openrouter"] })).rejects.toThrow("No configured drill providers");
+  });
 });

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole, AgentRunState } from "../../schemas/agentTask.js";
 import { nowIso } from "../../utils/time.js";
@@ -89,7 +91,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
 
-  const imagePaths = options.imagePaths ?? [];
+  const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
   if (imagePaths.length) {
     const vision = new VisionAgent();
@@ -330,6 +332,16 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   return finalizeState(state, ledger, router);
+}
+
+function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
+  return imagePaths.map((imagePath) => {
+    const resolved = path.isAbsolute(imagePath) ? imagePath : path.resolve(cwd, imagePath);
+    if (!existsSync(resolved)) {
+      throw new Error(`Image input not found: ${imagePath}`);
+    }
+    return resolved;
+  });
 }
 
 async function finalizeState(state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {

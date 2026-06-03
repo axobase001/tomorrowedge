@@ -183,6 +183,20 @@ describe("fixture E2E workflow", () => {
     expect(output).toContain("+  return a + b;");
     expect(output).toContain("node test.js");
   });
+
+  it("exports a brief terminal summary without artifact flooding", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    });
+    await saveSession(tempRoot, state);
+    const output = await captureStdout(() => exportCommand(tempRoot, "latest", { format: "markdown", brief: true }));
+
+    expect(output).toContain("TomorrowEdge Session");
+    expect(output).toContain("Events:");
+    expect(output).not.toContain("+  return a + b;");
+    expect(output).not.toContain("## Artifact Details");
+  });
 });
 
 async function captureStdout(fn: () => Promise<void>): Promise<string> {

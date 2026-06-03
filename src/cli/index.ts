@@ -22,7 +22,7 @@ const cwd = process.cwd();
 
 program.name("tedge").description("TomorrowEdge multi-model coding agent cockpit").version("0.1.0");
 
-program.command("init").description("Create .tomorrowedge/config.yaml").action(() => initCommand(cwd));
+program.command("init").description("Create .tomorrowedge/config.yaml").option("--force", "overwrite an existing config with defaults").action((options: { force?: boolean }) => initCommand(cwd, options));
 
 program
   .command("run")
@@ -59,7 +59,9 @@ program
   .option("--test-command <command>", "preferred test command")
   .option("--live-patch", "prefer live patch candidates")
   .option("--live-advisory", "prefer live advisory notes")
-  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean }) => prefsCommand(cwd, options));
+  .option("--json", "print raw preferences JSON")
+  .option("--list-keys", "show available preference keys")
+  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean; json?: boolean; listKeys?: boolean }) => prefsCommand(cwd, options));
 
 program
   .command("drill")
@@ -92,7 +94,7 @@ program.command("replay").description("Replay a saved local session").argument("
 
 program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").action((sessionId: string, options: { verbose?: boolean }) => traceCommand(cwd, sessionId, options));
 
-program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean }) => exportCommand(cwd, sessionId, options));
+program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean }) => exportCommand(cwd, sessionId, options));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
@@ -107,7 +109,12 @@ program
 
 program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").action((options: { list?: boolean; snapshot?: string }) => undoCommand(cwd, options));
 
-await program.parseAsync(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+}
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];

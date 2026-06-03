@@ -104,11 +104,24 @@ export function summarizeModelUsage(notes: ModelNote[]): ModelUsageSummary {
 
 function readPrice(provider: string, direction: "INPUT" | "OUTPUT"): number | undefined {
   const value = process.env[`${provider.toUpperCase()}_${direction}_PRICE_PER_MTOK`];
-  if (!value) return undefined;
+  if (!value) return defaultPrice(provider, direction);
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function roundUsd(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function defaultPrice(provider: string, direction: "INPUT" | "OUTPUT"): number | undefined {
+  const prices: Record<string, { input: number; output: number }> = {
+    openrouter: { input: 2.5, output: 10 },
+    deepseek: { input: 0.14, output: 0.28 },
+    mimo: { input: 0.4, output: 1.6 },
+    openai_compatible: { input: 0.15, output: 0.6 },
+    kimi: { input: 0.5, output: 2 }
+  };
+  const price = prices[provider.toLowerCase()];
+  if (!price) return undefined;
+  return direction === "INPUT" ? price.input : price.output;
 }

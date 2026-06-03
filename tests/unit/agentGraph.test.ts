@@ -167,20 +167,15 @@ describe("offline agent graph", () => {
     }
   });
 
-  it("falls back to offline visual handoff when live vision image input is missing", async () => {
+  it("fails before visual handoff when image input is missing", async () => {
     const cwd = path.join(os.tmpdir(), `tedge-live-vision-missing-${Date.now()}`);
     const imagePath = path.join(cwd, "missing-error.png");
     try {
       await mkdir(cwd, { recursive: true });
-      const state = await runOfflineGraph(cwd, "fix the bug shown in this error screenshot", defaultConfig, {
+      await expect(runOfflineGraph(cwd, "fix the bug shown in this error screenshot", defaultConfig, {
         imagePaths: [imagePath],
         liveVision: true
-      });
-
-      const visionNote = state.modelNotes.find((note) => note.kind === "vision_spec");
-      expect(visionNote?.error).toContain("unavailable");
-      expect(state.visualSpec?.sourceImages[0]?.exists).toBe(false);
-      expect(state.visualSpec?.pageType).toBe("error_screenshot");
+      })).rejects.toThrow("Image input not found");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

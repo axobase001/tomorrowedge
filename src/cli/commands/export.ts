@@ -8,6 +8,7 @@ import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
 export type ExportOptions = {
   format?: "markdown" | "json";
   includeArtifacts?: boolean;
+  brief?: boolean;
 };
 
 export async function exportCommand(cwd: string, sessionId: string, options: ExportOptions = {}): Promise<void> {
@@ -22,6 +23,11 @@ export async function exportCommand(cwd: string, sessionId: string, options: Exp
   }
 
   const state = session.state;
+  if (options.brief) {
+    process.stdout.write(renderBriefExport(session.sessionId, session.createdAt, state));
+    return;
+  }
+
   process.stdout.write(`# TomorrowEdge Session ${session.sessionId}
 
 Created: ${session.createdAt}
@@ -100,4 +106,25 @@ function fenceLanguage(ref: string): string {
   if (ref.includes("/diffs/")) return "diff";
   if (ref.endsWith(".json")) return "json";
   return "text";
+}
+
+function renderBriefExport(sessionId: string, createdAt: string, state: Awaited<ReturnType<typeof loadSession>>["state"]): string {
+  const eventCount = state.events?.length ?? 0;
+  const patchCount = state.candidates.filter((candidate) => candidate.unifiedDiff.trim()).length;
+  const shellCount = state.runResults.length;
+  const artifactCount = state.events.flatMap(artifactRefs).length;
+  return [
+    `TomorrowEdge Session ${sessionId}`,
+    `Created: ${createdAt}`,
+    `Goal: ${state.goal}`,
+    `Access: ${state.access.mode}`,
+    `Events: ${eventCount}`,
+    `Artifacts: ${artifactCount}`,
+    `Patch candidates: ${patchCount}`,
+    `Shell runs: ${shellCount}`,
+    `Result: ${state.finalSummary?.result ?? "unknown"}`,
+    "",
+    "Use tedge export latest --format markdown for the full artifact-expanded report.",
+    "Use tedge trace latest --verbose for event refs."
+  ].join("\n") + "\n";
 }

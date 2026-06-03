@@ -23,19 +23,25 @@ export function loadConfig(cwd: string): TomorrowEdgeConfig {
   return configSchema.parse(deepMerge(defaultConfig, parsed));
 }
 
-export async function writeDefaultConfig(cwd: string): Promise<string> {
+export type WriteDefaultConfigResult = {
+  path: string;
+  created: boolean;
+  overwritten: boolean;
+};
+
+export async function writeDefaultConfig(cwd: string, options: { force?: boolean } = {}): Promise<WriteDefaultConfigResult> {
   const dir = path.join(cwd, configDirName);
   await mkdir(dir, { recursive: true });
   const configPath = getConfigPath(cwd);
   if (existsSync(configPath)) {
-    const existing = loadConfig(cwd);
-    const merged = configSchema.parse(deepMerge(defaultConfig, existing)) as TomorrowEdgeConfig;
-    await writeFile(configPath, YAML.stringify(merged), "utf8");
-    process.stderr.write(`[tomorrowedge] Merged existing config with defaults at ${configPath}\n`);
-  } else {
+    if (!options.force) {
+      return { path: configPath, created: false, overwritten: false };
+    }
     await writeFile(configPath, YAML.stringify(defaultConfig), "utf8");
+    return { path: configPath, created: false, overwritten: true };
   }
-  return configPath;
+  await writeFile(configPath, YAML.stringify(defaultConfig), "utf8");
+  return { path: configPath, created: true, overwritten: false };
 }
 
 export async function writeConfig(cwd: string, config: TomorrowEdgeConfig): Promise<string> {

@@ -27,8 +27,9 @@ npm install
 npm test
 npm run dev -- doctor
 npm run dev -- init
+npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
-npm run dev -- run "fix failing test" --headless --provider fixture
+npm run dev -- run "fix failing test" --headless --fixture-mode
 npm run dev -- tui
 ```
 
@@ -69,6 +70,7 @@ tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
 tedge export latest --format markdown
+tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
@@ -95,13 +97,13 @@ tedge run "task" --access-mode restricted
 完整 approved patch/test loop：
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell
+tedge run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 ```
 
 失败测试后的 Repairer loop：
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
+tedge run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
 ```
 
 没有 `--approve-patch` 不会应用 diff；没有 `--approve-shell` 不会运行测试；没有 `--approve-repair` 只会记录 repair candidate。
@@ -209,8 +211,9 @@ npm install
 npm test
 npm run dev -- doctor
 npm run dev -- init
+npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
-npm run dev -- run "fix failing test" --headless --provider fixture
+npm run dev -- run "fix failing test" --headless --fixture-mode
 npm run dev -- tui
 ```
 
@@ -253,6 +256,7 @@ tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
 tedge export latest --format markdown
+tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
 tedge undo --list
