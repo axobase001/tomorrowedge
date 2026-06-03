@@ -14,7 +14,13 @@ export function loadLocalEnv(cwd: string): void {
 
     const key = trimmed.slice(0, separatorIndex).trim();
     const rawValue = trimmed.slice(separatorIndex + 1).trim();
-    if (process.env[key] !== undefined) continue;
+    if (process.env[key] !== undefined) {
+      const envValue = unquoteEnvValue(rawValue);
+      if (process.env[key] !== envValue) {
+        console.warn(`[tomorrowedge] ${key} is already set in the shell environment. Using environment value (${key}=${process.env[key]}), ignoring .env value (${key}=${envValue}).`);
+      }
+      continue;
+    }
     process.env[key] = unquoteEnvValue(rawValue);
   }
 }

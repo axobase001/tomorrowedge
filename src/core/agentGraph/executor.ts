@@ -28,6 +28,7 @@ import type { RunResult } from "../../schemas/evidence.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
+  fixtureMode?: boolean;
   approvePatch?: boolean;
   approveShell?: boolean;
   approveRepair?: boolean;
@@ -99,7 +100,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         config.routing.max_cost_usd
       );
       if (state.budgetStatus.status !== "blocked") {
-        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }));
+        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), "live");
         state.modelNotes.push(liveVision.note);
         state.usageSummary = summarizeModelUsage(state.modelNotes);
         recordModelNoteEvents(ledger, [liveVision.note], state.usageSummary);
@@ -148,10 +149,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const coder = new CoderAgent();
-  state.candidates.push(await runAgentState(state, ledger, router, "coder_a", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "a", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
+  state.candidates.push(await runAgentState(state, ledger, router, "coder_a", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "a", fixtureMode: (options.provider === "fixture" || options.fixtureMode), fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
   recordPatchCandidateEvent(ledger, "coder_a", state.candidates[state.candidates.length - 1]);
   if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runAgentState(state, ledger, router, "coder_b", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "b", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
+    state.candidates.push(await runAgentState(state, ledger, router, "coder_b", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "b", fixtureMode: (options.provider === "fixture" || options.fixtureMode), fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
     recordPatchCandidateEvent(ledger, "coder_b", state.candidates[state.candidates.length - 1]);
   }
 
@@ -286,7 +287,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         repairAttempts += 1;
         const repairer = new RepairerAgent();
         const repairCandidate = await runAgentState(state, ledger, router, "repairer", () =>
-          repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: options.provider === "fixture" })
+          repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) })
         );
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(ledger, "repairer", repairCandidate);
@@ -356,7 +357,7 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
   return state;
 }
 
-async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>): Promise<T> {
+async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind: "offline" | "live" = "offline"): Promise<T> {
   const assignment = router.assignmentFor(role);
   const agentState: AgentRunState = {
     id: role,
@@ -364,6 +365,7 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
     provider: assignment.provider,
     model: assignment.model,
     status: "running",
+    agentKind,
     startedAt: nowIso(),
     summary: assignment.reason
   };

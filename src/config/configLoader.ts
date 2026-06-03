@@ -27,7 +27,14 @@ export async function writeDefaultConfig(cwd: string): Promise<string> {
   const dir = path.join(cwd, configDirName);
   await mkdir(dir, { recursive: true });
   const configPath = getConfigPath(cwd);
-  await writeFile(configPath, YAML.stringify(defaultConfig), "utf8");
+  if (existsSync(configPath)) {
+    const existing = loadConfig(cwd);
+    const merged = configSchema.parse(deepMerge(defaultConfig, existing)) as TomorrowEdgeConfig;
+    await writeFile(configPath, YAML.stringify(merged), "utf8");
+    process.stderr.write(`[tomorrowedge] Merged existing config with defaults at ${configPath}\n`);
+  } else {
+    await writeFile(configPath, YAML.stringify(defaultConfig), "utf8");
+  }
   return configPath;
 }
 

@@ -7,6 +7,7 @@ import { loadProjectPreferences } from "../../core/memory/preferences.js";
 export type RunOptions = {
   headless?: boolean;
   provider?: string;
+  fixtureMode?: boolean;
   approvePatch?: boolean;
   approveShell?: boolean;
   approveRepair?: boolean;
@@ -27,6 +28,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
   const state = await runOfflineGraph(cwd, goal, config, {
     provider: options.provider,
+    fixtureMode: options.fixtureMode,
     approvePatch: options.approvePatch,
     approveShell: options.approveShell,
     approveRepair: options.approveRepair,
@@ -42,7 +44,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   });
   const sessionPath = await saveSession(cwd, state);
   if (options.headless) {
-    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, agents: state.agents.map(a => ({ role: a.role, provider: a.provider, model: a.model, kind: a.agentKind ?? "offline", status: a.status, summary: a.summary })), approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
     return;
   }
   const { render } = await import("ink");
