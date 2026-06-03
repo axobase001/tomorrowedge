@@ -1,4 +1,4 @@
-import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
+import { accessModeSchema, type AccessMode, type TomorrowEdgeConfig } from "../../config/schema.js";
 
 export type AccessPolicy = {
   mode: AccessMode;
@@ -12,14 +12,23 @@ export type AccessPolicy = {
 };
 
 export type AccessPolicyOptions = {
-  mode?: AccessMode;
+  mode?: string;
   approvePatch?: boolean;
   approveShell?: boolean;
   approveRepair?: boolean;
 };
 
+export function parseAccessMode(mode: string | undefined): AccessMode | undefined {
+  if (mode === undefined) return undefined;
+  const parsed = accessModeSchema.safeParse(mode);
+  if (!parsed.success) {
+    throw new Error(`Invalid access mode: ${mode}. Use restricted, partial, or full.`);
+  }
+  return parsed.data;
+}
+
 export function buildAccessPolicy(config: TomorrowEdgeConfig, options: AccessPolicyOptions = {}): AccessPolicy {
-  const mode = options.mode ?? config.project.access_mode;
+  const mode = parseAccessMode(options.mode) ?? config.project.access_mode;
   if (mode === "restricted") {
     return {
       mode,

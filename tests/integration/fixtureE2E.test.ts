@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
-import { prepareRunWorkspace } from "../../src/cli/commands/run.js";
+import { prepareRunWorkspace, runCommand } from "../../src/cli/commands/run.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -192,6 +192,12 @@ describe("fixture E2E workflow", () => {
     expect(workspace.fixtureWorkspace).toBe(workspace.executionCwd);
     expect(workspace.executionCwd).not.toBe(process.cwd());
     expect(source).toContain("return a - b");
+  });
+
+  it("rejects invalid run access modes before execution", async () => {
+    await expect(runCommand(process.cwd(), "fix failing test", { headless: true, provider: "fixture", accessMode: "nonsense" })).rejects.toThrow(
+      "Invalid access mode: nonsense"
+    );
   });
 });
 

@@ -3,10 +3,10 @@ import { cp, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../../config/configLoader.js";
-import type { AccessMode } from "../../config/schema.js";
 import { runOfflineGraph } from "../../core/agentGraph/executor.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
 import { loadProjectPreferences } from "../../core/memory/preferences.js";
+import { parseAccessMode } from "../../core/permissions/accessPolicy.js";
 import { renderInteractiveApp } from "../../tui/renderApp.js";
 
 export type RunOptions = {
@@ -15,7 +15,7 @@ export type RunOptions = {
   approvePatch?: boolean;
   approveShell?: boolean;
   approveRepair?: boolean;
-  accessMode?: AccessMode;
+  accessMode?: string;
   repairOnFail?: boolean;
   redTeamReview?: boolean;
   liveAdvisory?: boolean;
@@ -30,13 +30,14 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const loadedConfig = loadConfig(cwd);
   const prefs = loadProjectPreferences(cwd);
   const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
+  const accessMode = parseAccessMode(options.accessMode ?? prefs.accessMode);
   const workspace = await prepareRunWorkspace(cwd, options);
   const state = await runOfflineGraph(workspace.executionCwd, goal, config, {
     provider: options.provider,
     approvePatch: options.approvePatch,
     approveShell: options.approveShell,
     approveRepair: options.approveRepair,
-    accessMode: options.accessMode ?? prefs.accessMode,
+    accessMode,
     repairOnFail: options.repairOnFail,
     redTeamReview: options.redTeamReview,
     liveAdvisory: options.liveAdvisory ?? prefs.preferredLiveAdvisory,

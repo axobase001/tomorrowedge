@@ -42,7 +42,7 @@ program
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
+  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: string; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").action((goal?: string) => tuiCommand(cwd, goal));
 
