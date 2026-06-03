@@ -14,6 +14,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return event.error
         ? `model call ${event.status ?? "failure"}: ${event.error}`
         : `model call ${event.status ?? "recorded"}${event.fallbackUsed ? " via fallback" : ""}${event.inputTokens || event.outputTokens ? ` tokens=${event.inputTokens ?? 0}/${event.outputTokens ?? 0}` : ""}`;
+    case "agent_run":
+      return event.error ? `agent run ${event.status}: ${event.error}` : `agent run ${event.status}`;
     case "context_select":
       return `selected ${event.selectedFiles.length} files`;
     case "file_read":
