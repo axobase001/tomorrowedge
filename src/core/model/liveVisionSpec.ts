@@ -5,7 +5,7 @@ import type { ModelNote } from "../../schemas/modelNote.js";
 import type { StructuredVisualSpec, VisualComponent, VisualSource } from "../../schemas/visualSpec.js";
 import { makeId } from "../../utils/ids.js";
 import type { ModelRouter } from "../routing/router.js";
-import { estimateCostUsd } from "./costAccounting.js";
+import { estimateCostUsd, estimateMessageContentTokens } from "./costAccounting.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
 
 const maxVisionCompletionTokens = 1200;
@@ -34,6 +34,15 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
   };
 
   const sources = await Promise.all(input.imagePaths.map(toVisualSource));
+  const missingSources = sources.filter((source) => !source.exists);
+  if (missingSources.length) {
+    return {
+      note: {
+        ...noteBase,
+        error: `Image input unavailable: ${missingSources.map((source) => source.path).join(", ")}`
+      }
+    };
+  }
   const imageParts = await Promise.all(input.imagePaths.map(toImagePart));
   const prompt = buildVisionPrompt(input.goal, sources);
 
@@ -108,6 +117,14 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
 
 export function buildVisionCostPrompt(goal: string, imagePaths: string[]): string {
   return [buildVisionPrompt(goal, imagePaths.map((imagePath) => ({ path: imagePath, exists: true }))), ...imagePaths.map((imagePath) => `[image:${imagePath}]`)].join("\n");
+}
+
+export function estimateVisionInputTokens(goal: string, imagePaths: string[]): number {
+  const prompt = buildVisionPrompt(goal, imagePaths.map((imagePath) => ({ path: imagePath, exists: true })));
+  return estimateMessageContentTokens([
+    { type: "text", text: prompt },
+    ...imagePaths.map((imagePath) => ({ type: "image_url" as const, image_url: { url: imagePath, detail: "auto" as const } }))
+  ]);
 }
 
 async function toVisualSource(imagePath: string): Promise<VisualSource> {

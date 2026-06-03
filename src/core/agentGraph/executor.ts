@@ -18,7 +18,7 @@ import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
 import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
-import { buildVisionCostPrompt, runLiveVisionSpec } from "../model/liveVisionSpec.js";
+import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
 import { buildDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 
@@ -72,7 +72,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (options.liveVision && access.cloudAllowed) {
       const assignment = router.assignmentFor("vision");
       state.budgetStatus = preflightBudget(
-        [{ provider: assignment.provider, prompt: buildVisionCostPrompt(goal, imagePaths), maxOutputTokens: 1200 }],
+        [{ provider: assignment.provider, prompt: buildVisionCostPrompt(goal, imagePaths), estimatedInputTokens: estimateVisionInputTokens(goal, imagePaths), maxOutputTokens: 1200 }],
         config.routing.max_cost_usd
       );
       if (state.budgetStatus.status !== "blocked") {
@@ -270,13 +270,23 @@ async function runAgentState<T>(state: AgentGraphState, router: ModelRouter, rol
     const result = await fn();
     agentState.status = "success";
     agentState.summary = `${role} completed`;
+    updateCapabilityStep(state, role, "success", agentState.summary);
     return result;
   } catch (error) {
     agentState.status = "failed";
     agentState.summary = error instanceof Error ? error.message : String(error);
+    updateCapabilityStep(state, role, "blocked", agentState.summary);
     throw error;
   } finally {
     agentState.endedAt = nowIso();
     agentState.elapsedMs = Date.now() - start;
   }
+}
+
+function updateCapabilityStep(state: AgentGraphState, role: AgentRole, status: "success" | "blocked", summary: string): void {
+  if (!state.capabilityRoute) return;
+  state.capabilityRoute = {
+    ...state.capabilityRoute,
+    steps: state.capabilityRoute.steps.map((step) => (step.role === role ? { ...step, status, summary } : step))
+  };
 }

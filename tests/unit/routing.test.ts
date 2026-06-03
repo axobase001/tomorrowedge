@@ -47,4 +47,19 @@ describe("routing policies", () => {
     expect(router.assignmentFor("vision").provider).toBe("mimo");
     expect(router.assignmentFor("vision").reason).toContain("image input");
   });
+
+  it("keeps vision local in privacy mode even when cloud vision is enabled", () => {
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      routing: { ...defaultConfig.routing, mode: "privacy" },
+      providers: {
+        ...defaultConfig.providers,
+        mimo: { enabled: true, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1" }
+      }
+    };
+    const router = new ModelRouter(config);
+
+    expect(router.getPlan().privacyLocked).toBe(true);
+    expect(router.assignmentFor("vision").provider).toBe("ollama");
+  });
 });

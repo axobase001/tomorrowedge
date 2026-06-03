@@ -5,6 +5,7 @@ export type CostEstimateInput = {
   provider: string;
   prompt: string;
   maxOutputTokens: number;
+  estimatedInputTokens?: number;
 };
 
 export function estimateCostUsd(provider: string, usage?: { inputTokens: number; outputTokens: number }): number | undefined {
@@ -34,7 +35,7 @@ export function preflightBudget(items: CostEstimateInput[], maxCostUsd: number):
   let hasUnknownPrice = false;
 
   for (const item of items) {
-    const inputTokens = estimateTextTokens(item.prompt);
+    const inputTokens = item.estimatedInputTokens ?? estimateTextTokens(item.prompt);
     const outputTokens = item.maxOutputTokens;
     estimatedInputTokens += inputTokens;
     estimatedOutputTokens += outputTokens;

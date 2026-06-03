@@ -135,6 +135,9 @@ describe("offline agent graph", () => {
       expect(state.capabilityRoute?.steps.map((step) => step.role)).toContain("vision");
       expect(state.visualSpec?.pageType).toBe("ui_screen");
       expect(state.visualSpec?.handoffPrompt).toContain("Visual Spec");
+      expect(state.capabilityRoute?.steps.find((step) => step.role === "planner")?.status).toBe("success");
+      expect(state.capabilityRoute?.steps.find((step) => step.role === "coder_a")?.status).toBe("success");
+      expect(state.capabilityRoute?.steps.find((step) => step.role === "reviewer")?.status).toBe("success");
       expect(state.finalSummary?.evidence.some((item) => item.includes(state.visualSpec?.summary ?? ""))).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -155,6 +158,48 @@ describe("offline agent graph", () => {
       expect(state.modelNotes.some((note) => note.kind === "vision_spec")).toBe(true);
       expect(state.visualSpec?.pageType).toBe("error_screenshot");
       expect(state.capabilityRoute?.steps.find((step) => step.role === "vision")?.status).toBe("success");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to offline visual handoff when live vision image input is missing", async () => {
+    const cwd = path.join(os.tmpdir(), `tedge-live-vision-missing-${Date.now()}`);
+    const imagePath = path.join(cwd, "missing-error.png");
+    try {
+      await mkdir(cwd, { recursive: true });
+      const state = await runOfflineGraph(cwd, "fix the bug shown in this error screenshot", defaultConfig, {
+        imagePaths: [imagePath],
+        liveVision: true
+      });
+
+      const visionNote = state.modelNotes.find((note) => note.kind === "vision_spec");
+      expect(visionNote?.error).toContain("unavailable");
+      expect(state.visualSpec?.sourceImages[0]?.exists).toBe(false);
+      expect(state.visualSpec?.pageType).toBe("error_screenshot");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("includes image inputs in live vision budget preflight", async () => {
+    process.env.MOCK_INPUT_PRICE_PER_MTOK = "1000";
+    process.env.MOCK_OUTPUT_PRICE_PER_MTOK = "1000";
+    const cwd = path.join(os.tmpdir(), `tedge-live-vision-budget-${Date.now()}`);
+    const imagePath = path.join(cwd, "screen.png");
+    try {
+      await mkdir(cwd, { recursive: true });
+      await writeFile(imagePath, "fake image bytes", "utf8");
+      const config = { ...defaultConfig, routing: { ...defaultConfig.routing, max_cost_usd: 0.001 } };
+      const state = await runOfflineGraph(cwd, "restore this page from screenshot", config, {
+        imagePaths: [imagePath],
+        liveVision: true
+      });
+
+      expect(state.budgetStatus?.status).toBe("blocked");
+      expect(state.budgetStatus?.estimatedInputTokens).toBeGreaterThan(1000);
+      expect(state.modelNotes.find((note) => note.kind === "vision_spec")).toBeUndefined();
+      expect(state.visualSpec?.pageType).toBe("ui_screen");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

@@ -31,11 +31,11 @@ function assignRole(role: AgentRole, mode: RoutingMode, profiles: ModelProfile[]
   if (role === "runner") {
     return { role, provider: "local_tool", model: "shell", reason: "runner is a local tool, not a model" };
   }
-  if (role === "vision") {
-    return pick(role, profiles, ["vision", "ocr", "perception"], "image input requires perception before coding");
-  }
   if (mode === "local" || mode === "privacy") {
     return pick(role, profiles, ["local", "privacy"], "privacy/local mode requires local-first routing");
+  }
+  if (role === "vision") {
+    return pick(role, profiles, ["vision", "ocr", "perception"], "image input requires perception before coding");
   }
   if (mode === "cheap") {
     return pick(role, profiles, ["cheap", "fast"], "cheap mode minimizes cost and latency");
