@@ -189,6 +189,7 @@ Image / Screenshot / Diagram
 
 TomorrowEdge is a **TUI-first multi-model agent cockpit** for coding tasks: a terminal cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering workflows.
 TomorrowEdge is a **TUI-first multi-model agent cockpit for full-access coding workflows**.
+TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks.
 
 ```text
 Full autonomy, full visibility.
@@ -237,6 +238,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 - Core-led workflow with decomposition, multi-round debate, role execution, Core review, and saved reports
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
+- Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
 ## Commands
 
@@ -279,6 +281,23 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 ```
 
 `workflow` supports 1-5 debate rounds. Later rounds are cross-examination rounds over the prior transcript. Each live batch is preflighted against `debate.max_cost_usd`.
+
+## Orchestration Backends
+
+TomorrowEdge keeps the cockpit contract even when execution is delegated:
+
+```yaml
+orchestration:
+  backend: native # native | langgraph | crewai | autogen
+```
+
+`native` is executable today and wraps the current TomorrowEdge agent graph.
+`langgraph`, `crewai`, and `autogen` are registered placeholders with schema,
+docs, and clear unavailable-backend errors. External frameworks are adapters;
+they do not own full-access authorization, the event ledger, replay, export, or
+TUI visibility.
+
+See [docs/ORCHESTRATION_BACKENDS.md](docs/ORCHESTRATION_BACKENDS.md).
 
 ## Capability Stitching
 

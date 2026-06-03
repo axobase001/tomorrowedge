@@ -8,6 +8,8 @@ export const providerApiFormatSchema = z.enum(["openai_chat", "legacy_chat"]);
 export type ProviderApiFormat = z.infer<typeof providerApiFormatSchema>;
 export const providerAuthHeaderSchema = z.enum(["bearer", "api-key", "none"]);
 export type ProviderAuthHeader = z.infer<typeof providerAuthHeaderSchema>;
+export const orchestrationBackendSchema = z.enum(["native", "langgraph", "crewai", "autogen"]);
+export type OrchestrationBackendName = z.infer<typeof orchestrationBackendSchema>;
 
 export const providerConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -22,6 +24,19 @@ export const providerConfigSchema = z.object({
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),
   model: z.string().default("auto")
+});
+
+export const orchestrationAdapterConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  module: z.string().default(""),
+  entrypoint: z.string().default(""),
+  options: z.record(z.unknown()).default({})
+});
+
+export const mcpToolAdapterConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  servers: z.array(z.string()).default([]),
+  exposeToolsToBackend: z.boolean().default(false)
 });
 
 export const configSchema = z.object({
@@ -56,6 +71,13 @@ export const configSchema = z.object({
   }),
   providers: z.record(providerConfigSchema),
   agents: z.record(agentConfigSchema),
+  orchestration: z.object({
+    backend: orchestrationBackendSchema.default("native"),
+    langgraph: orchestrationAdapterConfigSchema.default({}),
+    crewai: orchestrationAdapterConfigSchema.default({}),
+    autogen: orchestrationAdapterConfigSchema.default({}),
+    mcp_tools: mcpToolAdapterConfigSchema.default({})
+  }),
   debate: z.object({
     enabled: z.boolean().default(true),
     max_candidates: z.number().int().min(1).max(4).default(2),

@@ -61,6 +61,13 @@ export const defaultConfig: TomorrowEdgeConfig = {
     repairer: { provider: "auto", model: "auto" },
     summarizer: { provider: "auto", model: "auto" }
   },
+  orchestration: {
+    backend: "native",
+    langgraph: { enabled: false, module: "", entrypoint: "", options: {} },
+    crewai: { enabled: false, module: "", entrypoint: "", options: {} },
+    autogen: { enabled: false, module: "", entrypoint: "", options: {} },
+    mcp_tools: { enabled: false, servers: [], exposeToolsToBackend: false }
+  },
   debate: {
     enabled: true,
     max_candidates: 2,

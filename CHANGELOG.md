@@ -9,6 +9,27 @@ Changelog: newest changes first, grouped by release and by change type.
 
 - Track future changes here before cutting the next version.
 
+## [0.1.1] - 2026-06-03
+
+### Added
+
+- Orchestration backend abstraction with `OrchestrationBackend`, `NativeBackend`,
+  backend registry, and async event-stream contract.
+- `orchestration.backend` config with supported values `native`, `langgraph`,
+  `crewai`, and `autogen`.
+- Placeholder adapters for LangGraph, CrewAI, AutoGen, and MCP tool bridging with
+  clear unavailable-backend errors.
+- Backend architecture docs:
+  `docs/ORCHESTRATION_BACKENDS.md`, `docs/MCP_ADAPTERS.md`,
+  `docs/LANGGRAPH_ADAPTER_PLAN.md`, and `docs/CREWAI_ADAPTER_PLAN.md`.
+
+### Changed
+
+- `tedge run` now executes through the orchestration backend registry while
+  preserving the native graph as the default executable backend.
+- README now positions TomorrowEdge as a full-access cockpit for native workflows
+  and existing agent frameworks, not as another agent framework.
+
 ## [0.1.0] - 2026-06-03
 
 ### Added
@@ -68,4 +89,3 @@ Changelog: newest changes first, grouped by release and by change type.
   fallback trace events, and patch parser hardening.
 - PR #13: first-run config ergonomics, fixture-mode alias, env shadow warnings,
   agent offline/live visibility, and provider budget defaults.
-

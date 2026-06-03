@@ -21,6 +21,21 @@ Project preferences are inspectable with `tedge prefs`; use
 `tedge prefs --list-keys` for available keys and `tedge prefs --json` for raw
 machine-readable output.
 
+## Orchestration backend
+
+TomorrowEdge defaults to the native agent graph:
+
+```yaml
+orchestration:
+  backend: native
+```
+
+The config schema also reserves adapter slots for `langgraph`, `crewai`, and
+`autogen`, plus MCP tool bridging. These adapters are placeholders in 0.1.1 and
+raise clear unavailable-backend errors if selected before implementation.
+
+See [ORCHESTRATION_BACKENDS.md](ORCHESTRATION_BACKENDS.md).
+
 ## Model and role configuration
 
 TomorrowEdge does not require hardcoded model ownership. Providers define how to

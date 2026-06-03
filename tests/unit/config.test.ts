@@ -13,6 +13,8 @@ describe("config loader", () => {
     expect(config.project.safe_mode).toBe(true);
     expect(config.project.access_mode).toBe("partial");
     expect(config.project.telemetry).toBe(false);
+    expect(config.orchestration.backend).toBe("native");
+    expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
   });
