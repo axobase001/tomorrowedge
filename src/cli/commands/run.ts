@@ -15,6 +15,7 @@ export type RunOptions = {
   redTeamReview?: boolean;
   liveAdvisory?: boolean;
   livePatch?: boolean;
+  liveVision?: boolean;
   fixtureFailingPatch?: boolean;
   testCommand?: string;
   image?: string[];
@@ -34,6 +35,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     redTeamReview: options.redTeamReview,
     liveAdvisory: options.liveAdvisory ?? prefs.preferredLiveAdvisory,
     livePatch: options.livePatch ?? prefs.preferredLivePatch,
+    liveVision: options.liveVision,
     fixtureFailingPatch: options.fixtureFailingPatch,
     testCommand: options.testCommand ?? prefs.preferredTestCommand,
     imagePaths: options.image ?? []

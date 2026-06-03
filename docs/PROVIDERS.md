@@ -46,6 +46,7 @@ Run a tiny live connectivity check:
 
 ```bash
 tedge models --real-smoke
+tedge models --smoke-suite
 ```
 
 Live advisory sessions always record token usage. If `*_PRICE_PER_MTOK`
@@ -63,5 +64,10 @@ the offline mock provider if the routed provider is enabled in config but is not
 available at runtime, for example because a key is missing. The fallback is
 recorded in `modelNotes`; it is not treated as a successful call from the
 original provider.
+
+`--smoke-suite` reports text, JSON, and likely multimodal vision checks for
+configured cloud providers. Failures are printed per provider/model instead of
+throwing, so CI or local setup can distinguish "provider unavailable" from a
+broken TomorrowEdge runtime.
 
 Default CI uses `mock` and `fixture` only.

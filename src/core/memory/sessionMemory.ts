@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import { makeId } from "../../utils/ids.js";
+import { appendLearnedTaskMemory } from "./taskMemory.js";
 
 export type SessionRecord = {
   sessionId: string;
@@ -20,6 +21,7 @@ export async function saveSession(cwd: string, state: AgentGraphState): Promise<
   await mkdir(dir, { recursive: true });
   const filePath = path.join(dir, `${sessionId}.json`);
   await writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
+  await appendLearnedTaskMemory(cwd, state);
   return filePath;
 }
 

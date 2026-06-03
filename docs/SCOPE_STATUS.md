@@ -30,32 +30,33 @@ This file tracks the full-scope request against the current implementation.
 - Shell command execution only after explicit approval
 - Session memory, session listing, and replay latest
 - Project preferences stored in `.tomorrowedge/preferences.json`
+- Learned task memory stored as compact `.tomorrowedge/task-memory.jsonl`
 - Multi-model non-mutating capability drill with local planner/reviewer rubric
 - Core-led workflow simulation with task decomposition, multi-round model debate, role execution, Core review, budget preflight, and saved report
 - `tedge run --image <path>` image/screenshot/diagram handoff with structured visual spec in session output
+- `tedge review-export latest --format github|google-docs` local review/comment draft export
 - Ink TUI panes, command palette, access/model panels, and interactive `a`, `t`, `u`, `c`, `p`, `m`, `q` controls
 - Safety basics: ignore rules, file risk, secret scanner, privacy guard
 - Image2 UI baseline with Chinese default and subtle sci-fi style
 - Offline unit/integration tests
-- Release dry-run packaging scripts and release checklist
+- Realistic benchmark fixtures for JavaScript, Python, TypeScript, React UI, and state-machine/diagram tasks
+- Release dry-run packaging scripts, release checklist, and GitHub Actions CI
 
 ## Partially Implemented
 
 - Real provider adapters: OpenRouter, DeepSeek, and MiMo Token Plan live smoke and drill pass; Anthropic/Gemini are placeholders
 - Debate mode: deterministic records and core-led live workflow debate with configurable cross-examination rounds exist; richer free-form negotiation UI is not complete
-- Routing: role assignment uses enabled providers and live-call fallback exists; richer capability probing is still shallow
-- Capability stitching: offline structured visual spec and routing handoff exist; live multimodal image API calls are not yet wired
+- Routing: role assignment uses enabled providers, live-call fallback, capability tags, and smoke-suite probing; richer adaptive routing still needs longitudinal evaluation
+- Capability stitching: offline structured visual spec, routing handoff, and live multimodal image payload path exist; provider-specific vision behavior still needs real smoke coverage per model
 - Privacy mode: cloud repo context is enforced for live patch prompts; broader provider operations still need full audit
-- TUI: panes and lightweight command/access/model panels exist; pane focus and richer keyboard navigation are not complete
+- TUI: panes, focus navigation, command/access/model panels, and temporary model-route preview exist; richer editing modal persistence is not complete
 - Verification: test runner, repair loop, and evidence matcher exist but are still minimal
-- Memory: session memory and project preferences exist; deeper task-learning is still minimal
+- Memory: session memory, project preferences, and compact learned task memory exist; deeper cross-session strategy learning is still minimal
 
 ## Not Yet Implemented
 
-- Google-style or GitHub-style review/comment integrations
-- Additional realistic benchmark tasks beyond tiny JavaScript/Python/TypeScript fixtures
-- Real provider smoke suite with richer assertions and graceful CI skip per provider
-- Live multimodal Vision Agent provider calls with image payloads
-- TUI pane focus and fully interactive model-change modal
-- Rich learned task memory beyond explicit project preferences
-- Public release hardening and publishing automation
+- External Google/GitHub comment publishing connectors beyond local draft export
+- Provider-specific live vision smoke assertions across every configured model
+- Persistent TUI model-change modal that writes config/preferences
+- Deeper learned memory that recommends routes based on historical outcomes
+- Public release publishing automation beyond CI and pack dry-run

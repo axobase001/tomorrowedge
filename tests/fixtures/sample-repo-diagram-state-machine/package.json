@@ -1,0 +1,7 @@
+{
+  "name": "sample-repo-diagram-state-machine",
+  "type": "module",
+  "scripts": {
+    "test": "node test.js"
+  }
+}

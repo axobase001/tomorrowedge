@@ -5,7 +5,7 @@ export type ModelNote = {
   role: AgentRole;
   provider: string;
   model: string;
-  kind: "plan_advice" | "implementation_advice" | "review_advice" | "judge_advice" | "patch_generation";
+  kind: "vision_spec" | "plan_advice" | "implementation_advice" | "review_advice" | "judge_advice" | "patch_generation";
   content: string;
   usage?: {
     inputTokens: number;

@@ -35,6 +35,7 @@ TomorrowEdge owns the structured handoff and review trail.
 
 ```bash
 tedge run "restore this React page from the screenshot" --image ./screen.png --headless
+tedge run "restore this React page from the screenshot" --image ./screen.png --live-vision --headless
 ```
 
 When images are present, TomorrowEdge:
@@ -46,9 +47,14 @@ When images are present, TomorrowEdge:
 5. Adds the visual handoff to Planner, Coder, live advisory, and live patch prompts.
 6. Records the capability route in session/headless output.
 
-The offline Vision Agent creates a structured placeholder spec so tests and
-TUI/session plumbing work without calling a real multimodal model. Live
-multimodal provider calls can be added behind the same `vision` role later.
+The offline Vision Agent creates a structured fallback spec so tests and
+TUI/session plumbing work without calling a real multimodal model.
+
+When `--live-vision` is enabled, TomorrowEdge sends an OpenAI-compatible image
+payload to the routed `vision` provider and asks for strict JSON. If the provider
+is unavailable, returns non-visual JSON, or fails budget/access checks, the
+error is recorded in `modelNotes` and the offline Vision Agent keeps the
+structured handoff alive.
 
 ## Capability Tags
 

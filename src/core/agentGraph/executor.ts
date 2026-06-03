@@ -18,6 +18,7 @@ import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
 import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
+import { buildVisionCostPrompt, runLiveVisionSpec } from "../model/liveVisionSpec.js";
 import { buildDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 
@@ -31,6 +32,7 @@ export type OfflineGraphOptions = {
   redTeamReview?: boolean;
   liveAdvisory?: boolean;
   livePatch?: boolean;
+  liveVision?: boolean;
   fixtureFailingPatch?: boolean;
   testCommand?: string;
   imagePaths?: string[];
@@ -67,7 +69,30 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
   if (imagePaths.length) {
     const vision = new VisionAgent();
-    state.visualSpec = await runAgentState(state, router, "vision", () => vision.run({ goal, imagePaths }));
+    if (options.liveVision && access.cloudAllowed) {
+      const assignment = router.assignmentFor("vision");
+      state.budgetStatus = preflightBudget(
+        [{ provider: assignment.provider, prompt: buildVisionCostPrompt(goal, imagePaths), maxOutputTokens: 1200 }],
+        config.routing.max_cost_usd
+      );
+      if (state.budgetStatus.status !== "blocked") {
+        const liveVision = await runAgentState(state, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router }));
+        state.modelNotes.push(liveVision.note);
+        state.usageSummary = summarizeModelUsage(state.modelNotes);
+        state.visualSpec = liveVision.spec;
+      }
+    } else if (options.liveVision && !access.cloudAllowed) {
+      state.budgetStatus = {
+        status: "blocked",
+        maxCostUsd: config.routing.max_cost_usd,
+        estimatedInputTokens: 0,
+        estimatedOutputTokens: 0,
+        reason: `Live vision blocked by access mode: ${access.mode}.`
+      };
+    }
+    if (!state.visualSpec) {
+      state.visualSpec = await runAgentState(state, router, "vision", () => vision.run({ goal, imagePaths }));
+    }
     state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router, visualSpec: state.visualSpec });
   }
 

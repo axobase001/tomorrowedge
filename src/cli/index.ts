@@ -12,6 +12,8 @@ import { modeCommand } from "./commands/mode.js";
 import { prefsCommand } from "./commands/prefs.js";
 import { drillCommand } from "./commands/drill.js";
 import { workflowCommand } from "./commands/workflow.js";
+import { memoryCommand } from "./commands/memory.js";
+import { reviewExportCommand } from "./commands/reviewExport.js";
 
 const program = new Command();
 const cwd = process.cwd();
@@ -34,10 +36,11 @@ program
   .option("--red-team-review", "run an adversarial review pass before judge selection")
   .option("--live-advisory", "ask routed providers for advisory notes without changing files")
   .option("--live-patch", "ask routed coder providers for patch candidates without applying them")
+  .option("--live-vision", "ask the routed vision provider to extract a structured visual spec from --image inputs")
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
+  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").action((goal?: string) => tuiCommand(cwd, goal));
 
@@ -73,13 +76,27 @@ program
   .option("--output <format>", "json or markdown", "markdown")
   .action((task: string, options: { providers?: string; rounds?: string; output?: "json" | "markdown" }) => workflowCommand(cwd, task, options));
 
-program.command("models").description("List configured providers and models").option("--real-smoke", "send a tiny live request to configured cloud providers").action((options: { realSmoke?: boolean }) => modelsCommand(cwd, options));
+program
+  .command("models")
+  .description("List configured providers and models")
+  .option("--real-smoke", "send a tiny live request to configured cloud providers")
+  .option("--smoke-suite", "run text/json/vision smoke checks for configured cloud providers; reports failures without throwing")
+  .action((options: { realSmoke?: boolean; smokeSuite?: boolean }) => modelsCommand(cwd, options));
 
 program.command("doctor").description("Check local configuration and provider readiness").action(() => doctorCommand(cwd));
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
+
+program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").action((options: { limit?: string }) => memoryCommand(cwd, options));
+
+program
+  .command("review-export")
+  .description("Export session review comments as GitHub or Google Docs style drafts")
+  .argument("[session-id]", "session id or latest", "latest")
+  .option("--format <format>", "github or google-docs", "github")
+  .action((sessionId: string, options: { format?: "github" | "google-docs" }) => reviewExportCommand(cwd, sessionId, options));
 
 program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").action((options: { list?: boolean; snapshot?: string }) => undoCommand(cwd, options));
 

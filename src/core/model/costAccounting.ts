@@ -1,4 +1,5 @@
 import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../schemas/modelNote.js";
+import type { ChatMessageContent } from "../../providers/types.js";
 
 export type CostEstimateInput = {
   provider: string;
@@ -16,6 +17,14 @@ export function estimateCostUsd(provider: string, usage?: { inputTokens: number;
 
 export function estimateTextTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+export function estimateMessageContentTokens(content: ChatMessageContent): number {
+  if (typeof content === "string") return estimateTextTokens(content);
+  return content.reduce((sum, part) => {
+    if (part.type === "text") return sum + estimateTextTokens(part.text);
+    return sum + 1200;
+  }, 0);
 }
 
 export function preflightBudget(items: CostEstimateInput[], maxCostUsd: number): ModelBudgetStatus {

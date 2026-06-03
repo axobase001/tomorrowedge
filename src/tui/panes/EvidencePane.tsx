@@ -2,9 +2,9 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { FinalSummary } from "../../schemas/evidence.js";
 
-export function EvidencePane({ summary }: { summary?: FinalSummary }) {
+export function EvidencePane({ summary, active = false }: { summary?: FinalSummary; active?: boolean }) {
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={active ? "cyan" : "gray"} paddingX={1}>
       <Text bold>证据</Text>
       <Text>结果={summary?.result ?? "--"}</Text>
       {(summary?.evidence ?? []).map((item) => (

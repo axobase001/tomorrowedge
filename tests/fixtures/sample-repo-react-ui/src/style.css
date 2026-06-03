@@ -1,0 +1,20 @@
+.screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #0b0f14;
+  color: #d6deeb;
+}
+
+.panel {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+  border: 1px solid #273142;
+  padding: 24px;
+}
+
+button {
+  background: #36c98f;
+  color: #06130d;
+}

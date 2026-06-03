@@ -14,6 +14,8 @@ Example:
 
 ```bash
 tedge drill "fix the failing add test" --fixture sample-repo-basic --providers openrouter,deepseek,mimo
+tedge drill "restore the login screen from the screenshot" --fixture sample-repo-react-ui --providers openrouter,deepseek,mimo
+tedge drill "implement the state machine from this flow diagram" --fixture sample-repo-diagram-state-machine --providers openrouter,deepseek,mimo
 ```
 
 The command does not apply patches, run tests, or mutate the fixture.

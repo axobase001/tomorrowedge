@@ -6,7 +6,8 @@ TomorrowEdge is split into stable contracts:
 - `core/routing`: role-conditioned model assignment
 - `core/model`: live provider calls, budget accounting, usage summaries, and fallback handling
 - `core/agentGraph`: workflow execution state
-- `core/agents`: Planner, Explorer, Coder, Reviewer, Judge, Repairer, Summarizer
+- `core/agents`: Vision, Planner, Explorer, Coder, Reviewer, Judge, Repairer, Summarizer
+- `core/capabilities`: capability stitching and structured handoffs
 - `core/patch`: diff preview, validation, apply, undo
 - `safety`: ignore rules, file risk, secret scanning, privacy guard
 - `tui`: Ink panes for cockpit visibility

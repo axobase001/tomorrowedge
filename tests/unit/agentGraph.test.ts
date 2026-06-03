@@ -140,4 +140,23 @@ describe("offline agent graph", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("keeps a visual handoff when live vision cannot produce structured JSON", async () => {
+    const cwd = path.join(os.tmpdir(), `tedge-live-vision-${Date.now()}`);
+    const imagePath = path.join(cwd, "error.png");
+    try {
+      await mkdir(cwd, { recursive: true });
+      await writeFile(imagePath, "fake image bytes", "utf8");
+      const state = await runOfflineGraph(cwd, "fix the bug shown in this error screenshot", defaultConfig, {
+        imagePaths: [imagePath],
+        liveVision: true
+      });
+
+      expect(state.modelNotes.some((note) => note.kind === "vision_spec")).toBe(true);
+      expect(state.visualSpec?.pageType).toBe("error_screenshot");
+      expect(state.capabilityRoute?.steps.find((step) => step.role === "vision")?.status).toBe("success");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

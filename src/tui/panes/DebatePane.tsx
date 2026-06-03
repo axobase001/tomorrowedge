@@ -9,17 +9,19 @@ export function DebatePane({
   candidates,
   review,
   judge,
-  rounds = []
+  rounds = [],
+  active = false
 }: {
   candidates: PatchCandidate[];
   review?: ReviewReport;
   judge?: JudgeDecision;
   rounds?: DebateRound[];
+  active?: boolean;
 }) {
   const findings = review?.mode === "red_team" ? review.reviews.flatMap((item) => item.redTeamFindings).slice(0, 3) : [];
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={active ? "cyan" : "gray"} paddingX={1}>
       <Text bold>辩论</Text>
       {candidates.slice(0, 4).map((candidate) => (
         <Text key={candidate.candidateId}>
