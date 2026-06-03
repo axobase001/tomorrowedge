@@ -7,6 +7,8 @@ import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../sche
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { ReviewReport } from "../../schemas/review.js";
+import type { CapabilityRoute } from "../../schemas/capabilityRoute.js";
+import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import type { RoutingPlan } from "../routing/policies.js";
 import type { AccessPolicy } from "../permissions/accessPolicy.js";
 
@@ -15,6 +17,8 @@ export type AgentGraphState = {
   routing: RoutingPlan;
   access: AccessPolicy;
   agents: AgentRunState[];
+  capabilityRoute?: CapabilityRoute;
+  visualSpec?: StructuredVisualSpec;
   plan?: Plan;
   contextSelection?: ContextSelection;
   candidates: PatchCandidate[];

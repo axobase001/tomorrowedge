@@ -34,9 +34,10 @@ program
   .option("--red-team-review", "run an adversarial review pass before judge selection")
   .option("--live-advisory", "ask routed providers for advisory notes without changing files")
   .option("--live-patch", "ask routed coder providers for patch candidates without applying them")
+  .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
+  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").action((goal?: string) => tuiCommand(cwd, goal));
 
@@ -83,3 +84,7 @@ program.command("sessions").description("List saved local sessions").action(() =
 program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").action((options: { list?: boolean; snapshot?: string }) => undoCommand(cwd, options));
 
 await program.parseAsync(process.argv);
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}

@@ -2,6 +2,9 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 
 export type ModelStrength =
+  | "vision"
+  | "ocr"
+  | "perception"
   | "planning"
   | "coding"
   | "review"
@@ -30,7 +33,7 @@ export const editableDefaultProfiles: ModelProfile[] = [
     provider: "mock",
     model: "mock-balanced",
     label: "Mock balanced offline model",
-    strengths: ["planning", "coding", "review", "cheap", "fast", "reasoning"],
+    strengths: ["vision", "ocr", "perception", "planning", "coding", "review", "cheap", "fast", "reasoning"],
     contextWindow: 128000
   },
   {
@@ -78,10 +81,10 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       provider: "mimo",
       model: process.env.MIMO_MODEL ?? "mimo-v2.5-pro",
       label: "Xiaomi MiMo V2.5 model",
-      strengths: ["coding", "cheap", "fast", "multilingual"],
+      strengths: ["vision", "ocr", "perception", "coding", "cheap", "fast", "multilingual"],
       contextWindow: 128000,
       latencyClass: "medium",
-      defaultRoles: ["coder_b", "summarizer"]
+      defaultRoles: ["vision", "coder_b", "summarizer"]
     });
   }
   return [...profiles, ...editableDefaultProfiles];

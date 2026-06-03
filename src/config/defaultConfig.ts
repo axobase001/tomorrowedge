@@ -36,6 +36,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
     ollama: { enabled: true, base_url: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434" }
   },
   agents: {
+    vision: { model: "auto" },
     planner: { model: "auto" },
     explorer: { model: "auto" },
     coder_a: { model: "auto" },

@@ -9,6 +9,7 @@ import { estimateCostUsd } from "./costAccounting.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
+import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
 
 const maxPatchCompletionTokens = 2200;
@@ -22,6 +23,7 @@ export type LivePatchInput = {
   router: ModelRouter;
   plan: Plan;
   contextSelection: ContextSelection;
+  visualSpec?: StructuredVisualSpec;
 };
 
 export type LivePatchPlan = {
@@ -163,9 +165,11 @@ function buildPatchPrompt(input: LivePatchInput, role: AgentRole, context: strin
     "- Prefer the smallest safe patch.",
     "- Do not modify ignored, secret, credential, lock, or generated files unless explicitly necessary.",
     "- If no safe patch can be produced, return an empty unifiedDiff and explain why in summary.",
+    input.visualSpec ? "Structured visual spec:" : "",
+    input.visualSpec?.handoffPrompt ?? "",
     "Context:",
     context || "No safe context files were selected."
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function parsePatchJson(raw: string): {

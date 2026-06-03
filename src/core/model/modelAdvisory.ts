@@ -4,6 +4,7 @@ import type { ModelNote } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { ReviewReport } from "../../schemas/review.js";
+import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { makeId } from "../../utils/ids.js";
 import { ModelRouter } from "../routing/router.js";
 import { estimateCostUsd } from "./costAccounting.js";
@@ -28,6 +29,7 @@ export type AdvisoryInput = {
   plan?: Plan;
   candidates?: PatchCandidate[];
   review?: ReviewReport;
+  visualSpec?: StructuredVisualSpec;
 };
 
 export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]> {
@@ -112,8 +114,9 @@ function buildPlannerPrompt(input: AdvisoryInput): string {
   return [
     `Task: ${input.goal}`,
     `Workspace: ${input.cwd}`,
+    input.visualSpec ? input.visualSpec.handoffPrompt : "",
     "Give a short plan with key risk, expected files, and verification command. Do not propose direct execution."
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function buildReviewerPrompt(input: AdvisoryInput): string {
@@ -134,8 +137,9 @@ function buildCoderPrompt(input: AdvisoryInput): string {
     `Task: ${input.goal}`,
     `Plan steps: ${(input.plan?.steps ?? []).map((step) => step.title).join(" | ") || "unknown"}`,
     `Expected files: ${(input.plan?.expectedFiles ?? []).join(", ") || "unknown"}`,
+    input.visualSpec ? input.visualSpec.handoffPrompt : "",
     "Suggest a minimal implementation approach and name the first files to inspect. Do not output a patch."
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function buildJudgePrompt(input: AdvisoryInput): string {

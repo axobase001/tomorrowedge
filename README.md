@@ -29,6 +29,7 @@ npm run dev -- tui
 
 - 角色化 agent 图：Planner、Explorer、Coder-A/B、Reviewer、Judge、Runner、Repairer、Summarizer
 - 多模型路由：OpenRouter、DeepSeek、MiMo、Ollama、本地 mock/fixture、OpenAI-compatible 等
+- 能力拼接式路由：图片/截图/流程图先交给 Vision Agent，再把结构化规格交给 coding agent
 - 访问模式：`restricted`、`partial`、`full`
 - 非破坏性 live advisory：真实模型给计划/实现/评审/裁决建议，但不改文件
 - 非破坏性 live patch：真实模型生成候选 diff，但不会自动应用
@@ -106,6 +107,25 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 
 `workflow` 支持 1-5 轮辩论。第 1 轮是角色发言，后续轮次是交叉质询：模型会围绕上轮 transcript 里的矛盾、授权边界和落地风险互相挑战。每个 live batch 都会按 `debate.max_cost_usd` 做预算预检。
 
+## 能力拼接
+
+```bash
+tedge run "根据截图还原 React 页面" --image ./screen.png --headless
+```
+
+当任务包含图片输入时，TomorrowEdge 会自动插入 Vision Agent：
+
+```text
+Image / Screenshot / Diagram
+  -> Vision Agent
+  -> Structured Visual Spec
+  -> Planner / Coder
+  -> Patch / Test
+  -> Reviewer / Runner
+```
+
+这就是能力拼接式模型路由：不是选择一个模型完成所有事情，而是组合一组最合适的能力。OpenRouter 路由请求，TomorrowEdge 路由能力。详见 [docs/CAPABILITY_STITCHING.md](docs/CAPABILITY_STITCHING.md)。
+
 ## 安全边界
 
 - 默认 safe mode
@@ -174,6 +194,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 
 - Role-conditioned agent graph: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer
 - Multi-model routing across OpenRouter, DeepSeek, MiMo, Ollama, local mock/fixture, OpenAI-compatible providers, and placeholders
+- Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
 - Access modes: `restricted`, `partial`, `full`
 - Non-mutating live advisory from routed providers
 - Non-mutating live patch candidates from routed providers
@@ -219,6 +240,28 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 ```
 
 `workflow` supports 1-5 debate rounds. Later rounds are cross-examination rounds over the prior transcript. Each live batch is preflighted against `debate.max_cost_usd`.
+
+## Capability Stitching
+
+```bash
+tedge run "restore this React page from the screenshot" --image ./screen.png --headless
+```
+
+When image input is present, TomorrowEdge inserts a Vision Agent:
+
+```text
+Image / Screenshot / Diagram
+  -> Vision Agent
+  -> Structured Visual Spec
+  -> Planner / Coder
+  -> Patch / Test
+  -> Reviewer / Runner
+```
+
+This is capability compositional routing: do not choose one model to do
+everything; compose the right capability chain for the task. OpenRouter routes
+requests. TomorrowEdge routes capabilities. See
+[docs/CAPABILITY_STITCHING.md](docs/CAPABILITY_STITCHING.md).
 
 ## Safety
 

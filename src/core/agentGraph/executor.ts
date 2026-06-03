@@ -5,6 +5,7 @@ import { CoderAgent } from "../agents/coder.js";
 import { ExplorerAgent } from "../agents/explorer.js";
 import { JudgeAgent } from "../agents/judge.js";
 import { PlannerAgent } from "../agents/planner.js";
+import { VisionAgent } from "../agents/vision.js";
 import { ReviewerAgent } from "../agents/reviewer.js";
 import { RepairerAgent } from "../agents/repairer.js";
 import { SummarizerAgent } from "../agents/summarizer.js";
@@ -18,6 +19,7 @@ import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js
 import { buildAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildDebateRounds } from "../debate/debateEngine.js";
+import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -31,6 +33,7 @@ export type OfflineGraphOptions = {
   livePatch?: boolean;
   fixtureFailingPatch?: boolean;
   testCommand?: string;
+  imagePaths?: string[];
 };
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
@@ -60,16 +63,25 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     }
   };
 
+  const imagePaths = options.imagePaths ?? [];
+  state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
+  if (imagePaths.length) {
+    const vision = new VisionAgent();
+    state.visualSpec = await runAgentState(state, router, "vision", () => vision.run({ goal, imagePaths }));
+    state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router, visualSpec: state.visualSpec });
+  }
+
   const planner = new PlannerAgent();
-  state.plan = await runAgentState(state, router, "planner", () => planner.run({ goal }));
+  const plannerGoal = state.visualSpec ? `${goal}\n\n${state.visualSpec.handoffPrompt}` : goal;
+  state.plan = await runAgentState(state, router, "planner", () => planner.run({ goal: plannerGoal }));
 
   const explorer = new ExplorerAgent();
   state.contextSelection = await runAgentState(state, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }));
 
   const coder = new CoderAgent();
-  state.candidates.push(await runAgentState(state, router, "coder_a", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "a", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch })));
+  state.candidates.push(await runAgentState(state, router, "coder_a", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "a", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
   if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runAgentState(state, router, "coder_b", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "b", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch })));
+    state.candidates.push(await runAgentState(state, router, "coder_b", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "b", fixtureMode: options.provider === "fixture", fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
   }
 
   if (options.livePatch && access.cloudAllowed) {
@@ -79,7 +91,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       config,
       router,
       plan: state.plan!,
-      contextSelection: state.contextSelection!
+      contextSelection: state.contextSelection!,
+      visualSpec: state.visualSpec
     };
     const patchPlans = await buildLivePatchPlans(livePatchInput);
     state.budgetStatus = preflightBudget(
@@ -117,7 +130,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       router,
       plan: state.plan,
       candidates: state.candidates,
-      review: state.review
+      review: state.review,
+      visualSpec: state.visualSpec
     };
     const advisoryPlans = buildAdvisoryPlans(advisoryInput);
     state.budgetStatus = preflightBudget(
@@ -203,7 +217,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       plan: state.plan!,
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
-      evidence: ["offline graph completed", ...state.runResults.map(evidenceFromRun)]
+      evidence: [
+        "offline graph completed",
+        ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
+        ...state.runResults.map(evidenceFromRun)
+      ]
     })
   );
 

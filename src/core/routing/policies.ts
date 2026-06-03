@@ -17,7 +17,7 @@ export type RoutingPlan = {
 };
 
 export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = editableDefaultProfiles): RoutingPlan {
-  const roles: AgentRole[] = ["planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
+  const roles: AgentRole[] = ["vision", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
   const assignments = roles.map((role) => assignRole(role, mode, profiles));
   return {
     mode,
@@ -30,6 +30,9 @@ export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = e
 function assignRole(role: AgentRole, mode: RoutingMode, profiles: ModelProfile[]): RouteAssignment {
   if (role === "runner") {
     return { role, provider: "local_tool", model: "shell", reason: "runner is a local tool, not a model" };
+  }
+  if (role === "vision") {
+    return pick(role, profiles, ["vision", "ocr", "perception"], "image input requires perception before coding");
   }
   if (mode === "local" || mode === "privacy") {
     return pick(role, profiles, ["local", "privacy"], "privacy/local mode requires local-first routing");

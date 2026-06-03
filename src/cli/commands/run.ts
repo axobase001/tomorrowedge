@@ -17,6 +17,7 @@ export type RunOptions = {
   livePatch?: boolean;
   fixtureFailingPatch?: boolean;
   testCommand?: string;
+  image?: string[];
 };
 
 export async function runCommand(cwd: string, goal: string, options: RunOptions = {}): Promise<void> {
@@ -34,11 +35,12 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     liveAdvisory: options.liveAdvisory ?? prefs.preferredLiveAdvisory,
     livePatch: options.livePatch ?? prefs.preferredLivePatch,
     fixtureFailingPatch: options.fixtureFailingPatch,
-    testCommand: options.testCommand ?? prefs.preferredTestCommand
+    testCommand: options.testCommand ?? prefs.preferredTestCommand,
+    imagePaths: options.image ?? []
   });
   const sessionPath = await saveSession(cwd, state);
   if (options.headless) {
-    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, approvals: state.approvals, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
     return;
   }
   const { render } = await import("ink");

@@ -12,6 +12,7 @@ This file tracks the full-scope request against the current implementation.
 - Local `.env` loader for ignored workspace credentials
 - Provider registry with OpenAI-compatible, OpenRouter, MiMo, DeepSeek, Kimi, Anthropic/Gemini placeholders, and Ollama
 - Role-conditioned routing modes that include enabled real providers
+- Capability stitching route for image inputs: Vision Agent -> Structured Visual Spec -> Planner/Coder/Reviewer
 - Dynamic live-call fallback from unavailable routed providers to offline mock fallback, recorded in `modelNotes`
 - `tedge models --real-smoke` live connectivity check
 - `--live-advisory` non-mutating real-provider notes for planner/coder/reviewer/judge
@@ -31,6 +32,7 @@ This file tracks the full-scope request against the current implementation.
 - Project preferences stored in `.tomorrowedge/preferences.json`
 - Multi-model non-mutating capability drill with local planner/reviewer rubric
 - Core-led workflow simulation with task decomposition, multi-round model debate, role execution, Core review, budget preflight, and saved report
+- `tedge run --image <path>` image/screenshot/diagram handoff with structured visual spec in session output
 - Ink TUI panes, command palette, access/model panels, and interactive `a`, `t`, `u`, `c`, `p`, `m`, `q` controls
 - Safety basics: ignore rules, file risk, secret scanner, privacy guard
 - Image2 UI baseline with Chinese default and subtle sci-fi style
@@ -42,6 +44,7 @@ This file tracks the full-scope request against the current implementation.
 - Real provider adapters: OpenRouter, DeepSeek, and MiMo Token Plan live smoke and drill pass; Anthropic/Gemini are placeholders
 - Debate mode: deterministic records and core-led live workflow debate with configurable cross-examination rounds exist; richer free-form negotiation UI is not complete
 - Routing: role assignment uses enabled providers and live-call fallback exists; richer capability probing is still shallow
+- Capability stitching: offline structured visual spec and routing handoff exist; live multimodal image API calls are not yet wired
 - Privacy mode: cloud repo context is enforced for live patch prompts; broader provider operations still need full audit
 - TUI: panes and lightweight command/access/model panels exist; pane focus and richer keyboard navigation are not complete
 - Verification: test runner, repair loop, and evidence matcher exist but are still minimal
@@ -52,6 +55,7 @@ This file tracks the full-scope request against the current implementation.
 - Google-style or GitHub-style review/comment integrations
 - Additional realistic benchmark tasks beyond tiny JavaScript/Python/TypeScript fixtures
 - Real provider smoke suite with richer assertions and graceful CI skip per provider
+- Live multimodal Vision Agent provider calls with image payloads
 - TUI pane focus and fully interactive model-change modal
 - Rich learned task memory beyond explicit project preferences
 - Public release hardening and publishing automation

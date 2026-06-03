@@ -17,14 +17,15 @@ export function AgentCard({ agent }: { agent: AgentRunState }) {
 
 function roleLabel(role: AgentRunState["role"]): string {
   return {
-    planner: "规划器",
-    explorer: "探索器",
-    coder_a: "编码器A",
-    coder_b: "编码器B",
-    reviewer: "审查器",
-    judge: "裁决器",
-    runner: "运行器",
-    repairer: "修复器",
-    summarizer: "总结器"
+    vision: "视觉",
+    planner: "规划",
+    explorer: "探索",
+    coder_a: "编码 A",
+    coder_b: "编码 B",
+    reviewer: "审查",
+    judge: "裁决",
+    runner: "运行",
+    repairer: "修复",
+    summarizer: "总结"
   }[role];
 }

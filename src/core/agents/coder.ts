@@ -1,25 +1,39 @@
 import { makeId } from "../../utils/ids.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
+import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import type { ContextSelection } from "../context/fileSelector.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class CoderAgent extends BaseAgent<{ plan: Plan; contextSelection: ContextSelection; variant: "a" | "b"; fixtureMode?: boolean; fixtureFailingPatch?: boolean }, PatchCandidate> {
+type CoderInput = {
+  plan: Plan;
+  contextSelection: ContextSelection;
+  variant: "a" | "b";
+  fixtureMode?: boolean;
+  fixtureFailingPatch?: boolean;
+  visualSpec?: StructuredVisualSpec;
+};
+
+export class CoderAgent extends BaseAgent<CoderInput, PatchCandidate> {
   readonly role: string = "coder";
 
-  async run(input: { plan: Plan; contextSelection: ContextSelection; variant: "a" | "b"; fixtureMode?: boolean; fixtureFailingPatch?: boolean }): Promise<PatchCandidate> {
+  async run(input: CoderInput): Promise<PatchCandidate> {
     if (input.fixtureMode && input.contextSelection.selectedFiles.some((file) => file.path === "index.js")) {
       return createFixtureCandidate(input.variant, input.plan, Boolean(input.fixtureFailingPatch));
     }
+    const visualSummary = input.visualSpec ? ` Visual handoff: ${input.visualSpec.summary}` : "";
     return {
       candidateId: makeId(`candidate_${input.variant}`),
       agentId: `coder_${input.variant}`,
       approach: input.variant === "a" ? "minimal_patch" : "alternative",
-      summary: `Offline candidate ${input.variant.toUpperCase()} prepared for review. No file writes performed.`,
+      summary: `Offline candidate ${input.variant.toUpperCase()} prepared for review. No file writes performed.${visualSummary}`,
       filesChanged: [],
       unifiedDiff: "",
       testPlan: input.plan.verificationCommands ?? [],
-      knownTradeoffs: ["Fixture skeleton does not modify files until a real candidate diff is produced."],
+      knownTradeoffs: [
+        "Fixture skeleton does not modify files until a real candidate diff is produced.",
+        ...(input.visualSpec ? ["Visual spec is preserved as a structured handoff for live patch generation or human review."] : [])
+      ],
       estimatedRisk: input.plan.riskLevel
     };
   }

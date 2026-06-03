@@ -1,4 +1,5 @@
 export const agentRoles = [
+  "vision",
   "planner",
   "explorer",
   "coder_a",

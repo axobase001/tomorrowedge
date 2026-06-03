@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import path from "node:path";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 
@@ -116,5 +118,26 @@ describe("offline agent graph", () => {
 
     expect(state.budgetStatus?.status).toBe("blocked");
     expect(state.modelNotes.filter((note) => note.kind === "patch_generation")).toEqual([]);
+  });
+
+  it("inserts a vision handoff when image inputs are provided", async () => {
+    const cwd = path.join(os.tmpdir(), `tedge-vision-${Date.now()}`);
+    const imagePath = path.join(cwd, "login-screen.png");
+    try {
+      await mkdir(cwd, { recursive: true });
+      await writeFile(imagePath, "fake image bytes", "utf8");
+      const state = await runOfflineGraph(cwd, "restore this mobile login React page from screenshot", defaultConfig, {
+        imagePaths: [imagePath]
+      });
+
+      expect(state.agents[0].role).toBe("vision");
+      expect(state.capabilityRoute?.trigger).toBe("image_input");
+      expect(state.capabilityRoute?.steps.map((step) => step.role)).toContain("vision");
+      expect(state.visualSpec?.pageType).toBe("ui_screen");
+      expect(state.visualSpec?.handoffPrompt).toContain("Visual Spec");
+      expect(state.finalSummary?.evidence.some((item) => item.includes(state.visualSpec?.summary ?? ""))).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });
