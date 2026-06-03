@@ -20,6 +20,19 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 明日边缘存在的原因，是 AI coding 的未来不会是单模型的。
 不同模型有不同的能力、价格、上下文长度、延迟与隐私边界。模型厂有动力把用户留在自家模型栈里，但工程团队真正需要的是跨模型的最优组合：用强模型做高价值判断，用高性价比模型做大规模执行，用本地模型守住隐私，用人类授权关键动作。明日边缘就是这个中立编排层，把异构模型组织成一个可监督、可审计、可回滚的软件工程工作流。 OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么让多个模型在一个真实工程任务里分工、争辩、监督、交付”。
 
+## 当前版本
+
+当前版本：`0.3.0`。
+
+这一版的重点是把 TomorrowEdge 从离线产品化骨架推进到 **可配置 live 路由原型**：
+
+- `tedge run` 在检测到已启用且带 API key 的云 provider 时，会自动启用非破坏性 live advisory / patch / vision 路由
+- `--live` 可以显式启用 live 路径，`--offline` 可以强制回到确定性离线路径
+- OpenAI-compatible provider 具备 120s timeout、429/5xx retry、provider fallback 和 model call trace
+- live patch / live vision 的 JSON 输出会经过 Zod runtime validation
+- `doctor` 会提前暴露 provider、placeholder backend、full-mode dirty workspace 等风险
+- `mock` / `fixture` / native backend 可执行；LangGraph、CrewAI、AutoGen、Anthropic、Gemini native adapter 仍是 placeholder
+
 ## 快速开始
 
 ```bash
@@ -34,7 +47,7 @@ npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch 
 npm run dev -- tui
 ```
 
-默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用。
+默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用；启用后 `tedge run` 会优先尝试非破坏性 live 候选，必要时仍可用 `--offline` 回到纯离线 fixture/mock 路径。
 
 ## 核心能力
 
@@ -213,6 +226,25 @@ The difference from black-box full-access agents is visibility: every model call
 TomorrowEdge exists because the future of AI coding will not be single-model.
 Different models have different capabilities, prices, context lengths, latency profiles, and privacy boundaries. Model vendors have incentives to keep users inside their own stacks, but engineering teams need the best cross-model composition: use strong models for high-value judgment, cost-efficient models for large-scale execution, local models for privacy, and humans for critical authorization. TomorrowEdge is that neutral orchestration layer. It organizes heterogeneous models into a supervised, auditable, reversible software engineering workflow. OpenRouter solves "how to call multiple models"; TomorrowEdge solves "how to make multiple models divide work, debate, supervise, and deliver inside a real engineering task."
 
+## Current Version
+
+Current version: `0.3.0`.
+
+This release moves TomorrowEdge from a productized offline skeleton toward a
+configurable live-routing prototype:
+
+- `tedge run` auto-enables non-mutating live advisory / patch / vision routing
+  when configured cloud providers and API keys are available
+- `--live` explicitly enables live routing; `--offline` forces deterministic
+  offline execution
+- OpenAI-compatible providers now have 120s timeout, 429/5xx retry, provider
+  fallback, and model-call trace visibility
+- Live patch and live vision JSON responses are validated with Zod at runtime
+- `doctor` surfaces provider readiness, placeholder backends, and full-mode dirty
+  workspace risk before execution
+- `mock` / `fixture` / native backend are executable today; LangGraph, CrewAI,
+  AutoGen, Anthropic, and Gemini native adapters remain placeholders
+
 ## Quickstart
 
 ```bash
@@ -227,7 +259,10 @@ npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch 
 npm run dev -- tui
 ```
 
-All default tests and demos run offline without API keys. Cloud providers are disabled unless explicitly configured with environment variables.
+All default tests and demos run offline without API keys. Cloud providers are
+disabled unless explicitly configured with environment variables; once enabled,
+`tedge run` prefers non-mutating live candidates, and `--offline` returns to the
+pure fixture/mock path.
 
 ## Core Features
 

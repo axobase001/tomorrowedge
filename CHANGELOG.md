@@ -7,6 +7,10 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+- Track future changes here before cutting the next version.
+
+## [0.3.0] - 2026-06-03
+
 ### Added
 
 - `tedge run --live` and `tedge run --offline` for explicit live/offline
