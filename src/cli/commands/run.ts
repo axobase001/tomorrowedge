@@ -7,6 +7,7 @@ import type { AccessMode } from "../../config/schema.js";
 import { runOfflineGraph } from "../../core/agentGraph/executor.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
 import { loadProjectPreferences } from "../../core/memory/preferences.js";
+import { renderInteractiveApp } from "../../tui/renderApp.js";
 
 export type RunOptions = {
   headless?: boolean;
@@ -50,10 +51,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     process.stdout.write(JSON.stringify({ sessionPath, executionCwd: workspace.executionCwd, fixtureWorkspace: workspace.fixtureWorkspace, access: state.access, approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
     return;
   }
-  const { render } = await import("ink");
-  const React = await import("react");
-  const { App } = await import("../../tui/App.js");
-  render(React.createElement(App, { graph: state, safeMode: config.project.safe_mode, cwd: workspace.executionCwd }));
+  await renderInteractiveApp({ graph: state, safeMode: config.project.safe_mode, cwd: workspace.executionCwd, commandName: "tedge run" });
 }
 
 export type RunWorkspace = {

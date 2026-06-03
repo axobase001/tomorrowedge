@@ -15,4 +15,7 @@ export async function drillCommand(cwd: string, task: string, options: DrillOpti
     includeMock: options.includeMock
   });
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  if (result.status === "no_providers" || result.status === "blocked") {
+    process.exitCode = 1;
+  }
 }

@@ -14,6 +14,7 @@ export type AgentDrillOptions = {
 };
 
 export type AgentDrillResult = {
+  status: "completed" | "no_providers" | "blocked";
   task: string;
   fixture: string;
   planner: {
@@ -22,9 +23,15 @@ export type AgentDrillResult = {
     expectedFix: string;
   };
   budgetStatus: ModelBudgetStatus;
+  skippedProviders: AgentDrillSkippedProvider[];
   runs: AgentDrillRun[];
   winner?: string;
   usageSummary: ReturnType<typeof summarizeModelUsage>;
+};
+
+export type AgentDrillSkippedProvider = {
+  provider: string;
+  reason: string;
 };
 
 export type AgentDrillRun = {
@@ -46,7 +53,8 @@ export async function runAgentDrill(cwd: string, task: string, config: TomorrowE
   const fixtureRoot = path.join(cwd, "tests", "fixtures", fixture);
   const prompt = await buildPrompt(fixtureRoot, task);
   const registry = createProviderRegistry(config);
-  const providers = await selectProviders(registry.list(), options);
+  const selection = await selectProviders(registry.list(), options);
+  const providers = selection.providers;
   const budgetStatus = preflightBudget(
     providers.map((provider) => ({ provider: provider.id, prompt, maxOutputTokens: maxDrillCompletionTokens })),
     config.routing.max_cost_usd
@@ -55,8 +63,10 @@ export async function runAgentDrill(cwd: string, task: string, config: TomorrowE
   const runs = budgetStatus.status === "blocked" ? [] : await Promise.all(providers.map((provider) => runProviderDrill(provider, prompt)));
   const notes = runs.map((run) => run.note);
   const winner = runs.length ? [...runs].sort((a, b) => b.score - a.score)[0]?.provider : undefined;
+  const status = budgetStatus.status === "blocked" ? "blocked" : runs.length ? "completed" : "no_providers";
 
   return {
+    status,
     task,
     fixture,
     planner: {
@@ -71,18 +81,33 @@ export async function runAgentDrill(cwd: string, task: string, config: TomorrowE
       expectedFix: "return a + b"
     },
     budgetStatus,
+    skippedProviders: selection.skippedProviders,
     runs,
     winner,
     usageSummary: summarizeModelUsage(notes)
   };
 }
 
-async function selectProviders(providers: ModelProvider[], options: AgentDrillOptions): Promise<ModelProvider[]> {
-  const allowed = new Set(options.providers ?? ["openrouter", "deepseek", "mimo"]);
-  return providers.filter((provider) => {
-    if (!options.includeMock && provider.kind === "mock") return false;
-    return allowed.has(provider.id);
-  });
+async function selectProviders(providers: ModelProvider[], options: AgentDrillOptions): Promise<{ providers: ModelProvider[]; skippedProviders: AgentDrillSkippedProvider[] }> {
+  const requested = options.providers ?? ["openrouter", "deepseek", "mimo"];
+  const byId = new Map(providers.map((provider) => [provider.id, provider]));
+  const selected: ModelProvider[] = [];
+  const skippedProviders: AgentDrillSkippedProvider[] = [];
+
+  for (const providerId of requested) {
+    const provider = byId.get(providerId);
+    if (!provider) {
+      skippedProviders.push({ provider: providerId, reason: "provider is not configured or unavailable" });
+      continue;
+    }
+    if (!options.includeMock && provider.kind === "mock") {
+      skippedProviders.push({ provider: providerId, reason: "mock providers are skipped unless --include-mock is set" });
+      continue;
+    }
+    selected.push(provider);
+  }
+
+  return { providers: selected, skippedProviders };
 }
 
 async function runProviderDrill(provider: ModelProvider, prompt: string): Promise<AgentDrillRun> {

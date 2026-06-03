@@ -10,8 +10,24 @@ describe("agent capability drill", () => {
     });
 
     expect(result.task).toBe("fix failing test");
+    expect(result.status).toBe("completed");
     expect(result.planner.expectedFiles).toEqual(["index.js"]);
     expect(result.runs[0]?.provider).toBe("mock");
     expect(result.runs[0]?.score).toBeGreaterThanOrEqual(0);
+  });
+
+  it("reports skipped providers when no drill provider can run", async () => {
+    const result = await runAgentDrill(process.cwd(), "fix failing test", defaultConfig, {
+      providers: ["notareal"]
+    });
+
+    expect(result.status).toBe("no_providers");
+    expect(result.runs).toEqual([]);
+    expect(result.skippedProviders).toEqual([
+      {
+        provider: "notareal",
+        reason: "provider is not configured or unavailable"
+      }
+    ]);
   });
 });

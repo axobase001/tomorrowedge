@@ -106,7 +106,12 @@ program
 
 program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").action((options: { list?: boolean; snapshot?: string }) => undoCommand(cwd, options));
 
-await program.parseAsync(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+}
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];

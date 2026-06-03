@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole, AgentRunState } from "../../schemas/agentTask.js";
+import { makeId } from "../../utils/ids.js";
 import { nowIso } from "../../utils/time.js";
 import { CoderAgent } from "../agents/coder.js";
 import { ExplorerAgent } from "../agents/explorer.js";
@@ -44,6 +47,7 @@ export type OfflineGraphOptions = {
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
   const router = new ModelRouter(config);
+  const imagePaths = normalizeImagePaths(cwd, options.imagePaths ?? []);
   const access = buildAccessPolicy(config, {
     mode: options.accessMode,
     approvePatch: options.approvePatch,
@@ -88,7 +92,6 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
 
-  const imagePaths = options.imagePaths ?? [];
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
   if (imagePaths.length) {
     const vision = new VisionAgent();
@@ -359,7 +362,7 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
 async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>): Promise<T> {
   const assignment = router.assignmentFor(role);
   const agentState: AgentRunState = {
-    id: role,
+    id: makeId(role),
     role,
     provider: assignment.provider,
     model: assignment.model,
@@ -503,4 +506,13 @@ function accessModeDescription(mode: AccessMode): string {
   if (mode === "full") return "MODE: FULL AUTONOMY - every step is visible and logged.";
   if (mode === "restricted") return "MODE: RESTRICTED - offline/read-only.";
   return "MODE: PARTIAL SUPERVISION - patch/shell/repair require approval.";
+}
+
+function normalizeImagePaths(cwd: string, imagePaths: string[]): string[] {
+  const normalized = imagePaths.map((imagePath) => (path.isAbsolute(imagePath) ? imagePath : path.join(cwd, imagePath)));
+  const missing = normalized.filter((imagePath) => !existsSync(imagePath));
+  if (missing.length) {
+    throw new Error(`Image input not found: ${missing.join(", ")}`);
+  }
+  return normalized;
 }
