@@ -30,7 +30,7 @@ npm run dev -- doctor
 npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
-npm run dev -- run "fix failing test" --headless --fixture-mode
+npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- tui
 ```
 
@@ -215,7 +215,7 @@ npm run dev -- doctor
 npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
-npm run dev -- run "fix failing test" --headless --fixture-mode
+npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- tui
 ```
 
