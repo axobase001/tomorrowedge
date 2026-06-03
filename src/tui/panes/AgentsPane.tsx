@@ -7,8 +7,8 @@ export function AgentsPane({ agents, active = false }: { agents: AgentRunState[]
   return (
     <Box flexDirection="column" width="50%">
       <Text bold color={active ? "cyan" : undefined}>智能体</Text>
-      {agents.map((agent) => (
-        <AgentCard key={agent.id} agent={agent} />
+      {agents.map((agent, index) => (
+        <AgentCard key={`${agent.id}-${agent.startedAt ?? "pending"}-${index}`} agent={agent} />
       ))}
     </Box>
   );
