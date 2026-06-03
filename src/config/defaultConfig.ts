@@ -72,6 +72,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
     exclude: [
       ".env",
       ".env.*",
+      ".tomorrowedge/**",
       "node_modules/**",
       ".git/**",
       "dist/**",

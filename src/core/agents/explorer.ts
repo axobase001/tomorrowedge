@@ -9,7 +9,7 @@ export class ExplorerAgent extends BaseAgent<{ plan: Plan }, ContextSelection> {
 
   async run(input: { plan: Plan }, context: AgentContext): Promise<ContextSelection> {
     const files = await indexRepository(context.cwd);
-    const selected = files.slice(0, 12).map((file) => ({
+    const selected = files.filter((file) => file.risk === "safe").slice(0, 12).map((file) => ({
       path: file.path,
       reason: `Visible project file for ${input.plan.taskType} context.`,
       risk: file.risk
