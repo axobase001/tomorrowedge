@@ -29,7 +29,8 @@ program
   .description("Run a coding task through the offline agent graph by default")
   .argument("<task>", "task goal")
   .option("--headless", "print JSON instead of launching TUI")
-  .option("--provider <provider>", "provider hint for future real runs")
+  .option("--provider <provider>", "[deprecated] use --fixture-mode instead")
+  .option("--fixture-mode", "use fixture provider for deterministic scripted responses")
   .option("--approve-patch", "allow the selected patch to be applied")
   .option("--approve-shell", "allow the proposed test command to run")
   .option("--access-mode <mode>", "access mode: restricted, partial, or full")
@@ -42,7 +43,7 @@ program
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .action((task: string, options: { headless?: boolean; provider?: string; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
+  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").action((goal?: string) => tuiCommand(cwd, goal));
 

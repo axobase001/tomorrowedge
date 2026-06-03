@@ -34,6 +34,7 @@ export type AgentRunState = {
   provider: string;
   model: string;
   status: AgentStatus;
+  agentKind?: "offline" | "live";
   startedAt?: string;
   endedAt?: string;
   elapsedMs?: number;

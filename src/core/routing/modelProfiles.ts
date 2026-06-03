@@ -61,6 +61,8 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       label: "OpenRouter GPT-5 class model",
       strengths: ["planning", "review", "reasoning", "coding", "long_context"],
       contextWindow: 400000,
+      inputPricePerMTok: 2.5,
+      outputPricePerMTok: 10,
       latencyClass: "medium",
       defaultRoles: ["planner", "reviewer", "judge"]
     });
@@ -72,6 +74,8 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       label: "DeepSeek coding/reasoning model",
       strengths: ["coding", "reasoning", "cheap", "fast", "multilingual"],
       contextWindow: 128000,
+      inputPricePerMTok: 0.14,
+      outputPricePerMTok: 0.28,
       latencyClass: "medium",
       defaultRoles: ["explorer", "coder_a", "repairer", "summarizer"]
     });
@@ -83,6 +87,8 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       label: "Xiaomi MiMo V2.5 model",
       strengths: ["vision", "ocr", "perception", "coding", "cheap", "fast", "multilingual"],
       contextWindow: 128000,
+      inputPricePerMTok: 0.4,
+      outputPricePerMTok: 1.6,
       latencyClass: "medium",
       defaultRoles: ["vision", "coder_b", "summarizer"]
     });
@@ -93,6 +99,8 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       model: configuredModel(config, "openai_compatible", "OPENAI_COMPATIBLE_MODEL", "configured-model"),
       label: "Generic OpenAI-compatible model",
       strengths: ["planning", "coding", "review", "reasoning"],
+      inputPricePerMTok: 0.15,
+      outputPricePerMTok: 0.6,
       contextWindow: 128000,
       latencyClass: "medium",
       defaultRoles: ["planner", "coder_a", "reviewer"]
@@ -104,6 +112,8 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       model: configuredModel(config, "kimi", "KIMI_MODEL", "kimi-k2"),
       label: "Kimi-compatible long-context model",
       strengths: ["long_context", "coding", "reasoning", "multilingual", "cheap"],
+      inputPricePerMTok: 0.5,
+      outputPricePerMTok: 2,
       contextWindow: 128000,
       latencyClass: "medium",
       defaultRoles: ["explorer", "coder_b", "summarizer"]
