@@ -23,6 +23,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -306,6 +307,35 @@ h1 span,
   align-items: center;
   border-bottom: 1px solid var(--line-strong);
   font-weight: 800;
+}
+
+.inline-action {
+  display: inline-grid;
+  grid-template-columns: 1fr 42px;
+  align-items: center;
+  min-width: 220px;
+  min-height: 52px;
+  margin-top: 26px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inline-action span:first-child {
+  padding: 0 18px;
+}
+
+.inline-action span:last-child {
+  width: 42px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: #fff;
+  font-size: 22px;
+  transform: rotate(-45deg);
 }
 
 .hero-visual {
@@ -846,7 +876,8 @@ h1 span,
   border: 1px solid var(--line);
 }
 
-.architecture-diagram div {
+.architecture-diagram a {
+  position: relative;
   min-height: 134px;
   display: grid;
   place-items: center;
@@ -857,19 +888,181 @@ h1 span,
   text-align: center;
   font-weight: 800;
   text-transform: uppercase;
+  transition: background 160ms ease, color 160ms ease;
 }
 
-.architecture-diagram div:nth-child(2n) {
+.architecture-diagram a::after {
+  content: "/";
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  color: var(--red);
+  font-size: 24px;
+  line-height: 1;
+  opacity: 0;
+  transform: rotate(-45deg);
+  transition: opacity 160ms ease;
+}
+
+.architecture-diagram a:hover,
+.architecture-diagram a:focus-visible,
+.architecture-diagram a[aria-current="true"] {
+  background: var(--red);
+  color: #fff;
+  outline: 0;
+}
+
+.architecture-diagram a:hover::after,
+.architecture-diagram a:focus-visible::after,
+.architecture-diagram a[aria-current="true"]::after {
+  color: #fff;
+  opacity: 1;
+}
+
+.architecture-diagram a:nth-child(2n) {
   border-right: 0;
 }
 
-.architecture-diagram div:nth-last-child(-n + 2) {
+.architecture-diagram a:nth-last-child(-n + 2) {
   border-bottom: 0;
 }
 
-.architecture-diagram div:nth-child(3) {
+.subpage-main {
+  padding-top: 86px;
+}
+
+.detail-hero {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(88px, 9vw, 144px) clamp(28px, 5vw, 72px) clamp(54px, 6vw, 86px);
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-hero h1 {
+  max-width: 980px;
+  margin: 0;
+  font-size: clamp(48px, 6vw, 92px);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.detail-hero p {
+  max-width: 760px;
+  margin: 28px 0 0;
+  color: var(--muted);
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.5;
+}
+
+.detail-grid,
+.detail-split {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(60px, 7vw, 100px) clamp(28px, 5vw, 72px);
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.detail-cell {
+  min-height: 210px;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  background: var(--paper-2);
+}
+
+.detail-cell:last-child {
+  border-right: 1px solid var(--line);
+}
+
+.detail-cell span,
+.feature-links span {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.detail-cell h2 {
+  margin: 28px 0 18px;
+  font-size: 26px;
+  line-height: 1.12;
+  text-transform: uppercase;
+}
+
+.detail-cell p,
+.detail-split p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.detail-split {
+  display: grid;
+  grid-template-columns: 0.65fr 1fr;
+  gap: clamp(32px, 6vw, 86px);
+  align-items: start;
+}
+
+.feature-links {
+  display: grid;
+  border: 1px solid var(--line);
+}
+
+.feature-links a {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  gap: 16px;
+  align-items: center;
+  min-height: 78px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feature-links a:last-child {
+  border-bottom: 0;
+}
+
+.feature-links a b {
+  font-size: 22px;
+  transform: rotate(-45deg);
+  color: var(--red);
+}
+
+.feature-links a:hover {
   background: var(--red);
   color: #fff;
+}
+
+.feature-links a:hover b,
+.feature-links a:hover span {
+  color: #fff;
+}
+
+.terminal-panel {
+  background: var(--terminal);
+  color: var(--terminal-text);
+  border: 1px solid var(--line-strong);
+  padding: 26px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  overflow-x: auto;
+}
+
+.terminal-panel p {
+  margin: 0 0 10px;
+  color: var(--terminal-text);
+  white-space: nowrap;
+}
+
+.terminal-panel strong {
+  color: var(--red);
 }
 
 .cockpit-image {
@@ -1169,9 +1362,9 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .architecture-diagram div,
-  .architecture-diagram div:nth-child(2n),
-  .architecture-diagram div:nth-last-child(-n + 2),
+  .architecture-diagram a,
+  .architecture-diagram a:nth-child(2n),
+  .architecture-diagram a:nth-last-child(-n + 2),
   .open-link,
   .open-link:nth-child(2n),
   .open-link:nth-child(-n + 2) {
@@ -1179,12 +1372,31 @@ pre {
     border-bottom: 1px solid var(--line);
   }
 
-  .architecture-diagram div:last-child,
+  .architecture-diagram a:last-child,
   .open-link:last-child {
     border-bottom: 0;
   }
 
   .workflow-chain {
     grid-template-columns: repeat(7, 110px);
+  }
+
+  .subpage-main {
+    padding-top: 76px;
+  }
+
+  .detail-grid,
+  .detail-split {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-cell,
+  .detail-cell:last-child {
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .detail-cell:last-child {
+    border-bottom: 1px solid var(--line);
   }
 }

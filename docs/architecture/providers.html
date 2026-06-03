@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Providers | TomorrowEdge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../site/tomorrowedge.css" />
+  </head>
+  <body>
+    <header class="site-header" data-elevated="false"><a class="brand" href="../" aria-label="TomorrowEdge home"><span class="mark" aria-hidden="true"><span class="mark-top"></span><span class="mark-stem"></span></span><span>TomorrowEdge</span></a><nav class="desktop-nav" aria-label="Primary navigation"><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a></nav><a class="header-cta" href="../get-started/"><span>Get started</span><span aria-hidden="true">/</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav"><span></span><span></span></button></header>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a><a href="../get-started/">Get started</a></nav>
+    <main class="subpage-main">
+      <section class="detail-hero"><p class="eyebrow">Provider layer</p><h1>Model access stays visible.</h1><p>TomorrowEdge can call multiple provider families while recording which model was used, why it was selected, what it cost, and whether fallback occurred.</p></section>
+      <section class="detail-grid"><article class="detail-cell"><span>Route</span><h2>Heterogeneous models</h2><p>OpenRouter, DeepSeek, MiMo, Ollama, OpenAI-compatible endpoints, fixture, and mock providers can coexist.</p></article><article class="detail-cell"><span>Budget</span><h2>Cost accounting</h2><p>Known provider prices can be checked before calls and recorded after calls.</p></article><article class="detail-cell"><span>Fallback</span><h2>Honest degradation</h2><p>Fallback is logged as fallback, not disguised as success from the primary provider.</p></article></section>
+    </main>
+    <footer class="site-footer"><span>TomorrowEdge</span><a href="./">Architecture</a><a href="../docs/">Docs</a><a href="../">Home</a></footer><script src="../site/tomorrowedge.js"></script>
+  </body>
+</html>

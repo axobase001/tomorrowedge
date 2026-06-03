@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Product | TomorrowEdge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../site/tomorrowedge.css" />
+  </head>
+  <body>
+    <header class="site-header" data-elevated="false">
+      <a class="brand" href="../" aria-label="TomorrowEdge home"><span class="mark" aria-hidden="true"><span class="mark-top"></span><span class="mark-stem"></span></span><span>TomorrowEdge</span></a>
+      <nav class="desktop-nav" aria-label="Primary navigation"><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a></nav>
+      <a class="header-cta" href="../get-started/"><span>Get started</span><span aria-hidden="true">/</span></a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav"><span></span><span></span></button>
+    </header>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a><a href="../get-started/">Get started</a></nav>
+
+    <main class="subpage-main">
+      <section class="detail-hero">
+        <p class="eyebrow">Product</p>
+        <h1>Full-access coding agents with a cockpit.</h1>
+        <p>TomorrowEdge turns autonomous coding workflows into an observable operator surface: agents, routing, patches, shell runs, reviews, fallbacks, costs, and replayable evidence.</p>
+      </section>
+      <section id="cockpit" class="detail-grid">
+        <article class="detail-cell"><span>01</span><h2>Autonomy modes</h2><p>Run restricted, partial, or full workflows while keeping approval, shell, patch, and repair boundaries explicit.</p></article>
+        <article class="detail-cell"><span>02</span><h2>Multi-model work</h2><p>Use strong models for judgment, efficient models for execution, and local or fixture providers for privacy and offline testing.</p></article>
+        <article class="detail-cell"><span>03</span><h2>Operator visibility</h2><p>Watch the workflow as state instead of waiting for a black-box transcript after the fact.</p></article>
+      </section>
+      <section class="detail-split">
+        <div><p class="eyebrow">Cockpit surface</p><h2>Designed for engineers who need to trust the run.</h2><p>TomorrowEdge is TUI-first: dense, stable, keyboard-friendly, and focused on what changed, who decided, what ran, and why the workflow continued.</p></div>
+        <div class="terminal-panel"><p><strong>&gt;</strong> mode: full</p><p><strong>&gt;</strong> workflow: fixture repair loop</p><p>[planner] objective decomposed</p><p>[coder-a] patch candidate saved</p><p>[runner] npm test</p><p>[judge] replay accepted</p></div>
+      </section>
+    </main>
+    <footer class="site-footer"><span>TomorrowEdge</span><a href="https://github.com/axobase001/tomorrowedge">GitHub</a><a href="../docs/">Docs</a><a href="../">Home</a></footer>
+    <script src="../site/tomorrowedge.js"></script>
+  </body>
+</html>

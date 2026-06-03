@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture | TomorrowEdge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../site/tomorrowedge.css" />
+  </head>
+  <body>
+    <header class="site-header" data-elevated="false">
+      <a class="brand" href="../" aria-label="TomorrowEdge home"><span class="mark" aria-hidden="true"><span class="mark-top"></span><span class="mark-stem"></span></span><span>TomorrowEdge</span></a>
+      <nav class="desktop-nav" aria-label="Primary navigation"><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a></nav>
+      <a class="header-cta" href="../get-started/"><span>Get started</span><span aria-hidden="true">/</span></a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav"><span></span><span></span></button>
+    </header>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="../product/">Product</a><a href="../architecture/">Architecture</a><a href="../docs/">Docs</a><a href="../community/">Community</a><a href="../get-started/">Get started</a></nav>
+
+    <main class="subpage-main">
+      <section class="detail-hero">
+        <p class="eyebrow">Architecture</p>
+        <h1>Six contracts keep full access visible.</h1>
+        <p>Each layer can evolve independently, but every step returns to one cockpit contract: route, authorize, observe, record, replay.</p>
+      </section>
+      <section class="detail-split">
+        <div><p class="eyebrow">Explore</p><h2>Open a layer.</h2><p>These pages mirror the six function cells on the homepage and explain what each layer owns.</p></div>
+        <div class="feature-links">
+          <a href="./providers.html"><span>Provider layer</span>Providers <b>/</b></a>
+          <a href="./role-router.html"><span>Role assignment</span>Role router <b>/</b></a>
+          <a href="./orchestration-backend.html"><span>Execution contract</span>Orchestration backend <b>/</b></a>
+          <a href="./cockpit-runtime.html"><span>Operator surface</span>Cockpit runtime <b>/</b></a>
+          <a href="./event-ledger.html"><span>Replay contract</span>Event ledger <b>/</b></a>
+          <a href="./adapters.html"><span>Extension layer</span>Adapters <b>/</b></a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer"><span>TomorrowEdge</span><a href="https://github.com/axobase001/tomorrowedge">GitHub</a><a href="../docs/">Docs</a><a href="../">Home</a></footer>
+    <script src="../site/tomorrowedge.js"></script>
+  </body>
+</html>
