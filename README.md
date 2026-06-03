@@ -67,8 +67,9 @@ tedge drill "task"
 tedge workflow "task"
 tedge replay latest
 tedge trace latest
+tedge trace latest --verbose
 tedge export latest --format markdown
-tedge export latest --format json
+tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
 tedge review-export latest --format github
@@ -223,6 +224,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 - Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
 - Access modes: `restricted`, `partial`, `full`
 - First-class event ledger with replayable `events.jsonl` and per-session artifacts
+- Artifact-aware trace/export for diffs, reviews, judge decisions, stdout/stderr, and model call refs
 - Non-mutating live advisory from routed providers
 - Non-mutating live patch candidates from routed providers
 - Explicit provider fallback recorded in `modelNotes`
@@ -249,8 +251,9 @@ tedge drill "task"
 tedge workflow "task"
 tedge replay latest
 tedge trace latest
+tedge trace latest --verbose
 tedge export latest --format markdown
-tedge export latest --format json
+tedge export latest --format json --include-artifacts
 tedge sessions
 tedge undo --list
 tedge undo

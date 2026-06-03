@@ -9,6 +9,7 @@ import { makeId } from "../../utils/ids.js";
 import { ModelRouter } from "../routing/router.js";
 import { estimateCostUsd } from "./costAccounting.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
+import type { EventLedger } from "../events/eventLedger.js";
 
 const advisoryMaxCompletionTokens = 600;
 
@@ -30,6 +31,7 @@ export type AdvisoryInput = {
   candidates?: PatchCandidate[];
   review?: ReviewReport;
   visualSpec?: StructuredVisualSpec;
+  ledger?: EventLedger;
 };
 
 export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]> {
@@ -78,6 +80,7 @@ async function runRoleAdvice(input: AdvisoryInput, plan: AdvisoryCallPlan): Prom
     role: plan.role,
     provider: plan.provider,
     model: plan.model,
+    ledger: input.ledger,
     buildRequest: (model) => ({
       model,
       messages: [

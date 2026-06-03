@@ -11,7 +11,9 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "access_mode":
       return `${event.description}`;
     case "model_call":
-      return event.error ? `model call failed: ${event.error}` : `model call recorded${event.fallbackUsed ? " via fallback" : ""}`;
+      return event.error
+        ? `model call ${event.status ?? "failure"}: ${event.error}`
+        : `model call ${event.status ?? "recorded"}${event.fallbackUsed ? " via fallback" : ""}${event.inputTokens || event.outputTokens ? ` tokens=${event.inputTokens ?? 0}/${event.outputTokens ?? 0}` : ""}`;
     case "context_select":
       return `selected ${event.selectedFiles.length} files`;
     case "file_read":
@@ -43,4 +45,23 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
 
 export function renderEventMarkdown(events: TomorrowEdgeEvent[]): string {
   return events.map((event) => `- ${renderEventLine(event)}`).join("\n");
+}
+
+export function renderVerboseEventLine(event: TomorrowEdgeEvent): string {
+  const refs = artifactRefs(event);
+  return `${renderEventLine(event)}${refs.length ? ` refs=${refs.join(",")}` : ""}`;
+}
+
+export function artifactRefs(event: TomorrowEdgeEvent): string[] {
+  const refs: string[] = [];
+  if ("promptRef" in event && event.promptRef) refs.push(event.promptRef);
+  if ("responseRef" in event && event.responseRef) refs.push(event.responseRef);
+  if ("diffRef" in event && event.diffRef) refs.push(event.diffRef);
+  if ("reviewRef" in event && event.reviewRef) refs.push(event.reviewRef);
+  if ("decisionRef" in event && event.decisionRef) refs.push(event.decisionRef);
+  if ("stdoutRef" in event && event.stdoutRef) refs.push(event.stdoutRef);
+  if ("stderrRef" in event && event.stderrRef) refs.push(event.stderrRef);
+  if ("evidenceRef" in event && event.evidenceRef) refs.push(event.evidenceRef);
+  if ("summaryRef" in event && event.summaryRef) refs.push(event.summaryRef);
+  return refs;
 }

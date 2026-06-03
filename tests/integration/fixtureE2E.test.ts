@@ -6,6 +6,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
+import { exportCommand } from "../../src/cli/commands/export.js";
 
 describe("fixture E2E workflow", () => {
   let tempRoot: string;
@@ -76,6 +77,8 @@ describe("fixture E2E workflow", () => {
     expect(state.runResults[0]?.success).toBe(true);
     expect(state.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(true);
     expect(state.events.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+    const eventTypes = new Set(state.events.map((event) => event.type));
+    expect(["access_mode", "context_select", "patch_candidate", "review_decision", "judge_decision", "patch_apply", "shell_run", "summary"].every((type) => eventTypes.has(type as never))).toBe(true);
   });
 
   it("full access mode auto-applies repair and reruns tests", async () => {
@@ -91,6 +94,7 @@ describe("fixture E2E workflow", () => {
     expect(source).toContain("return a + b");
     expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
+    expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
   });
 
   it("restricted access mode blocks patch application even when approval flags are present", async () => {
@@ -166,4 +170,32 @@ describe("fixture E2E workflow", () => {
     expect(eventsText).toContain("\"type\":\"patch_apply\"");
     await expect(stat(path.join(sessionDir, "artifacts", "diffs"))).resolves.toBeTruthy();
   });
+
+  it("exports markdown with expanded patch diff and shell output artifacts", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    });
+    await saveSession(tempRoot, state);
+    const output = await captureStdout(() => exportCommand(tempRoot, "latest", { format: "markdown" }));
+
+    expect(output).toContain("## Artifact Details");
+    expect(output).toContain("+  return a + b;");
+    expect(output).toContain("node test.js");
+  });
 });
+
+async function captureStdout(fn: () => Promise<void>): Promise<string> {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return output;
+}

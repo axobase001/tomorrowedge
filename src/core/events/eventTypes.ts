@@ -29,6 +29,7 @@ export type BaseEvent = {
 
 export type ModelCallEvent = BaseEvent & {
   type: "model_call";
+  status?: "start" | "success" | "failure";
   requestId: string;
   promptRef?: string;
   responseRef?: string;

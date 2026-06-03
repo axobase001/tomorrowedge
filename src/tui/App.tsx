@@ -21,7 +21,7 @@ type FocusPane = (typeof focusPanes)[number];
 export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: AgentGraphState; safeMode?: boolean; cwd?: string }) {
   const { exit } = useApp();
   const [viewGraph, setViewGraph] = useState(graph);
-  const [message, setMessage] = useState("就绪。按 a 应用补丁，按 t 运行测试，按 c 打开命令面板，按 q 退出。");
+  const [message, setMessage] = useState(initialMessage(graph.access.mode));
   const [busy, setBusy] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -96,10 +96,11 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
   return (
     <Box flexDirection="column">
       <Text bold>TomorrowEdge / 明日边缘</Text>
-      <Text color="gray">多模型 coding agent 终端驾驶舱。强模型计划与裁决，高性价比模型探索与实现。</Text>
-      <Text color={busy ? "yellow" : "cyan"}>{busy ? "执行中..." : message}</Text>
-      <Text color="gray">焦点：{activePane}</Text>
-      <ApprovalPrompt safeMode={safeMode} />
+      <Text color="gray">TUI-first multi-model agent cockpit for full-access coding workflows.</Text>
+      <Text color={viewGraph.access.mode === "full" ? "green" : viewGraph.access.mode === "restricted" ? "yellow" : "cyan"}>{modeBanner(viewGraph.access.mode)}</Text>
+      <Text color={busy ? "yellow" : "cyan"}>{busy ? "Working..." : message}</Text>
+      <Text color="gray">Focus: {activePane}</Text>
+      {viewGraph.access.mode === "partial" ? <ApprovalPrompt safeMode={safeMode} /> : null}
       {palette ? <CommandPalette mode={palette} graph={viewGraph} selectedRouteIndex={selectedRouteIndex} /> : null}
       <Box gap={1}>
         <AgentsPane agents={viewGraph.agents} active={activePane === "agents"} />
@@ -133,6 +134,18 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       </Box>
     </Box>
   );
+}
+
+function initialMessage(mode: AgentGraphState["access"]["mode"]): string {
+  if (mode === "full") return "FULL AUTONOMY: patch, shell, and repair actions run automatically; every step is logged.";
+  if (mode === "restricted") return "RESTRICTED: offline/read-only trace inspection.";
+  return "PARTIAL SUPERVISION: press a/t/u for explicit patch, shell, and undo actions.";
+}
+
+function modeBanner(mode: AgentGraphState["access"]["mode"]): string {
+  if (mode === "full") return "MODE: FULL AUTONOMY / full access cockpit";
+  if (mode === "restricted") return "MODE: RESTRICTED / offline read-only";
+  return "MODE: PARTIAL SUPERVISION / approval prompts enabled";
 }
 
 function previewRouteAssignment(graph: AgentGraphState, index: number, direction: 1 | -1): AgentGraphState {

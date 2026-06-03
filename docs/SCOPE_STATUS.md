@@ -16,12 +16,15 @@ This file tracks the full-scope request against the current implementation.
 - Mainstream OpenAI-compatible API adapter switches for Bearer auth, `api-key` auth, no-auth local endpoints, `max_completion_tokens`, `max_tokens`, and provider-specific extra headers
 - Capability stitching route for image inputs: Vision Agent -> Structured Visual Spec -> Planner/Coder/Reviewer
 - Dynamic live-call fallback from unavailable routed providers to offline mock fallback, recorded in `modelNotes`
+- Provider-layer model call events for request start, success, failure, fallback, usage, prompt refs, and response refs
 - `tedge models --real-smoke` live connectivity check
 - `--live-advisory` non-mutating real-provider notes for planner/coder/reviewer/judge
 - `--live-patch` real-provider patch candidate generation without automatic application
 - Access modes: `restricted`, `partial`, `full`, with persistent `tedge mode`
 - Full mode semantics corrected to autonomous patch/shell/repair execution with complete event visibility
 - First-class event ledger with `events.jsonl`, per-session artifact directories, TUI Trace pane, and markdown/json export
+- Trace quality upgrade: `tedge trace --verbose`, artifact-aware markdown export, and JSON export with `--include-artifacts`
+- Live event stream architecture note for future async cockpit rendering
 - Bounded autonomy config for max repairs, shell runs, wall time, and cost caps
 - Live token accounting and optional USD estimates from configurable per-million-token prices
 - Budget preflight for live advisory and live patch workflows when provider prices are configured

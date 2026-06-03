@@ -11,6 +11,7 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
 import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
+import type { EventLedger } from "../events/eventLedger.js";
 
 const maxPatchCompletionTokens = 2200;
 const maxFileChars = 2400;
@@ -24,6 +25,7 @@ export type LivePatchInput = {
   plan: Plan;
   contextSelection: ContextSelection;
   visualSpec?: StructuredVisualSpec;
+  ledger?: EventLedger;
 };
 
 export type LivePatchPlan = {
@@ -74,6 +76,7 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
     role: plan.role,
     provider: plan.provider,
     model: plan.model,
+    ledger: input.ledger,
     buildRequest: (model) => ({
       model,
       messages: [

@@ -7,6 +7,7 @@ import { makeId } from "../../utils/ids.js";
 import type { ModelRouter } from "../routing/router.js";
 import { estimateCostUsd, estimateMessageContentTokens } from "./costAccounting.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
+import type { EventLedger } from "../events/eventLedger.js";
 
 const maxVisionCompletionTokens = 1200;
 
@@ -15,6 +16,7 @@ export type LiveVisionInput = {
   imagePaths: string[];
   config: TomorrowEdgeConfig;
   router: ModelRouter;
+  ledger?: EventLedger;
 };
 
 export type LiveVisionResult = {
@@ -52,6 +54,7 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
     role: "vision",
     provider: assignment.provider,
     model: assignment.model,
+    ledger: input.ledger,
     buildRequest: (model) => ({
       model,
       messages: [

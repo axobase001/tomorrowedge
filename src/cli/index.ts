@@ -89,9 +89,9 @@ program.command("doctor").description("Check local configuration and provider re
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 
-program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").action((sessionId: string) => traceCommand(cwd, sessionId));
+program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").action((sessionId: string, options: { verbose?: boolean }) => traceCommand(cwd, sessionId, options));
 
-program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").action((sessionId: string, options: { format?: "markdown" | "json" }) => exportCommand(cwd, sessionId, options));
+program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean }) => exportCommand(cwd, sessionId, options));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 

@@ -99,7 +99,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         config.routing.max_cost_usd
       );
       if (state.budgetStatus.status !== "blocked") {
-        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router }));
+        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }));
         state.modelNotes.push(liveVision.note);
         state.usageSummary = summarizeModelUsage(state.modelNotes);
         recordModelNoteEvents(ledger, [liveVision.note], state.usageSummary);
@@ -163,7 +163,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       router,
       plan: state.plan!,
       contextSelection: state.contextSelection!,
-      visualSpec: state.visualSpec
+      visualSpec: state.visualSpec,
+      ledger
     };
     const patchPlans = await buildLivePatchPlans(livePatchInput);
     state.budgetStatus = preflightBudget(
@@ -223,7 +224,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       plan: state.plan,
       candidates: state.candidates,
       review: state.review,
-      visualSpec: state.visualSpec
+      visualSpec: state.visualSpec,
+      ledger
     };
     const advisoryPlans = buildAdvisoryPlans(advisoryInput);
     state.budgetStatus = preflightBudget(
@@ -462,19 +464,6 @@ function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSum
       fallbackFrom: note.fallbackFrom ? `${note.fallbackFrom.provider}/${note.fallbackFrom.model}` : undefined,
       error: note.error
     });
-    if (note.fallbackUsed && note.fallbackFrom) {
-      ledger.append({
-        type: "provider_fallback",
-        phase: "routing",
-        role: note.role,
-        fromProvider: note.fallbackFrom.provider,
-        fromModel: note.fallbackFrom.model,
-        toProvider: note.provider,
-        toModel: note.model,
-        reason: note.fallbackReason ?? "provider fallback used",
-        error: note.error
-      });
-    }
   }
   ledger.append({
     type: "cost_usage",

@@ -1,17 +1,26 @@
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
-import { renderEventMarkdown } from "../../core/events/eventRenderer.js";
+import { artifactRefs, renderEventMarkdown } from "../../core/events/eventRenderer.js";
+import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
 
 export type ExportOptions = {
   format?: "markdown" | "json";
+  includeArtifacts?: boolean;
 };
 
 export async function exportCommand(cwd: string, sessionId: string, options: ExportOptions = {}): Promise<void> {
   const initial = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
   const session = await loadSession(cwd, initial.sessionId);
+  const sessionDir = resolveSessionDir(cwd, session.sessionId);
+  const artifacts = await loadArtifacts(session.state.events, sessionDir);
+
   if (options.format === "json") {
-    process.stdout.write(JSON.stringify(session, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(options.includeArtifacts ? { ...session, artifacts } : session, null, 2) + "\n");
     return;
   }
+
   const state = session.state;
   process.stdout.write(`# TomorrowEdge Session ${session.sessionId}
 
@@ -37,6 +46,10 @@ ${state.routing.assignments.map((item) => `- ${item.role}: ${item.provider}/${it
 
 ${renderEventMarkdown(state.events)}
 
+## Artifact Details
+
+${renderArtifactDetails(state.events, artifacts)}
+
 ## Patches
 
 ${state.candidates.map((candidate) => `- ${candidate.candidateId}: ${candidate.summary} [${candidate.filesChanged.join(", ") || "no files"}]`).join("\n") || "No patch candidates."}
@@ -53,4 +66,38 @@ ${state.finalSummary?.evidence.map((item) => `- ${item}`).join("\n") ?? "No fina
 
 ${state.finalSummary ? `${state.finalSummary.result}: ${state.finalSummary.suggestedCommitMessage}` : "No final summary."}
 `);
+}
+
+function resolveSessionDir(cwd: string, sessionId: string): string {
+  const dir = path.join(cwd, ".tomorrowedge", "sessions", sessionId);
+  return existsSync(dir) ? dir : path.join(cwd, ".tomorrowedge", "sessions");
+}
+
+async function loadArtifacts(events: TomorrowEdgeEvent[], sessionDir: string): Promise<Record<string, string>> {
+  const refs = [...new Set(events.flatMap(artifactRefs))];
+  const entries = await Promise.all(
+    refs.map(async (ref) => {
+      const content = await readFile(path.join(sessionDir, ref), "utf8").catch(() => "");
+      return [ref, content] as const;
+    })
+  );
+  return Object.fromEntries(entries.filter(([, content]) => content.length));
+}
+
+function renderArtifactDetails(events: TomorrowEdgeEvent[], artifacts: Record<string, string>): string {
+  const sections: string[] = [];
+  for (const event of events) {
+    for (const ref of artifactRefs(event)) {
+      const content = artifacts[ref];
+      if (!content) continue;
+      sections.push(`### ${event.type} ${ref}\n\n\`\`\`${fenceLanguage(ref)}\n${content.trimEnd()}\n\`\`\``);
+    }
+  }
+  return sections.join("\n\n") || "No artifact refs recorded.";
+}
+
+function fenceLanguage(ref: string): string {
+  if (ref.includes("/diffs/")) return "diff";
+  if (ref.endsWith(".json")) return "json";
+  return "text";
 }
