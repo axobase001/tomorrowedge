@@ -8,6 +8,7 @@ const skipPatterns = [
   /^node_modules\//,
   /^\.git\//,
   /^\.tomorrowedge\//,
+  /^docs\/assets\//,
   /^docs\/ui\//,
   /^tests\//
 ];

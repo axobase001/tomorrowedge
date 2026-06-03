@@ -33,6 +33,16 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 - `doctor` 会提前暴露 provider、placeholder backend、full-mode dirty workspace 等风险
 - `mock` / `fixture` / native backend 可执行；LangGraph、CrewAI、AutoGen、Anthropic、Gemini native adapter 仍是 placeholder
 
+## 实际截图
+
+以下截图来自当前仓库的 docs 站点实际本地渲染，不是生成图或概念图。
+
+![TomorrowEdge home](docs/assets/screenshots/tomorrowedge-home.png)
+
+![TomorrowEdge product cockpit](docs/assets/screenshots/tomorrowedge-product.png)
+
+![TomorrowEdge architecture](docs/assets/screenshots/tomorrowedge-architecture.png)
+
 ## 快速开始
 
 ```bash
@@ -245,6 +255,17 @@ configurable live-routing prototype:
   workspace risk before execution
 - `mock` / `fixture` / native backend are executable today; LangGraph, CrewAI,
   AutoGen, Anthropic, and Gemini native adapters remain placeholders
+
+## Screenshots
+
+These screenshots are captured from the current repository's locally rendered
+docs site. They are real UI screenshots, not generated concept art.
+
+![TomorrowEdge home](docs/assets/screenshots/tomorrowedge-home.png)
+
+![TomorrowEdge product cockpit](docs/assets/screenshots/tomorrowedge-product.png)
+
+![TomorrowEdge architecture](docs/assets/screenshots/tomorrowedge-architecture.png)
 
 ## Quickstart
 
