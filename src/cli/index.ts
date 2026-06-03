@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import { initCommand } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
 import { tuiCommand } from "./commands/tui.js";
@@ -19,8 +20,10 @@ import { exportCommand } from "./commands/export.js";
 
 const program = new Command();
 const cwd = process.cwd();
+const require = createRequire(import.meta.url);
+const packageJson = require("../../package.json") as { version: string };
 
-program.name("tedge").description("TomorrowEdge multi-model coding agent cockpit").version("0.1.0");
+program.name("tedge").description("TomorrowEdge multi-model coding agent cockpit").version(packageJson.version);
 
 program
   .command("init")
@@ -47,13 +50,15 @@ program
   .option("--repair-on-fail", "ask the repairer to propose a repair patch after a failed approved test")
   .option("--approve-repair", "allow a repair patch to be applied")
   .option("--red-team-review", "run an adversarial review pass before judge selection")
+  .option("--live", "enable live advisory, patch, and vision routing when configured providers are available")
+  .option("--offline", "force deterministic offline execution even when live providers are configured")
   .option("--live-advisory", "ask routed providers for advisory notes without changing files")
   .option("--live-patch", "ask routed coder providers for patch candidates without applying them")
   .option("--live-vision", "ask the routed vision provider to extract a structured visual spec from --image inputs")
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
+  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").action((goal?: string) => tuiCommand(cwd, goal));
 

@@ -58,6 +58,8 @@ tedge init
 tedge tui
 tedge run "task"
 tedge run "task" --headless
+tedge run "task" --live
+tedge run "task" --offline
 tedge config
 tedge models
 tedge models --real-smoke
@@ -93,6 +95,8 @@ tedge run "task" --access-mode restricted
 - `restricted`：禁止云模型调用和本地变更
 - `partial`：允许模型调用，但 patch/shell/repair 需要授权
 - `full`：自治执行；自动应用 patch、运行 shell、执行 repair loop，并把每一步写入事件账本
+
+`full` 会自动批准 patch/shell/repair。CLI 会在进入 full autonomy 时输出风险提示；建议先在 clean repo、sandbox 或 fixture 中使用。
 
 ## Fixture 演示
 
@@ -162,20 +166,19 @@ Image / Screenshot / Diagram
 
 ## Provider
 
-离线 provider：
+| Provider | Adapter type | Default enabled | Live smoke | Vision | Status |
+|---|---|---:|---:|---:|---|
+| `mock` / `fixture` | built-in offline | yes | n/a | fixture | stable |
+| OpenRouter | OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| DeepSeek | OpenAI-compatible | no | yes, with key | no/limited | usable |
+| MiMo | OpenAI-compatible | no | yes, with key | supported when model supports images | usable |
+| OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
+| Kimi | Moonshot OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| Ollama | local | yes | local daemon | model-dependent | usable/local |
+| Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
+| Gemini | placeholder | no | no | no | planned/native adapter not implemented |
 
-- `mock`
-- `fixture`
-
-可配置 provider：
-
-- OpenRouter
-- DeepSeek-compatible
-- MiMo-compatible
-- OpenAI-compatible
-- Kimi-compatible placeholder
-- Ollama local
-- Anthropic/Gemini placeholders
+Anthropic/Gemini 目前是显式 placeholder；如果要用 Claude/Opus 或 Gemini 类模型，推荐先通过 OpenRouter 路由，直到 native adapter 实现。
 
 本项目不是 Xiaomi、MiMo、OpenAI、Anthropic、Google、DeepSeek、Moonshot/Kimi 或 OpenRouter 的官方项目。
 
@@ -252,6 +255,8 @@ tedge init
 tedge tui
 tedge run "task"
 tedge run "task" --headless
+tedge run "task" --live
+tedge run "task" --offline
 tedge config
 tedge models
 tedge models --real-smoke
@@ -277,6 +282,9 @@ tedge undo
 - `restricted`: blocks cloud/model calls and local mutations
 - `partial`: allows model calls while requiring patch/shell/repair approval
 - `full`: autonomous execution with complete workspace tool access; patch/shell/repair loop actions are auto-approved and logged
+
+`full` auto-approves patch, shell, and repair actions. The CLI prints a risk
+warning before full-autonomy runs; prefer a clean repo, sandbox, or fixture.
 
 ## Workflow
 
@@ -341,9 +349,19 @@ requests. TomorrowEdge routes capabilities. See
 
 ## Providers
 
-Offline providers: `mock`, `fixture`.
+| Provider | Adapter type | Default enabled | Live smoke | Vision | Status |
+|---|---|---:|---:|---:|---|
+| `mock` / `fixture` | built-in offline | yes | n/a | fixture | stable |
+| OpenRouter | OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| DeepSeek | OpenAI-compatible | no | yes, with key | no/limited | usable |
+| MiMo | OpenAI-compatible | no | yes, with key | supported when model supports images | usable |
+| OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
+| Kimi | Moonshot OpenAI-compatible | no | yes, with key | model-dependent | usable |
+| Ollama | local | yes | local daemon | model-dependent | usable/local |
+| Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
+| Gemini | placeholder | no | no | no | planned/native adapter not implemented |
 
-Configurable providers: OpenRouter, DeepSeek-compatible, MiMo-compatible, OpenAI-compatible, Kimi-compatible placeholder, Ollama local, Anthropic/Gemini placeholders.
+Anthropic/Gemini are explicit placeholders today. Route Claude/Opus or Gemini-class models through OpenRouter until native adapters are implemented.
 
 Recommended bilingual config / 推荐配置:
 

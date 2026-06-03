@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getConfigPath, loadConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
+import { getConfigPath, loadConfig, writeConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
 import { initCommand } from "../../src/cli/commands/init.js";
 import { doctorCommand } from "../../src/cli/commands/doctor.js";
 
@@ -19,6 +19,7 @@ describe("config loader", () => {
     expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
+    expect(config.providers.kimi.base_url).toBe("https://api.moonshot.cn/v1");
   });
 
   it("does not overwrite an existing config unless force is explicit", async () => {
@@ -77,6 +78,26 @@ describe("config loader", () => {
     } finally {
       if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
       else process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reports placeholder orchestration backends before run time", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-backend-"));
+    try {
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        orchestration: {
+          ...config.orchestration,
+          backend: "langgraph"
+        }
+      });
+      const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
+      const parsed = JSON.parse(output) as { warnings: string[] };
+
+      expect(parsed.warnings.join("\n")).toContain("not executable");
+    } finally {
       await rm(cwd, { recursive: true, force: true });
     }
   });

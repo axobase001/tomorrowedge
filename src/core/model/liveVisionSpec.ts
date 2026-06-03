@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
-import type { StructuredVisualSpec, VisualComponent, VisualSource } from "../../schemas/visualSpec.js";
+import { liveVisualSpecResponseSchema, type StructuredVisualSpec, type VisualComponent, type VisualSource } from "../../schemas/visualSpec.js";
 import { makeId } from "../../utils/ids.js";
 import type { ModelRouter } from "../routing/router.js";
 import { estimateCostUsd, estimateMessageContentTokens } from "./costAccounting.js";
@@ -170,7 +170,11 @@ function parseVisionJson(raw: string): Partial<StructuredVisualSpec> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("Vision response was not JSON.");
-  return JSON.parse(text.slice(start, end + 1)) as Partial<StructuredVisualSpec>;
+  const parsed = liveVisualSpecResponseSchema.safeParse(JSON.parse(text.slice(start, end + 1)));
+  if (!parsed.success) {
+    throw new Error(`Vision response schema mismatch: ${parsed.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
+  }
+  return parsed.data as Partial<StructuredVisualSpec>;
 }
 
 function assertVisionShape(parsed: Partial<StructuredVisualSpec>): void {

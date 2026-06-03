@@ -31,7 +31,7 @@ orchestration:
 ```
 
 The config schema also reserves adapter slots for `langgraph`, `crewai`, and
-`autogen`, plus MCP tool bridging. These adapters are placeholders in 0.1.1 and
+`autogen`, plus MCP tool bridging. These adapters are placeholders in 0.2.x and
 raise clear unavailable-backend errors if selected before implementation.
 
 See [ORCHESTRATION_BACKENDS.md](ORCHESTRATION_BACKENDS.md).
@@ -103,8 +103,10 @@ budget:
   warn_at_percent: 80
 ```
 
-If a bound is reached, TomorrowEdge emits an `autonomy_limit_reached` event and
-stops that part of the autonomous loop.
+Currently enforced bounds: `max_repairs` and `max_shell_runs`. Cost and wall
+time are estimated and reported, but `max_iterations`, `max_cost_usd`, and
+`max_wall_time_sec` are planned enforcement points for the next autonomous loop
+upgrade.
 
 Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
 sessions are saved. It records compact metadata only: task type, risk level,

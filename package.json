@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "site:serve": "node scripts/serve-site.mjs",
     "smoke:cli": "tsx src/cli/index.ts --help && tsx src/cli/index.ts doctor --json",
+    "secrets:scan": "tsx scripts/secret-scan.ts",
     "prepack": "npm test && npm run build",
     "pack:dry": "npm pack --dry-run",
     "doctor": "tsx src/cli/index.ts doctor",

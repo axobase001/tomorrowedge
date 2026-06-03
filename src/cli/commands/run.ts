@@ -6,6 +6,7 @@ import { saveSession } from "../../core/memory/sessionMemory.js";
 import { loadProjectPreferences } from "../../core/memory/preferences.js";
 import { NativeBackend } from "../../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../../core/orchestration/registry.js";
+import { getGitStatus } from "../../core/tools/gitTool.js";
 import { renderCockpit } from "../renderCockpit.js";
 
 export type RunOptions = {
@@ -18,6 +19,8 @@ export type RunOptions = {
   accessMode?: AccessMode;
   repairOnFail?: boolean;
   redTeamReview?: boolean;
+  live?: boolean;
+  offline?: boolean;
   liveAdvisory?: boolean;
   livePatch?: boolean;
   liveVision?: boolean;
@@ -32,6 +35,14 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const loadedConfig = loadConfig(cwd);
   const prefs = loadProjectPreferences(cwd);
   const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
+  const effectiveAccessMode = accessMode ?? prefs.accessMode ?? config.project.access_mode;
+  const autoLive = shouldAutoLive(config, options);
+  if (options.live && options.offline) {
+    throw new Error("Use either --live or --offline, not both.");
+  }
+  if (effectiveAccessMode === "full") {
+    await warnFullMode(cwd);
+  }
   const backend = createOrchestrationBackend(config);
   const backendInput = {
     cwd,
@@ -42,12 +53,12 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       approvePatch: options.approvePatch,
       approveShell: options.approveShell,
       approveRepair: options.approveRepair,
-      accessMode: accessMode ?? prefs.accessMode,
+      accessMode: effectiveAccessMode,
       repairOnFail: options.repairOnFail,
       redTeamReview: options.redTeamReview,
-      liveAdvisory: options.liveAdvisory ?? prefs.preferredLiveAdvisory,
-      livePatch: options.livePatch ?? prefs.preferredLivePatch,
-      liveVision: options.liveVision,
+      liveAdvisory: liveOption(options.offline, options.live, autoLive, options.liveAdvisory ?? prefs.preferredLiveAdvisory),
+      livePatch: liveOption(options.offline, options.live, autoLive, options.livePatch ?? prefs.preferredLivePatch),
+      liveVision: liveOption(options.offline, options.live, autoLive && imagePaths.length > 0, options.liveVision),
       fixtureFailingPatch: options.fixtureFailingPatch,
       testCommand: options.testCommand ?? prefs.preferredTestCommand,
       imagePaths
@@ -75,6 +86,31 @@ function parseAccessMode(mode?: string): AccessMode | undefined {
     throw new Error(`Invalid access mode: ${mode}. Use restricted, partial, or full.`);
   }
   return parsed.data;
+}
+
+function liveOption(offline: boolean | undefined, live: boolean | undefined, autoLive: boolean, explicit: boolean | undefined): boolean {
+  if (offline) return false;
+  if (live) return true;
+  if (explicit !== undefined) return explicit;
+  return autoLive;
+}
+
+function shouldAutoLive(config: ReturnType<typeof loadConfig>, options: RunOptions): boolean {
+  if (options.offline || options.fixtureMode) return false;
+  if (options.live) return true;
+  return Object.entries(config.providers).some(([id, provider]) => {
+    if (!provider.enabled || !provider.base_url || provider.auth_header === "none") return false;
+    if (["anthropic", "gemini"].includes(id)) return false;
+    return Boolean(provider.api_key_env && process.env[provider.api_key_env]);
+  });
+}
+
+async function warnFullMode(cwd: string): Promise<void> {
+  const gitStatus = await getGitStatus(cwd).catch(() => "not a git repository");
+  process.stderr.write("Warning: FULL AUTONOMY is enabled. Patch, shell, and repair actions may run without per-step approval.\n");
+  if (gitStatus !== "clean") {
+    process.stderr.write(`Warning: workspace is ${gitStatus}. Prefer a clean repo, sandbox, or fixture before full mode.\n`);
+  }
 }
 
 function validateImageInputs(cwd: string, imagePaths: string[]): string[] {

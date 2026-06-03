@@ -7,7 +7,33 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
-- Track future changes here before cutting the next version.
+### Added
+
+- `tedge run --live` and `tedge run --offline` for explicit live/offline
+  execution selection.
+- Automatic non-mutating live routing when configured cloud providers and API
+  keys are available.
+- Provider matrix in README distinguishing usable, local, and placeholder
+  adapters.
+- CLI contract test for `tedge --version`.
+
+### Changed
+
+- CLI version output now reads from `package.json` instead of a hardcoded
+  string.
+- OpenAI-compatible provider timeout default increased to 120 seconds and now
+  retries 429/5xx transient failures.
+- Kimi default base URL now uses the Moonshot OpenAI-compatible endpoint.
+- CI now runs on both Node `20.19.x` and `22.x`.
+- `tedge doctor` reports placeholder orchestration backends and full-mode dirty
+  workspace warnings earlier.
+
+### Fixed
+
+- Live patch and live vision JSON responses are validated with Zod before being
+  normalized into downstream objects.
+- `docs/CONFIG.md` now accurately distinguishes currently enforced autonomy
+  bounds from planned bounds.
 
 ## [0.2.0] - 2026-06-03
 

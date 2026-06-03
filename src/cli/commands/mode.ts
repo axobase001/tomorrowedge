@@ -27,6 +27,9 @@ export async function modeCommand(cwd: string, mode?: string): Promise<void> {
   const path = await writeConfig(cwd, next);
   const prefsPath = await saveProjectPreferences(cwd, { ...prefs, accessMode: parsed.data as AccessMode });
   process.stdout.write(`access_mode set to ${parsed.data}\n`);
+  if (parsed.data === "full") {
+    process.stderr.write("Warning: FULL AUTONOMY auto-approves patch, shell, and repair actions. Use it in a clean repo, sandbox, or fixture.\n");
+  }
   process.stdout.write(`updated ${path}\n`);
   process.stdout.write(`updated ${prefsPath}\n`);
 }

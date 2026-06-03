@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
-import type { PatchCandidate } from "../../schemas/patchCandidate.js";
+import { livePatchResponseSchema, type PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import { makeId } from "../../utils/ids.js";
 import type { ContextSelection } from "../context/fileSelector.js";
@@ -187,22 +187,11 @@ function parsePatchJson(raw: string): {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("Live patch response was not JSON.");
-  const parsed = JSON.parse(text.slice(start, end + 1)) as Partial<{
-    summary: string;
-    unifiedDiff: string;
-    filesChanged: string[];
-    testPlan: string[];
-    knownTradeoffs: string[];
-    estimatedRisk: "low" | "medium" | "high";
-  }>;
-  return {
-    summary: parsed.summary ?? "",
-    unifiedDiff: parsed.unifiedDiff ?? "",
-    filesChanged: Array.isArray(parsed.filesChanged) ? parsed.filesChanged : [],
-    testPlan: Array.isArray(parsed.testPlan) ? parsed.testPlan : [],
-    knownTradeoffs: Array.isArray(parsed.knownTradeoffs) ? parsed.knownTradeoffs : [],
-    estimatedRisk: parsed.estimatedRisk === "medium" || parsed.estimatedRisk === "high" ? parsed.estimatedRisk : "low"
-  };
+  const parsed = livePatchResponseSchema.safeParse(JSON.parse(text.slice(start, end + 1)));
+  if (!parsed.success) {
+    throw new Error(`Live patch response schema mismatch: ${parsed.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
+  }
+  return parsed.data;
 }
 
 function inferFilesFromDiff(diff: string): string[] {

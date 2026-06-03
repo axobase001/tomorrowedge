@@ -73,6 +73,37 @@ describe("provider registry", () => {
     expect(observedBody?.max_completion_tokens).toBeUndefined();
   });
 
+  it("retries transient OpenAI-compatible API failures", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("rate limited", { status: 429 });
+      }
+      return new Response(JSON.stringify({ id: "ok", choices: [{ message: { content: "done" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openrouter",
+      name: "OpenRouter",
+      apiKey: "test-key",
+      baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "openai/gpt-5.2",
+      retryBaseDelayMs: 0
+    });
+
+    const response = await provider.chat({
+      model: "openai/gpt-5.2",
+      messages: [{ role: "user", content: "hello" }]
+    });
+
+    expect(response.content).toBe("done");
+    expect(calls).toBe(2);
+  });
+
   it("registers Anthropic and Gemini as explicit placeholders instead of OpenAI-compatible shims", async () => {
     const registry = createProviderRegistry({
       ...defaultConfig,

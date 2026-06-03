@@ -23,6 +23,8 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
   const registry = createProviderRegistry(config);
   const configPath = getConfigPath(cwd);
   const diagnostics = buildProviderDiagnostics(config);
+  const git = await getGitStatus(cwd).catch(() => "not a git repository");
+  const warnings = buildWorkspaceWarnings(config, git);
   const payload = {
     node: process.version,
     config: existsSync(configPath) ? configPath : "default in-memory config",
@@ -32,7 +34,8 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
     orchestration: config.orchestration.backend,
     registeredProviders: registry.list().map((provider) => provider.id),
     providerDiagnostics: diagnostics,
-    git: await getGitStatus(cwd).catch(() => "not a git repository")
+    git,
+    warnings
   };
   if (options.json) {
     process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
@@ -47,11 +50,29 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
   process.stdout.write(`orchestration: ${payload.orchestration}\n`);
   process.stdout.write(`providers: ${payload.registeredProviders.join(", ")}\n`);
   process.stdout.write(`git: ${payload.git}\n`);
+  if (warnings.length) {
+    process.stdout.write("warnings:\n");
+    for (const warning of warnings) process.stdout.write(`- ${warning}\n`);
+  }
   process.stdout.write("provider diagnostics:\n");
   for (const diagnostic of diagnostics) {
     process.stdout.write(`- ${diagnostic.id}: ${diagnostic.status}; ${diagnostic.checks.join("; ")}\n`);
     if (diagnostic.fix) process.stdout.write(`  fix: ${diagnostic.fix}\n`);
   }
+}
+
+function buildWorkspaceWarnings(config: TomorrowEdgeConfig, gitStatus: string): string[] {
+  const warnings: string[] = [];
+  if (config.orchestration.backend !== "native") {
+    warnings.push(`orchestration.backend=${config.orchestration.backend} is registered but not executable in 0.2.x; use native for real runs.`);
+  }
+  if (config.project.access_mode === "full") {
+    warnings.push("full access mode auto-approves patch, shell, and repair actions.");
+    if (gitStatus !== "clean" && gitStatus !== "not a git repository") {
+      warnings.push(`full mode is configured while the workspace is ${gitStatus}; prefer a clean repo, sandbox, or fixture.`);
+    }
+  }
+  return warnings;
 }
 
 function buildProviderDiagnostics(config: TomorrowEdgeConfig): DoctorDiagnostic[] {
