@@ -1015,7 +1015,7 @@ h1 span,
 
 .feature-links a {
   display: grid;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: minmax(130px, 0.34fr) minmax(0, 1fr) 42px;
   gap: 16px;
   align-items: center;
   min-height: 78px;
@@ -1024,6 +1024,12 @@ h1 span,
   background: var(--paper-2);
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.feature-links a strong {
+  min-width: 0;
+  font-size: clamp(18px, 1.8vw, 24px);
+  line-height: 1.05;
 }
 
 .feature-links a:last-child {
@@ -1379,6 +1385,24 @@ pre {
 
   .workflow-chain {
     grid-template-columns: repeat(7, 110px);
+  }
+
+  .feature-links a {
+    grid-template-columns: 1fr 36px;
+    gap: 10px;
+    padding: 18px 20px;
+  }
+
+  .feature-links a span {
+    grid-column: 1 / -1;
+  }
+
+  .feature-links a strong {
+    grid-column: 1;
+  }
+
+  .feature-links a b {
+    grid-column: 2;
   }
 
   .subpage-main {
