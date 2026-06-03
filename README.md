@@ -23,6 +23,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 ## 快速开始
 
 ```bash
+node --version   # requires Node >=20.19.0
 npm install
 npm test
 npm run dev -- doctor
@@ -207,6 +208,7 @@ Different models have different capabilities, prices, context lengths, latency p
 ## Quickstart
 
 ```bash
+node --version   # requires Node >=20.19.0
 npm install
 npm test
 npm run dev -- doctor

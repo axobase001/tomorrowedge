@@ -6,6 +6,9 @@
   "bin": {
     "tedge": "./dist/cli/index.js"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadProjectPreferences, saveProjectPreferences } from "../../src/core/memory/preferences.js";
 import { prefsCommand } from "../../src/cli/commands/prefs.js";
+import { modeCommand } from "../../src/cli/commands/mode.js";
 
 describe("project preferences", () => {
   it("round-trips local preferences", async () => {
@@ -36,6 +37,18 @@ describe("project preferences", () => {
       expect(output).toContain("TomorrowEdge project preferences");
       expect(output).toContain("Available keys");
       expect(output).toContain("accessMode");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("syncs mode command writes into preferences so stale prefs cannot override it", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-prefs-"));
+    try {
+      await saveProjectPreferences(cwd, { accessMode: "restricted" });
+      await captureStdout(() => modeCommand(cwd, "full"));
+
+      expect(loadProjectPreferences(cwd).accessMode).toBe("full");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
