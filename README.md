@@ -2,9 +2,18 @@
 
 **中文** | [English](#english)
 
-明日边缘是一个 **TUI-first multi-model agent cockpit**：面向代码任务的终端驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
+明日边缘是一个 **TUI-first multi-model agent cockpit for full-access coding workflows**：面向 full-access 代码任务的终端驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
 
-它不是聊天机器人，也不是某个模型的一层 CLI 壳。它把 agentic coding 从一条黑盒命令，变成一个可见、可监督、可审计、可回滚的工作流：强模型负责计划与裁决，高性价比模型负责探索与实现，本地模型负责隐私，人类负责授权真正重要的动作。
+```text
+Full autonomy, full visibility.
+完全自治，完全可见。
+```
+
+它不是聊天机器人，也不是某个模型的一层 CLI 壳。Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+
+Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会自动应用 patch、运行 shell、执行 repair loop，并继续迭代，不会每一步都打断用户确认。
+
+它与黑盒 full-access agent 的区别不是限制权限，而是可见性：每次模型调用、上下文选择、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 TUI 中，并写入可回放事件账本。
 
 ## 为什么存在
 
@@ -57,6 +66,9 @@ tedge prefs
 tedge drill "task"
 tedge workflow "task"
 tedge replay latest
+tedge trace latest
+tedge export latest --format markdown
+tedge export latest --format json
 tedge sessions
 tedge memory
 tedge review-export latest --format github
@@ -75,7 +87,7 @@ tedge run "task" --access-mode restricted
 
 - `restricted`：禁止云模型调用和本地变更
 - `partial`：允许模型调用，但 patch/shell/repair 需要授权
-- `full`：自动授权 patch/shell/repair
+- `full`：自治执行；自动应用 patch、运行 shell、执行 repair loop，并把每一步写入事件账本
 
 ## Fixture 演示
 
@@ -172,8 +184,17 @@ Image / Screenshot / Diagram
 ## English
 
 TomorrowEdge is a **TUI-first multi-model agent cockpit** for coding tasks: a terminal cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering workflows.
+TomorrowEdge is a **TUI-first multi-model agent cockpit for full-access coding workflows**.
 
-It is not a chatbot CLI and not a single-provider wrapper. It turns agentic coding from a black-box command into a visible, supervised, auditable, and reversible workflow: strong models plan and judge, efficient models explore and implement, local models protect privacy, and humans authorize the actions that matter.
+```text
+Full autonomy, full visibility.
+```
+
+It is not a chatbot CLI and not a single-provider wrapper. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+
+Full mode is autonomous execution with complete workspace tool access. TomorrowEdge will apply patches, run shell commands, execute repair loops, and continue iterating without per-step confirmation.
+
+The difference from black-box full-access agents is visibility: every model call, context selection, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the TUI and saved to a replayable event ledger.
 
 ## Why It Exists
 
@@ -201,6 +222,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 - User-configurable provider/model assignment per agent role for controlled model-comparison experiments
 - Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
 - Access modes: `restricted`, `partial`, `full`
+- First-class event ledger with replayable `events.jsonl` and per-session artifacts
 - Non-mutating live advisory from routed providers
 - Non-mutating live patch candidates from routed providers
 - Explicit provider fallback recorded in `modelNotes`
@@ -226,6 +248,9 @@ tedge prefs
 tedge drill "task"
 tedge workflow "task"
 tedge replay latest
+tedge trace latest
+tedge export latest --format markdown
+tedge export latest --format json
 tedge sessions
 tedge undo --list
 tedge undo
@@ -235,7 +260,7 @@ tedge undo
 
 - `restricted`: blocks cloud/model calls and local mutations
 - `partial`: allows model calls while requiring patch/shell/repair approval
-- `full`: auto-approves patch/shell/repair actions
+- `full`: autonomous execution with complete workspace tool access; patch/shell/repair loop actions are auto-approved and logged
 
 ## Workflow
 

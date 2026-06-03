@@ -63,6 +63,27 @@ Recommended experiment pattern:
 - Use `ollama` for roles that must stay local in privacy experiments.
 - In `privacy` or `local` routing mode, cloud role overrides are ignored and routed to local-safe providers.
 
+## Autonomy and budget bounds
+
+Full mode is autonomous execution, so it uses run boundaries instead of
+per-step confirmation:
+
+```yaml
+autonomy:
+  max_iterations: 5
+  max_repairs: 3
+  max_shell_runs: 10
+  max_cost_usd: 10
+  max_wall_time_sec: 1800
+
+budget:
+  hard_cap_usd: 10
+  warn_at_percent: 80
+```
+
+If a bound is reached, TomorrowEdge emits an `autonomy_limit_reached` event and
+stops that part of the autonomous loop.
+
 Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
 sessions are saved. It records compact metadata only: task type, risk level,
 routing mode, verification commands, visual page type, judge decision, and

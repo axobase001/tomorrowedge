@@ -82,6 +82,7 @@ describe("offline agent graph", () => {
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
     expect(state.modelNotes.every((note) => note.fallbackUsed)).toBe(true);
     expect(state.modelNotes.every((note) => note.fallbackFrom?.provider === "openrouter")).toBe(true);
+    expect(state.events.some((event) => event.type === "provider_fallback")).toBe(true);
   });
 
   it("surfaces unavailable provider errors when routing fallback is disabled", async () => {

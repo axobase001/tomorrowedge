@@ -14,6 +14,8 @@ import { drillCommand } from "./commands/drill.js";
 import { workflowCommand } from "./commands/workflow.js";
 import { memoryCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
+import { traceCommand } from "./commands/trace.js";
+import { exportCommand } from "./commands/export.js";
 
 const program = new Command();
 const cwd = process.cwd();
@@ -86,6 +88,10 @@ program
 program.command("doctor").description("Check local configuration and provider readiness").action(() => doctorCommand(cwd));
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
+
+program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").action((sessionId: string) => traceCommand(cwd, sessionId));
+
+program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").action((sessionId: string, options: { format?: "markdown" | "json" }) => exportCommand(cwd, sessionId, options));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 

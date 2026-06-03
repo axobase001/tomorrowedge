@@ -6,7 +6,7 @@ This file tracks the full-scope request against the current implementation.
 
 - Clean-room note and project docs
 - TypeScript CLI/TUI scaffold
-- `tedge init`, `tui`, `run`, `config`, `models`, `doctor`, `replay`, `sessions`, `undo`
+- `tedge init`, `tui`, `run`, `config`, `models`, `doctor`, `replay`, `trace`, `export`, `sessions`, `undo`
 - Offline `mock` and `fixture` providers
 - Config loader with safe defaults and Chinese UI language default
 - Local `.env` loader for ignored workspace credentials
@@ -20,6 +20,9 @@ This file tracks the full-scope request against the current implementation.
 - `--live-advisory` non-mutating real-provider notes for planner/coder/reviewer/judge
 - `--live-patch` real-provider patch candidate generation without automatic application
 - Access modes: `restricted`, `partial`, `full`, with persistent `tedge mode`
+- Full mode semantics corrected to autonomous patch/shell/repair execution with complete event visibility
+- First-class event ledger with `events.jsonl`, per-session artifact directories, TUI Trace pane, and markdown/json export
+- Bounded autonomy config for max repairs, shell runs, wall time, and cost caps
 - Live token accounting and optional USD estimates from configurable per-million-token prices
 - Budget preflight for live advisory and live patch workflows when provider prices are configured
 - Offline agent graph: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Summarizer
@@ -30,7 +33,7 @@ This file tracks the full-scope request against the current implementation.
 - Create/delete patch support in the patch parser and applier
 - Rename and binary patch detection with explicit safety blocking
 - Shell command execution only after explicit approval
-- Session memory, session listing, and replay latest
+- Session memory, session directory artifacts, session listing, replay latest, trace latest, and export latest
 - Project preferences stored in `.tomorrowedge/preferences.json`
 - Learned task memory stored as compact `.tomorrowedge/task-memory.jsonl`
 - Multi-model non-mutating capability drill with local planner/reviewer rubric
@@ -51,7 +54,7 @@ This file tracks the full-scope request against the current implementation.
 - Routing: role assignment uses enabled providers, user role overrides, live-call fallback, capability tags, and smoke-suite probing; richer adaptive routing still needs longitudinal evaluation
 - Capability stitching: offline structured visual spec, routing handoff, and live multimodal image payload path exist; provider-specific vision behavior still needs real smoke coverage per model
 - Privacy mode: cloud repo context is enforced for live patch prompts; broader provider operations still need full audit
-- TUI: panes, focus navigation, command/access/model panels, and temporary model-route preview exist; richer editing modal persistence is not complete
+- TUI: panes, focus navigation, command/access/model panels, Trace pane, full-mode badge, and temporary model-route preview exist; richer editing modal persistence is not complete
 - Verification: test runner, repair loop, and evidence matcher exist but are still minimal
 - Memory: session memory, project preferences, and compact learned task memory exist; deeper cross-session strategy learning is still minimal
 

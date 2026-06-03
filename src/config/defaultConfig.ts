@@ -14,6 +14,17 @@ export const defaultConfig: TomorrowEdgeConfig = {
     max_cost_usd: 1,
     max_wall_time_sec: 600
   },
+  autonomy: {
+    max_iterations: 5,
+    max_repairs: 3,
+    max_shell_runs: 10,
+    max_cost_usd: 10,
+    max_wall_time_sec: 1800
+  },
+  budget: {
+    hard_cap_usd: 10,
+    warn_at_percent: 80
+  },
   privacy: {
     mode: "normal",
     allow_cloud_repo_context: true,

@@ -38,6 +38,17 @@ export const configSchema = z.object({
     max_cost_usd: z.number().nonnegative().default(1),
     max_wall_time_sec: z.number().positive().default(600)
   }),
+  autonomy: z.object({
+    max_iterations: z.number().int().positive().default(5),
+    max_repairs: z.number().int().nonnegative().default(3),
+    max_shell_runs: z.number().int().nonnegative().default(10),
+    max_cost_usd: z.number().nonnegative().default(10),
+    max_wall_time_sec: z.number().positive().default(1800)
+  }),
+  budget: z.object({
+    hard_cap_usd: z.number().nonnegative().default(10),
+    warn_at_percent: z.number().min(1).max(100).default(80)
+  }),
   privacy: z.object({
     mode: z.enum(["normal", "privacy", "local"]).default("normal"),
     allow_cloud_repo_context: z.boolean().default(true),

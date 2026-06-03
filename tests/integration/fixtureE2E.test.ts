@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm, cp } from "node:fs/promises";
+import { mkdtemp, readFile, rm, cp, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
+import { saveSession } from "../../src/core/memory/sessionMemory.js";
 
 describe("fixture E2E workflow", () => {
   let tempRoot: string;
@@ -73,6 +74,23 @@ describe("fixture E2E workflow", () => {
     expect(state.access.mode).toBe("full");
     expect(state.changedFiles).toEqual(["index.js"]);
     expect(state.runResults[0]?.success).toBe(true);
+    expect(state.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(true);
+    expect(state.events.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+  });
+
+  it("full access mode auto-applies repair and reruns tests", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    });
+    const source = await readFile(path.join(tempRoot, "index.js"), "utf8");
+
+    expect(state.runResults.map((result) => result.success)).toEqual([false, true]);
+    expect(source).toContain("return a + b");
+    expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
+    expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
   });
 
   it("restricted access mode blocks patch application even when approval flags are present", async () => {
@@ -132,5 +150,20 @@ describe("fixture E2E workflow", () => {
     expect(source).toContain("return a + b");
     expect(state.finalSummary?.result).toBe("completed");
     expect(state.finalSummary?.evidence).toContain("Command passed: npm test");
+  });
+
+  it("saves a replayable session directory with events and artifacts", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    });
+    const sessionPath = await saveSession(tempRoot, state);
+    const sessionDir = path.dirname(sessionPath);
+    const eventsText = await readFile(path.join(sessionDir, "events.jsonl"), "utf8");
+
+    expect(sessionPath.endsWith(path.join(state.sessionId, "session.json"))).toBe(true);
+    expect(eventsText).toContain("\"type\":\"access_mode\"");
+    expect(eventsText).toContain("\"type\":\"patch_apply\"");
+    await expect(stat(path.join(sessionDir, "artifacts", "diffs"))).resolves.toBeTruthy();
   });
 });

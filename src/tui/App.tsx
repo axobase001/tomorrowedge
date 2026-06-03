@@ -13,8 +13,9 @@ import { HelpPane } from "./panes/HelpPane.js";
 import { MemoryPane } from "./panes/MemoryPane.js";
 import { RouterPane } from "./panes/RouterPane.js";
 import { ShellPane } from "./panes/ShellPane.js";
+import { TracePane } from "./panes/TracePane.js";
 
-const focusPanes = ["agents", "goal", "routing", "debate", "evidence", "diff", "shell", "memory", "help"] as const;
+const focusPanes = ["agents", "goal", "routing", "trace", "debate", "evidence", "diff", "shell", "memory", "help"] as const;
 type FocusPane = (typeof focusPanes)[number];
 
 export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: AgentGraphState; safeMode?: boolean; cwd?: string }) {
@@ -119,8 +120,13 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       </Box>
       <Box gap={1}>
         <Box width="50%">
+          <TracePane events={viewGraph.events ?? []} active={activePane === "trace"} />
+        </Box>
+        <Box width="50%">
           <MemoryPane graph={viewGraph} active={activePane === "memory"} />
         </Box>
+      </Box>
+      <Box gap={1}>
         <Box width="50%">
           <HelpPane active={activePane === "help"} />
         </Box>

@@ -1,7 +1,8 @@
 import { listSessions, loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
 
 export async function replayCommand(cwd: string, sessionId: string): Promise<void> {
-  const session = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
+  const initial = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
+  const session = await loadSession(cwd, initial.sessionId);
   const { render } = await import("ink");
   const React = await import("react");
   const { App } = await import("../../tui/App.js");
