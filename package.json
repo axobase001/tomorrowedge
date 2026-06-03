@@ -1,0 +1,56 @@
+{
+  "name": "tomorrowedge",
+  "version": "0.1.0",
+  "description": "A TUI cockpit for multi-model coding agents.",
+  "type": "module",
+  "bin": {
+    "tedge": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepack": "npm test && npm run build",
+    "pack:dry": "npm pack --dry-run",
+    "doctor": "tsx src/cli/index.ts doctor",
+    "tui": "tsx src/cli/index.ts tui",
+    "smoke:real": "tsx src/cli/index.ts models --real-smoke"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs/*.md"
+  ],
+  "keywords": [
+    "tui",
+    "coding-agent",
+    "multi-model",
+    "agent-orchestration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "diff": "^8.0.4",
+    "execa": "^9.5.2",
+    "fast-glob": "^3.3.3",
+    "ignore": "^7.0.3",
+    "ink": "^5.1.0",
+    "react": "^18.3.1",
+    "simple-git": "^3.27.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/diff": "^7.0.2",
+    "@types/node": "^22.13.1",
+    "@types/react": "^18.3.18",
+    "playwright": "^1.60.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.8"
+  }
+}

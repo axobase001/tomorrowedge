@@ -1,0 +1,6 @@
+routing:
+  mode: privacy
+privacy:
+  mode: privacy
+  allow_cloud_repo_context: false
+  require_approval_for_sensitive_files: true

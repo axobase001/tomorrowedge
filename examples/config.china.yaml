@@ -1,0 +1,15 @@
+routing:
+  mode: china
+providers:
+  mimo:
+    enabled: false
+    api_key_env: MIMO_API_KEY
+    base_url: ""
+  deepseek:
+    enabled: false
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: ""
+  kimi:
+    enabled: false
+    api_key_env: KIMI_API_KEY
+    base_url: ""

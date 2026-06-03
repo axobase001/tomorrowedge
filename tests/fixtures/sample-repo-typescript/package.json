@@ -1,0 +1,10 @@
+{
+  "name": "sample-repo-typescript",
+  "type": "module",
+  "scripts": {
+    "test": "tsx test.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

@@ -1,0 +1,6 @@
+routing:
+  mode: quality
+debate:
+  enabled: true
+  max_candidates: 2
+  max_rounds: 1

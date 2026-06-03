@@ -1,0 +1,9 @@
+routing:
+  mode: local
+privacy:
+  mode: local
+  allow_cloud_repo_context: false
+providers:
+  ollama:
+    enabled: true
+    base_url: http://localhost:11434

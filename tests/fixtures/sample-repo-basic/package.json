@@ -1,0 +1,7 @@
+{
+  "name": "sample-repo-basic",
+  "type": "module",
+  "scripts": {
+    "test": "node test.js"
+  }
+}

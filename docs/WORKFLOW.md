@@ -1,0 +1,38 @@
+# Core-Led Workflow
+
+`tedge workflow` runs the full cockpit pattern:
+
+1. Core Planner creates a task decomposition, acceptance criteria, roles, and safety rules.
+2. Different providers debate the plan before execution.
+3. Core assigns different model roles and deliverables.
+4. Models execute non-mutating deliverables.
+5. Core Reviewer audits quality and writes a replayable report.
+
+Example:
+
+```bash
+tedge workflow "design and land a real multi-model orchestration workflow" --providers openrouter,deepseek,mimo
+tedge workflow "design and land a real multi-model orchestration workflow" --providers openrouter,deepseek,mimo --rounds 2
+```
+
+Default role mapping:
+
+- Core Planner/Reviewer: local River/TomorrowEdge
+- Architect/Judge: OpenRouter
+- Implementation Agent: DeepSeek
+- Docs/UX Agent: MiMo
+
+The command saves a Markdown report under `.tomorrowedge/workflows/`.
+It does not apply patches or run shell commands proposed by models.
+
+`--rounds` accepts 1-5 debate rounds. Round 1 collects role-specific arguments.
+Later rounds are cross-examination rounds over the prior transcript:
+
+- Architect/Judge identifies contradictions and approval gates.
+- Implementation Agent responds to risks and refines landing order.
+- Docs/UX Agent challenges unclear Chinese operator UX and cockpit copy.
+
+Each live debate or execution batch is preflighted against
+`debate.max_cost_usd`. If configured prices show the batch would exceed the
+remaining budget, the workflow stops further model calls, records
+`budgetStatus`, and the Core Review reports `needs_revision`.

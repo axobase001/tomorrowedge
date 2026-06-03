@@ -1,0 +1,72 @@
+import path from "node:path";
+import { loadConfig } from "../../config/configLoader.js";
+import { classifyFileRisk } from "../../safety/fileRisk.js";
+import { createIgnoreMatcher, normalizePath } from "../../safety/ignoreRules.js";
+import { parseUnifiedDiff } from "./patchParser.js";
+
+export type PatchValidationIssue = {
+  path: string;
+  reason: string;
+};
+
+export type PatchValidationResult = {
+  ok: boolean;
+  issues: PatchValidationIssue[];
+  files: string[];
+};
+
+export function validateUnifiedDiff(cwd: string, unifiedDiff: string): PatchValidationResult {
+  const config = loadConfig(cwd);
+  const matcher = createIgnoreMatcher(cwd, config);
+  const parsedFiles = parseUnifiedDiff(unifiedDiff);
+  const files = parsedFiles
+    .map((file) => normalizePath(file.newFileName || file.oldFileName))
+    .filter(Boolean);
+  const issues: PatchValidationIssue[] = [];
+
+  for (const parsedFile of parsedFiles) {
+    const filePath = normalizePath(parsedFile.newFileName || parsedFile.oldFileName);
+    if (!filePath) continue;
+    if (parsedFile.isBinary) {
+      issues.push({ path: filePath, reason: "binary patches are not supported" });
+      continue;
+    }
+    if (parsedFile.isRename) {
+      issues.push({ path: filePath, reason: "rename patches require explicit manual handling" });
+      continue;
+    }
+    if (isPathTraversal(cwd, filePath)) {
+      issues.push({ path: filePath, reason: "path escapes project root" });
+      continue;
+    }
+    if (matcher.ignores(filePath)) {
+      issues.push({ path: filePath, reason: "path is ignored by safety or ignore rules" });
+      continue;
+    }
+    const risk = classifyFileRisk(filePath, 0);
+    if (risk === "sensitive") {
+      issues.push({ path: filePath, reason: "path is classified as sensitive" });
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    files
+  };
+}
+
+export function assertPatchSafe(cwd: string, unifiedDiff: string): string[] {
+  const result = validateUnifiedDiff(cwd, unifiedDiff);
+  if (!result.ok) {
+    const detail = result.issues.map((issue) => `${issue.path}: ${issue.reason}`).join("; ");
+    throw new Error(`Patch blocked by safety validation: ${detail}`);
+  }
+  return result.files;
+}
+
+function isPathTraversal(cwd: string, relativePath: string): boolean {
+  const resolved = path.resolve(cwd, relativePath);
+  const root = path.resolve(cwd);
+  return resolved !== root && !resolved.startsWith(root + path.sep);
+}

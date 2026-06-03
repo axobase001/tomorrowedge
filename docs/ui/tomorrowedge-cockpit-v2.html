@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TomorrowEdge Cockpit Mockup V2</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d12;
+      --panel: #101720;
+      --panel-2: #0d141c;
+      --line: #253142;
+      --line-soft: #1b2634;
+      --text: #d6deeb;
+      --muted: #7d8590;
+      --cyan: #58a6ff;
+      --green: #3fb950;
+      --amber: #d29922;
+      --red: #f85149;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, rgba(88, 166, 255, 0.04), transparent 24rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Consolas, "SFMono-Regular", "Liberation Mono", Menlo, monospace;
+    }
+
+    .frame {
+      width: min(1440px, calc(100vw - 48px));
+      margin: 24px auto;
+      border: 1px solid var(--line);
+      background: rgba(13, 20, 28, 0.92);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: #0c1118;
+    }
+
+    .title {
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--amber);
+      font-size: 13px;
+      border: 1px solid rgba(210, 153, 34, 0.45);
+      background: rgba(210, 153, 34, 0.07);
+      padding: 0 12px;
+      min-height: 36px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr 420px;
+      grid-template-rows: 180px 318px 190px;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.015), transparent), var(--panel);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 12px 14px 10px;
+      font-size: 13px;
+      color: var(--text);
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--panel-2);
+      font-weight: 700;
+    }
+
+    .body { padding: 13px 14px; }
+    .agents { grid-row: span 2; }
+    .diff { grid-row: span 2; }
+    .memory { grid-column: span 2; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 88px 92px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(37, 49, 66, 0.58);
+      font-size: 12px;
+    }
+
+    .row:last-child { border-bottom: 0; }
+    .role { color: var(--cyan); }
+    .ok { color: var(--green); }
+    .wait { color: var(--amber); }
+    .fail { color: var(--red); }
+    .muted { color: var(--muted); }
+
+    .chip {
+      display: inline-block;
+      border: 1px solid var(--line);
+      background: #0b1017;
+      padding: 3px 7px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-right: 6px;
+    }
+
+    .goal {
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .constraint {
+      margin-top: 12px;
+      color: var(--amber);
+      font-size: 12px;
+    }
+
+    .debate-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(37, 49, 66, 0.58);
+      font-size: 12px;
+    }
+
+    .diff-code {
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.75;
+      white-space: pre;
+    }
+
+    .approval {
+      margin: 6px 14px 14px;
+      border: 1px solid rgba(210, 153, 34, 0.48);
+      background: rgba(210, 153, 34, 0.075);
+      color: var(--amber);
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+
+    .shell-line {
+      color: var(--amber);
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .key {
+      border: 1px solid var(--line);
+      background: #0b1017;
+      padding: 8px 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .key b { color: var(--cyan); }
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <section class="top">
+      <div>
+        <div class="title">TomorrowEdge / tedge</div>
+        <div class="subtitle">TUI cockpit for multi-model coding agents · visible state · explicit authorization · reversible workflow</div>
+      </div>
+      <div class="statusbar">SAFE MODE · patch and shell approval required</div>
+    </section>
+
+    <section class="grid">
+      <article class="panel agents">
+        <h2>Agents</h2>
+        <div class="body">
+          <div class="row"><span class="role">planner</span><span class="ok">success</span><span class="muted">mock / balanced</span></div>
+          <div class="row"><span class="role">explorer</span><span class="ok">success</span><span class="muted">fixture / repo context</span></div>
+          <div class="row"><span class="role">coder_a</span><span class="ok">success</span><span class="muted">minimal patch</span></div>
+          <div class="row"><span class="role">coder_b</span><span class="ok">success</span><span class="muted">alternative</span></div>
+          <div class="row"><span class="role">reviewer</span><span class="ok">success</span><span class="muted">scores candidates</span></div>
+          <div class="row"><span class="role">judge</span><span class="ok">select</span><span class="muted">fixture_candidate_a</span></div>
+          <div class="row"><span class="role">runner</span><span class="wait">waiting</span><span class="muted">approval gate</span></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Goal</h2>
+        <div class="body goal">
+          fix failing test without changing schema
+          <div class="constraint">constraint: Without changing schema · risk: medium · task: test</div>
+        </div>
+      </article>
+
+      <article class="panel diff">
+        <h2>Diff · fixture_candidate_a</h2>
+        <div class="diff-code"><span class="muted">export function add(a, b) {</span>
+<span class="fail">-  return a - b;</span>
+<span class="ok">+  return a + b;</span>
+<span class="muted">}</span>
+
+<span class="muted">export default add;</span></div>
+        <div class="approval">Awaiting patch approval · press a to apply</div>
+      </article>
+
+      <article class="panel">
+        <h2>Router</h2>
+        <div class="body">
+          <span class="chip">mode balanced</span><span class="chip">privacy normal</span><span class="chip">debate on</span>
+          <p class="muted">Strong routes plan and judge. Efficient routes explore and implement. Runner remains local only.</p>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Debate</h2>
+        <div class="body">
+          <div class="debate-line"><span class="ok">Coder-A</span><span>minimal patch · score 85</span></div>
+          <div class="debate-line"><span class="muted">Coder-B</span><span>no concrete fix · score 32</span></div>
+          <div class="debate-line"><span class="role">Judge</span><span>select fixture_candidate_a</span></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Shell</h2>
+        <div class="body">
+          <div class="shell-line">proposed: npm test</div>
+          <div class="muted">waiting for t approval after patch apply</div>
+        </div>
+      </article>
+
+      <article class="panel memory">
+        <h2>Memory</h2>
+        <div class="body">
+          <div class="muted">session stores plan, selected files, candidates, review, judge decision, approvals, run results, final summary</div>
+          <div class="keys">
+            <div class="key"><b>a</b> apply</div>
+            <div class="key"><b>t</b> test</div>
+            <div class="key"><b>d</b> debate</div>
+            <div class="key"><b>j</b> judge</div>
+            <div class="key"><b>q</b> quit</div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
