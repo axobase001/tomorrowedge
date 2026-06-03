@@ -376,12 +376,13 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
     updateCapabilityStep(state, role, "success", agentState.summary);
     if (assignment.provider !== "local_tool") {
       ledger.append({
-        type: "model_call",
+        type: "agent_run",
         phase: phaseForRole(role),
         role,
         provider: assignment.provider,
         model: assignment.model,
-        requestId: agentState.id,
+        status: "success",
+        runId: agentState.id,
         responseRef: ledger.writeArtifact("responses", JSON.stringify(result, null, 2), "json")
       });
     }
@@ -392,12 +393,13 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
     updateCapabilityStep(state, role, "blocked", agentState.summary);
     if (assignment.provider !== "local_tool") {
       ledger.append({
-        type: "model_call",
+        type: "agent_run",
         phase: phaseForRole(role),
         role,
         provider: assignment.provider,
         model: assignment.model,
-        requestId: agentState.id,
+        status: "failure",
+        runId: agentState.id,
         error: agentState.summary
       });
     }

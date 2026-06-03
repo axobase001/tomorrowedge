@@ -10,6 +10,7 @@ export type OpenAICompatibleOptions = {
   apiFormat?: ProviderApiFormat;
   authHeader?: ProviderAuthHeader;
   extraHeaders?: Record<string, string>;
+  requestTimeoutMs?: number;
 };
 
 export class OpenAICompatibleProvider implements ModelProvider {
@@ -35,20 +36,34 @@ export class OpenAICompatibleProvider implements ModelProvider {
       throw new Error(`${this.id} is disabled because API key or base URL is missing.`);
     }
     const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
-    const response = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...this.authHeaders(),
-        ...(this.options.extraHeaders ?? {})
-      },
-      body: JSON.stringify({
-        model: req.model || this.options.defaultModel,
-        messages: req.messages,
-        temperature: req.temperature ?? 0.2,
-        ...(req.maxCompletionTokens ? { [tokenField]: req.maxCompletionTokens } : {})
-      })
-    });
+    const controller = new AbortController();
+    const timeoutMs = this.options.requestTimeoutMs ?? 60_000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...this.authHeaders(),
+          ...(this.options.extraHeaders ?? {})
+        },
+        body: JSON.stringify({
+          model: req.model || this.options.defaultModel,
+          messages: req.messages,
+          temperature: req.temperature ?? 0.2,
+          ...(req.maxCompletionTokens ? { [tokenField]: req.maxCompletionTokens } : {})
+        })
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`${this.id} request timed out after ${timeoutMs}ms.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!response.ok) {
       throw new Error(`${this.id} request failed: ${response.status} ${await response.text()}`);
     }

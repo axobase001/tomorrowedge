@@ -41,6 +41,14 @@ export type ModelCallEvent = BaseEvent & {
   error?: string;
 };
 
+export type AgentRunEvent = BaseEvent & {
+  type: "agent_run";
+  status: "success" | "failure";
+  runId: string;
+  responseRef?: string;
+  error?: string;
+};
+
 export type ContextSelectEvent = BaseEvent & {
   type: "context_select";
   selectedFiles: string[];
@@ -160,6 +168,7 @@ export type AutonomyLimitEvent = BaseEvent & {
 
 export type TomorrowEdgeEvent =
   | ModelCallEvent
+  | AgentRunEvent
   | ContextSelectEvent
   | FileReadEvent
   | PatchCandidateEvent

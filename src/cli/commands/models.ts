@@ -27,7 +27,7 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
             maxCompletionTokens: 64
           });
           const content = response.content.trim();
-          const status = content ? "ok" : "warning: empty response";
+          const status = isExactOk(content) ? "ok" : content ? "warning: expected exact ok" : "warning: empty response";
           process.stdout.write(`    smoke: ${status} (${response.usage ? `${response.usage.inputTokens}/${response.usage.outputTokens} tokens` : "usage unavailable"})\n`);
         } catch (error) {
           process.stdout.write(`    smoke: failed (${error instanceof Error ? error.message : String(error)})\n`);
@@ -65,7 +65,9 @@ async function smokeText(provider: Parameters<typeof runSmokeSuite>[0], model: s
       temperature: 0,
       maxCompletionTokens: 64
     });
-    return response.content.trim() ? { name: "smoke:text", status: "ok", detail: tokenDetail(response.usage) } : { name: "smoke:text", status: "warning", detail: "empty response" };
+    const content = response.content.trim();
+    if (isExactOk(content)) return { name: "smoke:text", status: "ok", detail: tokenDetail(response.usage) };
+    return { name: "smoke:text", status: "warning", detail: content ? "expected exact ok" : "empty response" };
   } catch (error) {
     return { name: "smoke:text", status: "failed", detail: error instanceof Error ? error.message : String(error) };
   }
@@ -120,6 +122,10 @@ async function smokeVision(provider: Parameters<typeof runSmokeSuite>[0], model:
 
 function tokenDetail(usage?: { inputTokens: number; outputTokens: number }): string {
   return usage ? `${usage.inputTokens}/${usage.outputTokens} tokens` : "usage unavailable";
+}
+
+function isExactOk(content: string): boolean {
+  return content.trim().toLowerCase() === "ok";
 }
 
 function onePixelPngDataUrl(): string {

@@ -11,19 +11,55 @@ export type ParsedPatchFile = {
 };
 
 export function parseUnifiedDiff(unifiedDiff: string): ParsedPatchFile[] {
-  if (!unifiedDiff.trim()) return [];
-  if (/GIT binary patch|Binary files .+ differ/i.test(unifiedDiff)) {
-    return parseBinaryPatchTargets(unifiedDiff);
+  const normalizedDiff = normalizeUnifiedDiffHunkCounts(unifiedDiff);
+  if (!normalizedDiff.trim()) return [];
+  if (/GIT binary patch|Binary files .+ differ/i.test(normalizedDiff)) {
+    return parseBinaryPatchTargets(normalizedDiff);
   }
-  return parsePatch(unifiedDiff).map((file) => ({
+  return parsePatch(normalizedDiff).map((file) => ({
     oldFileName: stripPrefix(file.oldFileName ?? ""),
     newFileName: stripPrefix(file.newFileName ?? ""),
     hunks: file.hunks.length,
     isCreate: isDevNull(file.oldFileName),
     isDelete: isDevNull(file.newFileName),
     isRename: Boolean(file.oldFileName && file.newFileName && stripPrefix(file.oldFileName) !== stripPrefix(file.newFileName) && !isDevNull(file.oldFileName) && !isDevNull(file.newFileName)),
-    isBinary: /GIT binary patch|Binary files .+ differ/i.test(unifiedDiffForFile(unifiedDiff, file.oldFileName, file.newFileName))
+    isBinary: /GIT binary patch|Binary files .+ differ/i.test(unifiedDiffForFile(normalizedDiff, file.oldFileName, file.newFileName))
   }));
+}
+
+export function normalizeUnifiedDiffHunkCounts(unifiedDiff: string): string {
+  const lines = unifiedDiff.split("\n");
+  const normalized: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = lines[index];
+    const match = header.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
+    if (!match) {
+      normalized.push(header);
+      continue;
+    }
+
+    const hunkLines: string[] = [];
+    let oldLines = 0;
+    let newLines = 0;
+    let cursor = index + 1;
+    while (cursor < lines.length && !isPatchBoundary(lines[cursor])) {
+      const line = lines[cursor];
+      hunkLines.push(line);
+      if (line.startsWith("\\ No newline")) {
+        cursor += 1;
+        continue;
+      }
+      const operation = line[0];
+      if (operation === " " || operation === "-") oldLines += 1;
+      if (operation === " " || operation === "+") newLines += 1;
+      cursor += 1;
+    }
+
+    normalized.push(`@@ -${match[1]},${oldLines} +${match[2]},${newLines} @@${match[3]}`);
+    normalized.push(...hunkLines);
+    index = cursor - 1;
+  }
+  return normalized.join("\n");
 }
 
 function parseBinaryPatchTargets(unifiedDiff: string): ParsedPatchFile[] {
@@ -51,6 +87,10 @@ export function stripPrefix(fileName: string): string {
 
 function isDevNull(fileName?: string): boolean {
   return fileName === "/dev/null" || fileName === "dev/null";
+}
+
+function isPatchBoundary(line: string): boolean {
+  return line.startsWith("@@ ") || line.startsWith("--- ") || line.startsWith("diff --git ");
 }
 
 function unifiedDiffForFile(unifiedDiff: string, oldFileName?: string, newFileName?: string): string {
