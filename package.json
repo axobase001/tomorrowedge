@@ -14,6 +14,7 @@
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "site:serve": "node scripts/serve-site.mjs",
     "prepack": "npm test && npm run build",
     "pack:dry": "npm pack --dry-run",
     "doctor": "tsx src/cli/index.ts doctor",

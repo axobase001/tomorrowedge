@@ -7,3 +7,4 @@ coverage/
 .tomorrowedge/
 *.log
 output/imagegen/
+output/site-qa/
