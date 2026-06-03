@@ -21,8 +21,8 @@ describe("routing policies", () => {
       ...defaultConfig,
       providers: {
         ...defaultConfig.providers,
-        openrouter: { enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" },
-        deepseek: { enabled: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com" }
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" },
+        deepseek: { ...defaultConfig.providers.deepseek, enabled: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com" }
       }
     };
     const router = new ModelRouter(config);
@@ -38,8 +38,8 @@ describe("routing policies", () => {
       ...defaultConfig,
       providers: {
         ...defaultConfig.providers,
-        mimo: { enabled: true, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1" },
-        deepseek: { enabled: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com" }
+        mimo: { ...defaultConfig.providers.mimo, enabled: true, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1" },
+        deepseek: { ...defaultConfig.providers.deepseek, enabled: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com" }
       }
     };
     const router = new ModelRouter(config);
@@ -54,12 +54,51 @@ describe("routing policies", () => {
       routing: { ...defaultConfig.routing, mode: "privacy" },
       providers: {
         ...defaultConfig.providers,
-        mimo: { enabled: true, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1" }
+        mimo: { ...defaultConfig.providers.mimo, enabled: true, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1" }
       }
     };
     const router = new ModelRouter(config);
 
     expect(router.getPlan().privacyLocked).toBe(true);
     expect(router.assignmentFor("vision").provider).toBe("ollama");
+  });
+
+  it("honors user-configured provider and model per role", () => {
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, model: "anthropic/claude-opus-4.1" },
+        deepseek: { ...defaultConfig.providers.deepseek, enabled: true, base_url: "https://api.deepseek.com", model: "deepseek-chat" }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "deepseek", model: "deepseek-chat" },
+        reviewer: { provider: "openrouter", model: "anthropic/claude-opus-4.1" }
+      }
+    };
+    const router = new ModelRouter(config);
+
+    expect(router.assignmentFor("planner")).toMatchObject({ provider: "deepseek", model: "deepseek-chat" });
+    expect(router.assignmentFor("reviewer")).toMatchObject({ provider: "openrouter", model: "anthropic/claude-opus-4.1" });
+  });
+
+  it("keeps privacy/local routing local even when a role override points to cloud", () => {
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      routing: { ...defaultConfig.routing, mode: "privacy" },
+      providers: {
+        ...defaultConfig.providers,
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, model: "openai/gpt-5.2" }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "openrouter", model: "openai/gpt-5.2" }
+      }
+    };
+    const router = new ModelRouter(config);
+
+    expect(router.assignmentFor("planner").provider).toBe("ollama");
+    expect(router.assignmentFor("planner").reason).toContain("ignored cloud override");
   });
 });

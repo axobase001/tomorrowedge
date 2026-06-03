@@ -1,12 +1,15 @@
 import { OpenAICompatibleProvider } from "./openaiCompatible.js";
+import type { ProviderApiFormat, ProviderAuthHeader } from "../config/schema.js";
 
-export function createMimoProvider(baseUrl: string, apiKey?: string, defaultModel?: string): OpenAICompatibleProvider {
+export function createMimoProvider(baseUrl: string, apiKey?: string, defaultModel?: string, apiFormat: ProviderApiFormat = "openai_chat", authHeader: ProviderAuthHeader = "api-key", extraHeaders?: Record<string, string>): OpenAICompatibleProvider {
   return new OpenAICompatibleProvider({
     id: "mimo",
     name: "MiMo-compatible",
     apiKey,
     baseUrl,
     defaultModel,
-    extraHeaders: apiKey ? { "api-key": apiKey } : undefined
+    apiFormat,
+    authHeader,
+    extraHeaders
   });
 }

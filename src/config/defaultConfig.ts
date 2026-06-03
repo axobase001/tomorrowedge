@@ -20,31 +20,35 @@ export const defaultConfig: TomorrowEdgeConfig = {
     require_approval_for_sensitive_files: true
   },
   providers: {
-    mock: { enabled: true, base_url: "" },
-    fixture: { enabled: true, base_url: "" },
+    mock: { enabled: true, base_url: "", model: "mock-balanced", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
+    fixture: { enabled: true, base_url: "", model: "fixture-scripted", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
     openrouter: {
       enabled: false,
       api_key_env: "OPENROUTER_API_KEY",
-      base_url: "https://openrouter.ai/api/v1"
+      base_url: "https://openrouter.ai/api/v1",
+      model: "openai/gpt-5.2",
+      api_format: "openai_chat",
+      auth_header: "bearer",
+      extra_headers: {}
     },
-    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "" },
-    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "" },
-    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "" },
-    kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "" },
-    anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "" },
-    gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "" },
-    ollama: { enabled: true, base_url: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434" }
+    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "", model: "mimo-v2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
+    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "", model: "gpt-4o-mini", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "", model: "kimi-k2", api_format: "legacy_chat", auth_header: "bearer", extra_headers: {} },
+    anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "", model: "claude-opus-4.1", api_format: "legacy_chat", auth_header: "bearer", extra_headers: {} },
+    gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "", model: "gemini-2.5-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    ollama: { enabled: true, base_url: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434", model: "local-auto", api_format: "openai_chat", auth_header: "none", extra_headers: {} }
   },
   agents: {
-    vision: { model: "auto" },
-    planner: { model: "auto" },
-    explorer: { model: "auto" },
-    coder_a: { model: "auto" },
-    coder_b: { model: "auto" },
-    reviewer: { model: "auto" },
-    judge: { model: "auto" },
-    repairer: { model: "auto" },
-    summarizer: { model: "auto" }
+    vision: { provider: "auto", model: "auto" },
+    planner: { provider: "auto", model: "auto" },
+    explorer: { provider: "auto", model: "auto" },
+    coder_a: { provider: "auto", model: "auto" },
+    coder_b: { provider: "auto", model: "auto" },
+    reviewer: { provider: "auto", model: "auto" },
+    judge: { provider: "auto", model: "auto" },
+    repairer: { provider: "auto", model: "auto" },
+    summarizer: { provider: "auto", model: "auto" }
   },
   debate: {
     enabled: true,

@@ -4,11 +4,24 @@ export const routingModeSchema = z.enum(["cheap", "balanced", "quality", "local"
 export type RoutingMode = z.infer<typeof routingModeSchema>;
 export const accessModeSchema = z.enum(["restricted", "partial", "full"]);
 export type AccessMode = z.infer<typeof accessModeSchema>;
+export const providerApiFormatSchema = z.enum(["openai_chat", "legacy_chat"]);
+export type ProviderApiFormat = z.infer<typeof providerApiFormatSchema>;
+export const providerAuthHeaderSchema = z.enum(["bearer", "api-key", "none"]);
+export type ProviderAuthHeader = z.infer<typeof providerAuthHeaderSchema>;
 
 export const providerConfigSchema = z.object({
   enabled: z.boolean().default(false),
   api_key_env: z.string().optional(),
-  base_url: z.string().default("")
+  base_url: z.string().default(""),
+  model: z.string().default(""),
+  api_format: providerApiFormatSchema.default("openai_chat"),
+  auth_header: providerAuthHeaderSchema.default("bearer"),
+  extra_headers: z.record(z.string()).default({})
+});
+
+export const agentConfigSchema = z.object({
+  provider: z.string().default("auto"),
+  model: z.string().default("auto")
 });
 
 export const configSchema = z.object({
@@ -31,7 +44,7 @@ export const configSchema = z.object({
     require_approval_for_sensitive_files: z.boolean().default(true)
   }),
   providers: z.record(providerConfigSchema),
-  agents: z.record(z.object({ model: z.string().default("auto") })),
+  agents: z.record(agentConfigSchema),
   debate: z.object({
     enabled: z.boolean().default(true),
     max_candidates: z.number().int().min(1).max(4).default(2),

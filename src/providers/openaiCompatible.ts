@@ -1,4 +1,5 @@
 import type { ChatRequest, ChatResponse, ModelInfo, ModelProvider } from "./types.js";
+import type { ProviderApiFormat, ProviderAuthHeader } from "../config/schema.js";
 
 export type OpenAICompatibleOptions = {
   id: string;
@@ -6,6 +7,8 @@ export type OpenAICompatibleOptions = {
   baseUrl: string;
   apiKey?: string;
   defaultModel?: string;
+  apiFormat?: ProviderApiFormat;
+  authHeader?: ProviderAuthHeader;
   extraHeaders?: Record<string, string>;
 };
 
@@ -31,18 +34,19 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (!this.isConfigured()) {
       throw new Error(`${this.id} is disabled because API key or base URL is missing.`);
     }
+    const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
     const response = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.options.apiKey}`,
+        ...this.authHeaders(),
         ...(this.options.extraHeaders ?? {})
       },
       body: JSON.stringify({
-        model: req.model,
+        model: req.model || this.options.defaultModel,
         messages: req.messages,
         temperature: req.temperature ?? 0.2,
-        ...(req.maxCompletionTokens ? { max_completion_tokens: req.maxCompletionTokens } : {})
+        ...(req.maxCompletionTokens ? { [tokenField]: req.maxCompletionTokens } : {})
       })
     });
     if (!response.ok) {
@@ -67,6 +71,12 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   private isConfigured(): boolean {
-    return Boolean(this.options.baseUrl && this.options.apiKey);
+    return Boolean(this.options.baseUrl && (this.options.authHeader === "none" || this.options.apiKey));
+  }
+
+  private authHeaders(): Record<string, string> {
+    if (!this.options.apiKey || this.options.authHeader === "none") return {};
+    if (this.options.authHeader === "api-key") return { "api-key": this.options.apiKey };
+    return { Authorization: `Bearer ${this.options.apiKey}` };
   }
 }

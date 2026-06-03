@@ -72,7 +72,7 @@ describe("offline agent graph", () => {
       ...defaultConfig,
       providers: {
         ...defaultConfig.providers,
-        openrouter: { enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
       }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
@@ -92,7 +92,7 @@ describe("offline agent graph", () => {
       routing: { ...defaultConfig.routing, fallback: false },
       providers: {
         ...defaultConfig.providers,
-        openrouter: { enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
       }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });

@@ -1,13 +1,13 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
-import type { AgentRole } from "../../schemas/agentTask.js";
+import { agentRoles, type AgentRole } from "../../schemas/agentTask.js";
 import { profilesFromConfig } from "./modelProfiles.js";
-import { buildRoutingPlan, type RouteAssignment, type RoutingPlan } from "./policies.js";
+import { buildRoutingPlan, type AgentRouteOverrides, type RouteAssignment, type RoutingPlan } from "./policies.js";
 
 export class ModelRouter {
   private readonly plan: RoutingPlan;
 
   constructor(config: TomorrowEdgeConfig) {
-    this.plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config));
+    this.plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config));
   }
 
   getPlan(): RoutingPlan {
@@ -25,4 +25,13 @@ export class ModelRouter {
   fallbackFor(role: AgentRole): RouteAssignment | undefined {
     return this.plan.fallbacks.find((item) => item.role === role);
   }
+}
+
+function overridesFromConfig(config: TomorrowEdgeConfig): AgentRouteOverrides {
+  const overrides: AgentRouteOverrides = {};
+  for (const role of agentRoles) {
+    const agent = config.agents[role];
+    if (agent) overrides[role] = { provider: agent.provider, model: agent.model };
+  }
+  return overrides;
 }

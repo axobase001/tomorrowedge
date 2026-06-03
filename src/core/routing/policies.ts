@@ -16,9 +16,16 @@ export type RoutingPlan = {
   fallbacks: RouteAssignment[];
 };
 
-export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = editableDefaultProfiles): RoutingPlan {
+export type AgentRouteOverride = {
+  provider?: string;
+  model?: string;
+};
+
+export type AgentRouteOverrides = Partial<Record<AgentRole, AgentRouteOverride>>;
+
+export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = editableDefaultProfiles, overrides: AgentRouteOverrides = {}): RoutingPlan {
   const roles: AgentRole[] = ["vision", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
-  const assignments = roles.map((role) => assignRole(role, mode, profiles));
+  const assignments = roles.map((role) => applyOverride(assignRole(role, mode, profiles), mode, profiles, overrides[role]));
   return {
     mode,
     privacyLocked: mode === "privacy" || mode === "local",
@@ -48,6 +55,46 @@ function assignRole(role: AgentRole, mode: RoutingMode, profiles: ModelProfile[]
     if (chinaProvider) return toAssignment(role, chinaProvider, "china mode provider preference");
   }
   return pick(role, profiles, role.includes("coder") ? ["coding", "fast"] : ["reasoning", "planning", "review"], "balanced role-conditioned default");
+}
+
+function applyOverride(assignment: RouteAssignment, mode: RoutingMode, profiles: ModelProfile[], override?: AgentRouteOverride): RouteAssignment {
+  if (assignment.role === "runner" || !override) return assignment;
+
+  const configuredProvider = normalizeOverride(override.provider);
+  const configuredModel = normalizeOverride(override.model);
+  if (!configuredProvider && !configuredModel) return assignment;
+
+  const provider = configuredProvider ?? profiles.find((profile) => profile.model === configuredModel)?.provider ?? assignment.provider;
+  if (isPrivacyLockedMode(mode) && !isLocalProvider(provider, profiles)) {
+    return {
+      ...assignment,
+      reason: `${assignment.reason}; ignored cloud override ${provider}/${configuredModel ?? assignment.model} in privacy/local mode`
+    };
+  }
+
+  const matchingProfile = profiles.find((profile) => profile.provider === provider && (!configuredModel || profile.model === configuredModel)) ?? profiles.find((profile) => profile.provider === provider);
+  const model = configuredModel ?? matchingProfile?.model ?? assignment.model;
+  return {
+    role: assignment.role,
+    provider,
+    model,
+    reason: `user-configured agent route override${matchingProfile ? "" : " (provider/model profile not pre-registered)"}`
+  };
+}
+
+function normalizeOverride(value?: string): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized !== "auto" ? normalized : undefined;
+}
+
+function isPrivacyLockedMode(mode: RoutingMode): boolean {
+  return mode === "privacy" || mode === "local";
+}
+
+function isLocalProvider(provider: string, profiles: ModelProfile[]): boolean {
+  if (["mock", "fixture", "ollama", "local_tool"].includes(provider)) return true;
+  const profile = profiles.find((candidate) => candidate.provider === provider);
+  return Boolean(profile?.strengths.includes("local") || profile?.strengths.includes("privacy"));
 }
 
 function pick(role: AgentRole, profiles: ModelProfile[], strengths: string[], reason: string): RouteAssignment {

@@ -57,7 +57,7 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
   if (config.providers.openrouter?.enabled) {
     profiles.push({
       provider: "openrouter",
-      model: process.env.OPENROUTER_MODEL ?? "openai/gpt-5.2",
+      model: configuredModel(config, "openrouter", "OPENROUTER_MODEL", "openai/gpt-5.2"),
       label: "OpenRouter GPT-5 class model",
       strengths: ["planning", "review", "reasoning", "coding", "long_context"],
       contextWindow: 400000,
@@ -68,7 +68,7 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
   if (config.providers.deepseek?.enabled) {
     profiles.push({
       provider: "deepseek",
-      model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-pro",
+      model: configuredModel(config, "deepseek", "DEEPSEEK_MODEL", "deepseek-v4-pro"),
       label: "DeepSeek coding/reasoning model",
       strengths: ["coding", "reasoning", "cheap", "fast", "multilingual"],
       contextWindow: 128000,
@@ -79,7 +79,7 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
   if (config.providers.mimo?.enabled) {
     profiles.push({
       provider: "mimo",
-      model: process.env.MIMO_MODEL ?? "mimo-v2.5-pro",
+      model: configuredModel(config, "mimo", "MIMO_MODEL", "mimo-v2.5-pro"),
       label: "Xiaomi MiMo V2.5 model",
       strengths: ["vision", "ocr", "perception", "coding", "cheap", "fast", "multilingual"],
       contextWindow: 128000,
@@ -87,5 +87,43 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       defaultRoles: ["vision", "coder_b", "summarizer"]
     });
   }
+  if (config.providers.openai_compatible?.enabled) {
+    profiles.push({
+      provider: "openai_compatible",
+      model: configuredModel(config, "openai_compatible", "OPENAI_COMPATIBLE_MODEL", "configured-model"),
+      label: "Generic OpenAI-compatible model",
+      strengths: ["planning", "coding", "review", "reasoning"],
+      contextWindow: 128000,
+      latencyClass: "medium",
+      defaultRoles: ["planner", "coder_a", "reviewer"]
+    });
+  }
+  if (config.providers.kimi?.enabled) {
+    profiles.push({
+      provider: "kimi",
+      model: configuredModel(config, "kimi", "KIMI_MODEL", "kimi-k2"),
+      label: "Kimi-compatible long-context model",
+      strengths: ["long_context", "coding", "reasoning", "multilingual", "cheap"],
+      contextWindow: 128000,
+      latencyClass: "medium",
+      defaultRoles: ["explorer", "coder_b", "summarizer"]
+    });
+  }
+  if (config.providers.ollama?.enabled) {
+    profiles.push({
+      provider: "ollama",
+      model: configuredModel(config, "ollama", "OLLAMA_MODEL", "local-auto"),
+      label: "Configured local Ollama model",
+      strengths: ["local", "privacy"],
+      defaultRoles: ["explorer", "coder_a", "repairer", "summarizer"]
+    });
+  }
   return [...profiles, ...editableDefaultProfiles];
+}
+
+function configuredModel(config: TomorrowEdgeConfig, provider: string, envName: string, fallback: string): string {
+  const fromConfig = config.providers[provider]?.model?.trim();
+  if (fromConfig) return fromConfig;
+  const fromEnv = process.env[envName]?.trim();
+  return fromEnv || fallback;
 }

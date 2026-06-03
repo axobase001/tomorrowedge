@@ -1,10 +1,15 @@
 import { OpenAICompatibleProvider } from "./openaiCompatible.js";
+import type { ProviderApiFormat, ProviderAuthHeader } from "../config/schema.js";
 
-export function createKimiProvider(baseUrl: string, apiKey?: string): OpenAICompatibleProvider {
+export function createKimiProvider(baseUrl: string, apiKey?: string, defaultModel?: string, apiFormat: ProviderApiFormat = "legacy_chat", authHeader: ProviderAuthHeader = "bearer", extraHeaders?: Record<string, string>): OpenAICompatibleProvider {
   return new OpenAICompatibleProvider({
     id: "kimi",
     name: "Kimi-compatible",
     apiKey,
-    baseUrl
+    baseUrl,
+    defaultModel,
+    apiFormat,
+    authHeader,
+    extraHeaders
   });
 }

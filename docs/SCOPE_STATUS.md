@@ -12,6 +12,8 @@ This file tracks the full-scope request against the current implementation.
 - Local `.env` loader for ignored workspace credentials
 - Provider registry with OpenAI-compatible, OpenRouter, MiMo, DeepSeek, Kimi, Anthropic/Gemini placeholders, and Ollama
 - Role-conditioned routing modes that include enabled real providers
+- User-configurable provider/model assignments per agent role through `.tomorrowedge/config.yaml`
+- Mainstream OpenAI-compatible API adapter switches for Bearer auth, `api-key` auth, no-auth local endpoints, `max_completion_tokens`, `max_tokens`, and provider-specific extra headers
 - Capability stitching route for image inputs: Vision Agent -> Structured Visual Spec -> Planner/Coder/Reviewer
 - Dynamic live-call fallback from unavailable routed providers to offline mock fallback, recorded in `modelNotes`
 - `tedge models --real-smoke` live connectivity check
@@ -46,7 +48,7 @@ This file tracks the full-scope request against the current implementation.
 
 - Real provider adapters: OpenRouter, DeepSeek, and MiMo Token Plan live smoke and drill pass; Anthropic/Gemini are placeholders
 - Debate mode: deterministic records and core-led live workflow debate with configurable cross-examination rounds exist; richer free-form negotiation UI is not complete
-- Routing: role assignment uses enabled providers, live-call fallback, capability tags, and smoke-suite probing; richer adaptive routing still needs longitudinal evaluation
+- Routing: role assignment uses enabled providers, user role overrides, live-call fallback, capability tags, and smoke-suite probing; richer adaptive routing still needs longitudinal evaluation
 - Capability stitching: offline structured visual spec, routing handoff, and live multimodal image payload path exist; provider-specific vision behavior still needs real smoke coverage per model
 - Privacy mode: cloud repo context is enforced for live patch prompts; broader provider operations still need full audit
 - TUI: panes, focus navigation, command/access/model panels, and temporary model-route preview exist; richer editing modal persistence is not complete
@@ -57,6 +59,6 @@ This file tracks the full-scope request against the current implementation.
 
 - External Google/GitHub comment publishing connectors beyond local draft export
 - Provider-specific live vision smoke assertions across every configured model
-- Persistent TUI model-change modal that writes config/preferences
+- Persistent TUI model-change modal that writes config/preferences directly from the cockpit
 - Deeper learned memory that recommends routes based on historical outcomes
 - Public release publishing automation beyond CI and pack dry-run

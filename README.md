@@ -198,6 +198,7 @@ All default tests and demos run offline without API keys. Cloud providers are di
 
 - Role-conditioned agent graph: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer
 - Multi-model routing across OpenRouter, DeepSeek, MiMo, Ollama, local mock/fixture, OpenAI-compatible providers, and placeholders
+- User-configurable provider/model assignment per agent role for controlled model-comparison experiments
 - Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
 - Access modes: `restricted`, `partial`, `full`
 - Non-mutating live advisory from routed providers
@@ -282,6 +283,47 @@ requests. TomorrowEdge routes capabilities. See
 Offline providers: `mock`, `fixture`.
 
 Configurable providers: OpenRouter, DeepSeek-compatible, MiMo-compatible, OpenAI-compatible, Kimi-compatible placeholder, Ollama local, Anthropic/Gemini placeholders.
+
+Recommended bilingual config / 推荐配置:
+
+```yaml
+providers:
+  openrouter:
+    enabled: true
+    api_key_env: OPENROUTER_API_KEY
+    base_url: https://openrouter.ai/api/v1
+    model: openai/gpt-5.2
+    api_format: openai_chat
+    auth_header: bearer
+  deepseek:
+    enabled: true
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    model: deepseek-v4-pro
+    api_format: openai_chat
+    auth_header: bearer
+  mimo:
+    enabled: true
+    api_key_env: MIMO_API_KEY
+    base_url: https://token-plan-sgp.xiaomimimo.com/v1
+    model: mimo-v2.5-pro
+    api_format: openai_chat
+    auth_header: api-key
+
+agents:
+  vision: { provider: mimo, model: mimo-v2.5-pro }
+  planner: { provider: openrouter, model: openai/gpt-5.2 }
+  explorer: { provider: deepseek, model: deepseek-v4-pro }
+  coder_a: { provider: deepseek, model: deepseek-v4-pro }
+  reviewer: { provider: openrouter, model: anthropic/claude-opus-4.1 }
+  judge: { provider: openrouter, model: openai/gpt-5.2 }
+```
+
+This is a recommended starting point, not a hardcoded assignment. Users can
+replace `providers.<id>.model` or any `agents.<role>.provider/model` entry to
+compare GPT, Claude/Opus, DeepSeek, MiMo, Kimi, Ollama, or any compatible model.
+`auth_header` supports `bearer`, `api-key`, and `none`; `api_format` supports
+`openai_chat` and `legacy_chat`.
 
 This is not an official Xiaomi, MiMo, OpenAI, Anthropic, Google, DeepSeek, Moonshot/Kimi, or OpenRouter project.
 

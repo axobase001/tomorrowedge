@@ -1,11 +1,15 @@
 import { OpenAICompatibleProvider } from "./openaiCompatible.js";
+import type { ProviderApiFormat, ProviderAuthHeader } from "../config/schema.js";
 
-export function createOpenRouterProvider(apiKey?: string, defaultModel?: string): OpenAICompatibleProvider {
+export function createOpenRouterProvider(apiKey?: string, defaultModel?: string, baseUrl = "https://openrouter.ai/api/v1", apiFormat: ProviderApiFormat = "openai_chat", authHeader: ProviderAuthHeader = "bearer", extraHeaders?: Record<string, string>): OpenAICompatibleProvider {
   return new OpenAICompatibleProvider({
     id: "openrouter",
     name: "OpenRouter",
     apiKey,
-    baseUrl: "https://openrouter.ai/api/v1",
-    defaultModel
+    baseUrl,
+    defaultModel,
+    apiFormat,
+    authHeader,
+    extraHeaders
   });
 }

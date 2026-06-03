@@ -19,6 +19,31 @@ profiles from config before falling back to offline defaults:
 - Coder-B and secondary Chinese/multilingual slots: MiMo when configured
 - Runner: always local tool, never an LLM provider
 
+These are defaults, not a fixed product rule. Users and test subjects can
+override any model-owned role with:
+
+```yaml
+agents:
+  planner:
+    provider: openrouter
+    model: openai/gpt-5.2
+  coder_a:
+    provider: deepseek
+    model: deepseek-v4-pro
+  vision:
+    provider: mimo
+    model: mimo-v2.5-pro
+```
+
+Set `provider: auto` or `model: auto` to hand that part back to the router. If
+only `model` is specified, TomorrowEdge tries to infer the provider from the
+configured model profiles; otherwise it keeps the auto-selected provider and
+uses the requested model string.
+
+In `privacy` and `local` modes, cloud overrides are ignored and the route stays
+local-safe. This lets experiments freely compare models in normal modes without
+accidentally violating privacy-mode expectations.
+
 This keeps the product principle visible in cockpit state:
 
 ```text
