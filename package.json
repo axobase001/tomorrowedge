@@ -3,19 +3,22 @@
   "version": "0.1.0",
   "description": "A TUI cockpit for multi-model coding agents.",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "bin": {
     "tedge": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/cli/index.ts",
+    "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepack": "npm test && npm run build",
     "pack:dry": "npm pack --dry-run",
-    "doctor": "tsx src/cli/index.ts doctor",
-    "tui": "tsx src/cli/index.ts tui",
-    "smoke:real": "tsx src/cli/index.ts models --real-smoke"
+    "doctor": "node scripts/tsx-dev.mjs doctor",
+    "tui": "node scripts/tsx-dev.mjs tui",
+    "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke"
   },
   "files": [
     "dist",

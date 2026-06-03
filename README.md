@@ -22,6 +22,8 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 快速开始
 
+需要 Node.js `^20.19.0 || >=22.12.0`。低版本 Node 可能会跳过 Vitest/Rolldown 的可选原生依赖，导致测试启动失败。
+
 ```bash
 npm install
 npm test
@@ -33,6 +35,7 @@ npm run dev -- tui
 ```
 
 默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用。
+`npm run dev` 会在 WSL 的 Windows-mounted temp 场景下自动把 `TMPDIR` 切到 `/tmp`，避免 `tsx` IPC socket 创建失败。
 
 ## 核心能力
 
@@ -95,14 +98,16 @@ tedge run "task" --access-mode restricted
 完整 approved patch/test loop：
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell
+npm run dev -- run "fix failing test" --headless --provider fixture --approve-patch --approve-shell
 ```
 
 失败测试后的 Repairer loop：
 
 ```bash
-tedge run "fix failing test" --headless --provider fixture --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
+npm run dev -- run "fix failing test" --headless --provider fixture --approve-patch --approve-shell --fixture-failing-patch --repair-on-fail --approve-repair
 ```
+
+从 TomorrowEdge 项目根目录运行时，fixture demo 会复制 `tests/fixtures/sample-repo-basic` 到临时目录后执行，因此不会改动仓库里的 fixture 文件。输出中的 `fixtureWorkspace` 会显示实际执行目录。
 
 没有 `--approve-patch` 不会应用 diff；没有 `--approve-shell` 不会运行测试；没有 `--approve-repair` 只会记录 repair candidate。
 
@@ -204,6 +209,8 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Quickstart
 
+Requires Node.js `^20.19.0 || >=22.12.0`. Older Node runtimes can skip Vitest/Rolldown optional native dependencies and fail before the test suite starts.
+
 ```bash
 npm install
 npm test
@@ -215,6 +222,7 @@ npm run dev -- tui
 ```
 
 All default tests and demos run offline without API keys. Cloud providers are disabled unless explicitly configured with environment variables.
+`npm run dev` automatically uses `/tmp` for `tsx` on WSL when the inherited temp directory points at a Windows-mounted path.
 
 ## Core Features
 

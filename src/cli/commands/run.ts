@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { cp, mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { loadConfig } from "../../config/configLoader.js";
 import type { AccessMode } from "../../config/schema.js";
 import { runOfflineGraph } from "../../core/agentGraph/executor.js";
@@ -25,7 +29,8 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const loadedConfig = loadConfig(cwd);
   const prefs = loadProjectPreferences(cwd);
   const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
-  const state = await runOfflineGraph(cwd, goal, config, {
+  const workspace = await prepareRunWorkspace(cwd, options);
+  const state = await runOfflineGraph(workspace.executionCwd, goal, config, {
     provider: options.provider,
     approvePatch: options.approvePatch,
     approveShell: options.approveShell,
@@ -42,11 +47,35 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   });
   const sessionPath = await saveSession(cwd, state);
   if (options.headless) {
-    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ sessionPath, executionCwd: workspace.executionCwd, fixtureWorkspace: workspace.fixtureWorkspace, access: state.access, approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
     return;
   }
   const { render } = await import("ink");
   const React = await import("react");
   const { App } = await import("../../tui/App.js");
-  render(React.createElement(App, { graph: state, safeMode: config.project.safe_mode, cwd }));
+  render(React.createElement(App, { graph: state, safeMode: config.project.safe_mode, cwd: workspace.executionCwd }));
+}
+
+export type RunWorkspace = {
+  executionCwd: string;
+  fixtureWorkspace?: string;
+};
+
+export async function prepareRunWorkspace(cwd: string, options: Pick<RunOptions, "provider">): Promise<RunWorkspace> {
+  if (options.provider !== "fixture") {
+    return { executionCwd: cwd };
+  }
+
+  if (existsSync(path.join(cwd, "index.js")) && existsSync(path.join(cwd, "package.json"))) {
+    return { executionCwd: cwd };
+  }
+
+  const fixtureSource = path.join(cwd, "tests", "fixtures", "sample-repo-basic");
+  if (!existsSync(path.join(fixtureSource, "index.js")) || !existsSync(path.join(fixtureSource, "package.json"))) {
+    return { executionCwd: cwd };
+  }
+
+  const fixtureWorkspace = await mkdtemp(path.join(os.tmpdir(), "tedge-fixture-demo-"));
+  await cp(fixtureSource, fixtureWorkspace, { recursive: true });
+  return { executionCwd: fixtureWorkspace, fixtureWorkspace };
 }
