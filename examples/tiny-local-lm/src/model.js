@@ -19,8 +19,8 @@ const CHINESE_VERBS = ["检查", "引导", "记录", "辩论", "验证", "总结
 const DEFAULT_CORPUS = buildBilingualCorpus();
 const DEFAULT_OPTIONS = {
   order: 5,
-  contextBuckets: 8192,
-  embeddingSize: 64
+  contextBuckets: 131072,
+  embeddingSize: 384
 };
 
 export function createTinyCharModel(corpus = DEFAULT_CORPUS, orderOrOptions = DEFAULT_OPTIONS.order, maybeOptions = {}) {
@@ -108,8 +108,8 @@ function normalizeOptions(orderOrOptions, maybeOptions) {
   const raw = typeof orderOrOptions === "object" ? orderOrOptions : { ...maybeOptions, order: orderOrOptions };
   return {
     order: clampInt(raw.order ?? DEFAULT_OPTIONS.order, 1, 8),
-    contextBuckets: clampInt(raw.contextBuckets ?? DEFAULT_OPTIONS.contextBuckets, 512, 32768),
-    embeddingSize: clampInt(raw.embeddingSize ?? DEFAULT_OPTIONS.embeddingSize, 16, 128)
+    contextBuckets: clampInt(raw.contextBuckets ?? DEFAULT_OPTIONS.contextBuckets, 512, 131072),
+    embeddingSize: clampInt(raw.embeddingSize ?? DEFAULT_OPTIONS.embeddingSize, 16, 384)
   };
 }
 

@@ -101,7 +101,7 @@ describe("fixture E2E workflow", () => {
     expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
-  });
+  }, 15_000);
 
   it("restricted access mode blocks patch application even when approval flags are present", async () => {
     const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {

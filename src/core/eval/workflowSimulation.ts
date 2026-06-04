@@ -324,7 +324,7 @@ function buildExternalDebatePlans(plan: CorePlan, context: string, agents: Exter
     .map((agent) => ({
       externalAgent: agent,
       role: `External ${bestExternalRole(agent)} (${agent.id})`,
-      prompt: buildDebatePrompt(plan, context, `as external agent ${agent.name}, challenge the plan from your allowed roles: ${agent.allowedRoles.join(", ")}`),
+      prompt: buildDebatePrompt(plan, context, `as external agent ${agent.name}, actively challenge the plan from your allowed roles: ${agent.allowedRoles.join(", ")}. Return concise sections: Challenge, Cross-exam question, Reviewer stance, Judge stance, Required evidence.`),
       maxOutputTokens: maxWorkflowTokens
     }));
 }
@@ -335,7 +335,7 @@ function buildExternalCrossExaminationPlans(plan: CorePlan, transcript: string, 
     .map((agent) => ({
       externalAgent: agent,
       role: `External Cross-Examiner (${agent.id})`,
-      prompt: buildCrossExaminationPrompt(plan, transcript, `as external ${agent.name}, cross-examine other agents and name one judge/reviewer decision you would make in round ${round}`),
+      prompt: buildCrossExaminationPrompt(plan, transcript, `as external ${agent.name}, cross-examine other agents in round ${round}. Return concise sections: Contradiction, Question to implementer, Reviewer stance, Judge stance, Evidence required before approval.`),
       maxOutputTokens: maxWorkflowTokens
     }));
 }
@@ -346,7 +346,7 @@ function buildExternalExecutionPlans(plan: CorePlan, context: string, agents: Ex
     .map((agent) => ({
       externalAgent: agent,
       role: `External Delivery (${agent.id})`,
-      prompt: buildExecutionPrompt(plan, context, `as external ${agent.name}, produce your role-bound delivery note and explicit approval risks`),
+      prompt: buildExecutionPrompt(plan, context, `as external ${agent.name}, produce your role-bound delivery note. Include Reviewer stance, Judge stance, approval risks, and exact handoff artifacts you require before delivery.`),
       maxOutputTokens: maxWorkflowTokens
     }));
 }
@@ -425,15 +425,30 @@ async function askExternalAgent(agent: ExternalAgentProfile, phase: WorkflowTurn
     provider: `external:${agent.id}`,
     model: agent.name,
     prompt,
-    content: [
-      `${agent.name} participates as a configured external MCP agent.`,
-      `Allowed roles: ${agent.allowedRoles.join(", ") || "none"}.`,
-      phase === "debate"
-        ? "Position: challenge the plan, identify approval boundaries, and force reviewer/judge criteria into the transcript."
-        : "Delivery: provide role-bound implementation/review/judge notes without claiming local file changes.",
-      agent.command ? `Runtime configured: ${agent.command} ${(agent.args ?? []).join(" ")}`.trim() : "Runtime not auto-started; using configured-profile mock turn."
-    ].join("\n")
+    content: renderConfiguredExternalTurn(agent, phase, round)
   };
+}
+
+function renderConfiguredExternalTurn(agent: ExternalAgentProfile, phase: WorkflowTurn["phase"], round: number): string {
+  const reviewerStance = agent.allowedRoles.includes("reviewer") || agent.allowedRoles.includes("core")
+    ? "Reviewer stance: require concrete diff/artifact refs, test evidence, and explicit risk notes before approval."
+    : "Reviewer stance: not an allowed role for this agent.";
+  const judgeStance = agent.allowedRoles.includes("judge") || agent.allowedRoles.includes("core")
+    ? "Judge stance: do not select a candidate with unresolved reviewer blocking concerns; request revision instead."
+    : "Judge stance: not an allowed role for this agent.";
+  return [
+    `${agent.name} participates as a configured external MCP agent.`,
+    `Allowed roles: ${agent.allowedRoles.join(", ") || "none"}.`,
+    `Round: ${round}; phase: ${phase}.`,
+    "Challenge: identify approval boundaries and force missing evidence into the transcript.",
+    "Cross-exam question: what exact artifact proves the implementation is correct and scoped?",
+    reviewerStance,
+    judgeStance,
+    phase === "debate"
+      ? "Required evidence: patch candidate refs, reviewer findings, judge decision, shell output, and cost usage before delivery."
+      : "Delivery stance: provide role-bound implementation/review/judge notes without claiming local file changes.",
+    agent.command ? `Runtime configured: ${agent.command} ${(agent.args ?? []).join(" ")}`.trim() : "Runtime not auto-started; using configured-profile mock turn."
+  ].join("\n");
 }
 
 function buildAssignments(providers: WorkflowProviders): WorkflowAssignment[] {
@@ -458,6 +473,7 @@ function coreReview(plan: CorePlan, debate: WorkflowTurn[], executions: Workflow
   ];
   if (executions.some((turn) => /test|verify|验证/i.test(turn.content))) strengths.push("At least one execution agent addressed verification.");
   if (debate.some((turn) => /risk|approval|安全|授权/i.test(turn.content))) strengths.push("Debate raised risk or approval concerns.");
+  if (allTurns.some((turn) => turn.provider.startsWith("external:") && /Reviewer stance|Judge stance/.test(turn.content))) strengths.push("External agents contributed explicit reviewer/judge stances.");
   return {
     verdict: gaps.length ? "needs_revision" : "accepted",
     strengths,

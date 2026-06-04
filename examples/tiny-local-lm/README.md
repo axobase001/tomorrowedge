@@ -1,6 +1,6 @@
 # Tiny Local LM Demo
 
-A locally runnable 500k-1M parameter bilingual language model demo for TomorrowEdge acceptance.
+A locally runnable 50M-60M parameter bilingual language model demo for TomorrowEdge acceptance.
 
 ## Setup
 
@@ -36,4 +36,4 @@ npm run verify
 
 ## Notes
 
-The model is a local bilingual hashed neural n-gram model with roughly 500k-1M parameters by default. It combines dense context bucket embeddings, output embeddings, and 5-gram transition boosts over a generated Chinese/English corpus. It does not call OpenAI, OpenRouter, or any other cloud API.
+The model is a local bilingual hashed neural n-gram model with roughly 50M-60M parameters by default. It combines dense context bucket embeddings, output embeddings, and 5-gram transition boosts over a generated Chinese/English corpus. It does not call OpenAI, OpenRouter, or any other cloud API.

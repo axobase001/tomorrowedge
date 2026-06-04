@@ -1,36 +1,102 @@
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { RedTeamFinding, ReviewReport } from "../../schemas/review.js";
+import { parseUnifiedDiff } from "../patch/patchParser.js";
 import { BaseAgent } from "./baseAgent.js";
 
 export class ReviewerAgent extends BaseAgent<{ candidates: PatchCandidate[]; redTeam?: boolean }, ReviewReport> {
   readonly role = "reviewer";
 
   async run(input: { candidates: PatchCandidate[]; redTeam?: boolean }): Promise<ReviewReport> {
+    const reviews = input.candidates.map((candidate) => reviewCandidate(candidate, Boolean(input.redTeam)));
     return {
       mode: input.redTeam ? "red_team" : "standard",
-      reviews: input.candidates.map((candidate) => {
-        const redTeamFindings = input.redTeam ? buildRedTeamFindings(candidate) : [];
-        return {
-          candidateId: candidate.candidateId,
-          correctnessScore: candidate.unifiedDiff ? 70 : 40,
-          riskScore: candidate.estimatedRisk === "high" ? 70 : 25,
-          invasiveness: candidate.filesChanged.length > 5 ? "high" : candidate.filesChanged.length > 0 ? "medium" : "low",
-          testCoverage: candidate.testPlan.length ? "adequate" : "none",
-          securityConcerns: [],
-          regressionConcerns: candidate.unifiedDiff ? [] : ["No concrete diff produced in skeleton mode."],
-          redTeamFindings,
-          recommendation: candidate.unifiedDiff ? "accept_with_minor_change" : "revise",
-          notes: [
-            "Offline reviewer used deterministic scoring.",
-            ...(input.redTeam ? ["Red-team pass checked missing diff, broad blast radius, and missing verification."] : [])
-          ]
-        };
-      }),
+      reviews,
       overallRecommendation: input.redTeam
         ? "Red-team review complete; judge should select only concrete diffs with visible verification evidence."
-        : "Review complete; judge should select only if a concrete diff exists."
+        : reviews.some((review) => review.recommendation === "accept" || review.recommendation === "accept_with_minor_change")
+          ? "Review complete; judge may select only candidates without blocking concerns."
+          : "Review complete; all candidates need revision before patch application."
     };
   }
+}
+
+function reviewCandidate(candidate: PatchCandidate, redTeam: boolean): ReviewReport["reviews"][number] {
+  const parsedTargets = parseTargets(candidate.unifiedDiff);
+  const securityConcerns: string[] = [];
+  const regressionConcerns: string[] = [];
+  const redTeamFindings = redTeam ? buildRedTeamFindings(candidate) : [];
+
+  if (!candidate.unifiedDiff.trim()) {
+    regressionConcerns.push("No concrete diff produced in skeleton mode.");
+  } else if (!parsedTargets.ok) {
+    regressionConcerns.push(`Unified diff is not parseable: ${parsedTargets.error}`);
+  } else if (!parsedTargets.targets.length) {
+    regressionConcerns.push("Unified diff does not contain any file targets.");
+  }
+
+  if (parsedTargets.ok && parsedTargets.targets.length && candidate.filesChanged.length) {
+    const declared = new Set(candidate.filesChanged);
+    const missing = parsedTargets.targets.filter((target) => !declared.has(target));
+    const extra = candidate.filesChanged.filter((target) => !parsedTargets.targets.includes(target));
+    if (missing.length || extra.length) {
+      regressionConcerns.push(`filesChanged does not match diff targets (missing=${missing.join(",") || "none"} extra=${extra.join(",") || "none"}).`);
+    }
+  }
+
+  if (!candidate.testPlan.length) {
+    regressionConcerns.push("Candidate does not include a verification plan.");
+  }
+  if (candidate.filesChanged.length > 5) {
+    regressionConcerns.push(`Candidate touches ${candidate.filesChanged.length} files and needs narrower scope or stronger evidence.`);
+  }
+  if (candidate.estimatedRisk === "high") {
+    securityConcerns.push("Candidate self-reports high implementation risk.");
+  }
+  if (containsEncodingNoise(candidate.unifiedDiff)) {
+    regressionConcerns.push("Diff appears to edit mojibake or binary-decoded text; context hygiene must be fixed before approval.");
+  }
+
+  const blockingConcerns = [...securityConcerns, ...regressionConcerns].filter((concern) => !concern.startsWith("Candidate touches "));
+  const recommendation = chooseRecommendation(candidate, parsedTargets.ok ? parsedTargets.targets.length : 0, blockingConcerns);
+  const correctnessScore = recommendation === "accept" ? 88 : recommendation === "accept_with_minor_change" ? 76 : recommendation === "revise" ? 52 : 20;
+  const riskScore = candidate.estimatedRisk === "high" ? 80 : blockingConcerns.length ? 60 : candidate.estimatedRisk === "medium" ? 35 : 20;
+
+  return {
+    candidateId: candidate.candidateId,
+    correctnessScore,
+    riskScore,
+    invasiveness: candidate.filesChanged.length > 5 ? "high" : candidate.filesChanged.length > 0 ? "medium" : "low",
+    testCoverage: candidate.testPlan.length ? "adequate" : "none",
+    securityConcerns,
+    regressionConcerns,
+    redTeamFindings,
+    recommendation,
+    notes: [
+      "Offline reviewer used deterministic scoring.",
+      "Blocking concerns prevent automatic judge selection.",
+      ...(redTeam ? ["Red-team pass checked missing diff, broad blast radius, and missing verification."] : [])
+    ]
+  };
+}
+
+function parseTargets(unifiedDiff: string): { ok: true; targets: string[] } | { ok: false; error: string } {
+  if (!unifiedDiff.trim()) return { ok: true, targets: [] };
+  try {
+    const files = parseUnifiedDiff(unifiedDiff);
+    return { ok: true, targets: files.map((file) => file.isDelete ? file.oldFileName : file.newFileName || file.oldFileName).filter(Boolean) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function chooseRecommendation(candidate: PatchCandidate, targetCount: number, blockingConcerns: string[]): "accept" | "accept_with_minor_change" | "revise" | "reject" {
+  if (!candidate.unifiedDiff.trim() || targetCount === 0) return "reject";
+  if (blockingConcerns.length) return blockingConcerns.some((concern) => /not parseable|mojibake|high implementation risk/i.test(concern)) ? "reject" : "revise";
+  return candidate.estimatedRisk === "low" ? "accept" : "accept_with_minor_change";
+}
+
+function containsEncodingNoise(value: string): boolean {
+  return /�|锟|鈥|乣|俓/.test(value);
 }
 
 function buildRedTeamFindings(candidate: PatchCandidate): RedTeamFinding[] {

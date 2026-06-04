@@ -22,7 +22,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.4.1`。
+当前版本：`0.5.0`。
 
 这一版的重点是 **MCP Agent Bridge**：让 Claude Code / Codex 等外部 coding agents 通过 MCP 接入 TomorrowEdge，并被用户绑定到 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等 workflow roles。
 
@@ -33,7 +33,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 - `agents.<role>.provider: external:<id>` 支持把 workflow role 显式绑定到外部 agent
 - 外部 agent 的 patch、review、judgment、result、cost usage 都会写入 `events.jsonl`
 - TUI 的 Agents / Router / Trace panes 会显示 external agent badge、role binding 和 `external_agent_*` 事件
-- `0.4.1` 继续强化 release hardening：`npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
+- `0.5.0` 增加 Conversation Targets，并保留 `npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
 
 ## TUI 实际运行截图
 
@@ -82,7 +82,11 @@ npm run dev -- tui
 ```bash
 tedge init
 tedge tui
+tedge tui --to reviewer
+tedge targets
+tedge ask --to reviewer "is this patch safe?"
 tedge run "task"
+tedge run --to debate "task"
 tedge run "task" --headless
 tedge run "task" --live
 tedge run "task" --offline
@@ -309,11 +313,33 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.4.1`.
+Current version: `0.5.0`.
 
-This release introduces the **MCP Agent Bridge**: Claude Code / Codex and other
-external coding agents can connect through MCP and be bound to workflow roles
-such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`.
+This release introduces **Conversation Targets**: the user can choose who a
+natural-language message is addressed to while TomorrowEdge still owns
+orchestration, trace, event ledger, and full-access supervision.
+
+- `tedge targets` lists available targets such as `core`, `planner`,
+  `reviewer`, `judge`, `debate`, and enabled `agent:<id>` external agents
+- `tedge ask --to reviewer "..."` records a non-mutating directed conversation
+  trace
+- `tedge run --to debate "..."` runs a full workflow while recording the user's
+  chosen conversation target in `events.jsonl`, TUI, trace, and export
+- the TUI Goal pane shows `Talk to: <target>` so the cockpit makes the current
+  communication object explicit
+- `conversation_target` and `conversation_message` events make the handoff
+  replayable and auditable
+- reviewer/judge quality gates are stricter: parseable diffs, target matching,
+  verification plan, encoding hygiene, and blocking concerns affect automatic
+  selection
+- context selection no longer treats common binary/image assets as safe text
+  context
+- the local LM demo now reports roughly 50M parameters by default
+
+The previous **MCP Agent Bridge** remains available: Claude Code / Codex and
+other external coding agents can connect through MCP and be bound to workflow
+roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
+`repairer`.
 
 - `tedge mcp serve` starts the TomorrowEdge MCP stdio server
 - `tedge mcp tools` lists the MCP tools exposed to external agents
@@ -326,9 +352,9 @@ such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`.
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `0.4.1` hardens the release lane with `npm run verify`, zip-safe secret
-  scanning, full-access shell policy, an external command runner skeleton, and a
-  locally runnable tiny LM demo.
+- `0.5.0` adds Conversation Targets while preserving the hardened release lane:
+  `npm run verify`, zip-safe secret scanning, full-access shell policy, an
+  external command runner skeleton, and a locally runnable tiny LM demo.
 
 ## TUI Runtime Screenshots
 
@@ -380,6 +406,7 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
+- Conversation Targets for `core`, role-specific questions, debate-room broadcasts, and external agents
 - Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
 ## Commands
@@ -387,7 +414,11 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 ```bash
 tedge init
 tedge tui
+tedge tui --to reviewer
+tedge targets
+tedge ask --to reviewer "is this patch safe?"
 tedge run "task"
+tedge run --to debate "task"
 tedge run "task" --headless
 tedge run "task" --live
 tedge run "task" --offline
@@ -413,6 +444,25 @@ tedge sessions
 tedge undo --list
 tedge undo
 ```
+
+## Conversation Targets
+
+TomorrowEdge Core is the default natural-language conversation object. Users can
+also address a specific role or external agent while the cockpit keeps ownership
+of orchestration, routing, trace, session export, and supervision.
+
+```bash
+tedge targets
+tedge ask --to core "what should happen next?"
+tedge ask --to reviewer "is this diff safe to approve?"
+tedge ask --to judge "should we select or request revision?"
+tedge ask --to agent:codex "review the latest session"
+tedge run --to debate "implement this feature after multi-agent debate"
+```
+
+Every directed message records `conversation_target` and
+`conversation_message` events. Markdown and JSON exports include the chosen
+target, and the TUI Goal pane shows `Talk to: <target>`.
 
 ## Access Modes
 
@@ -468,7 +518,7 @@ npm run verify
 ```
 
 The demo is a local bilingual Chinese/English hashed neural n-gram toy language
-model with roughly 540k parameters by default, not an OpenAI or OpenRouter API
+model with roughly 50M parameters by default, not an OpenAI or OpenRouter API
 call. It exposes `/health`, `/model-info`, and `/generate`, plus a frontend with
 prompt, temperature, and max token controls for orchestration acceptance drills.
 

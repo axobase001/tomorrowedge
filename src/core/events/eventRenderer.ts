@@ -36,6 +36,10 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.fromProvider}/${event.fromModel} -> ${event.toProvider}/${event.toModel}`;
     case "cost_usage":
       return `tokens=${event.totalTokens}${event.estimatedCostUsd === undefined ? "" : ` cost=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "conversation_target":
+      return `target=${event.target} ${event.label}`;
+    case "conversation_message":
+      return `message to ${event.target}: ${event.summary}`;
     case "external_agent_registered":
       return `registered ${event.externalAgentId} roles=${event.allowedRoles.join(",")}`;
     case "external_agent_call":
@@ -81,6 +85,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("stderrRef" in event && event.stderrRef) refs.push(event.stderrRef);
   if ("evidenceRef" in event && event.evidenceRef) refs.push(event.evidenceRef);
   if ("summaryRef" in event && event.summaryRef) refs.push(event.summaryRef);
+  if ("messageRef" in event && event.messageRef) refs.push(event.messageRef);
   if ("requestRef" in event && event.requestRef) refs.push(event.requestRef);
   if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
   return refs;

@@ -18,6 +18,7 @@ export type ModelNote = {
     model: string;
   };
   fallbackReason?: string;
+  retryUsed?: boolean;
   error?: string;
 };
 

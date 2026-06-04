@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createTinyCharModel } from "../src/model.js";
 
-test("default bilingual local model reports 500k-1M local parameters", () => {
+test("default bilingual local model reports 50M-60M local parameters", () => {
   const model = createTinyCharModel();
   const info = model.info();
   assert.equal(info.cloudApi, false);
   assert.equal(info.type, "bilingual hashed neural n-gram");
-  assert.ok(info.parameterCount >= 500_000, `parameterCount=${info.parameterCount}`);
-  assert.ok(info.parameterCount <= 1_000_000, `parameterCount=${info.parameterCount}`);
+  assert.ok(info.parameterCount >= 50_000_000, `parameterCount=${info.parameterCount}`);
+  assert.ok(info.parameterCount <= 60_000_000, `parameterCount=${info.parameterCount}`);
   assert.deepEqual(info.languages, ["zh-CN", "en"]);
 });
 

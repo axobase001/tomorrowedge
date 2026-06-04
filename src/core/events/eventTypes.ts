@@ -138,6 +138,22 @@ export type CostUsageEvent = BaseEvent & {
   byProvider?: Record<string, { inputTokens: number; outputTokens: number; estimatedCostUsd?: number }>;
 };
 
+export type ConversationTargetEvent = BaseEvent & {
+  type: "conversation_target";
+  target: string;
+  targetKind: "core" | "role" | "debate" | "external_agent";
+  label: string;
+  description: string;
+};
+
+export type ConversationMessageEvent = BaseEvent & {
+  type: "conversation_message";
+  target: string;
+  targetKind: "core" | "role" | "debate" | "external_agent";
+  messageRef: string;
+  summary: string;
+};
+
 export type ExternalAgentRegisteredEvent = BaseEvent & {
   type: "external_agent_registered";
   externalAgentId: string;
@@ -247,6 +263,8 @@ export type TomorrowEdgeEvent =
   | RepairEvent
   | ProviderFallbackEvent
   | CostUsageEvent
+  | ConversationTargetEvent
+  | ConversationMessageEvent
   | ExternalAgentRegisteredEvent
   | ExternalAgentCallEvent
   | ExternalAgentResultEvent

@@ -29,6 +29,7 @@ export type RunOptions = {
   fixtureFailingPatch?: boolean;
   testCommand?: string;
   image?: string[];
+  to?: string;
 };
 
 export async function runCommand(cwd: string, goal: string, options: RunOptions = {}): Promise<void> {
@@ -64,7 +65,8 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       liveVision: liveOption(options.offline, options.live, autoLive && imagePaths.length > 0, options.liveVision),
       fixtureFailingPatch: options.fixtureFailingPatch,
       testCommand: options.testCommand ?? prefs.preferredTestCommand,
-      imagePaths
+      imagePaths,
+      conversationTarget: options.to
     }
   };
   if (!(backend instanceof NativeBackend)) {
@@ -84,6 +86,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       agents: state.agents.map(a => ({ role: a.role, provider: a.provider, model: a.model, kind: a.agentKind ?? "offline", status: a.status, summary: a.summary })),
       approvals: state.approvals,
       capabilityRoute: state.capabilityRoute,
+      conversationTarget: state.conversationTarget,
       visualSpec: state.visualSpec,
       review: state.review,
       judge: state.judge,

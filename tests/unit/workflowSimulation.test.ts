@@ -127,9 +127,13 @@ describe("workflow simulation", () => {
       const report = await readFile(result.reportPath, "utf8");
 
       expect(result.debate.some((turn) => turn.provider === "external:codex")).toBe(true);
+      expect(result.debate.some((turn) => turn.provider === "external:codex" && turn.content.includes("Reviewer stance"))).toBe(true);
+      expect(result.debate.some((turn) => turn.provider === "external:codex" && turn.content.includes("Judge stance"))).toBe(true);
+      expect(result.review.strengths).toContain("External agents contributed explicit reviewer/judge stances.");
       expect(result.assignments.some((assignment) => assignment.provider === "external:codex")).toBe(true);
       expect(report).toContain("Cost Governance");
       expect(report).toContain("external:codex");
+      expect(report).toContain("Reviewer stance");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

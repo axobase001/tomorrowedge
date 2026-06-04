@@ -105,7 +105,7 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       <Box gap={1}>
         <AgentsPane agents={viewGraph.agents} active={activePane === "agents"} />
         <Box flexDirection="column" width="50%">
-          <GoalPane goal={viewGraph.goal} plan={viewGraph.plan} active={activePane === "goal"} />
+          <GoalPane goal={viewGraph.goal} plan={viewGraph.plan} conversationTarget={viewGraph.conversationTarget} active={activePane === "goal"} />
           <RouterPane routing={viewGraph.routing} access={viewGraph.access} capabilityRoute={viewGraph.capabilityRoute} active={activePane === "routing"} />
         </Box>
       </Box>

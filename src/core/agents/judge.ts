@@ -7,11 +7,13 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
   readonly role = "judge";
 
   async run(input: { candidates: PatchCandidate[]; review: ReviewReport }): Promise<JudgeDecision> {
-    const acceptable = input.review.reviews.find((review) => review.recommendation === "accept" || review.recommendation === "accept_with_minor_change");
+    const acceptable = input.review.reviews
+      .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
+      .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
     if (!acceptable) {
       return {
-        decision: "request_revision",
-        reason: "No candidate has enough evidence for safe application.",
+        decision: input.review.reviews.some(hasCriticalConcern) ? "ask_user" : "request_revision",
+        reason: "No candidate cleared reviewer blocking concerns for safe automatic application.",
         confidence: 0.62
       };
     }
@@ -32,4 +34,16 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
       confidence: 0.78
     };
   }
+}
+
+function hasBlockingConcern(review: ReviewReport["reviews"][number]): boolean {
+  return Boolean(review.securityConcerns.length || blockingRegressionConcerns(review).length || review.redTeamFindings.some((finding) => finding.severity === "high" || finding.severity === "critical"));
+}
+
+function hasCriticalConcern(review: ReviewReport["reviews"][number]): boolean {
+  return review.redTeamFindings.some((finding) => finding.severity === "critical");
+}
+
+function blockingRegressionConcerns(review: ReviewReport["reviews"][number]): string[] {
+  return review.regressionConcerns.filter((concern) => !concern.startsWith("Candidate touches "));
 }

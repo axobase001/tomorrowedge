@@ -7,11 +7,38 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-04
+
+### Added
+
+- Conversation Targets for natural-language routing to `core`, `planner`,
+  `reviewer`, `judge`, `debate`, or enabled `agent:<id>` external agents.
+- `tedge targets` for listing available conversation targets.
+- `tedge ask --to <target> "<message>"` for non-mutating directed conversation
+  traces.
+- `tedge run --to <target> "<task>"` for full workflows that preserve the user's
+  chosen communication object in the session.
+- `tedge tui --to <target>` for opening the cockpit with an explicit displayed
+  communication object.
+- `conversation_target` and `conversation_message` events in `events.jsonl`,
+  trace, and artifact-aware exports.
+- TUI Goal pane target display so operators can see who the current message is
+  addressed to.
+
 ### Changed
 
 - Upgraded `examples/tiny-local-lm` from a 935-parameter character n-gram toy to
   a local bilingual Chinese/English hashed neural n-gram model with roughly
-  540k parameters by default.
+  50M parameters by default.
+- Hardened context hygiene so common binary/image assets are excluded from safe
+  text context and omitted from live patch prompts.
+- Hardened patch application for empty diffs, missing targets, bounded stale
+  context, and ambiguous changed-substring fallbacks.
+- Reviewer/Judge gates now enforce parseable diffs, diff-target consistency,
+  verification plans, encoding hygiene, and blocking concern handling before
+  automatic selection.
+- External agent workflow debate now asks for explicit reviewer/judge stances,
+  cross-examination questions, and required evidence.
 
 ## [0.4.1] - 2026-06-04
 

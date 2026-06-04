@@ -13,8 +13,8 @@ test("API exposes health, model info, and generation endpoints", async () => {
 
     const info = await fetch(`${baseUrl}/model-info`).then((response) => response.json());
     assert.equal(info.cloudApi, false);
-    assert.ok(info.parameterCount >= 500_000);
-    assert.ok(info.parameterCount <= 1_000_000);
+    assert.ok(info.parameterCount >= 50_000_000);
+    assert.ok(info.parameterCount <= 60_000_000);
     assert.deepEqual(info.languages, ["zh-CN", "en"]);
 
     const generated = await fetch(`${baseUrl}/generate`, {

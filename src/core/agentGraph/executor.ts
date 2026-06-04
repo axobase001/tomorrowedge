@@ -27,6 +27,7 @@ import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { RunResult } from "../../schemas/evidence.js";
+import { resolveConversationTarget, targetPromptPrefix } from "../conversation/conversationTargets.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -43,6 +44,7 @@ export type OfflineGraphOptions = {
   fixtureFailingPatch?: boolean;
   testCommand?: string;
   imagePaths?: string[];
+  conversationTarget?: string;
 };
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
@@ -54,9 +56,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     approveRepair: options.approveRepair
   });
   const ledger = createEventLedger(access.mode);
+  const conversationTarget = resolveConversationTarget(config, options.conversationTarget);
   const state: AgentGraphState = {
     sessionId: ledger.sessionId,
     goal,
+    conversationTarget,
     routing: router.getPlan(),
     access,
     events: ledger.events,
@@ -84,6 +88,22 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     shellApproved: access.shellApproved,
     repairApproved: access.repairApproved,
     description: accessModeDescription(access.mode)
+  });
+  ledger.append({
+    type: "conversation_target",
+    phase: "routing",
+    target: conversationTarget.id,
+    targetKind: conversationTarget.kind,
+    label: conversationTarget.label,
+    description: conversationTarget.description
+  });
+  ledger.append({
+    type: "conversation_message",
+    phase: "routing",
+    target: conversationTarget.id,
+    targetKind: conversationTarget.kind,
+    messageRef: ledger.writeArtifact("conversation_messages", goal),
+    summary: `${conversationTarget.id}: ${goal.slice(0, 120)}${goal.length > 120 ? "..." : ""}`
   });
   ledger.append({
     type: "evidence_update",
@@ -132,8 +152,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const planner = new PlannerAgent();
-  const plannerGoal = state.visualSpec ? `${goal}\n\n${state.visualSpec.handoffPrompt}` : goal;
+  const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
   state.plan = await runAgentState(state, ledger, router, "planner", () => planner.run({ goal: plannerGoal }));
+  state.plan = { ...state.plan, goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();

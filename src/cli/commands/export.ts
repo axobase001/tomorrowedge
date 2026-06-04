@@ -36,6 +36,13 @@ Created: ${session.createdAt}
 
 ${state.goal}
 
+## Conversation Target
+
+${state.conversationTarget ? `- Target: ${state.conversationTarget.id}
+- Label: ${state.conversationTarget.label}
+- Kind: ${state.conversationTarget.kind}
+- Description: ${state.conversationTarget.description}` : "- Target: core"}
+
 ## Access
 
 - Mode: ${state.access.mode}
@@ -117,6 +124,7 @@ function renderBriefExport(sessionId: string, createdAt: string, state: Awaited<
     `TomorrowEdge Session ${sessionId}`,
     `Created: ${createdAt}`,
     `Goal: ${state.goal}`,
+    `Conversation target: ${state.conversationTarget ? `${state.conversationTarget.id} (${state.conversationTarget.label})` : "core"}`,
     `Access: ${state.access.mode}`,
     `Events: ${eventCount}`,
     `Artifacts: ${artifactCount}`,

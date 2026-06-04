@@ -15,12 +15,17 @@ export const patchCandidateSchema = z.object({
   estimatedRisk: patchRiskSchema
 });
 
+const responseStringArraySchema = z.preprocess((value) => {
+  if (typeof value === "string") return value.trim() ? [value] : [];
+  return value;
+}, z.array(z.string()));
+
 export const livePatchResponseSchema = z.object({
   summary: z.string().optional().default(""),
   unifiedDiff: z.string().optional().default(""),
   filesChanged: z.array(z.string()).optional().default([]),
-  testPlan: z.array(z.string()).optional().default([]),
-  knownTradeoffs: z.array(z.string()).optional().default([]),
+  testPlan: responseStringArraySchema.optional().default([]),
+  knownTradeoffs: responseStringArraySchema.optional().default([]),
   estimatedRisk: patchRiskSchema.optional().default("low")
 });
 

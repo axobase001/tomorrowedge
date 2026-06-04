@@ -12,10 +12,12 @@ import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import type { RoutingPlan } from "../routing/policies.js";
 import type { AccessPolicy } from "../permissions/accessPolicy.js";
 import type { EventArtifact, TomorrowEdgeEvent } from "../events/eventTypes.js";
+import type { ConversationTarget } from "../../schemas/conversation.js";
 
 export type AgentGraphState = {
   sessionId: string;
   goal: string;
+  conversationTarget?: ConversationTarget;
   routing: RoutingPlan;
   access: AccessPolicy;
   events: TomorrowEdgeEvent[];

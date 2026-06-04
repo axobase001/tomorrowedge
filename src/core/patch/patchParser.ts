@@ -43,7 +43,7 @@ export function normalizeUnifiedDiffHunkCounts(unifiedDiff: string): string {
     let newLines = 0;
     let cursor = index + 1;
     while (cursor < lines.length && !isPatchBoundary(lines[cursor])) {
-      const line = lines[cursor];
+      const line = lines[cursor] === "" ? " " : lines[cursor];
       hunkLines.push(line);
       if (line.startsWith("\\ No newline")) {
         cursor += 1;
