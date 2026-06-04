@@ -31,20 +31,22 @@ export type RunOptions = {
   testCommand?: string;
   image?: string[];
   to?: string;
+  cwd?: string;
 };
 
 export async function runCommand(cwd: string, goal: string, options: RunOptions = {}): Promise<void> {
+  const targetCwd = options.cwd ? path.resolve(cwd, options.cwd) : cwd;
   const accessMode = parseAccessMode(options.accessMode);
-  const imagePaths = validateImageInputs(cwd, options.image ?? []);
-  const loadedConfig = loadConfig(cwd);
-  const prefs = loadProjectPreferences(cwd);
+  const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
+  const loadedConfig = loadConfig(targetCwd);
+  const prefs = loadProjectPreferences(targetCwd);
   const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
   const effectiveAccessMode = accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {
     throw new Error("Use either --live or --offline, not both.");
   }
-  const workspace = await prepareRunWorkspace(cwd, options);
+  const workspace = await prepareRunWorkspace(targetCwd, options);
   if (effectiveAccessMode === "full") {
     await warnFullMode(workspace.executionCwd);
   }
@@ -77,7 +79,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
   }
   const state = await backend.runGraph(workspace.executionCwd, goal, backendInput.options);
-  const sessionPath = await saveSession(cwd, state);
+  const sessionPath = await saveSession(targetCwd, state);
   if (options.headless) {
     const headlessPayload = {
       sessionPath,
@@ -96,6 +98,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       modelNotes: state.modelNotes,
       usageSummary: state.usageSummary,
       budgetStatus: state.budgetStatus,
+      budgetStatuses: state.budgetStatuses,
       changedFiles: state.changedFiles,
       runResults: state.runResults,
       repairCandidates: state.repairCandidates,

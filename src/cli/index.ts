@@ -61,7 +61,9 @@ program
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
   .option("--to <target>", "conversation target: core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core")
-  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string }) => runCommand(cwd, task, options));
+  .option("--cwd <path>", "run against another project directory")
+  .option("--workdir <path>", "alias for --cwd")
+  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task, { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").action((goal: string | undefined, options: { to?: string }) => tuiCommand(cwd, goal, options));
 

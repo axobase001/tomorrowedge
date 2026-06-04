@@ -8,11 +8,22 @@ export function AgentCard({ agent }: { agent: AgentRunState }) {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} marginBottom={1}>
       <Text>
-        <Text bold>{roleLabel(agent.role)}</Text> <StatusBadge status={agent.status} /> {agent.agentKind === "external" || agent.provider.startsWith("external:") ? <Text color="cyan">EXTERNAL </Text> : null}<Text color="gray">{agent.provider}/{agent.model}</Text> <CostBadge costUsd={agent.costUsd} />
+        <Text bold>{roleLabel(agent.role)}</Text> <StatusBadge status={agent.status} /> {agent.agentKind === "external" || agent.provider.startsWith("external:") ? <Text color="cyan">EXTERNAL </Text> : null}{agent.role === "runner" ? <Text color="yellow">{runnerKind(agent)} </Text> : null}<Text color="gray">{agent.provider}/{agent.model}</Text> <Text color="gray">{formatDuration(agent.elapsedMs)}</Text> <CostBadge costUsd={agent.costUsd} />
       </Text>
       <Text color="gray">{agent.summary}</Text>
     </Box>
   );
+}
+
+function runnerKind(agent: AgentRunState): string {
+  if (/patch/i.test(agent.model) || /patch/i.test(agent.summary)) return "PATCH-RUNNER";
+  if (/shell|test|command/i.test(agent.model) || /shell|test|command/i.test(agent.summary)) return "SHELL-RUNNER";
+  return "RUNNER";
+}
+
+function formatDuration(ms?: number): string {
+  if (ms === undefined) return "";
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
 function roleLabel(role: AgentRunState["role"]): string {

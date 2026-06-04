@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { Box, Text } from "ink";
 import type { AgentGraphState } from "../../core/agentGraph/state.js";
 
@@ -11,7 +11,7 @@ export function CommandPalette({ mode, graph, selectedRouteIndex = 0 }: { mode: 
       {mode === "commands" ? <CommandItems /> : null}
       {mode === "access" ? <AccessItems graph={graph} /> : null}
       {mode === "models" ? <ModelItems graph={graph} selectedRouteIndex={selectedRouteIndex} /> : null}
-      <Text color="gray">Enter/Esc 关闭</Text>
+      <Text color="gray">Enter/Esc close</Text>
     </Box>
   );
 }
@@ -19,12 +19,12 @@ export function CommandPalette({ mode, graph, selectedRouteIndex = 0 }: { mode: 
 function CommandItems() {
   return (
     <>
-      <Text><Text color="cyan">Tab</Text> 切换焦点面板</Text>
-      <Text><Text color="cyan">a</Text> 授权并应用当前裁决补丁</Text>
-      <Text><Text color="cyan">t</Text> 授权运行计划中的测试命令</Text>
-      <Text><Text color="cyan">u</Text> 回滚最近一次补丁快照</Text>
-      <Text><Text color="cyan">p</Text> 查看权限模式</Text>
-      <Text><Text color="cyan">m</Text> 打开模型/路由面板</Text>
+      <Text><Text color="cyan">Tab</Text> switch focused pane</Text>
+      <Text><Text color="cyan">a</Text> approve and apply selected patch</Text>
+      <Text><Text color="cyan">t</Text> approve planned shell command</Text>
+      <Text><Text color="cyan">u</Text> undo latest patch snapshot</Text>
+      <Text><Text color="cyan">p</Text> show access mode</Text>
+      <Text><Text color="cyan">m</Text> show model route preview</Text>
     </>
   );
 }
@@ -32,11 +32,11 @@ function CommandItems() {
 function AccessItems({ graph }: { graph: AgentGraphState }) {
   return (
     <>
-      <Text>当前：{graph.access.mode}</Text>
-      <Text color="gray">restricted：禁止云模型与本地变更</Text>
-      <Text color="gray">partial：允许模型调用，patch/shell/repair 需授权</Text>
-      <Text color="gray">full：自动批准 patch/shell/repair</Text>
-      <Text color="yellow">持久切换：tedge mode restricted|partial|full</Text>
+      <Text>Current: {graph.access.mode}</Text>
+      <Text color="gray">restricted: blocks cloud/model calls and mutations</Text>
+      <Text color="gray">partial: model calls allowed; patch/shell/repair require approval</Text>
+      <Text color="gray">full: patch/shell/repair auto-approved and logged</Text>
+      <Text color="yellow">Persist mode: tedge mode restricted|partial|full</Text>
     </>
   );
 }
@@ -44,20 +44,20 @@ function AccessItems({ graph }: { graph: AgentGraphState }) {
 function ModelItems({ graph, selectedRouteIndex }: { graph: AgentGraphState; selectedRouteIndex: number }) {
   return (
     <>
-      <Text>路由模式：{graph.routing.mode}</Text>
-      <Text color="gray">数字键选择角色；+/- 临时切换该角色 provider/model 预览。</Text>
+      <Text>Routing mode: {graph.routing.mode}</Text>
+      <Text color="gray">Number keys select a role; +/- previews provider/model changes.</Text>
       {graph.routing.assignments.slice(0, 9).map((assignment, index) => (
         <Text key={assignment.role} color={index === selectedRouteIndex ? "cyan" : "gray"}>
           {index + 1}. {assignment.role}: {assignment.provider}/{assignment.model}
         </Text>
       ))}
-      <Text color="yellow">持久切换：tedge prefs --routing-mode balanced|quality|cheap|privacy</Text>
+      <Text color="yellow">Persist preview: edit .tomorrowedge/config.yaml agents role provider/model, or run tedge models --configure-free --free-first.</Text>
     </>
   );
 }
 
 function titleFor(mode: PaletteMode): string {
-  if (mode === "access") return "权限模式";
-  if (mode === "models") return "模型/路由";
-  return "命令面板";
+  if (mode === "access") return "Access mode";
+  if (mode === "models") return "Model routing";
+  return "Commands";
 }

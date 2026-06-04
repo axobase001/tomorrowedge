@@ -71,7 +71,7 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
   if (config.providers.gemini?.enabled) registry.register(createGeminiPlaceholder());
 
   if (config.providers.ollama?.enabled) {
-    registry.register(new OllamaProvider(config.providers.ollama.base_url));
+    registry.register(new OllamaProvider(process.env.OLLAMA_BASE_URL ?? config.providers.ollama.base_url));
   }
 
   return registry;

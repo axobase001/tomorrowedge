@@ -49,6 +49,7 @@ describe("offline agent graph", () => {
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
 
     expect(state.budgetStatus?.status).toBe("blocked");
+    expect(state.budgetStatuses.map((status) => status.status)).toContain("blocked");
     expect(state.modelNotes).toEqual([]);
     expect(state.usageSummary.totalTokens).toBe(0);
   });

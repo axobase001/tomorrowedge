@@ -15,7 +15,7 @@ import { RouterPane } from "./panes/RouterPane.js";
 import { ShellPane } from "./panes/ShellPane.js";
 import { TracePane } from "./panes/TracePane.js";
 
-const focusPanes = ["agents", "goal", "routing", "trace", "debate", "evidence", "diff", "shell", "memory", "help"] as const;
+const focusPanes = ["memory", "agents", "goal", "routing", "trace", "debate", "evidence", "diff", "shell", "help"] as const;
 type FocusPane = (typeof focusPanes)[number];
 
 export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: AgentGraphState; safeMode?: boolean; cwd?: string }) {
@@ -100,11 +100,12 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       <Text color={viewGraph.access.mode === "full" ? "green" : viewGraph.access.mode === "restricted" ? "yellow" : "cyan"}>{modeBanner(viewGraph.access.mode)}</Text>
       <Text color={busy ? "yellow" : "cyan"}>{busy ? "Working..." : message}</Text>
       <Text color="gray">Focus: {activePane}</Text>
-      {viewGraph.access.mode === "partial" ? <ApprovalPrompt safeMode={safeMode} /> : null}
+      {viewGraph.access.mode === "partial" ? <ApprovalPrompt graph={viewGraph} /> : null}
       {palette ? <CommandPalette mode={palette} graph={viewGraph} selectedRouteIndex={selectedRouteIndex} /> : null}
       <Box gap={1}>
         <AgentsPane agents={viewGraph.agents} active={activePane === "agents"} />
         <Box flexDirection="column" width="50%">
+          <MemoryPane graph={viewGraph} active={activePane === "memory"} />
           <GoalPane goal={viewGraph.goal} plan={viewGraph.plan} conversationTarget={viewGraph.conversationTarget} active={activePane === "goal"} />
           <RouterPane routing={viewGraph.routing} access={viewGraph.access} capabilityRoute={viewGraph.capabilityRoute} active={activePane === "routing"} />
         </Box>
@@ -115,19 +116,14 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
           <EvidencePane summary={viewGraph.finalSummary} active={activePane === "evidence"} />
         </Box>
         <Box flexDirection="column" width="50%">
-          <DiffPane candidate={viewGraph.candidates.find((candidate) => candidate.candidateId === viewGraph.judge?.selectedCandidateId) ?? viewGraph.candidates[0]} active={activePane === "diff"} />
-          <ShellPane commands={viewGraph.plan?.verificationCommands ?? []} active={activePane === "shell"} />
+          <DiffPane candidate={viewGraph.candidates.find((candidate) => candidate.candidateId === viewGraph.judge?.selectedCandidateId) ?? viewGraph.candidates[0]} candidates={viewGraph.candidates} repairCandidates={viewGraph.repairCandidates} active={activePane === "diff"} />
+          <ShellPane commands={viewGraph.plan?.verificationCommands ?? []} runResults={viewGraph.runResults} active={activePane === "shell"} />
         </Box>
       </Box>
       <Box gap={1}>
         <Box width="50%">
           <TracePane events={viewGraph.events ?? []} active={activePane === "trace"} />
         </Box>
-        <Box width="50%">
-          <MemoryPane graph={viewGraph} active={activePane === "memory"} />
-        </Box>
-      </Box>
-      <Box gap={1}>
         <Box width="50%">
           <HelpPane active={activePane === "help"} />
         </Box>

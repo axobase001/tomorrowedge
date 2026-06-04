@@ -74,6 +74,22 @@ describe("fixture E2E workflow", () => {
     expect(state.finalSummary?.evidence).toContain("Command passed: npm test");
   });
 
+  it("can run against an explicit --cwd project directory", async () => {
+    const output = await captureStdout(() =>
+      runCommand(process.cwd(), "fix failing test", {
+        cwd: tempRoot,
+        headless: true,
+        provider: "fixture",
+        approvePatch: true,
+        approveShell: true
+      })
+    );
+    const payload = JSON.parse(output) as { executionCwd: string; runResults: Array<{ success: boolean }> };
+
+    expect(payload.executionCwd).toBe(tempRoot);
+    expect(payload.runResults[0]?.success).toBe(true);
+  }, 20_000);
+
   it("describes partial mode explicit approvals separately from full autonomy", async () => {
     const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
       provider: "fixture",

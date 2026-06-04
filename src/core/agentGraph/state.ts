@@ -33,6 +33,7 @@ export type AgentGraphState = {
   modelNotes: ModelNote[];
   usageSummary: ModelUsageSummary;
   budgetStatus?: ModelBudgetStatus;
+  budgetStatuses: ModelBudgetStatus[];
   review?: ReviewReport;
   judge?: JudgeDecision;
   changedFiles: string[];

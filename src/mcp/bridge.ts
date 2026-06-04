@@ -63,6 +63,7 @@ export class TomorrowEdgeMcpBridge {
       debateRounds: [],
       modelNotes: [],
       usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      budgetStatuses: [],
       changedFiles: [],
       runResults: [],
       approvals: {

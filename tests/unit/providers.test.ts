@@ -41,6 +41,12 @@ describe("provider registry", () => {
     expect(models?.[0]?.id).toBe("anthropic/claude-opus-4.1");
   });
 
+  it("reads OLLAMA_BASE_URL after local env loading instead of defaultConfig module import", () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://localhost:18080");
+    const registry = createProviderRegistry(defaultConfig);
+    expect(registry.get("ollama")).toBeTruthy();
+  });
+
   it("supports api-key auth and legacy max_tokens for OpenAI-compatible APIs", async () => {
     let observedHeaders: Headers | undefined;
     let observedBody: Record<string, unknown> | undefined;

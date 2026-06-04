@@ -56,6 +56,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     approveRepair: options.approveRepair
   });
   const ledger = createEventLedger(access.mode);
+  const startedAtMs = Date.now();
   const conversationTarget = resolveConversationTarget(config, options.conversationTarget);
   const state: AgentGraphState = {
     sessionId: ledger.sessionId,
@@ -71,6 +72,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetStatuses: [],
     changedFiles: [],
     runResults: [],
     approvals: {
@@ -117,11 +119,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const vision = new VisionAgent();
     if (options.liveVision && access.cloudAllowed) {
       const assignment = router.assignmentFor("vision");
-      state.budgetStatus = preflightBudget(
+      const budgetStatus = setBudgetStatus(state, preflightBudget(
         [{ provider: assignment.provider, prompt: buildVisionCostPrompt(goal, imagePaths), estimatedInputTokens: estimateVisionInputTokens(goal, imagePaths), maxOutputTokens: 1200 }],
         config.routing.max_cost_usd
-      );
-      if (state.budgetStatus.status !== "blocked") {
+      ));
+      if (budgetStatus.status !== "blocked") {
         const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), "live");
         state.modelNotes.push(liveVision.note);
         state.usageSummary = summarizeModelUsage(state.modelNotes);
@@ -129,14 +131,14 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         state.visualSpec = liveVision.spec;
       }
     } else if (options.liveVision && !access.cloudAllowed) {
-      state.budgetStatus = {
+      const budgetStatus = setBudgetStatus(state, {
         status: "blocked",
         maxCostUsd: config.routing.max_cost_usd,
         estimatedInputTokens: 0,
         estimatedOutputTokens: 0,
         reason: `Live vision blocked by access mode: ${access.mode}.`
-      };
-      ledger.append({ type: "autonomy_limit_reached", phase: "vision", status: "blocked_by_budget", reason: state.budgetStatus.reason });
+      });
+      ledger.append({ type: "autonomy_limit_reached", phase: "vision", status: "blocked_by_budget", reason: budgetStatus.reason });
     }
     if (!state.visualSpec) {
       state.visualSpec = await runAgentState(state, ledger, router, "vision", () => vision.run({ goal, imagePaths }));
@@ -191,11 +193,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger
     };
     const patchPlans = await buildLivePatchPlans(livePatchInput);
-    state.budgetStatus = preflightBudget(
+    const budgetStatus = setBudgetStatus(state, preflightBudget(
       patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
       config.routing.max_cost_usd
-    );
-    if (state.budgetStatus.status !== "blocked") {
+    ));
+    if (budgetStatus.status !== "blocked") {
       const livePatchResult = await runLivePatchCandidates(livePatchInput);
       state.candidates.push(...livePatchResult.candidates);
       for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(ledger, candidate.agentId as AgentRole, candidate);
@@ -204,14 +206,14 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
     }
   } else if (options.livePatch && !access.cloudAllowed) {
-    state.budgetStatus = {
+    const budgetStatus = setBudgetStatus(state, {
       status: "blocked",
       maxCostUsd: config.routing.max_cost_usd,
       estimatedInputTokens: 0,
       estimatedOutputTokens: 0,
         reason: `Live patch generation blocked by access mode: ${access.mode}.`
-      };
-      ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: state.budgetStatus.reason });
+      });
+      ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
 
   const reviewer = new ReviewerAgent();
@@ -252,25 +254,25 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger
     };
     const advisoryPlans = buildAdvisoryPlans(advisoryInput);
-    state.budgetStatus = preflightBudget(
+    const budgetStatus = setBudgetStatus(state, preflightBudget(
       advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
       config.routing.max_cost_usd
-    );
-    if (state.budgetStatus.status !== "blocked") {
+    ));
+    if (budgetStatus.status !== "blocked") {
       const advisoryNotes = await runLiveAdvisory(advisoryInput);
       state.modelNotes.push(...advisoryNotes);
       state.usageSummary = summarizeModelUsage(state.modelNotes);
       recordModelNoteEvents(ledger, advisoryNotes, state.usageSummary);
     }
   } else if (options.liveAdvisory && !access.cloudAllowed) {
-    state.budgetStatus = {
+    const budgetStatus = setBudgetStatus(state, {
       status: "blocked",
       maxCostUsd: config.routing.max_cost_usd,
       estimatedInputTokens: 0,
       estimatedOutputTokens: 0,
         reason: `Live advisory blocked by access mode: ${access.mode}.`
-      };
-      ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: state.budgetStatus.reason });
+      });
+      ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
 
   if (state.judge.decision === "select" && state.judge.selectedCandidateId) {
@@ -300,17 +302,21 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     }
   }
 
-  const testCommand = options.testCommand ?? state.plan.verificationCommands?.[0];
+  const testCommands = options.testCommand ? [options.testCommand] : state.plan.verificationCommands ?? [];
   let shellRuns = 0;
   let repairAttempts = 0;
-  if (state.changedFiles.length && testCommand) {
+  if (state.changedFiles.length && testCommands.length) {
     try {
-      if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
-      shellRuns += 1;
-      const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
-      state.runResults.push(result);
-      recordShellRunEvent(ledger, cwd, result);
-      if (!result.success && options.repairOnFail) {
+      for (const testCommand of testCommands) {
+        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
+        if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
+        shellRuns += 1;
+        const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+        state.runResults.push(result);
+        recordShellRunEvent(ledger, cwd, result);
+        if (result.success) continue;
+        if (!options.repairOnFail) break;
+        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return finalizeState(state, ledger, router);
         if (!canAttemptRepair(config, repairAttempts, ledger)) return finalizeState(state, ledger, router);
         repairAttempts += 1;
         const repairer = new RepairerAgent();
@@ -326,11 +332,13 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved));
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
+            if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
             if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
             shellRuns += 1;
             const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
             state.runResults.push(repairedRun);
             recordShellRunEvent(ledger, cwd, repairedRun);
+            if (!repairedRun.success) break;
           } catch (error) {
             ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: error instanceof Error ? error.message : String(error) });
             state.agents.push({
@@ -345,7 +353,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         }
       }
     } catch (error) {
-      ledger.append({ type: "shell_run", phase: "shell", role: "runner", provider: "local_tool", model: "shell", command: testCommand, cwd, error: error instanceof Error ? error.message : String(error) });
+      ledger.append({ type: "shell_run", phase: "shell", role: "runner", provider: "local_tool", model: "shell", command: testCommands.join(" && "), cwd, error: error instanceof Error ? error.message : String(error) });
       state.agents.push({
         id: "approval_shell",
         role: "runner",
@@ -372,18 +380,31 @@ function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
 
 async function finalizeState(state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {
   const summarizer = new SummarizerAgent();
-  state.finalSummary = await runAgentState(state, ledger, router, "summarizer", () =>
-    summarizer.run({
-      plan: state.plan!,
+  try {
+    state.finalSummary = await runAgentState(state, ledger, router, "summarizer", () =>
+      summarizer.run({
+        plan: state.plan!,
+        changedFiles: state.changedFiles,
+        testsRun: state.runResults.map((result) => result.command),
+        evidence: [
+          "offline graph completed",
+          ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
+          ...state.runResults.map(evidenceFromRun)
+        ]
+      })
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    state.finalSummary = {
+      task: state.goal,
+      result: state.runResults.some((result) => !result.success) ? "partially_completed" : "completed",
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
-      evidence: [
-        "offline graph completed",
-        ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
-        ...state.runResults.map(evidenceFromRun)
-      ]
-    })
-  );
+      evidence: ["summarizer failed; fallback summary generated", ...state.runResults.map(evidenceFromRun)],
+      risksRemaining: [`summarizer failed: ${message}`],
+      suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
+    };
+  }
   ledger.append({
     type: "summary",
     phase: "summary",
@@ -527,6 +548,26 @@ function canAttemptRepair(config: TomorrowEdgeConfig, repairs: number, ledger: E
   if (repairs < config.autonomy.max_repairs) return true;
   ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: `max_repairs=${config.autonomy.max_repairs} reached` });
   return false;
+}
+
+function setBudgetStatus(state: AgentGraphState, status: NonNullable<AgentGraphState["budgetStatus"]>): NonNullable<AgentGraphState["budgetStatus"]> {
+  state.budgetStatus = status;
+  state.budgetStatuses.push(status);
+  return status;
+}
+
+function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, startedAtMs: number, phase: "shell" | "repair" | "summary" | "coding"): boolean {
+  const elapsedSec = (Date.now() - startedAtMs) / 1000;
+  if (elapsedSec > config.autonomy.max_wall_time_sec) {
+    ledger.append({ type: "autonomy_limit_reached", phase, status: "blocked_by_iteration_limit", reason: `max_wall_time_sec=${config.autonomy.max_wall_time_sec} reached` });
+    return false;
+  }
+  const cost = state.usageSummary.estimatedCostUsd;
+  if (cost !== undefined && cost > config.autonomy.max_cost_usd) {
+    ledger.append({ type: "autonomy_limit_reached", phase, status: "blocked_by_budget", reason: `autonomy.max_cost_usd=${config.autonomy.max_cost_usd} exceeded by estimated cost $${cost.toFixed(6)}` });
+    return false;
+  }
+  return true;
 }
 
 function shellExecutionOptions(config: TomorrowEdgeConfig, access: AgentGraphState["access"]) {

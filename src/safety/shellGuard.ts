@@ -52,6 +52,16 @@ export function splitCommand(command: string): string[] {
   let quote: "'" | "\"" | undefined;
   for (let index = 0; index < command.length; index += 1) {
     const char = command[index];
+    if (char === "\\") {
+      const next = command[index + 1];
+      if (next !== undefined && (/\s/.test(next) || next === "\\" || next === "'" || next === "\"")) {
+        current += next;
+        index += 1;
+      } else {
+        current += char;
+      }
+      continue;
+    }
     if ((char === "'" || char === "\"") && !quote) {
       quote = char;
       continue;

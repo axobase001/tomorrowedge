@@ -130,7 +130,7 @@ function isRetryableError(error: unknown): boolean {
 }
 
 function retryDelayMs(attempt: number, baseDelayMs: number): number {
-  return attempt === 0 ? baseDelayMs : baseDelayMs * 4;
+  return baseDelayMs * 2 ** attempt;
 }
 
 function delay(ms: number): Promise<void> {

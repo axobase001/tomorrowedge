@@ -19,15 +19,19 @@ export function DebatePane({
   active?: boolean;
 }) {
   const findings = review?.mode === "red_team" ? review.reviews.flatMap((item) => item.redTeamFindings).slice(0, 3) : [];
+  const reviewByCandidate = new Map(review?.reviews.map((item) => [item.candidateId, item]) ?? []);
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={active ? "cyan" : "gray"} paddingX={1}>
       <Text bold>辩论</Text>
-      {candidates.slice(0, 4).map((candidate) => (
-        <Text key={candidate.candidateId}>
-          {candidate.candidateId}: {candidate.summary.slice(0, 96)}
-        </Text>
-      ))}
+      {candidates.slice(0, 4).map((candidate) => {
+        const candidateReview = reviewByCandidate.get(candidate.candidateId);
+        return (
+          <Text key={candidate.candidateId}>
+            {candidate.candidateId}: {candidate.summary.slice(0, 72)} {candidateReview ? <Text color="cyan">score={candidateReview.correctnessScore}/risk={candidateReview.riskScore}/{candidateReview.recommendation}</Text> : null}
+          </Text>
+        );
+      })}
       <Text color="gray">{review?.overallRecommendation ?? "等待审查"}</Text>
       {rounds.slice(0, 4).map((round) => (
         <Text key={`${round.round}-${round.speaker}-${round.targetCandidateId}`} color="gray">
