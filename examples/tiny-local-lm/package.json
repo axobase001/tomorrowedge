@@ -1,7 +1,7 @@
 {
   "name": "tomorrowedge-tiny-local-lm-demo",
   "version": "0.1.0",
-  "description": "A locally runnable tiny character-level language model demo for TomorrowEdge orchestration acceptance.",
+  "description": "A locally runnable bilingual hashed neural n-gram language model demo for TomorrowEdge orchestration acceptance.",
   "type": "module",
   "private": true,
   "scripts": {

@@ -74,6 +74,19 @@ describe("fixture E2E workflow", () => {
     expect(state.finalSummary?.evidence).toContain("Command passed: npm test");
   });
 
+  it("describes partial mode explicit approvals separately from full autonomy", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      approvePatch: true,
+      approveShell: true
+    });
+    const accessEvent = state.events.find((event) => event.type === "access_mode");
+
+    expect(state.access.mode).toBe("partial");
+    expect(accessEvent?.description).toContain("explicit approvals: patch=yes shell=yes repair=no");
+    expect(accessEvent?.description).not.toContain("FULL AUTONOMY");
+  });
+
   it("full access mode auto-approves patch and shell actions", async () => {
     const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
       provider: "fixture",
@@ -379,6 +392,7 @@ describe("fixture E2E workflow", () => {
     const payload = JSON.parse(output) as {
       executionCwd: string;
       fixtureWorkspace?: string;
+      accessSummary: string;
       changedFiles: string[];
       runResults: Array<{ success: boolean }>;
       summary?: { result?: string };
@@ -386,6 +400,7 @@ describe("fixture E2E workflow", () => {
     trackCleanup(payload.fixtureWorkspace);
 
     expect(payload.fixtureWorkspace).toBe(payload.executionCwd);
+    expect(payload.accessSummary).toContain("explicit approvals: patch=yes shell=yes repair=no");
     expect(payload.changedFiles).toEqual(["index.js"]);
     expect(payload.runResults[0]?.success).toBe(true);
     expect(payload.summary?.result).toBe("completed");
