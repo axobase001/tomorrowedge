@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Local LM</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <header>
+          <p class="eyebrow">TomorrowEdge Local Demo</p>
+          <h1>Tiny Local LM</h1>
+        </header>
+        <label>
+          Prompt
+          <textarea id="prompt" rows="5">TomorrowEdge routes</textarea>
+        </label>
+        <div class="controls">
+          <label>
+            Temperature
+            <input id="temperature" type="range" min="0.05" max="2" step="0.05" value="0.8" />
+            <output id="temperatureValue">0.8</output>
+          </label>
+          <label>
+            Max tokens
+            <input id="maxTokens" type="number" min="1" max="500" value="80" />
+          </label>
+        </div>
+        <button id="generate">Generate</button>
+      </section>
+      <section class="panel output-panel">
+        <header>
+          <p class="eyebrow">Generated Text</p>
+          <h2>Output</h2>
+        </header>
+        <pre id="output">Ready.</pre>
+        <p id="modelInfo" class="meta"></p>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

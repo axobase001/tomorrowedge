@@ -1,0 +1,17 @@
+{
+  "name": "tomorrowedge-tiny-local-lm-demo",
+  "version": "0.1.0",
+  "description": "A locally runnable tiny character-level language model demo for TomorrowEdge orchestration acceptance.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js",
+    "api:smoke": "node --test tests/api.test.js",
+    "frontend:build": "node scripts/build-frontend.mjs",
+    "verify": "npm test && npm run frontend:build"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

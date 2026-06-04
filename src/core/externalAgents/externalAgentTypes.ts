@@ -9,6 +9,7 @@ export type ExternalAgentProfile = {
   transport: ExternalAgentTransport;
   command?: string;
   args?: string[];
+  cwd?: string;
   env?: Record<string, string>;
   autoStart?: boolean;
   startupTimeoutMs?: number;
@@ -27,6 +28,7 @@ export type ExternalAgentRegistrationInput = {
   transport?: ExternalAgentTransport;
   command?: string;
   args?: string[];
+  cwd?: string;
   env?: Record<string, string>;
   autoStart?: boolean;
   startupTimeoutMs?: number;

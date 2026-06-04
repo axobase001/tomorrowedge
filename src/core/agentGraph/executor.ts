@@ -281,7 +281,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     try {
       if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
       shellRuns += 1;
-      const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, access.shellAllowed && access.shellApproved));
+      const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
       state.runResults.push(result);
       recordShellRunEvent(ledger, cwd, result);
       if (!result.success && options.repairOnFail) {
@@ -302,7 +302,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
             if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
             shellRuns += 1;
-            const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, access.shellAllowed && access.shellApproved));
+            const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
             state.runResults.push(repairedRun);
             recordShellRunEvent(ledger, cwd, repairedRun);
           } catch (error) {
@@ -501,6 +501,16 @@ function canAttemptRepair(config: TomorrowEdgeConfig, repairs: number, ledger: E
   if (repairs < config.autonomy.max_repairs) return true;
   ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: `max_repairs=${config.autonomy.max_repairs} reached` });
   return false;
+}
+
+function shellExecutionOptions(config: TomorrowEdgeConfig, access: AgentGraphState["access"]) {
+  const configuredPolicy = config.shell.policy;
+  const policy = configuredPolicy ?? (access.mode === "full" ? "unrestricted" : "approval_required");
+  return {
+    approved: access.shellAllowed && access.shellApproved,
+    policy,
+    verificationAllowlist: config.shell.verification_allowlist
+  };
 }
 
 function phaseForRole(role: AgentRole) {

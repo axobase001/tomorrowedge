@@ -22,7 +22,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.4.0`。
+当前版本：`0.4.1`。
 
 这一版的重点是 **MCP Agent Bridge**：让 Claude Code / Codex 等外部 coding agents 通过 MCP 接入 TomorrowEdge，并被用户绑定到 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等 workflow roles。
 
@@ -33,6 +33,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 - `agents.<role>.provider: external:<id>` 支持把 workflow role 显式绑定到外部 agent
 - 外部 agent 的 patch、review、judgment、result、cost usage 都会写入 `events.jsonl`
 - TUI 的 Agents / Router / Trace panes 会显示 external agent badge、role binding 和 `external_agent_*` 事件
+- `0.4.1` 继续强化 release hardening：`npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
 
 ## TUI 实际运行截图
 
@@ -49,6 +50,7 @@ node --version   # requires Node >=20.19.0
 npm install
 npm test
 npm run dev -- doctor
+npm run verify
 npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
@@ -178,6 +180,20 @@ tedge mcp invoke codex --session latest --role reviewer --prompt "review the cur
 tedge trace latest --verbose
 ```
 
+TomorrowEdge 也不浪费你已经订阅的 Claude Code / Codex：它可以把这些昂贵强 agent 绑定到 planner、reviewer、judge 等关键角色，把大规模探索和实现交给更便宜或本地的模型，从而降低全流程强模型成本。
+`external_agents.<id>.command` / `args` / `cwd` / `env` 可用于 command runner skeleton。外部进程通过 stdin 和 `TOMORROWEDGE_EXTERNAL_CONTEXT_FILE` 接收结构化任务上下文，stdout/stderr 会作为 artifact 写入 trace。
+
+## 本地 tiny LM demo
+
+```bash
+cd examples/tiny-local-lm
+npm install
+npm start
+npm run verify
+```
+
+这个 demo 是本地 char-level n-gram toy language model，不调用 OpenAI/OpenRouter API。它提供 `/health`、`/model-info`、`/generate`，前端支持 prompt、temperature 和 max tokens，用于验证 TomorrowEdge 的多 agent 分工、review、judge、repair 和 export 流程。
+
 角色绑定示例：
 
 ```yaml
@@ -293,7 +309,7 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.4.0`.
+Current version: `0.4.1`.
 
 This release introduces the **MCP Agent Bridge**: Claude Code / Codex and other
 external coding agents can connect through MCP and be bound to workflow roles
@@ -310,6 +326,9 @@ such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`.
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
+- `0.4.1` hardens the release lane with `npm run verify`, zip-safe secret
+  scanning, full-access shell policy, an external command runner skeleton, and a
+  locally runnable tiny LM demo.
 
 ## TUI Runtime Screenshots
 
@@ -328,6 +347,7 @@ node --version   # requires Node >=20.19.0
 npm install
 npm test
 npm run dev -- doctor
+npm run verify
 npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
@@ -429,6 +449,28 @@ tedge mcp serve
 tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
 tedge trace latest --verbose
 ```
+
+It also protects existing Claude Code / Codex subscriptions by binding expensive
+strong agents to high-value roles such as planner, reviewer, and judge while
+cheaper or local models handle broad execution.
+`external_agents.<id>.command` / `args` / `cwd` / `env` can also drive the
+command runner skeleton. The process receives structured task context through
+stdin and `TOMORROWEDGE_EXTERNAL_CONTEXT_FILE`; stdout/stderr are stored as trace
+artifacts.
+
+## Local Tiny LM Demo
+
+```bash
+cd examples/tiny-local-lm
+npm install
+npm start
+npm run verify
+```
+
+The demo is a local char-level n-gram toy language model, not an OpenAI or
+OpenRouter API call. It exposes `/health`, `/model-info`, and `/generate`, plus a
+frontend with prompt, temperature, and max token controls for orchestration
+acceptance drills.
 
 Role binding example:
 

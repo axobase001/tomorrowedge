@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A TUI cockpit for multi-model coding agents.",
   "type": "module",
   "bin": {
@@ -15,6 +15,7 @@
     "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "npm test && npm run build && npm run secrets:scan && npm audit --audit-level=high && npm run pack:dry",
     "site:serve": "node scripts/serve-site.mjs",
     "smoke:cli": "tsx src/cli/index.ts --help && tsx src/cli/index.ts doctor --json",
     "secrets:scan": "tsx scripts/secret-scan.ts",
@@ -30,7 +31,16 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "docs/*.md"
+    "docs/*.md",
+    "scripts/secret-scan.ts",
+    "examples/tiny-local-lm/ARCHITECTURE.md",
+    "examples/tiny-local-lm/README.md",
+    "examples/tiny-local-lm/package.json",
+    "examples/tiny-local-lm/server.js",
+    "examples/tiny-local-lm/public",
+    "examples/tiny-local-lm/scripts",
+    "examples/tiny-local-lm/src",
+    "examples/tiny-local-lm/tests"
   ],
   "keywords": [
     "tui",

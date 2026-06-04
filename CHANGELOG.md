@@ -7,6 +7,8 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-04
+
 ### Added
 
 - External MCP process runtime for configured Claude Code / Codex-style stdio
@@ -14,11 +16,31 @@ Changelog: newest changes first, grouped by release and by change type.
 - Active external-agent participation in workflow debate, cross-examination,
   and judge/reviewer-style delivery turns.
 - External-agent cost visibility in the TUI Memory pane and workflow reports.
+- `npm run verify` release gate covering tests, build, secret scan,
+  high-severity audit, and dry npm packing.
+- External command runner skeleton for configured role-bound agents, with stdin
+  and temp-file context handoff plus `external_agent_call/result/error` events.
+- Local `examples/tiny-local-lm` acceptance demo with a tiny char-level n-gram
+  model, `/health`, `/model-info`, `/generate`, frontend controls, and tests.
 
 ### Changed
 
 - MCP Agent Bridge docs now distinguish Codex's `mcp-server` path from Claude
   Code setups that need a stdio MCP wrapper or future server command.
+- Full access shell execution now defaults to `unrestricted`; partial mode
+  defaults to approval-required shell execution; verification allowlists are an
+  explicit CI/demo shell policy.
+- `secrets:scan` works outside a git checkout by falling back from
+  `git ls-files` to fast-glob.
+
+### Usage
+
+- Run the full release gate with `npm run verify`.
+- Use `shell.policy: verification_allowlist` only for CI/demo verification
+  lanes; full mode remains Codex-style unrestricted execution with ledgered
+  shell events.
+- Run the local toy LM demo with `cd examples/tiny-local-lm && npm install &&
+  npm start`.
 
 ## [0.4.0] - 2026-06-04
 

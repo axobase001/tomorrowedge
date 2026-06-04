@@ -11,6 +11,8 @@ export const providerAuthHeaderSchema = z.enum(["bearer", "api-key", "none"]);
 export type ProviderAuthHeader = z.infer<typeof providerAuthHeaderSchema>;
 export const orchestrationBackendSchema = z.enum(["native", "langgraph", "crewai", "autogen"]);
 export type OrchestrationBackendName = z.infer<typeof orchestrationBackendSchema>;
+export const shellPolicySchema = z.enum(["unrestricted", "verification_allowlist", "approval_required"]);
+export type ShellPolicy = z.infer<typeof shellPolicySchema>;
 export const externalAgentTransportSchema = z.enum(["mcp"]);
 export const externalAgentTrustLevelSchema = z.enum(["low", "medium", "high", "owner"]);
 export const agentRoleSchema = z.enum(agentRoles);
@@ -37,6 +39,7 @@ export const externalAgentConfigSchema = z.object({
   transport: externalAgentTransportSchema.default("mcp"),
   command: z.string().default(""),
   args: z.array(z.string()).default([]),
+  cwd: z.string().optional(),
   env: z.record(z.string()).default({}),
   autoStart: z.boolean().default(false),
   startupTimeoutMs: z.number().int().positive().default(10_000),
@@ -92,6 +95,10 @@ export const configSchema = z.object({
     allow_cloud_repo_context: z.boolean().default(true),
     require_approval_for_sensitive_files: z.boolean().default(true)
   }),
+  shell: z.object({
+    policy: shellPolicySchema.optional(),
+    verification_allowlist: z.array(z.string()).default(["npm", "node", "npx", "pnpm", "yarn", "python", "python3", "pytest", "tsx", "tsc", "vitest", "jest", "cargo", "rustc", "make", "cmake", "go", "uv", "pip", "bun", "deno"])
+  }).default({ policy: undefined, verification_allowlist: ["npm", "node", "npx", "pnpm", "yarn", "python", "python3", "pytest", "tsx", "tsc", "vitest", "jest", "cargo", "rustc", "make", "cmake", "go", "uv", "pip", "bun", "deno"] }),
   providers: z.record(providerConfigSchema),
   agents: z.record(agentConfigSchema),
   external_agents: z.record(externalAgentConfigSchema).default({}),

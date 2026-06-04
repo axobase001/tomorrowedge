@@ -103,6 +103,9 @@ external_agents:
     transport: mcp
     command: codex
     args: [mcp-server]
+    cwd: /path/to/workspace
+    env:
+      NODE_ENV: development
     autoStart: true
     requestTimeoutMs: 60000
     maxRetries: 1
@@ -130,6 +133,40 @@ Use `tedge mcp agents --probe` to verify that configured commands start and
 return MCP tools. Use `tedge mcp invoke <agent-id> --session latest --role
 reviewer --prompt "..."` to call a configured external MCP process and record
 the call/result/error in the current session.
+
+For command runner adapters, TomorrowEdge passes a structured JSON request on
+stdin and writes the same payload to a temp file exposed as
+`TOMORROWEDGE_EXTERNAL_CONTEXT_FILE`. stdout and stderr are captured into the
+event ledger as artifacts.
+
+## Shell policy
+
+Shell policy is separate from access mode:
+
+```yaml
+shell:
+  policy: unrestricted # unrestricted | verification_allowlist | approval_required
+  verification_allowlist:
+    - npm
+    - node
+    - cargo
+    - rustc
+    - make
+    - cmake
+    - go
+    - uv
+    - pip
+    - bun
+    - deno
+```
+
+Defaults:
+
+- `restricted`: shell is disabled by access approval state.
+- `partial`: shell requires explicit approval.
+- `full`: shell is unrestricted by default and fully logged.
+- CI/demo lanes can set `shell.policy: verification_allowlist` to constrain
+  verification commands without changing full-access semantics.
 
 ## Autonomy and budget bounds
 

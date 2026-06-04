@@ -1,4 +1,8 @@
 import { TomorrowEdgeMcpBridge } from "./bridge.js";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../../package.json") as { version: string };
 
 type JsonRpcRequest = {
   jsonrpc?: "2.0";
@@ -64,7 +68,7 @@ async function handleRequest(request: JsonRpcRequest, bridge: TomorrowEdgeMcpBri
     if (request.method === "initialize") {
       return ok(request.id, {
         protocolVersion: "2024-11-05",
-        serverInfo: { name: "tomorrowedge", version: "0.4.0" },
+        serverInfo: { name: "tomorrowedge", version: packageJson.version },
         capabilities: { tools: {} }
       });
     }

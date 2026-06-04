@@ -148,6 +148,32 @@ describe("MCP Agent Bridge", () => {
     expect(session.state.events.map((event) => event.type)).toEqual(expect.arrayContaining(["external_agent_call", "external_agent_result"]));
   });
 
+  it("can invoke a configured external command runner process", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-command-runner-"));
+    const config = externalConfig();
+    config.external_agents.codex = {
+      ...config.external_agents.codex,
+      enabled: true,
+      command: process.execPath,
+      args: [path.join(process.cwd(), "tests", "fixtures", "mock-command-agent.mjs")],
+      autoStart: false,
+      requestTimeoutMs: 10_000
+    };
+    const bridge = new TomorrowEdgeMcpBridge(cwd, config);
+    const started = await bridge.startWorkflow({ goal: "external command runner smoke" });
+    const result = await bridge.invokeExternalAgent({
+      sessionId: started.sessionId,
+      externalAgentId: "codex",
+      role: "reviewer",
+      prompt: "review this workflow through command runner"
+    });
+
+    expect(JSON.stringify(result.result)).toContain("mock command handled reviewer");
+    const session = await loadSession(cwd, started.sessionId);
+    expect(session.state.events.map((event) => event.type)).toEqual(expect.arrayContaining(["external_agent_call", "external_agent_result"]));
+    expect(JSON.stringify(session.state.events)).toContain("external_agent_response");
+  });
+
   it("probes configured external MCP stdio tools", async () => {
     const profile = {
       id: "codex",

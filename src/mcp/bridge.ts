@@ -12,6 +12,7 @@ import { externalAgentRegistryFromConfig, ExternalAgentRegistry } from "../core/
 import type { ExternalAgentProfile, ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgentRouter.js";
 import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
+import { runCommandExternalAgent } from "../core/externalAgents/runners/commandExternalAgentRunner.js";
 import { loadLatestSession, loadSession, type SessionRecord } from "../core/memory/sessionMemory.js";
 import type { AgentRole, AgentRunState } from "../schemas/agentTask.js";
 import type { JudgeDecision } from "../schemas/judge.js";
@@ -140,6 +141,20 @@ export class TomorrowEdgeMcpBridge {
     await this.withSession(sessionId, async (state, ledger) => {
       const profile = this.requireProfile(input.externalAgentId);
       const context = await this.getContext({ sessionId });
+      if (profile.command && !profile.autoStart) {
+        const result = await runCommandExternalAgent({
+          cwd: this.cwd,
+          profile,
+          role: input.role,
+          task: input.prompt ?? `Act as ${input.role} for TomorrowEdge workflow ${sessionId}.`,
+          context: { ...context, arguments: input.arguments ?? {} },
+          ledger
+        });
+        upsertExternalAgentState(state, input.role, profile, result.ok ? "success" : "failed", result.summary);
+        payload = { sessionId, result, attempts: 1 };
+        if (!result.ok) throw new Error(result.error ?? "External command runner failed.");
+        return;
+      }
       const requestRef = ledger.writeArtifact("external_requests", JSON.stringify({ role: input.role, prompt: input.prompt, context, arguments: input.arguments }, null, 2), "json");
       appendExternalCall(ledger, input.role, profile, "tomorrowedge.invoke_external_agent", "start", requestRef);
       upsertExternalAgentState(state, input.role, profile, "running", "External MCP process call started.");

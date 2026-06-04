@@ -5,14 +5,14 @@ surface is prepared for dry-run validation.
 
 Release checklist:
 
-1. Run `npm test`.
-2. Run `npm run build`.
-3. Run `npm audit --json`.
-4. Run `npm run pack:dry`.
-5. Confirm `.env`, `.tomorrowedge/sessions`, `.tomorrowedge/undo`, and generated
+1. Run `npm run verify`.
+2. Confirm `.env`, `.tomorrowedge/sessions`, `.tomorrowedge/undo`, and generated
    image output are not included in the package.
-6. Run `tedge doctor`.
-7. Optional: run `tedge models --real-smoke` with local keys.
+3. Run `tedge doctor`.
+4. Optional: run `tedge models --real-smoke` with local keys.
+
+`npm run verify` executes `npm test`, `npm run build`, `npm run secrets:scan`,
+`npm audit --audit-level=high`, and `npm run pack:dry`.
 
 Package entrypoint:
 
@@ -20,5 +20,6 @@ Package entrypoint:
 tedge
 ```
 
-The `files` whitelist in `package.json` includes only `dist`, docs, README, and
-LICENSE.
+The `files` whitelist in `package.json` includes `dist`, docs, README,
+CHANGELOG, LICENSE, the release secret scan script, and the tiny local LM demo
+source.

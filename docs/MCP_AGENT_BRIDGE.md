@@ -4,6 +4,7 @@ TomorrowEdge is not replacing Claude Code / Codex.
 
 It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
 TomorrowEdge does not replace the Claude Code / Codex subscriptions you already have. It turns them into orchestratable and observable role nodes.
+That means expensive strong agents can be bound to high-value roles such as `planner`, `reviewer`, and `judge`, while cheaper or local models handle broad exploration and implementation.
 
 The MCP Agent Bridge exposes TomorrowEdge as a local MCP server so external coding agents can join a workflow as `core`, `planner`, `reviewer`, `judge`, `coder_a`, `repairer`, or another configured role. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision in its own core.
 
@@ -19,6 +20,15 @@ tedge mcp invoke codex --session latest --role reviewer --prompt "review the cur
 
 `tedge mcp serve` starts the stdio transport. The first implementation is intentionally transport-light and offline-testable. HTTP/SSE can be added later without changing the bridge state model.
 `tedge mcp agents --probe` starts configured external MCP commands, runs `initialize`, and lists available tools. `tedge mcp invoke` calls a configured external MCP process and writes start/success/failure/result events into the same session ledger.
+
+## Bridge Mode vs Command Runner Mode
+
+TomorrowEdge supports two first-stage external agent modes:
+
+- **Bridge mode**: `tedge mcp serve` exposes TomorrowEdge tools to an external agent. Claude Code, Codex, or another MCP client can call `tomorrowedge.start_workflow`, submit patch candidates, reviews, judgments, and export the session.
+- **Command runner mode**: TomorrowEdge starts a configured command for a role-bound agent. The command receives a JSON task/context payload on stdin and the same payload path in `TOMORROWEDGE_EXTERNAL_CONTEXT_FILE`. stdout/stderr are captured as artifacts, and `external_agent_call`, `external_agent_result`, or `external_agent_error` events are written to the ledger.
+
+Command runner mode is a skeleton for real CLI adapters. It does not assume every external agent speaks the same protocol, but it gives Claude Code / Codex wrappers a stable handoff surface.
 
 ## Exposed Tools
 
@@ -60,6 +70,9 @@ external_agents:
     transport: mcp
     command: codex
     args: [mcp-server]
+    cwd: /path/to/workspace
+    env:
+      NODE_ENV: development
     autoStart: true
     roles: [core, coder_a, repairer, reviewer]
     capabilities: [core, coding, repair, review]

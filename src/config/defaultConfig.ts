@@ -30,6 +30,10 @@ export const defaultConfig: TomorrowEdgeConfig = {
     allow_cloud_repo_context: true,
     require_approval_for_sensitive_files: true
   },
+  shell: {
+    policy: undefined,
+    verification_allowlist: ["npm", "node", "npx", "pnpm", "yarn", "python", "python3", "pytest", "tsx", "tsc", "vitest", "jest", "cargo", "rustc", "make", "cmake", "go", "uv", "pip", "bun", "deno"]
+  },
   providers: {
     mock: { enabled: true, base_url: "", model: "mock-balanced", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
     fixture: { enabled: true, base_url: "", model: "fixture-scripted", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
@@ -57,6 +61,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
       transport: "mcp",
       command: "",
       args: [],
+      cwd: undefined,
       env: {},
       autoStart: false,
       startupTimeoutMs: 10_000,
@@ -73,6 +78,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
       transport: "mcp",
       command: "",
       args: [],
+      cwd: undefined,
       env: {},
       autoStart: false,
       startupTimeoutMs: 10_000,
