@@ -20,8 +20,8 @@ run a real repository safely, understand what happened, and recover.
 - Task-relevant context selection using goal/plan keywords, path/content
   matches, source/test metadata, and expected file hints.
 - Patch application rollback when a later file write fails.
-- Anthropic/Gemini are explicit placeholder providers until native protocol
-  adapters are implemented.
+- Anthropic/Gemini now use native REST adapters; OpenRouter remains the easiest
+  multi-family onboarding route.
 - Package metadata, `typecheck`, CLI smoke, and CI coverage for productized
   release checks.
 
@@ -29,7 +29,7 @@ run a real repository safely, understand what happened, and recover.
 
 - Live TUI event streaming. The architecture note exists, but the current TUI is
   still primarily post-run.
-- Native Anthropic and Gemini adapters.
+- Full live smoke matrix for native Anthropic and Gemini with real API keys.
 - Full provider smoke matrix with real API keys.
 - Team policy, plugin API, strategy memory, and metrics dashboard.
 - Complete i18n.
@@ -41,4 +41,3 @@ These remain roadmap items rather than hidden claims.
 Do not trade visibility for framework integration or automation speed. The
 cockpit must continue to own authorization, traceability, redaction, replay, and
 recovery.
-

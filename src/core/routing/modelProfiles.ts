@@ -119,6 +119,32 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       defaultRoles: ["explorer", "coder_b", "summarizer"]
     });
   }
+  if (config.providers.anthropic?.enabled) {
+    profiles.push({
+      provider: "anthropic",
+      model: configuredModel(config, "anthropic", "ANTHROPIC_MODEL", "claude-sonnet-4-5"),
+      label: "Anthropic Claude native Messages model",
+      strengths: ["planning", "review", "reasoning", "coding", "long_context", "vision"],
+      inputPricePerMTok: 3,
+      outputPricePerMTok: 15,
+      contextWindow: 200000,
+      latencyClass: "medium",
+      defaultRoles: ["core", "planner", "reviewer", "judge"]
+    });
+  }
+  if (config.providers.gemini?.enabled) {
+    profiles.push({
+      provider: "gemini",
+      model: configuredModel(config, "gemini", "GEMINI_MODEL", "gemini-2.5-pro"),
+      label: "Google Gemini native generateContent model",
+      strengths: ["vision", "perception", "planning", "review", "reasoning", "long_context", "multilingual"],
+      inputPricePerMTok: 1.25,
+      outputPricePerMTok: 10,
+      contextWindow: 1000000,
+      latencyClass: "medium",
+      defaultRoles: ["vision", "planner", "reviewer"]
+    });
+  }
   if (config.providers.ollama?.enabled) {
     profiles.push({
       provider: "ollama",

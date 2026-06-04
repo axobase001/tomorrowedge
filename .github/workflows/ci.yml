@@ -22,6 +22,7 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run secrets:scan
       - run: npm run smoke:cli
       - run: npm audit --audit-level=high
       - run: npm run pack:dry

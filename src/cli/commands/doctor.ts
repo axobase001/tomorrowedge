@@ -17,7 +17,7 @@ export type DoctorOptions = {
 
 export type DoctorDiagnostic = {
   id: string;
-  status: "ready" | "warning" | "error" | "placeholder";
+  status: "ready" | "warning" | "error";
   checks: string[];
   fix?: string;
 };
@@ -94,20 +94,16 @@ function diagnoseProvider(id: string, provider: ProviderConfig, hasProfile: bool
   let fix: string | undefined;
 
   if (["mock", "fixture", "ollama"].includes(id)) checks.push("offline/local provider does not require API key");
-  if (["anthropic", "gemini"].includes(id)) {
-    status = "placeholder";
-    checks.push("native protocol adapter is not implemented yet");
-    fix = `Keep ${id}.enabled=false or implement the native ${id} adapter before using it for live calls.`;
-  }
+  if (["anthropic", "gemini"].includes(id)) checks.push("native protocol adapter available");
   if (!provider.model?.trim()) {
-    status = status === "placeholder" ? status : "warning";
+    status = "warning";
     checks.push("model is not configured");
     fix = `Set providers.${id}.model in .tomorrowedge/config.yaml.`;
   } else {
     checks.push(`model=${provider.model}`);
   }
   if (!provider.base_url && !["mock", "fixture"].includes(id)) {
-    status = status === "placeholder" ? status : "error";
+    status = "error";
     checks.push("base_url is missing");
     fix = `Set providers.${id}.base_url or disable providers.${id}.enabled.`;
   } else if (provider.base_url) {
@@ -118,11 +114,11 @@ function diagnoseProvider(id: string, provider: ProviderConfig, hasProfile: bool
     }
   }
   if (provider.auth_header !== "none" && provider.api_key_env && !process.env[provider.api_key_env]) {
-    status = status === "placeholder" ? status : "error";
+    status = "error";
     checks.push(`missing env ${provider.api_key_env}`);
     fix = `Set ${provider.api_key_env} in your shell or disable providers.${id}.enabled.`;
   }
-  if (!hasProfile && !["anthropic", "gemini"].includes(id)) {
+  if (!hasProfile) {
     status = status === "error" ? status : "warning";
     checks.push("no routing profile registered");
   }

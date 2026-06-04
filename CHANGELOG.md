@@ -18,12 +18,21 @@ Changelog: newest changes first, grouped by release and by change type.
 - `tedge models --connection-test` for lightweight post-key HTTP `/models`
   connectivity checks before chat smoke tests.
 - `model_discovery` config defaults for recommendation-only onboarding.
+- Native Anthropic Messages API provider adapter with `x-api-key`,
+  `anthropic-version`, text, and image URL/data URL payload translation.
+- Native Gemini `generateContent` provider adapter with `x-goog-api-key`, text,
+  and data URL image payload translation.
+- End-to-end workflow case study and troubleshooting guide for provider setup,
+  MCP invocation, full mode, release archives, and Windows markdown encoding.
 
 ### Changed
 
 - `tedge init` now guides first-run users toward OpenRouter as an optional
   starter provider and recommends separate API keys for cost tracking,
   rate-limit isolation, and provider failure diagnosis.
+- `tedge doctor`, provider routing profiles, connection tests, README provider
+  matrix, and CI now treat Anthropic/Gemini as real native providers instead of
+  placeholders.
 
 ## [0.5.0] - 2026-06-04
 

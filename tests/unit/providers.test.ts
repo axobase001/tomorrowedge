@@ -112,28 +112,100 @@ describe("provider registry", () => {
     expect(calls).toBe(2);
   });
 
-  it("registers Anthropic and Gemini as explicit placeholders instead of OpenAI-compatible shims", async () => {
+  it("registers Anthropic and Gemini native adapters", async () => {
+    vi.stubEnv("ANTHROPIC_TEST_KEY", "anthropic-test-key");
+    vi.stubEnv("GEMINI_TEST_KEY", "gemini-test-key");
     const registry = createProviderRegistry({
       ...defaultConfig,
       providers: {
         ...defaultConfig.providers,
-        anthropic: { ...defaultConfig.providers.anthropic, enabled: true },
-        gemini: { ...defaultConfig.providers.gemini, enabled: true }
+        anthropic: { ...defaultConfig.providers.anthropic, enabled: true, api_key_env: "ANTHROPIC_TEST_KEY" },
+        gemini: { ...defaultConfig.providers.gemini, enabled: true, api_key_env: "GEMINI_TEST_KEY" }
       }
     });
 
-    await expect(
-      registry.get("anthropic")?.chat({
-        model: "claude-opus-4.1",
-        messages: [{ role: "user", content: "hello" }]
-      })
-    ).rejects.toThrow("placeholder");
-    await expect(
-      registry.get("gemini")?.chat({
-        model: "gemini-2.5-pro",
-        messages: [{ role: "user", content: "hello" }]
-      })
-    ).rejects.toThrow("placeholder");
+    expect(await registry.get("anthropic")?.listModels()).toMatchObject([{ id: "claude-sonnet-4-5" }]);
+    expect(await registry.get("gemini")?.listModels()).toMatchObject([{ id: "gemini-2.5-pro" }]);
+  });
+
+  it("calls Anthropic Messages API with native headers and payload", async () => {
+    let observedUrl = "";
+    let observedHeaders: Headers | undefined;
+    let observedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      observedUrl = String(input);
+      observedHeaders = new Headers(init?.headers);
+      observedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ id: "msg_test", model: "claude-sonnet-4-5", content: [{ type: "text", text: "done" }], usage: { input_tokens: 11, output_tokens: 3 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubEnv("ANTHROPIC_TEST_KEY", "anthropic-test-key");
+    const provider = createProviderRegistry({
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        anthropic: { ...defaultConfig.providers.anthropic, enabled: true, api_key_env: "ANTHROPIC_TEST_KEY" }
+      }
+    }).get("anthropic")!;
+
+    const response = await provider.chat({
+      model: "claude-sonnet-4-5",
+      messages: [
+        { role: "system", content: "be concise" },
+        { role: "user", content: "hello" }
+      ],
+      maxCompletionTokens: 64
+    });
+
+    expect(observedUrl).toBe("https://api.anthropic.com/v1/messages");
+    expect(observedHeaders?.get("x-api-key")).toBe("anthropic-test-key");
+    expect(observedHeaders?.get("anthropic-version")).toBe("2023-06-01");
+    expect(observedBody?.max_tokens).toBe(64);
+    expect(observedBody?.system).toBe("be concise");
+    expect(response.content).toBe("done");
+    expect(response.usage).toEqual({ inputTokens: 11, outputTokens: 3 });
+  });
+
+  it("calls Gemini generateContent with native API-key header and payload", async () => {
+    let observedUrl = "";
+    let observedHeaders: Headers | undefined;
+    let observedBody: { contents?: Array<{ role: string; parts: unknown[] }> } | undefined;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      observedUrl = String(input);
+      observedHeaders = new Headers(init?.headers);
+      observedBody = JSON.parse(String(init?.body)) as { contents?: Array<{ role: string; parts: unknown[] }> };
+      return new Response(JSON.stringify({ responseId: "gemini_test", modelVersion: "gemini-2.5-pro", candidates: [{ content: { parts: [{ text: "done" }] } }], usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 2 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubEnv("GEMINI_TEST_KEY", "gemini-test-key");
+    const provider = createProviderRegistry({
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        gemini: { ...defaultConfig.providers.gemini, enabled: true, api_key_env: "GEMINI_TEST_KEY" }
+      }
+    }).get("gemini")!;
+
+    const response = await provider.chat({
+      model: "gemini-2.5-pro",
+      messages: [
+        { role: "system", content: "be concise" },
+        { role: "user", content: "hello" }
+      ],
+      maxCompletionTokens: 64
+    });
+
+    expect(observedUrl).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent");
+    expect(observedHeaders?.get("x-goog-api-key")).toBe("gemini-test-key");
+    expect(observedBody?.contents?.[0]?.parts).toEqual([{ text: "System instructions:\nbe concise" }]);
+    expect(response.content).toBe("done");
+    expect(response.usage).toEqual({ inputTokens: 7, outputTokens: 2 });
   });
 
   it("recommends free Kimi 2.6 from an OpenRouter catalog ahead of generic free models", () => {
@@ -215,5 +287,45 @@ describe("provider registry", () => {
     expect(calls).toBe(0);
     expect(result.status).toBe("failed");
     expect(result.detail).toContain("missing env");
+  });
+
+  it("tests Anthropic and Gemini connectivity with native catalog headers", async () => {
+    vi.stubEnv("ANTHROPIC_TEST_KEY", "anthropic-test-key");
+    vi.stubEnv("GEMINI_TEST_KEY", "gemini-test-key");
+    const observed: Array<{ url: string; headers: Headers }> = [];
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      observed.push({ url: String(input), headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    const anthropic = await testProviderConnection("anthropic", {
+      enabled: true,
+      api_key_env: "ANTHROPIC_TEST_KEY",
+      base_url: "https://api.anthropic.com/v1",
+      model: "claude-sonnet-4-5",
+      api_format: "legacy_chat",
+      auth_header: "api-key",
+      extra_headers: {}
+    });
+    const gemini = await testProviderConnection("gemini", {
+      enabled: true,
+      api_key_env: "GEMINI_TEST_KEY",
+      base_url: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-2.5-pro",
+      api_format: "openai_chat",
+      auth_header: "api-key",
+      extra_headers: {}
+    });
+
+    expect(anthropic.status).toBe("ok");
+    expect(gemini.status).toBe("ok");
+    expect(observed[0]?.url).toBe("https://api.anthropic.com/v1/models");
+    expect(observed[0]?.headers.get("x-api-key")).toBe("anthropic-test-key");
+    expect(observed[0]?.headers.get("anthropic-version")).toBe("2023-06-01");
+    expect(observed[1]?.url).toBe("https://generativelanguage.googleapis.com/v1beta/models");
+    expect(observed[1]?.headers.get("x-goog-api-key")).toBe("gemini-test-key");
   });
 });

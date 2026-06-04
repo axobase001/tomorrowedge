@@ -15,6 +15,8 @@ MIMO_MODEL=mimo-v2.5-pro
 DEEPSEEK_MODEL=deepseek-v4-pro
 OPENAI_COMPATIBLE_MODEL=gpt-4o-mini
 KIMI_MODEL=kimi-k2.6
+ANTHROPIC_MODEL=claude-sonnet-4-5
+GEMINI_MODEL=gemini-2.5-pro
 OLLAMA_MODEL=local-auto
 OPENROUTER_INPUT_PRICE_PER_MTOK=
 OPENROUTER_OUTPUT_PRICE_PER_MTOK=
@@ -59,6 +61,8 @@ Current configured endpoints:
 - OpenRouter: `https://openrouter.ai/api/v1`
 - DeepSeek: `https://api.deepseek.com`
 - Kimi/Moonshot: `https://api.moonshot.ai/v1` with default model `kimi-k2.6`
+- Anthropic: `https://api.anthropic.com/v1` with native Messages API headers
+- Gemini: `https://generativelanguage.googleapis.com/v1beta` with native `generateContent`
 - Xiaomi MiMo Token Plan OpenAI-compatible: `https://token-plan-sgp.xiaomimimo.com/v1`
 
 MiMo has two key families:
@@ -150,6 +154,22 @@ providers:
     api_format: openai_chat
     auth_header: bearer
     extra_headers: {}
+  anthropic:
+    enabled: true
+    api_key_env: ANTHROPIC_API_KEY
+    base_url: https://api.anthropic.com/v1
+    model: claude-sonnet-4-5
+    api_format: legacy_chat
+    auth_header: api-key
+    extra_headers: {}
+  gemini:
+    enabled: true
+    api_key_env: GEMINI_API_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    model: gemini-2.5-pro
+    api_format: openai_chat
+    auth_header: api-key
+    extra_headers: {}
   ollama:
     enabled: true
     base_url: http://localhost:11434
@@ -165,6 +185,10 @@ Supported provider adapter switches:
 - `api_format: legacy_chat` sends `max_tokens` for older OpenAI-compatible APIs.
 - `auth_header: bearer` sends `Authorization: Bearer <key>`.
 - `auth_header: api-key` sends `api-key: <key>`, useful for MiMo token-plan clusters.
+- Anthropic ignores the generic auth header at request time and sends `x-api-key`
+  plus `anthropic-version: 2023-06-01`.
+- Gemini ignores the generic auth header at request time and sends
+  `x-goog-api-key`.
 - `auth_header: none` allows local or unauthenticated OpenAI-compatible endpoints.
 - `extra_headers` can carry provider-specific headers such as OpenRouter app metadata.
 

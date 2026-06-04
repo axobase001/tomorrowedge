@@ -34,9 +34,9 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Provider smoke matrix covers OpenRouter, DeepSeek, MiMo, Ollama,
-  OpenAI-compatible, Kimi-compatible, and placeholder providers.
-- Native Anthropic and Gemini adapters are either implemented or removed from
-  user-facing recommended providers.
+  OpenAI-compatible, Kimi-compatible, Anthropic, and Gemini providers.
+- Native Anthropic and Gemini adapters have direct connection tests and unit
+  coverage; real-key smoke coverage is expanded over time.
 - Model routing explanations include capability, cost, privacy, fallback, and
   user override reasons.
 

@@ -7,8 +7,8 @@ import { createOpenRouterProvider } from "./openrouter.js";
 import { createMimoProvider } from "./mimo.js";
 import { createDeepSeekProvider } from "./deepseek.js";
 import { createKimiProvider } from "./kimi.js";
-import { createAnthropicPlaceholder } from "./anthropic.js";
-import { createGeminiPlaceholder } from "./gemini.js";
+import { createAnthropicProvider } from "./anthropic.js";
+import { createGeminiProvider } from "./gemini.js";
 import type { ModelProvider } from "./types.js";
 
 export class ProviderRegistry {
@@ -67,8 +67,14 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
     registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2.6"), kimi.api_format, kimi.auth_header, kimi.extra_headers));
   }
 
-  if (config.providers.anthropic?.enabled) registry.register(createAnthropicPlaceholder());
-  if (config.providers.gemini?.enabled) registry.register(createGeminiPlaceholder());
+  const anthropic = config.providers.anthropic;
+  if (isRegistrable(config, "anthropic")) {
+    registry.register(createAnthropicProvider(providerKey(config, "anthropic"), providerModel(config, "anthropic", "ANTHROPIC_MODEL", "claude-sonnet-4-5"), anthropic.base_url, anthropic.extra_headers));
+  }
+  const gemini = config.providers.gemini;
+  if (isRegistrable(config, "gemini")) {
+    registry.register(createGeminiProvider(providerKey(config, "gemini"), providerModel(config, "gemini", "GEMINI_MODEL", "gemini-2.5-pro"), gemini.base_url, gemini.extra_headers));
+  }
 
   if (config.providers.ollama?.enabled) {
     registry.register(new OllamaProvider(process.env.OLLAMA_BASE_URL ?? config.providers.ollama.base_url));

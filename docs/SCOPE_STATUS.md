@@ -10,7 +10,7 @@ This file tracks the full-scope request against the current implementation.
 - Offline `mock` and `fixture` providers
 - Config loader with safe defaults and Chinese UI language default
 - Local `.env` loader for ignored workspace credentials
-- Provider registry with OpenAI-compatible, OpenRouter, MiMo, DeepSeek, Kimi, Anthropic/Gemini placeholders, and Ollama
+- Provider registry with OpenAI-compatible, OpenRouter, MiMo, DeepSeek, Kimi, native Anthropic/Gemini, and Ollama
 - Role-conditioned routing modes that include enabled real providers
 - User-configurable provider/model assignments per agent role through `.tomorrowedge/config.yaml`
 - Mainstream OpenAI-compatible API adapter switches for Bearer auth, `api-key` auth, no-auth local endpoints, `max_completion_tokens`, `max_tokens`, and provider-specific extra headers
@@ -52,7 +52,7 @@ This file tracks the full-scope request against the current implementation.
 
 ## Partially Implemented
 
-- Real provider adapters: OpenRouter, DeepSeek, and MiMo Token Plan live smoke and drill pass; Anthropic/Gemini are placeholders
+- Real provider adapters: OpenRouter, DeepSeek, MiMo Token Plan, Kimi, native Anthropic Messages API, and native Gemini generateContent are implemented; real-key smoke coverage varies by configured key/model
 - Debate mode: deterministic records and core-led live workflow debate with configurable cross-examination rounds exist; richer free-form negotiation UI is not complete
 - Routing: role assignment uses enabled providers, user role overrides, live-call fallback, capability tags, and smoke-suite probing; richer adaptive routing still needs longitudinal evaluation
 - Capability stitching: offline structured visual spec, routing handoff, and live multimodal image payload path exist; provider-specific vision behavior still needs real smoke coverage per model

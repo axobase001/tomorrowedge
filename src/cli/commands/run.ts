@@ -155,7 +155,6 @@ function shouldAutoLive(config: ReturnType<typeof loadConfig>, options: RunOptio
   if (options.live) return true;
   return Object.entries(config.providers).some(([id, provider]) => {
     if (!provider.enabled || !provider.base_url || provider.auth_header === "none") return false;
-    if (["anthropic", "gemini"].includes(id)) return false;
     return Boolean(provider.api_key_env && process.env[provider.api_key_env]);
   });
 }

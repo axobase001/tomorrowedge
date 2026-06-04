@@ -1,5 +1,7 @@
 # TomorrowEdge / 明日边缘
 
+[![CI](https://github.com/axobase001/tomorrowedge/actions/workflows/ci.yml/badge.svg)](https://github.com/axobase001/tomorrowedge/actions/workflows/ci.yml)
+
 **中文** | [English](#english)
 
 明日边缘是一个 **TUI-first multi-model agent cockpit for full-access coding workflows**：面向 full-access 代码任务的终端驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
@@ -57,6 +59,11 @@ npm run dev -- run "fix failing test" --headless
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- tui
 ```
+
+深度演示与排障：
+
+- [端到端工作流案例：fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
+- [Provider / MCP / full mode troubleshooting](docs/TROUBLESHOOTING.md)
 
 默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用；启用后 `tedge run` 会优先尝试非破坏性 live 候选，必要时仍可用 `--offline` 回到纯离线 fixture/mock 路径。
 `npm run dev` 在 WSL 且临时目录落到 Windows mount 时会自动把 `TMPDIR` 切到 `/tmp`，避免 `tsx` IPC socket 失败。
@@ -276,10 +283,13 @@ Image / Screenshot / Diagram
 | OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
 | Kimi | Moonshot OpenAI-compatible (`kimi-k2.6`) | no | yes, with key | model-dependent | usable |
 | Ollama | local | yes | local daemon | model-dependent | usable/local |
-| Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
-| Gemini | placeholder | no | no | no | planned/native adapter not implemented |
+| Anthropic | native Messages API | no | yes, with key | text + image URL/data URL | usable |
+| Gemini | native generateContent API | no | yes, with key | text + data URL images | usable |
 
-Anthropic/Gemini 目前是显式 placeholder；如果要用 Claude/Opus 或 Gemini 类模型，推荐先通过 OpenRouter 路由，直到 native adapter 实现。
+Anthropic/Gemini now use native REST adapters. OpenRouter is still the easiest
+onboarding route when you want one key for many model families, but Claude and
+Gemini keys can be configured directly for high-value review, judgment, and
+vision roles.
 
 本项目不是 Xiaomi、MiMo、OpenAI、Anthropic、Google、DeepSeek、Moonshot/Kimi 或 OpenRouter 的官方项目。
 
@@ -384,6 +394,11 @@ npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch 
 npm run dev -- tui
 ```
 
+Deep demo and troubleshooting:
+
+- [End-to-end workflow case study: fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
+- [Provider / MCP / full mode troubleshooting](docs/TROUBLESHOOTING.md)
+
 All default tests and demos run offline without API keys. Cloud providers are
 disabled unless explicitly configured with environment variables; once enabled,
 `tedge run` prefers non-mutating live candidates, and `--offline` returns to the
@@ -394,7 +409,7 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 ## Core Features
 
 - Role-conditioned agent graph: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer
-- Multi-model routing across OpenRouter, DeepSeek, MiMo, Ollama, local mock/fixture, OpenAI-compatible providers, and placeholders
+- Multi-model routing across OpenRouter, DeepSeek, MiMo, Anthropic, Gemini, Ollama, local mock/fixture, and OpenAI-compatible providers
 - User-configurable provider/model assignment per agent role for controlled model-comparison experiments
 - Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
 - Access modes: `restricted`, `partial`, `full`
@@ -624,10 +639,13 @@ requests. TomorrowEdge routes capabilities. See
 | OpenAI-compatible | generic compatible endpoint | no | yes, with key/base URL | model-dependent | usable |
 | Kimi | Moonshot OpenAI-compatible (`kimi-k2.6`) | no | yes, with key | model-dependent | usable |
 | Ollama | local | yes | local daemon | model-dependent | usable/local |
-| Anthropic | placeholder | no | no | no | planned/native adapter not implemented |
-| Gemini | placeholder | no | no | no | planned/native adapter not implemented |
+| Anthropic | native Messages API | no | yes, with key | text + image URL/data URL | usable |
+| Gemini | native generateContent API | no | yes, with key | text + data URL images | usable |
 
-Anthropic/Gemini are explicit placeholders today. Route Claude/Opus or Gemini-class models through OpenRouter until native adapters are implemented.
+Anthropic/Gemini now use native REST adapters. OpenRouter remains the easiest
+onboarding route when you want one key for many model families, but Claude and
+Gemini keys can be configured directly for high-value review, judgment, and
+vision roles.
 
 OpenRouter onboarding:
 
