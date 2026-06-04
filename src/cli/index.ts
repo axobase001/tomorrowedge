@@ -17,7 +17,7 @@ import { memoryCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
 import { exportCommand } from "./commands/export.js";
-import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpToolsCommand } from "./commands/mcp.js";
+import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 
 const program = new Command();
@@ -128,7 +128,7 @@ program.command("sessions").description("List saved local sessions").action(() =
 
 program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").action((options: { limit?: string }) => memoryCommand(cwd, options));
 
-const mcp = program.command("mcp").description("Run or inspect the TomorrowEdge MCP Agent Bridge");
+const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));
 mcp.command("tools").description("List TomorrowEdge MCP tools").action(() => mcpToolsCommand(cwd));
 mcp.command("agents").description("List enabled external MCP agents").option("--probe", "start configured MCP commands and list their tools").action((options: { probe?: boolean }) => mcpAgentsCommand(cwd, options));

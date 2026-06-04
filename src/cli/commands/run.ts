@@ -135,7 +135,7 @@ function parseAccessMode(mode?: string): AccessMode | undefined {
   if (mode === undefined) return undefined;
   const parsed = accessModeSchema.safeParse(mode);
   if (!parsed.success) {
-    throw new Error(`Invalid access mode: ${mode}. Use restricted, partial, or full.`);
+    throw new Error(`invalid access mode "${mode}". Allowed values: restricted, partial, or full.`);
   }
   return parsed.data;
 }
