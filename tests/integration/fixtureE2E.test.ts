@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm, cp, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { prepareRunWorkspace, runCommand } from "../../src/cli/commands/run.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -10,14 +11,19 @@ import { exportCommand } from "../../src/cli/commands/export.js";
 
 describe("fixture E2E workflow", () => {
   let tempRoot: string;
+  let cleanupPaths: string[];
 
   beforeEach(async () => {
+    cleanupPaths = [];
     tempRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-fixture-"));
+    trackCleanup(tempRoot);
     await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), tempRoot, { recursive: true });
   });
 
   afterEach(async () => {
-    await rm(tempRoot, { recursive: true, force: true });
+    for (const cleanupPath of [...cleanupPaths].reverse()) {
+      await rm(cleanupPath, { recursive: true, force: true });
+    }
   });
 
   it("selects a fixture patch but blocks apply by default", async () => {
@@ -197,6 +203,70 @@ describe("fixture E2E workflow", () => {
     expect(output).not.toContain("+  return a + b;");
     expect(output).not.toContain("## Artifact Details");
   });
+
+  it("prepares a temporary fixture workspace for --fixture-mode from the project root", async () => {
+    const projectRoot = await createProjectRootWithFixture();
+    const workspace = await prepareRunWorkspace(projectRoot, { fixtureMode: true });
+    trackCleanup(workspace.fixtureWorkspace);
+    const source = await readFile(path.join(workspace.executionCwd, "index.js"), "utf8");
+
+    expect(workspace.fixtureWorkspace).toBe(workspace.executionCwd);
+    expect(workspace.executionCwd).not.toBe(projectRoot);
+    expect(source).toContain("return a - b");
+  });
+
+  it("keeps --provider fixture as a deprecated fixture workspace alias", async () => {
+    const projectRoot = await createProjectRootWithFixture();
+    const workspace = await prepareRunWorkspace(projectRoot, { provider: "fixture" });
+    trackCleanup(workspace.fixtureWorkspace);
+    const source = await readFile(path.join(workspace.executionCwd, "index.js"), "utf8");
+
+    expect(workspace.fixtureWorkspace).toBe(workspace.executionCwd);
+    expect(workspace.executionCwd).not.toBe(projectRoot);
+    expect(source).toContain("return a - b");
+  });
+
+  it("runs the documented fixture demo from the project root in a temporary workspace", async () => {
+    const projectRoot = await createProjectRootWithFixture();
+    const output = await captureStdout(() =>
+      runCommand(projectRoot, "fix failing test", {
+        headless: true,
+        fixtureMode: true,
+        approvePatch: true,
+        approveShell: true
+      })
+    );
+    const payload = JSON.parse(output) as {
+      executionCwd: string;
+      fixtureWorkspace?: string;
+      changedFiles: string[];
+      runResults: Array<{ success: boolean }>;
+      summary?: { result?: string };
+    };
+    trackCleanup(payload.fixtureWorkspace);
+
+    expect(payload.fixtureWorkspace).toBe(payload.executionCwd);
+    expect(payload.changedFiles).toEqual(["index.js"]);
+    expect(payload.runResults[0]?.success).toBe(true);
+    expect(payload.summary?.result).toBe("completed");
+    await expect(readFile(path.join(payload.executionCwd, "index.js"), "utf8")).resolves.toContain("return a + b");
+    await expect(readFile(path.join(projectRoot, "tests", "fixtures", "sample-repo-basic", "index.js"), "utf8")).resolves.toContain("return a - b");
+  });
+
+  function trackCleanup(cleanupPath: string | undefined): void {
+    if (cleanupPath && !cleanupPaths.includes(cleanupPath)) {
+      cleanupPaths.push(cleanupPath);
+    }
+  }
+
+  async function createProjectRootWithFixture(): Promise<string> {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-project-"));
+    trackCleanup(projectRoot);
+    const fixtureTarget = path.join(projectRoot, "tests", "fixtures", "sample-repo-basic");
+    await mkdir(path.dirname(fixtureTarget), { recursive: true });
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), fixtureTarget, { recursive: true });
+    return projectRoot;
+  }
 });
 
 async function captureStdout(fn: () => Promise<void>): Promise<string> {
