@@ -23,6 +23,7 @@ export type ChatRequest = {
   messages: ChatMessage[];
   temperature?: number;
   maxCompletionTokens?: number;
+  responseFormat?: { type: "text" | "json_object" };
   metadata?: Record<string, unknown>;
 };
 
