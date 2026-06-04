@@ -22,7 +22,8 @@
     "pack:dry": "npm pack --dry-run",
     "doctor": "node scripts/tsx-dev.mjs doctor",
     "tui": "node scripts/tsx-dev.mjs tui",
-    "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke"
+    "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke",
+    "screenshots:tui": "node scripts/capture-tui-screenshots.mjs"
   },
   "files": [
     "dist",
