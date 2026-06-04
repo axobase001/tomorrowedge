@@ -2,8 +2,7 @@ import { listSessions, loadLatestSession, loadSession } from "../../core/memory/
 import { renderCockpit } from "../renderCockpit.js";
 
 export async function replayCommand(cwd: string, sessionId: string): Promise<void> {
-  const initial = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
-  const session = await loadSession(cwd, initial.sessionId);
+  const session = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
   await renderCockpit(session.state, true, cwd);
 }
 

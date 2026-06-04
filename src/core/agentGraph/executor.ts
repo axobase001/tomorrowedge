@@ -198,7 +198,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (state.budgetStatus.status !== "blocked") {
       const livePatchResult = await runLivePatchCandidates(livePatchInput);
       state.candidates.push(...livePatchResult.candidates);
-      for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(ledger, "coder_a", candidate);
+      for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(ledger, candidate.agentId as AgentRole, candidate);
       state.modelNotes.push(...livePatchResult.notes);
       state.usageSummary = summarizeModelUsage(state.modelNotes);
       recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
@@ -292,6 +292,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
           summary: error instanceof Error ? error.message : String(error)
         });
       }
+    } else {
+      const reason = selected
+        ? `Judge selected candidate ${selected.candidateId} but it has no unified diff to apply.`
+        : `Judge selected candidate ${state.judge.selectedCandidateId} but it was not found in the candidate list.`;
+      ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: state.judge.selectedCandidateId, filesChanged: [], diffRef: undefined, undoSnapshotIds: [], applied: false, error: reason });
     }
   }
 

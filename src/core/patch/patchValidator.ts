@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../../config/configLoader.js";
 import { classifyFileRisk } from "../../safety/fileRisk.js";
@@ -68,5 +69,20 @@ export function assertPatchSafe(cwd: string, unifiedDiff: string): string[] {
 function isPathTraversal(cwd: string, relativePath: string): boolean {
   const resolved = path.resolve(cwd, relativePath);
   const root = path.resolve(cwd);
-  return resolved !== root && !resolved.startsWith(root + path.sep);
+  if (resolved === root) return false;
+  if (!resolved.startsWith(root + path.sep)) return true;
+  try {
+    const realRoot = realpathSync(root);
+    const parentDir = path.dirname(resolved);
+    const realParent = realpathSync(parentDir);
+    if (realParent !== realRoot && !realParent.startsWith(realRoot + path.sep)) return true;
+    try {
+      const realResolved = realpathSync(resolved);
+      return realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep);
+    } catch {
+      return false;
+    }
+  } catch {
+    return true;
+  }
 }

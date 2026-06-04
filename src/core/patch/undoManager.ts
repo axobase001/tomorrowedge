@@ -34,7 +34,12 @@ export async function listUndoSnapshots(cwd: string): Promise<Array<UndoSnapshot
       .filter((name) => name.endsWith(".json"))
       .map(async (name) => {
         const snapshotPath = path.join(snapshotDir, name);
-        const parsed = JSON.parse(await readFile(snapshotPath, "utf8")) as Partial<UndoSnapshot>;
+        let parsed: Partial<UndoSnapshot>;
+        try {
+          parsed = JSON.parse(await readFile(snapshotPath, "utf8")) as Partial<UndoSnapshot>;
+        } catch {
+          return null;
+        }
         const id = parsed.id ?? path.basename(name, ".json");
         return {
           id,
@@ -45,7 +50,7 @@ export async function listUndoSnapshots(cwd: string): Promise<Array<UndoSnapshot
         };
       })
   );
-  return snapshots.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return snapshots.filter((s): s is NonNullable<typeof s> => s !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function restoreLatestUndoSnapshot(cwd: string): Promise<{ restoredPath: string; snapshotId: string }> {

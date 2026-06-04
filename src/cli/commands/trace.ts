@@ -6,8 +6,7 @@ export type TraceOptions = {
 };
 
 export async function traceCommand(cwd: string, sessionId: string, options: TraceOptions = {}): Promise<void> {
-  const initial = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
-  const session = await loadSession(cwd, initial.sessionId);
+  const session = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
   if (!session.state.events.length) {
     process.stdout.write("No events recorded for this session.\n");
     return;
