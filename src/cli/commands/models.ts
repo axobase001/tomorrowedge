@@ -27,7 +27,14 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
   }
   const registry = createProviderRegistry(config);
   for (const provider of registry.list()) {
-    const models = await provider.listModels();
+    let models: Awaited<ReturnType<typeof provider.listModels>>;
+    try {
+      models = await provider.listModels();
+    } catch (error) {
+      process.stdout.write(`${provider.id} [${provider.kind}]\n`);
+      process.stdout.write(`  error: ${error instanceof Error ? error.message : String(error)}\n`);
+      continue;
+    }
     process.stdout.write(`${provider.id} [${provider.kind}]\n`);
     if (!models.length) {
       process.stdout.write("  no configured models or provider unavailable\n");

@@ -521,7 +521,15 @@ function normalizeJudgment(input: Partial<JudgeDecision>): JudgeDecision {
 }
 
 function chooseExternalTool(toolNames: string[]): string {
-  return toolNames.find((name) => /agent|chat|complete|prompt|run/i.test(name)) ?? toolNames[0] ?? "run";
+  if (!toolNames.length) {
+    throw new Error("External MCP agent returned no tools. Register the agent with an explicit toolName or check the agent command.");
+  }
+  const matched = toolNames.find((name) => /agent|chat|complete|prompt|run/i.test(name));
+  if (matched) return matched;
+  throw new Error(
+    `Could not auto-select a tool from external MCP agent. Available tools: ${toolNames.join(", ")}. ` +
+    `Specify an explicit toolName when calling invoke_external_agent.`
+  );
 }
 
 function requiredSession(input: WorkflowRef): string {

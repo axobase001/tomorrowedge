@@ -12,8 +12,7 @@ export type ExportOptions = {
 };
 
 export async function exportCommand(cwd: string, sessionId: string, options: ExportOptions = {}): Promise<void> {
-  const initial = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
-  const session = await loadSession(cwd, initial.sessionId);
+  const session = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
   const sessionDir = resolveSessionDir(cwd, session.sessionId);
   const artifacts = await loadArtifacts(session.state.events, sessionDir);
 

@@ -34,9 +34,8 @@ export function scanSecrets(content: string): SecretFinding[] {
   return findings;
 }
 
-export function redact(value: string): string {
-  if (value.length <= 12) return "[redacted]";
-  return `${value.slice(0, 6)}...[redacted]`;
+export function redact(_value: string): string {
+  return "[redacted]";
 }
 
 export function redactText(content: string): string {

@@ -1,5 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createRequire } from "node:module";
 import type { ExternalAgentProfile } from "./externalAgentTypes.js";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../../../package.json") as { version: string };
 
 type JsonRpcRequest = {
   jsonrpc: "2.0";
@@ -69,7 +73,7 @@ export class ExternalAgentProcessClient {
     const response = await this.request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "tomorrowedge", version: "0.4.x" }
+      clientInfo: { name: "tomorrowedge", version: packageJson.version }
     });
     return response;
   }

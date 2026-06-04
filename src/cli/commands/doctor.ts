@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import process from "node:process";
 import { getConfigPath, loadConfig } from "../../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../../config/schema.js";
@@ -6,6 +7,9 @@ import { createProviderRegistry } from "../../providers/registry.js";
 import { getGitStatus } from "../../core/tools/gitTool.js";
 import { estimateCostUsd } from "../../core/model/costAccounting.js";
 import { profilesFromConfig } from "../../core/routing/modelProfiles.js";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../../../package.json") as { version: string };
 
 export type DoctorOptions = {
   json?: boolean;
@@ -64,7 +68,7 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
 function buildWorkspaceWarnings(config: TomorrowEdgeConfig, gitStatus: string): string[] {
   const warnings: string[] = [];
   if (config.orchestration.backend !== "native") {
-    warnings.push(`orchestration.backend=${config.orchestration.backend} is registered but not executable in 0.2.x; use native for real runs.`);
+    warnings.push(`orchestration.backend=${config.orchestration.backend} is registered but not executable in ${packageJson.version}; use native for real runs.`);
   }
   if (config.project.access_mode === "full") {
     warnings.push("full access mode auto-approves patch, shell, and repair actions.");
