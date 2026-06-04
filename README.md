@@ -69,6 +69,7 @@ npm run dev -- tui
 - provider fallback：主路由不可用时按计划 fallback，并在 `modelNotes` 里记录原因
 - 多模型 drill：Core/River 作为 planner/reviewer，比较不同模型完成同一任务的能力
 - Core-led workflow：任务拆分、多轮模型辩论、角色执行、Core 审核、报告落盘
+- MCP Agent Bridge：把 Claude Code / Codex 等外部 coding agents 绑定为 core/planner/reviewer/judge/coder/repairer
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
 - 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
 - TUI 驾驶舱：agent 状态、路由、辩论、diff、shell、证据、记忆、帮助面板
@@ -92,6 +93,9 @@ tedge mode full
 tedge prefs
 tedge drill "task"
 tedge workflow "task"
+tedge mcp serve
+tedge mcp tools
+tedge mcp agents
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
@@ -154,6 +158,12 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 ```
 
 `workflow` 支持 1-5 轮辩论。第 1 轮是角色发言，后续轮次是交叉质询：模型会围绕上轮 transcript 里的矛盾、授权边界和落地风险互相挑战。每个 live batch 都会按 `debate.max_cost_usd` 做预算预检。
+
+## MCP Agent Bridge
+
+TomorrowEdge 不替代 Claude Code / Codex，而是把它们纳入 full-access multi-model cockpit。Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+
+MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等角色。TomorrowEdge 继续负责 orchestration、routing、trace、event ledger、session export 和 TUI 可视化监督。详见 [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) 和 [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md)。
 
 ## 能力拼接
 
@@ -300,6 +310,7 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Explicit provider fallback recorded in `modelNotes`
 - Multi-model capability drills with Core/River as planner/reviewer
 - Core-led workflow with decomposition, multi-round debate, role execution, Core review, and saved reports
+- MCP Agent Bridge for binding Claude Code / Codex or other external coding agents to core/planner/reviewer/judge/coder/repairer roles
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
@@ -323,6 +334,9 @@ tedge mode full
 tedge prefs
 tedge drill "task"
 tedge workflow "task"
+tedge mcp serve
+tedge mcp tools
+tedge mcp agents
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
@@ -351,6 +365,12 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 ```
 
 `workflow` supports 1-5 debate rounds. Later rounds are cross-examination rounds over the prior transcript. Each live batch is preflighted against `debate.max_cost_usd`.
+
+## MCP Agent Bridge
+
+TomorrowEdge is not replacing Claude Code / Codex. It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+
+The MCP bridge lets external coding agents take roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision. See [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) and [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md).
 
 ## Orchestration Backends
 

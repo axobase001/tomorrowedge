@@ -50,6 +50,26 @@ export const defaultConfig: TomorrowEdgeConfig = {
     gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "", model: "gemini-2.5-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     ollama: { enabled: true, base_url: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434", model: "local-auto", api_format: "openai_chat", auth_header: "none", extra_headers: {} }
   },
+  external_agents: {
+    claude_code: {
+      enabled: false,
+      name: "Claude Code",
+      transport: "mcp",
+      capabilities: ["core", "planning", "review", "judgment", "coding"],
+      roles: ["core", "planner", "reviewer", "judge"],
+      trustLevel: "high",
+      notes: "Mock MCP bridge profile; real Claude Code invocation is configured by the user."
+    },
+    codex: {
+      enabled: false,
+      name: "Codex",
+      transport: "mcp",
+      capabilities: ["core", "coding", "repair", "review", "tool_use"],
+      roles: ["core", "coder_a", "repairer", "reviewer"],
+      trustLevel: "high",
+      notes: "Mock MCP bridge profile; real Codex invocation is configured by the user."
+    }
+  },
   agents: {
     vision: { provider: "auto", model: "auto" },
     planner: { provider: "auto", model: "auto" },

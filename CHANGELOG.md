@@ -9,6 +9,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ### Added
 
+- MCP Agent Bridge skeleton with `tedge mcp serve`, `tedge mcp tools`, and
+  `tedge mcp agents`.
+- External MCP agent registry, role binding via `external:<id>`, and
+  `external_agent_*` event ledger visibility for patch/review/judgment/result
+  handoffs.
+- Docs for MCP external agent roles and Claude Code / Codex cockpit integration.
 - WSL-safe `tsx` dev wrapper for `npm run dev`, `doctor`, `tui`, and
   `smoke:real`.
 

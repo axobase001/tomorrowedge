@@ -17,6 +17,7 @@ import { memoryCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
 import { exportCommand } from "./commands/export.js";
+import { mcpAgentsCommand, mcpServeCommand, mcpToolsCommand } from "./commands/mcp.js";
 
 const program = new Command();
 const cwd = process.cwd();
@@ -114,6 +115,11 @@ program.command("export").description("Export a saved session report").argument(
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
 program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").action((options: { limit?: string }) => memoryCommand(cwd, options));
+
+const mcp = program.command("mcp").description("Run or inspect the TomorrowEdge MCP Agent Bridge");
+mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));
+mcp.command("tools").description("List TomorrowEdge MCP tools").action(() => mcpToolsCommand(cwd));
+mcp.command("agents").description("List enabled external MCP agents").action(() => mcpAgentsCommand(cwd));
 
 program
   .command("review-export")

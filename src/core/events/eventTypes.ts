@@ -138,6 +138,74 @@ export type CostUsageEvent = BaseEvent & {
   byProvider?: Record<string, { inputTokens: number; outputTokens: number; estimatedCostUsd?: number }>;
 };
 
+export type ExternalAgentRegisteredEvent = BaseEvent & {
+  type: "external_agent_registered";
+  externalAgentId: string;
+  name: string;
+  transport: "mcp";
+  capabilities: string[];
+  allowedRoles: AgentRole[];
+  trustLevel: string;
+};
+
+export type ExternalAgentCallEvent = BaseEvent & {
+  type: "external_agent_call";
+  externalAgentId: string;
+  tool?: string;
+  status: "start" | "success" | "failure";
+  requestRef?: string;
+  responseRef?: string;
+  error?: string;
+};
+
+export type ExternalAgentResultEvent = BaseEvent & {
+  type: "external_agent_result";
+  externalAgentId: string;
+  resultRef?: string;
+  summary: string;
+};
+
+export type ExternalAgentPatchCandidateEvent = BaseEvent & {
+  type: "external_agent_patch_candidate";
+  externalAgentId: string;
+  candidateId: string;
+  filesChanged: string[];
+  diffRef?: string;
+  summary: string;
+  estimatedRisk: "low" | "medium" | "high";
+};
+
+export type ExternalAgentReviewEvent = BaseEvent & {
+  type: "external_agent_review";
+  externalAgentId: string;
+  reviewRef: string;
+  recommendation: string;
+};
+
+export type ExternalAgentJudgmentEvent = BaseEvent & {
+  type: "external_agent_judgment";
+  externalAgentId: string;
+  decision: string;
+  selectedCandidateId?: string;
+  reason: string;
+  decisionRef: string;
+};
+
+export type ExternalAgentErrorEvent = BaseEvent & {
+  type: "external_agent_error";
+  externalAgentId: string;
+  error: string;
+};
+
+export type ExternalAgentCostUsageEvent = BaseEvent & {
+  type: "external_agent_cost_usage";
+  externalAgentId: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  estimatedCostUsd?: number;
+};
+
 export type EvidenceEvent = BaseEvent & {
   type: "evidence_update";
   evidence: string[];
@@ -179,6 +247,14 @@ export type TomorrowEdgeEvent =
   | RepairEvent
   | ProviderFallbackEvent
   | CostUsageEvent
+  | ExternalAgentRegisteredEvent
+  | ExternalAgentCallEvent
+  | ExternalAgentResultEvent
+  | ExternalAgentPatchCandidateEvent
+  | ExternalAgentReviewEvent
+  | ExternalAgentJudgmentEvent
+  | ExternalAgentErrorEvent
+  | ExternalAgentCostUsageEvent
   | EvidenceEvent
   | SummaryEvent
   | AccessModeEvent

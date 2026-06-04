@@ -1,4 +1,5 @@
 export const agentRoles = [
+  "core",
   "vision",
   "planner",
   "explorer",
@@ -34,7 +35,7 @@ export type AgentRunState = {
   provider: string;
   model: string;
   status: AgentStatus;
-  agentKind?: "offline" | "live";
+  agentKind?: "offline" | "live" | "external";
   startedAt?: string;
   endedAt?: string;
   elapsedMs?: number;

@@ -14,8 +14,8 @@ export function RouterPane({ routing, access, capabilityRoute, active = false }:
       </Text>
       {capabilityRoute ? <Text color="cyan">Capability stitching: {capabilityRoute.inputTypes.join(", ")} -&gt; Visual Spec -&gt; Code</Text> : null}
       {routing.assignments.map((assignment) => (
-        <Text key={assignment.role} color="gray">
-          {assignment.role}: {assignment.provider}/{assignment.model}
+        <Text key={assignment.role} color={assignment.provider.startsWith("external:") ? "cyan" : "gray"}>
+          {assignment.role}: {assignment.provider.startsWith("external:") ? "EXTERNAL " : ""}{assignment.provider}/{assignment.model}
         </Text>
       ))}
     </Box>

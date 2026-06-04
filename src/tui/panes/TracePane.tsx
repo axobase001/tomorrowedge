@@ -10,7 +10,7 @@ export function TracePane({ events, active = false }: { events: TomorrowEdgeEven
       <Text bold>Trace</Text>
       {latest.length ? (
         latest.map((event) => (
-          <Text key={event.id} color={event.type === "autonomy_limit_reached" || event.type === "provider_fallback" ? "yellow" : "gray"}>
+          <Text key={event.id} color={event.type.startsWith("external_agent_") ? "cyan" : event.type === "autonomy_limit_reached" || event.type === "provider_fallback" ? "yellow" : "gray"}>
             {renderEventLine(event)}
           </Text>
         ))

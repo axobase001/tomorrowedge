@@ -1,5 +1,6 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import { agentRoles, type AgentRole } from "../../schemas/agentTask.js";
+import { validateExternalAssignment } from "../externalAgents/externalAgentRouter.js";
 import { profilesFromConfig } from "./modelProfiles.js";
 import { buildRoutingPlan, type AgentRouteOverrides, type RouteAssignment, type RoutingPlan } from "./policies.js";
 
@@ -7,7 +8,12 @@ export class ModelRouter {
   private readonly plan: RoutingPlan;
 
   constructor(config: TomorrowEdgeConfig) {
-    this.plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config));
+    const plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config));
+    this.plan = {
+      ...plan,
+      assignments: plan.assignments.map((assignment) => validateExternalAssignment(config, assignment)),
+      fallbacks: plan.fallbacks.filter((assignment) => !assignment.provider.startsWith("external:"))
+    };
   }
 
   getPlan(): RoutingPlan {

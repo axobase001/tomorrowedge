@@ -1,5 +1,6 @@
 import type { RoutingMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import { isExternalProvider } from "../externalAgents/externalAgentRouter.js";
 import { editableDefaultProfiles, type ModelProfile } from "./modelProfiles.js";
 
 export type RouteAssignment = {
@@ -24,7 +25,7 @@ export type AgentRouteOverride = {
 export type AgentRouteOverrides = Partial<Record<AgentRole, AgentRouteOverride>>;
 
 export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = editableDefaultProfiles, overrides: AgentRouteOverrides = {}): RoutingPlan {
-  const roles: AgentRole[] = ["vision", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
+  const roles: AgentRole[] = coreRoleRequested(overrides) ? ["core", ...defaultRoutingRoles()] : defaultRoutingRoles();
   const assignments = roles.map((role) => applyOverride(assignRole(role, mode, profiles), mode, profiles, overrides[role]));
   return {
     mode,
@@ -35,6 +36,9 @@ export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = e
 }
 
 function assignRole(role: AgentRole, mode: RoutingMode, profiles: ModelProfile[]): RouteAssignment {
+  if (role === "core") {
+    return pick(role, profiles, ["reasoning", "planning", "review"], "optional core role prefers high-level reasoning and supervision");
+  }
   if (role === "runner") {
     return { role, provider: "local_tool", model: "shell", reason: "runner is a local tool, not a model" };
   }
@@ -65,7 +69,7 @@ function applyOverride(assignment: RouteAssignment, mode: RoutingMode, profiles:
   if (!configuredProvider && !configuredModel) return assignment;
 
   const provider = configuredProvider ?? profiles.find((profile) => profile.model === configuredModel)?.provider ?? assignment.provider;
-  if (isPrivacyLockedMode(mode) && !isLocalProvider(provider, profiles)) {
+  if (isPrivacyLockedMode(mode) && !isLocalProvider(provider, profiles) && !isExternalProvider(provider)) {
     return {
       ...assignment,
       reason: `${assignment.reason}; ignored cloud override ${provider}/${configuredModel ?? assignment.model} in privacy/local mode`
@@ -95,6 +99,15 @@ function isLocalProvider(provider: string, profiles: ModelProfile[]): boolean {
   if (["mock", "fixture", "ollama", "local_tool"].includes(provider)) return true;
   const profile = profiles.find((candidate) => candidate.provider === provider);
   return Boolean(profile?.strengths.includes("local") || profile?.strengths.includes("privacy"));
+}
+
+function defaultRoutingRoles(): AgentRole[] {
+  return ["vision", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
+}
+
+function coreRoleRequested(overrides: AgentRouteOverrides): boolean {
+  const core = overrides.core;
+  return Boolean(core && ((core.provider && core.provider !== "auto") || (core.model && core.model !== "auto")));
 }
 
 function pick(role: AgentRole, profiles: ModelProfile[], strengths: string[], reason: string): RouteAssignment {

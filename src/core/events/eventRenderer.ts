@@ -36,6 +36,22 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.fromProvider}/${event.fromModel} -> ${event.toProvider}/${event.toModel}`;
     case "cost_usage":
       return `tokens=${event.totalTokens}${event.estimatedCostUsd === undefined ? "" : ` cost=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "external_agent_registered":
+      return `registered ${event.externalAgentId} roles=${event.allowedRoles.join(",")}`;
+    case "external_agent_call":
+      return event.error ? `${event.externalAgentId} call ${event.status}: ${event.error}` : `${event.externalAgentId} call ${event.status}${event.tool ? ` tool=${event.tool}` : ""}`;
+    case "external_agent_result":
+      return `${event.externalAgentId} result: ${event.summary}`;
+    case "external_agent_patch_candidate":
+      return `${event.externalAgentId} candidate ${event.candidateId} ${event.filesChanged.length} files risk=${event.estimatedRisk}`;
+    case "external_agent_review":
+      return `${event.externalAgentId} review recommendation=${event.recommendation}`;
+    case "external_agent_judgment":
+      return `${event.externalAgentId} ${event.decision}${event.selectedCandidateId ? ` ${event.selectedCandidateId}` : ""}: ${event.reason}`;
+    case "external_agent_error":
+      return `${event.externalAgentId} error: ${event.error}`;
+    case "external_agent_cost_usage":
+      return `${event.externalAgentId} tokens=${event.totalTokens ?? ((event.inputTokens ?? 0) + (event.outputTokens ?? 0))}${event.estimatedCostUsd === undefined ? "" : ` cost=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "evidence_update":
       return `${event.evidence.length} evidence item(s)`;
     case "summary":
@@ -65,5 +81,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("stderrRef" in event && event.stderrRef) refs.push(event.stderrRef);
   if ("evidenceRef" in event && event.evidenceRef) refs.push(event.evidenceRef);
   if ("summaryRef" in event && event.summaryRef) refs.push(event.summaryRef);
+  if ("requestRef" in event && event.requestRef) refs.push(event.requestRef);
+  if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
   return refs;
 }

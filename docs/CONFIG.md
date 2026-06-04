@@ -85,6 +85,42 @@ Recommended experiment pattern:
 - Use `ollama` for roles that must stay local in privacy experiments.
 - In `privacy` or `local` routing mode, cloud role overrides are ignored and routed to local-safe providers.
 
+## External MCP agents
+
+TomorrowEdge can bind external coding agents such as Claude Code or Codex to
+workflow roles through the MCP Agent Bridge:
+
+```yaml
+external_agents:
+  claude_code:
+    enabled: true
+    transport: mcp
+    roles: [core, planner, reviewer, judge]
+    capabilities: [core, planning, review, judgment]
+    trustLevel: high
+  codex:
+    enabled: true
+    transport: mcp
+    roles: [core, coder_a, repairer, reviewer]
+    capabilities: [core, coding, repair, review]
+    trustLevel: high
+
+agents:
+  planner:
+    provider: external:claude_code
+    model: auto
+  reviewer:
+    provider: external:codex
+    model: auto
+  judge:
+    provider: external:claude_code
+    model: auto
+```
+
+`core` is optional. It appears in routing only when explicitly bound. External
+agents are visible in the TUI, and their patch/review/judgment/result
+submissions are written to `events.jsonl`.
+
 ## Autonomy and budget bounds
 
 Full mode is autonomous execution, so it uses run boundaries instead of

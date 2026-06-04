@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentRoles } from "../schemas/agentTask.js";
 
 export const routingModeSchema = z.enum(["cheap", "balanced", "quality", "local", "privacy", "china"]);
 export type RoutingMode = z.infer<typeof routingModeSchema>;
@@ -10,6 +11,9 @@ export const providerAuthHeaderSchema = z.enum(["bearer", "api-key", "none"]);
 export type ProviderAuthHeader = z.infer<typeof providerAuthHeaderSchema>;
 export const orchestrationBackendSchema = z.enum(["native", "langgraph", "crewai", "autogen"]);
 export type OrchestrationBackendName = z.infer<typeof orchestrationBackendSchema>;
+export const externalAgentTransportSchema = z.enum(["mcp"]);
+export const externalAgentTrustLevelSchema = z.enum(["low", "medium", "high", "owner"]);
+export const agentRoleSchema = z.enum(agentRoles);
 
 export const providerConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -25,6 +29,17 @@ export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),
   model: z.string().default("auto")
+});
+
+export const externalAgentConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  name: z.string().optional(),
+  transport: externalAgentTransportSchema.default("mcp"),
+  capabilities: z.array(z.string()).default([]),
+  roles: z.array(agentRoleSchema).default([]),
+  trustLevel: externalAgentTrustLevelSchema.default("medium"),
+  costProfile: z.record(z.unknown()).optional(),
+  notes: z.string().optional()
 });
 
 export const orchestrationAdapterConfigSchema = z.object({
@@ -72,6 +87,7 @@ export const configSchema = z.object({
   }),
   providers: z.record(providerConfigSchema),
   agents: z.record(agentConfigSchema),
+  external_agents: z.record(externalAgentConfigSchema).default({}),
   orchestration: z.object({
     backend: orchestrationBackendSchema.default("native"),
     langgraph: orchestrationAdapterConfigSchema.default({}),

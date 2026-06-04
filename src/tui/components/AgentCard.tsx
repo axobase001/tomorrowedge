@@ -8,7 +8,7 @@ export function AgentCard({ agent }: { agent: AgentRunState }) {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} marginBottom={1}>
       <Text>
-        <Text bold>{roleLabel(agent.role)}</Text> <StatusBadge status={agent.status} /> <Text color="gray">{agent.provider}/{agent.model}</Text> <CostBadge costUsd={agent.costUsd} />
+        <Text bold>{roleLabel(agent.role)}</Text> <StatusBadge status={agent.status} /> {agent.agentKind === "external" || agent.provider.startsWith("external:") ? <Text color="cyan">EXTERNAL </Text> : null}<Text color="gray">{agent.provider}/{agent.model}</Text> <CostBadge costUsd={agent.costUsd} />
       </Text>
       <Text color="gray">{agent.summary}</Text>
     </Box>
@@ -17,6 +17,7 @@ export function AgentCard({ agent }: { agent: AgentRunState }) {
 
 function roleLabel(role: AgentRunState["role"]): string {
   return {
+    core: "Core",
     vision: "视觉",
     planner: "规划",
     explorer: "探索",
