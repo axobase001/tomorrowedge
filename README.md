@@ -92,6 +92,9 @@ tedge run "task" --live
 tedge run "task" --offline
 tedge config
 tedge models
+tedge models --refresh-free
+tedge models --configure-free moonshotai/kimi-k2.6:free --free-first
+tedge models --connection-test
 tedge models --real-smoke
 tedge models --smoke-suite
 tedge mode restricted
@@ -424,7 +427,11 @@ tedge run "task" --live
 tedge run "task" --offline
 tedge config
 tedge models
+tedge models --refresh-free
+tedge models --configure-free moonshotai/kimi-k2.6:free --free-first
+tedge models --connection-test
 tedge models --real-smoke
+tedge models --smoke-suite
 tedge mode restricted
 tedge mode partial
 tedge mode full
@@ -621,6 +628,30 @@ requests. TomorrowEdge routes capabilities. See
 | Gemini | placeholder | no | no | no | planned/native adapter not implemented |
 
 Anthropic/Gemini are explicit placeholders today. Route Claude/Opus or Gemini-class models through OpenRouter until native adapters are implemented.
+
+OpenRouter onboarding:
+
+```bash
+tedge models --refresh-free
+tedge models --configure-free moonshotai/kimi-k2.6:free --free-first
+tedge models --connection-test --provider openrouter
+```
+
+If you are not sure where to start, use OpenRouter first. One key gives
+TomorrowEdge access to many model families, and the free-model refresh command
+uses the live OpenRouter catalog to recommend free or low-cost large models such
+as Kimi K2.6 free when available. `--configure-free` only writes the selected
+model after the user chooses it. `--free-first` binds low-risk execution roles
+such as explorer, coder_b, and summarizer to the selected free model.
+
+For real work, prefer separate API keys per provider or account whenever
+possible. Separate keys make cost tracking, rate-limit isolation, and provider
+failure diagnosis much cleaner; do not mix a personal primary key into demo or
+CI configs.
+
+After adding a key, run `tedge models --connection-test --provider openrouter`
+to verify that the configured endpoint returns HTTP 2xx from its `/models`
+catalog before sending any chat prompt.
 
 Recommended bilingual config / 推荐配置:
 

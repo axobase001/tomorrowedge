@@ -14,6 +14,12 @@ export const defaultConfig: TomorrowEdgeConfig = {
     max_cost_usd: 1,
     max_wall_time_sec: 600
   },
+  model_discovery: {
+    recommended_provider: "openrouter",
+    refresh_free_models: true,
+    prefer_free_onboarding: true,
+    free_model_limit: 10
+  },
   autonomy: {
     max_iterations: 5,
     max_repairs: 3,

@@ -70,8 +70,12 @@ function renderNextSteps(config: TomorrowEdgeConfig, providerConfigured: boolean
     `2. Current access mode is ${config.project.access_mode}. Change it with tedge mode restricted|partial|full.`,
     `3. Current routing mode is ${config.routing.mode}. Change it with tedge prefs --routing-mode <mode>.`,
     "4. Try the offline fixture: tedge run \"fix failing test\" --headless --fixture-mode --approve-patch --approve-shell.",
-    "5. For real providers, put API keys in environment variables, not config.yaml."
+    "5. For real providers, put API keys in environment variables, not config.yaml.",
+    "6. Start with OpenRouter if you are not sure: one key can reach multiple model families.",
+    "7. Refresh free/low-cost candidates: tedge models --refresh-free",
+    "8. Configure an optional free onboarding model: tedge models --configure-free <model-id> --free-first",
+    "9. Prefer separate provider keys for cost tracking, rate-limit isolation, and debugging."
   ];
-  if (!providerConfigured) lines.push("6. Enable a provider later by editing .tomorrowedge/config.yaml or rerunning init with --force --provider <id>.");
+  if (!providerConfigured) lines.push("10. Enable a provider later by editing .tomorrowedge/config.yaml or rerunning init with --force --provider <id>.");
   return `${lines.join("\n")}\n`;
 }

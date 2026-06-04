@@ -79,6 +79,17 @@ export const configSchema = z.object({
     max_cost_usd: z.number().nonnegative().default(1),
     max_wall_time_sec: z.number().positive().default(600)
   }),
+  model_discovery: z.object({
+    recommended_provider: z.string().default("openrouter"),
+    refresh_free_models: z.boolean().default(true),
+    prefer_free_onboarding: z.boolean().default(true),
+    free_model_limit: z.number().int().min(1).max(50).default(10)
+  }).default({
+    recommended_provider: "openrouter",
+    refresh_free_models: true,
+    prefer_free_onboarding: true,
+    free_model_limit: 10
+  }),
   autonomy: z.object({
     max_iterations: z.number().int().positive().default(5),
     max_repairs: z.number().int().nonnegative().default(3),

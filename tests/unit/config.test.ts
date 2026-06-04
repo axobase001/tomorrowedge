@@ -5,6 +5,7 @@ import path from "node:path";
 import { getConfigPath, loadConfig, writeConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
 import { initCommand } from "../../src/cli/commands/init.js";
 import { doctorCommand } from "../../src/cli/commands/doctor.js";
+import { modelsCommand } from "../../src/cli/commands/models.js";
 
 describe("config loader", () => {
   it("loads safe offline defaults without a config file", async () => {
@@ -15,8 +16,10 @@ describe("config loader", () => {
     expect(config.project.safe_mode).toBe(true);
     expect(config.project.access_mode).toBe("partial");
     expect(config.project.telemetry).toBe(false);
-    expect(config.orchestration.backend).toBe("native");
-    expect(config.orchestration.langgraph.enabled).toBe(false);
+      expect(config.orchestration.backend).toBe("native");
+      expect(config.model_discovery.recommended_provider).toBe("openrouter");
+      expect(config.model_discovery.prefer_free_onboarding).toBe(true);
+      expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
     expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
@@ -56,6 +59,7 @@ describe("config loader", () => {
       const config = loadConfig(cwd);
 
       expect(output).toContain("First run next steps");
+      expect(output).toContain("Start with OpenRouter");
       expect(config.project.access_mode).toBe("restricted");
       expect(config.routing.mode).toBe("privacy");
       expect(config.privacy.allow_cloud_repo_context).toBe(false);
@@ -99,6 +103,46 @@ describe("config loader", () => {
 
       expect(parsed.warnings.join("\n")).toContain("not executable");
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("can configure an OpenRouter free onboarding model from the live-catalog command path", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-free-model-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      await writeDefaultConfig(cwd);
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "moonshotai/kimi-k2.6:free",
+                name: "MoonshotAI: Kimi K2.6 (free)",
+                context_length: 262144,
+                pricing: { prompt: "0", completion: "0" }
+              }
+            ]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )) as typeof fetch;
+
+      const output = await captureStdout(() =>
+        modelsCommand(cwd, {
+          refreshFree: true,
+          configureFree: "moonshotai/kimi-k2.6:free",
+          freeFirst: true
+        })
+      );
+      const config = loadConfig(cwd);
+
+      expect(output).toContain("Configured OpenRouter onboarding model");
+      expect(config.providers.openrouter.enabled).toBe(true);
+      expect(config.providers.openrouter.model).toBe("moonshotai/kimi-k2.6:free");
+      expect(config.routing.mode).toBe("cheap");
+      expect(config.agents.coder_b.provider).toBe("openrouter");
+    } finally {
+      globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });
     }
   });

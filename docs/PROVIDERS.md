@@ -28,6 +28,32 @@ OLLAMA_BASE_URL=http://localhost:11434
 The CLI automatically loads a local `.env` file from the current workspace.
 `.env` is ignored by git and must not be committed.
 
+Recommended onboarding path:
+
+```bash
+tedge init
+tedge models --refresh-free
+tedge models --configure-free moonshotai/kimi-k2.6:free --free-first
+tedge models --connection-test --provider openrouter
+```
+
+Start with OpenRouter if you are not sure. One key gives TomorrowEdge access to
+multiple model families, and you can later assign specific providers or models
+to each workflow role. `tedge models --refresh-free` queries OpenRouter's live
+model catalog and recommends free or low-cost large models, preferring Kimi
+K2.6 free when it is available. The command is read-only until you explicitly
+choose a model with `--configure-free`.
+
+After configuring a key, run `tedge models --connection-test` to test enabled
+provider endpoints with a lightweight `GET /models` request. This checks HTTP
+connectivity and authentication before any chat completion is sent. Use
+`--provider openrouter` or another provider id to limit the test.
+
+Use separate keys wherever possible: one provider/account key for OpenRouter,
+DeepSeek, MiMo, Kimi, OpenAI-compatible endpoints, or local gateways. Separate
+keys make cost tracking, rate-limit isolation, and failure diagnosis easier.
+Do not put a personal primary key into demo or CI configs.
+
 Current configured endpoints:
 
 - OpenRouter: `https://openrouter.ai/api/v1`
@@ -49,6 +75,8 @@ Known Token Plan cluster URLs:
 Run a tiny live connectivity check:
 
 ```bash
+tedge models --refresh-free
+tedge models --connection-test
 tedge models --real-smoke
 tedge models --smoke-suite
 ```

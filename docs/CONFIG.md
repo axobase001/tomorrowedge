@@ -14,6 +14,25 @@ This creates:
 
 The default config enables safe mode, disables telemetry, and leaves cloud providers off unless configured.
 
+First-run model discovery is recommendation-only:
+
+```yaml
+model_discovery:
+  recommended_provider: openrouter
+  refresh_free_models: true
+  prefer_free_onboarding: true
+  free_model_limit: 10
+```
+
+Use `tedge models --refresh-free` to query OpenRouter's live catalog for free
+or low-cost onboarding candidates. Use
+`tedge models --configure-free <model-id> --free-first` only after choosing a
+model you want to write into `.tomorrowedge/config.yaml`.
+
+After adding an API key, use `tedge models --connection-test` to verify that
+enabled provider endpoints return HTTP 2xx from `/models` before running any
+chat completion smoke test.
+
 `tedge init` never overwrites an existing config. Use `tedge init --force` only
 when you intentionally want to replace the current config with defaults.
 
@@ -83,6 +102,10 @@ Recommended experiment pattern:
 - Use efficient coding models for `explorer`, `coder_a`, `coder_b`, and `repairer`.
 - Use a vision-capable model for `vision` when screenshot/image tasks are tested.
 - Use `ollama` for roles that must stay local in privacy experiments.
+- Use OpenRouter as the easiest onboarding provider when users do not yet want
+  to collect several direct provider keys.
+- Prefer separate API keys per provider/account for cost tracking,
+  rate-limit isolation, and debugging.
 - In `privacy` or `local` routing mode, cloud role overrides are ignored and routed to local-safe providers.
 
 ## External MCP agents

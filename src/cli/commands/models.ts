@@ -1,13 +1,30 @@
-import { loadConfig } from "../../config/configLoader.js";
+import { loadConfig, writeConfig } from "../../config/configLoader.js";
 import { createProviderRegistry } from "../../providers/registry.js";
+import { testProviderConnections } from "../../providers/connectionTest.js";
+import { fetchOpenRouterCatalog, formatOpenRouterModelLine, recommendFreeOpenRouterModels } from "../../providers/openrouterCatalog.js";
 
 export type ModelsOptions = {
   realSmoke?: boolean;
   smokeSuite?: boolean;
+  refreshFree?: boolean;
+  configureFree?: string;
+  freeFirst?: boolean;
+  limit?: string;
+  provider?: string;
+  connectionTest?: boolean;
 };
 
 export async function modelsCommand(cwd: string, options: ModelsOptions = {}): Promise<void> {
-  const config = loadConfig(cwd);
+  let config = loadConfig(cwd);
+  if (options.connectionTest) {
+    await runConnectionTests(config, options.provider);
+    if (!options.refreshFree && !options.configureFree && !options.realSmoke && !options.smokeSuite) return;
+  }
+  if (options.refreshFree || options.configureFree) {
+    await refreshFreeModels(cwd, config, options);
+    if (!options.realSmoke && !options.smokeSuite) return;
+    config = loadConfig(cwd);
+  }
   const registry = createProviderRegistry(config);
   for (const provider of registry.list()) {
     const models = await provider.listModels();
@@ -41,6 +58,84 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
       }
     }
   }
+}
+
+async function runConnectionTests(config: ReturnType<typeof loadConfig>, providerFilter?: string): Promise<void> {
+  const results = await testProviderConnections(config, providerFilter);
+  process.stdout.write("Provider connection test\n");
+  for (const result of results) {
+    const status = result.httpStatus ? `HTTP ${result.httpStatus}` : result.status;
+    const url = result.url ? ` ${result.url}` : "";
+    process.stdout.write(`  ${result.id}: ${result.status} (${status})${url}\n`);
+    process.stdout.write(`    ${result.detail}\n`);
+  }
+}
+
+async function refreshFreeModels(cwd: string, config: ReturnType<typeof loadConfig>, options: ModelsOptions): Promise<void> {
+  const providerId = options.provider ?? config.model_discovery.recommended_provider;
+  if (providerId !== "openrouter") {
+    throw new Error(`Free model refresh currently supports openrouter. Requested: ${providerId}`);
+  }
+  const provider = config.providers.openrouter;
+  if (!provider) throw new Error("OpenRouter provider is missing from config.");
+  const apiKey = provider.api_key_env ? process.env[provider.api_key_env] : undefined;
+  const limit = parseLimit(options.limit, config.model_discovery.free_model_limit);
+  const catalog = await fetchOpenRouterCatalog(provider, apiKey);
+  const recommendations = recommendFreeOpenRouterModels(catalog, { limit, preferKimi: true });
+  process.stdout.write("OpenRouter free / low-cost recommendations\n");
+  process.stdout.write("Recommended provider: OpenRouter (one key, many model families; replace later per role as needed)\n");
+  process.stdout.write("Key hygiene: use separate provider keys where possible for cost tracking, rate-limit isolation, and fault diagnosis.\n");
+  if (!recommendations.length) {
+    process.stdout.write("No free or low-cost candidates were found in the live catalog.\n");
+    return;
+  }
+  for (const model of recommendations) {
+    process.stdout.write(`  ${formatOpenRouterModelLine(model)}\n`);
+  }
+  if (!options.configureFree) {
+    process.stdout.write("\nChoose one with: tedge models --configure-free <model-id>\n");
+    return;
+  }
+  const selected = catalog.find((model) => model.id === options.configureFree);
+  if (!selected) {
+    throw new Error(`Model not found in OpenRouter catalog: ${options.configureFree}`);
+  }
+  if (!selected.isFree && !selected.isLowCost) {
+    throw new Error(`Refusing to configure a non-free/non-low-cost onboarding model: ${selected.id}`);
+  }
+  const next = {
+    ...config,
+    routing: { ...config.routing, mode: options.freeFirst ? "cheap" as const : config.routing.mode },
+    providers: {
+      ...config.providers,
+      openrouter: {
+        ...provider,
+        enabled: true,
+        model: selected.id,
+        api_key_env: provider.api_key_env ?? "OPENROUTER_API_KEY",
+        base_url: provider.base_url || "https://openrouter.ai/api/v1"
+      }
+    },
+    agents: options.freeFirst
+      ? {
+          ...config.agents,
+          explorer: { provider: "openrouter", model: selected.id },
+          coder_b: { provider: "openrouter", model: selected.id },
+          summarizer: { provider: "openrouter", model: selected.id }
+        }
+      : config.agents
+  };
+  await writeConfig(cwd, next);
+  process.stdout.write(`\nConfigured OpenRouter onboarding model: ${selected.id}\n`);
+  process.stdout.write("API key remains outside config. Set OPENROUTER_API_KEY in your environment or local .env.\n");
+  if (options.freeFirst) process.stdout.write("Free-first routing bound explorer/coder_b/summarizer to the selected OpenRouter model.\n");
+}
+
+function parseLimit(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) throw new Error("--limit must be an integer from 1 to 50.");
+  return parsed;
 }
 
 type SmokeCheck = {

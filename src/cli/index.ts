@@ -108,7 +108,13 @@ program
   .description("List configured providers and models")
   .option("--real-smoke", "send a tiny live request to configured cloud providers")
   .option("--smoke-suite", "run text/json/vision smoke checks for configured cloud providers; reports failures without throwing")
-  .action((options: { realSmoke?: boolean; smokeSuite?: boolean }) => modelsCommand(cwd, options));
+  .option("--refresh-free", "fetch OpenRouter's live catalog and recommend free or low-cost onboarding models")
+  .option("--configure-free <model-id>", "enable OpenRouter and set the selected free or low-cost model in .tomorrowedge/config.yaml")
+  .option("--free-first", "when used with --configure-free, bind low-risk execution roles to the selected free model")
+  .option("--connection-test", "test enabled provider endpoints with a lightweight HTTP /models request")
+  .option("--provider <id>", "limit connection tests or catalog refresh to one provider; free refresh currently supports openrouter")
+  .option("--limit <n>", "number of free/low-cost recommendations to print")
+  .action((options: { realSmoke?: boolean; smokeSuite?: boolean; refreshFree?: boolean; configureFree?: string; freeFirst?: boolean; connectionTest?: boolean; provider?: string; limit?: string }) => modelsCommand(cwd, options));
 
 program.command("doctor").description("Check local configuration and provider readiness").option("--json", "print machine-readable diagnostics").action((options: { json?: boolean }) => doctorCommand(cwd, options));
 

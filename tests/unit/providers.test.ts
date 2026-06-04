@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { createProviderRegistry } from "../../src/providers/registry.js";
 import { OpenAICompatibleProvider } from "../../src/providers/openaiCompatible.js";
+import { recommendFreeOpenRouterModels } from "../../src/providers/openrouterCatalog.js";
+import { testProviderConnection } from "../../src/providers/connectionTest.js";
 
 describe("provider registry", () => {
   afterEach(() => {
@@ -126,5 +128,86 @@ describe("provider registry", () => {
         messages: [{ role: "user", content: "hello" }]
       })
     ).rejects.toThrow("placeholder");
+  });
+
+  it("recommends free Kimi 2.6 from an OpenRouter catalog ahead of generic free models", () => {
+    const recommended = recommendFreeOpenRouterModels(
+      [
+        {
+          id: "qwen/qwen3-coder:free",
+          name: "Qwen Coder Free",
+          contextWindow: 131072,
+          promptPrice: 0,
+          completionPrice: 0,
+          isFree: true,
+          isLowCost: false,
+          tags: ["qwen", "long-context"]
+        },
+        {
+          id: "moonshotai/kimi-k2.6:free",
+          name: "MoonshotAI: Kimi K2.6 (free)",
+          contextWindow: 262144,
+          promptPrice: 0,
+          completionPrice: 0,
+          isFree: true,
+          isLowCost: false,
+          tags: ["kimi", "k2.6", "long-context"]
+        }
+      ],
+      { limit: 2 }
+    );
+
+    expect(recommended[0]?.id).toBe("moonshotai/kimi-k2.6:free");
+  });
+
+  it("tests provider connectivity with a lightweight /models request", async () => {
+    vi.stubEnv("OPENROUTER_TEST_KEY", "test-key");
+    let observedUrl = "";
+    let observedHeaders: Headers | undefined;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      observedUrl = String(input);
+      observedHeaders = new Headers(init?.headers);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    const result = await testProviderConnection("openrouter", {
+      enabled: true,
+      api_key_env: "OPENROUTER_TEST_KEY",
+      base_url: "https://openrouter.ai/api/v1",
+      model: "moonshotai/kimi-k2.6:free",
+      api_format: "openai_chat",
+      auth_header: "bearer",
+      extra_headers: {}
+    });
+
+    expect(observedUrl).toBe("https://openrouter.ai/api/v1/models");
+    expect(observedHeaders?.get("Authorization")).toBe("Bearer test-key");
+    expect(result.status).toBe("ok");
+    expect(result.httpStatus).toBe(200);
+  });
+
+  it("does not attempt provider connectivity when the configured key env is missing", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls += 1;
+      return new Response("should not call", { status: 500 });
+    });
+
+    const result = await testProviderConnection("openrouter", {
+      enabled: true,
+      api_key_env: "OPENROUTER_MISSING_TEST_KEY",
+      base_url: "https://openrouter.ai/api/v1",
+      model: "moonshotai/kimi-k2.6:free",
+      api_format: "openai_chat",
+      auth_header: "bearer",
+      extra_headers: {}
+    });
+
+    expect(calls).toBe(0);
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("missing env");
   });
 });

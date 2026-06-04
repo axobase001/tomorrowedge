@@ -7,6 +7,24 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Added
+
+- OpenRouter onboarding model discovery via `tedge models --refresh-free`,
+  with live free/low-cost recommendations that prefer Kimi K2.6 free when
+  available.
+- `tedge models --configure-free <model-id>` for explicitly enabling a chosen
+  OpenRouter free/low-cost model, plus `--free-first` to bind low-risk execution
+  roles to that model.
+- `tedge models --connection-test` for lightweight post-key HTTP `/models`
+  connectivity checks before chat smoke tests.
+- `model_discovery` config defaults for recommendation-only onboarding.
+
+### Changed
+
+- `tedge init` now guides first-run users toward OpenRouter as an optional
+  starter provider and recommends separate API keys for cost tracking,
+  rate-limit isolation, and provider failure diagnosis.
+
 ## [0.5.0] - 2026-06-04
 
 ### Added
