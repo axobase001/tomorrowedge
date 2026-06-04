@@ -65,7 +65,7 @@ program
   .option("--workdir <path>", "alias for --cwd")
   .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task, { ...options, cwd: options.cwd ?? options.workdir }));
 
-program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").action((goal: string | undefined, options: { to?: string }) => tuiCommand(cwd, goal, options));
+program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
 
@@ -101,9 +101,10 @@ program
   .description("Run a core-led multi-model workflow simulation and save a report")
   .argument("<task>", "task goal")
   .option("--providers <ids>", "comma-separated provider ids", "openrouter,deepseek,mimo")
+  .option("--include-mock", "include mock provider if selected")
   .option("--rounds <n>", "debate rounds, 1-5")
   .option("--output <format>", "json or markdown", "markdown")
-  .action((task: string, options: { providers?: string; rounds?: string; output?: "json" | "markdown" }) => workflowCommand(cwd, task, options));
+  .action((task: string, options: { providers?: string; rounds?: string; output?: "json" | "markdown"; includeMock?: boolean }) => workflowCommand(cwd, task, options));
 
 program
   .command("models")

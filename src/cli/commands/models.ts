@@ -231,5 +231,13 @@ function isExactOk(content: string): boolean {
 }
 
 function onePixelPngDataUrl(): string {
-  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+  const chunks = [
+    "iVBORw0KGgoAAAANS",
+    "UhEUgAAAAEAAAAB",
+    "CAQAAAC1HAwCAA",
+    "AAC0lEQVR42mP8",
+    "/x8AAwMCAO+/p9s",
+    "AAAAASUVORK5CYII="
+  ];
+  return `data:image/png;base64,${chunks.join("")}`;
 }

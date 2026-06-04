@@ -11,6 +11,8 @@ export type AccessPolicy = {
   repairApproved: boolean;
 };
 
+export type AccessApprovalState = AccessPolicy;
+
 export type AccessPolicyOptions = {
   mode?: AccessMode;
   approvePatch?: boolean;

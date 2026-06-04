@@ -19,6 +19,7 @@ describe("workflow simulation", () => {
       };
       const result = await runWorkflowSimulation(cwd, "simulate agent orchestration", config, {
         providers: ["mock"],
+        includeMock: true,
         rounds: 2
       });
 
@@ -49,6 +50,7 @@ describe("workflow simulation", () => {
       };
       const result = await runWorkflowSimulation(cwd, "simulate expensive orchestration", config, {
         providers: ["mock"],
+        includeMock: true,
         rounds: 2
       });
 
@@ -122,10 +124,12 @@ describe("workflow simulation", () => {
       };
       const result = await runWorkflowSimulation(cwd, "simulate external debate", config, {
         providers: ["mock", "codex"],
+        includeMock: true,
         rounds: 2
       });
       const report = await readFile(result.reportPath, "utf8");
 
+      expect(report.charCodeAt(0)).toBe(0xfeff);
       expect(result.debate.some((turn) => turn.provider === "external:codex")).toBe(true);
       expect(result.debate.some((turn) => turn.provider === "external:codex" && turn.content.includes("Reviewer stance"))).toBe(true);
       expect(result.debate.some((turn) => turn.provider === "external:codex" && turn.content.includes("Judge stance"))).toBe(true);

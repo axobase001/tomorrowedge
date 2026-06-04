@@ -8,6 +8,7 @@ import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { exportCommand } from "../../src/cli/commands/export.js";
+import { tuiCommand } from "../../src/cli/commands/tui.js";
 import { artifactRefs } from "../../src/core/events/eventRenderer.js";
 import { renderStaticCockpit } from "../../src/cli/renderCockpit.js";
 
@@ -195,6 +196,20 @@ describe("fixture E2E workflow", () => {
     expect(output).toContain("repair candidate fixture_repair_candidate");
     expect(output).toContain("npm test exit=0");
     expect(output).toContain("result=completed");
+  }, 15_000);
+
+  it("opens the latest saved session in static TUI mode", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    });
+    await saveSession(tempRoot, state);
+
+    const output = await captureStdout(() => tuiCommand(tempRoot, "ignored live goal", { session: "latest" }));
+
+    expect(output).toContain("TomorrowEdge cockpit summary");
+    expect(output).toContain("Goal: fix failing test");
+    expect(output).not.toContain("ignored live goal");
   }, 15_000);
 
   it("restricted access mode blocks patch application even when approval flags are present", async () => {

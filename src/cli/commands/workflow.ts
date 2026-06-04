@@ -5,12 +5,14 @@ export type WorkflowOptions = {
   providers?: string;
   output?: "json" | "markdown";
   rounds?: string;
+  includeMock?: boolean;
 };
 
 export async function workflowCommand(cwd: string, task: string, options: WorkflowOptions = {}): Promise<void> {
   const config = loadConfig(cwd);
   const result = await runWorkflowSimulation(cwd, task, config, {
     providers: options.providers?.split(",").map((item) => item.trim()).filter(Boolean),
+    includeMock: options.includeMock,
     output: options.output,
     rounds: validateRounds(options.rounds)
   });

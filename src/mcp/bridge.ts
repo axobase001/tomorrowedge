@@ -282,7 +282,7 @@ export class TomorrowEdgeMcpBridge {
     return {
       sessionId: session.sessionId,
       format,
-      content: format === "json" ? JSON.stringify(session, null, 2) : renderEventMarkdown(session.state.events)
+      content: format === "json" ? JSON.stringify(session, null, 2) : renderMcpSessionMarkdown(session)
     };
   }
 
@@ -350,6 +350,95 @@ export class TomorrowEdgeMcpBridge {
   private async resolveSessionId(sessionId: string): Promise<string> {
     return sessionId === "latest" ? (await loadLatestSession(this.cwd)).sessionId : sessionId;
   }
+}
+
+function renderMcpSessionMarkdown(session: SessionRecord): string {
+  const state = session.state;
+  return `# TomorrowEdge MCP Session ${session.sessionId}
+
+Created: ${session.createdAt}
+
+## Goal
+
+${state.goal}
+
+## Access
+
+- Mode: ${state.access.mode}
+- Cloud allowed: ${state.access.cloudAllowed}
+- Patch approved: ${state.access.patchApproved}
+- Shell approved: ${state.access.shellApproved}
+- Repair approved: ${state.access.repairApproved}
+
+## Routing
+
+${state.routing.assignments.map((item) => `- ${item.role}: ${item.provider}/${item.model} (${item.reason})`).join("\n")}
+
+## Events
+
+${renderEventMarkdown(state.events)}
+
+## Patches
+
+${renderMcpPatches(state)}
+
+## Shell Commands
+
+${renderMcpShellRuns(state)}
+
+## Evidence
+
+${state.finalSummary?.evidence.map((item) => `- ${item}`).join("\n") ?? "No final evidence."}
+
+## Final Summary
+
+${state.finalSummary ? `${state.finalSummary.result}: ${state.finalSummary.suggestedCommitMessage}` : "No final summary."}
+`;
+}
+
+function renderMcpPatches(state: AgentGraphState): string {
+  const candidates = [...state.candidates, ...state.repairCandidates];
+  if (!candidates.length) return "No patch candidates.";
+  return candidates
+    .map(
+      (candidate) => `### ${candidate.candidateId}
+
+- Summary: ${candidate.summary}
+- Files: ${candidate.filesChanged.join(", ") || "no files"}
+- Risk: ${candidate.estimatedRisk}
+- Test plan: ${candidate.testPlan.join("; ") || "not provided"}
+
+${codeFence("diff", candidate.unifiedDiff || "No unified diff provided.")}`
+    )
+    .join("\n\n");
+}
+
+function renderMcpShellRuns(state: AgentGraphState): string {
+  if (!state.runResults.length) return "No shell commands executed.";
+  return state.runResults
+    .map(
+      (result, index) => `### Run ${index + 1}: ${result.command}
+
+- Exit: ${result.exitCode}
+- Success: ${result.success}
+
+STDOUT
+
+${codeFence("text", trimForMarkdown(result.stdout || "(empty)"))}
+
+STDERR
+
+${codeFence("text", trimForMarkdown(result.stderr || "(empty)"))}`
+    )
+    .join("\n\n");
+}
+
+function codeFence(language: string, content: string): string {
+  return `\`\`\`${language}\n${content.replaceAll("```", "'''")}\n\`\`\``;
+}
+
+function trimForMarkdown(content: string, limit = 4000): string {
+  return content.length <= limit ? content : `${content.slice(0, limit)}\n...[truncated ${content.length - limit} chars]`;
 }
 
 export type McpToolDefinition = {

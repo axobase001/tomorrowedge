@@ -12,6 +12,7 @@ import { ExternalAgentProcessClient } from "../externalAgents/externalAgentProce
 
 export type WorkflowOptions = {
   providers?: string[];
+  includeMock?: boolean;
   output?: "json" | "markdown";
   rounds?: number;
 };
@@ -81,7 +82,7 @@ export async function runWorkflowSimulation(cwd: string, task: string, config: T
   const createdAt = new Date().toISOString();
   const corePlan = buildCorePlan(task);
   const registry = createProviderRegistry(config);
-  const providers = selectProviders(registry.list(), config, options.providers);
+  const providers = selectProviders(registry.list(), config, options.providers, options.includeMock);
   const context = await loadWorkflowContext(cwd);
   const maxRounds = normalizeRounds(options.rounds ?? config.debate.max_rounds);
   const debate: WorkflowTurn[] = [];
@@ -164,9 +165,9 @@ function buildCorePlan(task: string): CorePlan {
   };
 }
 
-function selectProviders(providers: ModelProvider[], config: TomorrowEdgeConfig, requested?: string[]): WorkflowProviders {
+function selectProviders(providers: ModelProvider[], config: TomorrowEdgeConfig, requested?: string[], includeMock = false): WorkflowProviders {
   const allowed = requested?.length ? new Set(requested) : undefined;
-  const available = providers.filter((provider) => provider.id !== "fixture" && (!allowed || allowed.has(provider.id)));
+  const available = providers.filter((provider) => provider.id !== "fixture" && (includeMock || provider.kind !== "mock") && (!allowed || allowed.has(provider.id)));
   const externalAgents = externalAgentRegistryFromConfig(config)
     .list()
     .filter((agent) => !allowed || allowed.has(`external:${agent.id}`) || allowed.has(agent.id));
@@ -602,6 +603,6 @@ async function saveWorkflowReport(cwd: string, id: string, content: string): Pro
   const dir = path.join(cwd, ".tomorrowedge", "workflows");
   await mkdir(dir, { recursive: true });
   const filePath = path.join(dir, `${id}.md`);
-  await writeFile(filePath, content, "utf8");
+  await writeFile(filePath, `\uFEFF${content}`, "utf8");
   return filePath;
 }

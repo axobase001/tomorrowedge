@@ -30,10 +30,10 @@ export function createTinyCharModel(corpus = DEFAULT_CORPUS, orderOrOptions = DE
   const charToIndex = new Map(vocabulary.map((char, index) => [char, index]));
   const transitions = buildTransitions(text, options.order);
   const global = countGlobal(text);
-  const contextEmbeddings = createContextEmbeddings(options.contextBuckets, options.embeddingSize, text);
-  const outputEmbeddings = createOutputEmbeddings(vocabulary, options.embeddingSize, text);
-  const outputBias = createOutputBias(vocabulary, global);
-  const denseParameterCount = contextEmbeddings.length + outputEmbeddings.length + outputBias.length;
+  let contextEmbeddings;
+  let outputEmbeddings;
+  let outputBias;
+  const denseParameterCount = options.contextBuckets * options.embeddingSize + vocabulary.length * options.embeddingSize + vocabulary.length;
   const ngramParameterCount = [...transitions.values()].reduce((sum, table) => sum + table.size, 0);
   const parameterCount = denseParameterCount + ngramParameterCount;
 
@@ -69,9 +69,9 @@ export function createTinyCharModel(corpus = DEFAULT_CORPUS, orderOrOptions = DE
           charToIndex,
           transitions,
           global,
-          contextEmbeddings,
-          outputEmbeddings,
-          outputBias
+          contextEmbeddings: contextEmbeddings ??= createContextEmbeddings(options.contextBuckets, options.embeddingSize, text),
+          outputEmbeddings: outputEmbeddings ??= createOutputEmbeddings(vocabulary, options.embeddingSize, text),
+          outputBias: outputBias ??= createOutputBias(vocabulary, global)
         });
         output += next;
       }

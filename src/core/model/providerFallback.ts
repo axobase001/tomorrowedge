@@ -1,6 +1,7 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import { createProviderRegistry } from "../../providers/registry.js";
+import type { ProviderRegistry } from "../../providers/registry.js";
 import type { ChatRequest, ChatResponse } from "../../providers/types.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
@@ -18,6 +19,8 @@ export type ProviderFallbackResult = {
   };
   fallbackReason?: string;
 };
+
+const registryCache = new WeakMap<TomorrowEdgeConfig, ProviderRegistry>();
 
 export async function chatWithProviderFallback(input: {
   config: TomorrowEdgeConfig;
@@ -77,7 +80,7 @@ async function tryChat(
   buildRequest: (model: string, provider: string) => ChatRequest,
   ledger?: EventLedger
 ): Promise<Pick<ProviderFallbackResult, "response" | "error">> {
-  const provider = createProviderRegistry(config).get(providerId);
+  const provider = cachedProviderRegistry(config).get(providerId);
   const requestId = makeId(`request_${role}`);
   const request = buildRequest(model, providerId);
   const promptRef = ledger?.writeArtifact("prompts", JSON.stringify(request.messages, null, 2), "json");
@@ -137,6 +140,14 @@ async function tryChat(
     });
     return { error: message };
   }
+}
+
+function cachedProviderRegistry(config: TomorrowEdgeConfig): ProviderRegistry {
+  const cached = registryCache.get(config);
+  if (cached) return cached;
+  const registry = createProviderRegistry(config);
+  registryCache.set(config, registry);
+  return registry;
 }
 
 function phaseForRole(role: AgentRole) {

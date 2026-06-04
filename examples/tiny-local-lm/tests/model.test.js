@@ -28,7 +28,7 @@ test("bilingual local model generates bounded English text from a prompt", () =>
 });
 
 test("bilingual local model can continue a Chinese prompt", () => {
-  const model = createTinyCharModel();
+  const model = createTinyCharModel(undefined, { contextBuckets: 512, embeddingSize: 16, order: 3 });
   const result = model.generate("明日边缘", { maxTokens: 32, temperature: 0.6, seed: "zh-unit" });
   assert.equal(result.prompt, "明日边缘");
   assert.ok(result.generated.length <= 32);

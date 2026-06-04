@@ -140,7 +140,11 @@ describe("MCP Agent Bridge", () => {
         arguments: { sessionId: started.sessionId, format: "markdown" }
       })) as { format: string; content: string };
       expect(exported.format).toBe("markdown");
+      expect(exported.content).toContain("## Routing");
+      expect(exported.content).toContain("## Patches");
       expect(exported.content).toContain("rpc_patch_1");
+      expect(exported.content).toContain("- return a - b;");
+      expect(exported.content).toContain("+ return a + b;");
       expect(exported.content).toContain("RPC judge selected the reviewed patch.");
     } finally {
       rpc.dispose();
