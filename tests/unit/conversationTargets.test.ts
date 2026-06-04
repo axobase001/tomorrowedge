@@ -20,7 +20,8 @@ describe("conversation targets", () => {
       }
     };
 
-    expect(listConversationTargets(config).map((target) => target.id)).toEqual(expect.arrayContaining(["core", "planner", "reviewer", "judge", "debate", "agent:codex"]));
+    expect(listConversationTargets(config).map((target) => target.id)).toEqual(expect.arrayContaining(["core", "debate", "planner", "reviewer", "judge", "coder", "repairer", "agent:codex"]));
+    expect(resolveConversationTarget(config, "coder_a")).toMatchObject({ id: "coder", role: "coder_a" });
     expect(resolveConversationTarget(config, "external:codex").id).toBe("agent:codex");
   });
 
@@ -51,7 +52,9 @@ describe("conversation targets", () => {
     try {
       const targetsOutput = await captureStdout(() => targetsCommand(cwd));
       expect(targetsOutput).toContain("Conversation targets");
-      expect(targetsOutput).toContain("reviewer");
+      for (const target of ["core", "debate", "planner", "reviewer", "judge", "coder", "repairer"]) {
+        expect(targetsOutput).toContain(`- ${target}`);
+      }
 
       const askOutput = await captureStdout(() => askCommand(cwd, "judge this", { to: "judge" }));
       expect(askOutput).toContain("Conversation target: judge");
@@ -60,6 +63,29 @@ describe("conversation targets", () => {
       const sessionText = await readFile(sessionPath!, "utf8");
       expect(sessionText).toContain("\"conversationTarget\"");
       expect(sessionText).toContain("\"judge\"");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("saves ask --to reviewer as a conversation-only CLI session", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-conversation-reviewer-"));
+    try {
+      const output = await captureStdout(() => askCommand(cwd, "is this patch safe?", { to: "reviewer", headless: true }));
+      const payload = JSON.parse(output) as {
+        sessionPath: string;
+        conversationTarget: { id: string };
+        summary: { changedFiles: string[]; testsRun: string[] };
+      };
+      const session = JSON.parse(await readFile(payload.sessionPath, "utf8")) as { state: { events: Array<{ type: string; target?: string }> } };
+
+      expect(payload.conversationTarget.id).toBe("reviewer");
+      expect(payload.summary.changedFiles).toEqual([]);
+      expect(payload.summary.testsRun).toEqual([]);
+      expect(session.state.events.map((event) => event.type)).toEqual(["conversation_target", "conversation_message", "summary"]);
+      expect(session.state.events.some((event) => event.type === "conversation_target" && event.target === "reviewer")).toBe(true);
+      expect(session.state.events.some((event) => event.type === "conversation_message" && event.target === "reviewer")).toBe(true);
+      expect(session.state.events.some((event) => ["patch_apply", "shell_run"].includes(event.type))).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

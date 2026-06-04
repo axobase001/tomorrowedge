@@ -3,11 +3,11 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 import type { ConversationTarget } from "../../schemas/conversation.js";
 import { externalAgentRegistryFromConfig } from "../externalAgents/externalAgentRegistry.js";
 
-const roleTargets: Array<{ role: AgentRole; label: string; description: string }> = [
+const roleTargets: Array<{ id?: string; role: AgentRole; label: string; description: string }> = [
   { role: "planner", label: "Planner", description: "Ask for decomposition, risk, and implementation strategy only." },
   { role: "reviewer", label: "Reviewer", description: "Ask for critique, missing tests, regression risk, and approval blockers." },
   { role: "judge", label: "Judge", description: "Ask for final selection, revision, or user-decision guidance." },
-  { role: "coder_a", label: "Coder", description: "Ask for implementation direction or candidate patch generation." },
+  { id: "coder", role: "coder_a", label: "Coder", description: "Ask for implementation direction or candidate patch generation." },
   { role: "repairer", label: "Repairer", description: "Ask for post-failure repair strategy." }
 ];
 
@@ -33,7 +33,7 @@ export function listConversationTargets(config: TomorrowEdgeConfig): Conversatio
       description: "Broadcast the question into a multi-agent debate context."
     },
     ...roleTargets.map((target) => ({
-      id: target.role,
+      id: target.id ?? target.role,
       kind: "role" as const,
       label: target.label,
       description: target.description,
@@ -46,7 +46,7 @@ export function listConversationTargets(config: TomorrowEdgeConfig): Conversatio
 export function resolveConversationTarget(config: TomorrowEdgeConfig, rawTarget = "core"): ConversationTarget {
   const normalized = normalizeTarget(rawTarget);
   const targets = listConversationTargets(config);
-  const target = targets.find((item) => normalizeTarget(item.id) === normalized || normalizeTarget(item.label) === normalized);
+  const target = targets.find((item) => normalizeTarget(item.id) === normalized || normalizeTarget(item.label) === normalized || ("role" in item && item.role && normalizeTarget(item.role) === normalized));
   if (!target) {
     throw new Error(`Unknown conversation target: ${rawTarget}. Run "tedge targets" to list available targets.`);
   }

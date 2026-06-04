@@ -1,11 +1,14 @@
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { writeConfig } from "../../src/config/configLoader.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { TomorrowEdgeMcpBridge } from "../../src/mcp/bridge.js";
+import { serveMcpStdio } from "../../src/mcp/server.js";
 import { loadSession } from "../../src/core/memory/sessionMemory.js";
 import { traceCommand } from "../../src/cli/commands/trace.js";
 import { ModelRouter } from "../../src/core/routing/router.js";
@@ -27,6 +30,106 @@ describe("MCP Agent Bridge", () => {
 
     expect(result.stdout).toContain("tomorrowedge.start_workflow");
     expect(result.stdout).toContain("tomorrowedge.submit_judgment");
+  }, 20_000);
+
+  it("handles a full JSON-RPC tools/call workflow over stdio", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-jsonrpc-"));
+    await writeConfig(cwd, {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true
+        }
+      }
+    });
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const rpc = createJsonRpcHarness(stdout);
+    await serveMcpStdio({ cwd, stdin, stdout });
+    try {
+      const initialized = await rpc.send(stdin, 1, "initialize", {});
+      expect(initialized.result?.serverInfo?.name).toBe("tomorrowedge");
+
+      const started = structured(await rpc.send(stdin, 2, "tools/call", {
+        name: "tomorrowedge.start_workflow",
+        arguments: { goal: "mcp json-rpc patch review judgment smoke", accessMode: "partial" }
+      })) as { sessionId: string };
+
+      await rpc.send(stdin, 3, "tools/call", {
+        name: "tomorrowedge.propose_patch",
+        arguments: {
+          sessionId: started.sessionId,
+          externalAgentId: "codex",
+          role: "coder_a",
+          candidate: {
+            candidateId: "rpc_patch_1",
+            summary: "Use addition instead of subtraction.",
+            filesChanged: ["index.js"],
+            unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@ -1,3 +1,3 @@\n- return a - b;\n+ return a + b;\n",
+            estimatedRisk: "low",
+            testPlan: ["npm test"]
+          }
+        }
+      });
+      await rpc.send(stdin, 4, "tools/call", {
+        name: "tomorrowedge.submit_review",
+        arguments: {
+          sessionId: started.sessionId,
+          externalAgentId: "codex",
+          review: {
+            overallRecommendation: "RPC review accepts the patch.",
+            reviews: [
+              {
+                candidateId: "rpc_patch_1",
+                correctnessScore: 92,
+                riskScore: 8,
+                invasiveness: "low",
+                testCoverage: "adequate",
+                securityConcerns: [],
+                regressionConcerns: [],
+                redTeamFindings: [],
+                recommendation: "accept",
+                notes: ["JSON-RPC review submitted."]
+              }
+            ]
+          }
+        }
+      });
+      await rpc.send(stdin, 5, "tools/call", {
+        name: "tomorrowedge.submit_judgment",
+        arguments: {
+          sessionId: started.sessionId,
+          externalAgentId: "codex",
+          judgment: {
+            decision: "select",
+            selectedCandidateId: "rpc_patch_1",
+            reason: "RPC judge selected the reviewed patch.",
+            confidence: 0.9
+          }
+        }
+      });
+
+      const trace = structured(await rpc.send(stdin, 6, "tools/call", {
+        name: "tomorrowedge.get_trace",
+        arguments: { sessionId: started.sessionId }
+      })) as { events: Array<{ type: string }>; markdown: string };
+      expect(trace.events.map((event) => event.type)).toEqual(expect.arrayContaining(["patch_candidate", "review_decision", "judge_decision"]));
+      expect(trace.markdown).toContain("rpc_patch_1");
+
+      const exported = structured(await rpc.send(stdin, 7, "tools/call", {
+        name: "tomorrowedge.export_session",
+        arguments: { sessionId: started.sessionId, format: "markdown" }
+      })) as { format: string; content: string };
+      expect(exported.format).toBe("markdown");
+      expect(exported.content).toContain("rpc_patch_1");
+      expect(exported.content).toContain("RPC judge selected the reviewed patch.");
+    } finally {
+      rpc.dispose();
+      stdin.destroy();
+      stdout.destroy();
+    }
   }, 20_000);
 
   it("binds enabled external agents to planner reviewer and judge roles", () => {
@@ -238,4 +341,68 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
     process.stdout.write = original;
   }
   return output;
+}
+
+type RpcResponse = {
+  jsonrpc: "2.0";
+  id: number;
+  result?: {
+    serverInfo?: { name?: string };
+    structuredContent?: unknown;
+  };
+  error?: { message: string };
+};
+
+function structured(response: RpcResponse): unknown {
+  expect(response.error).toBeUndefined();
+  expect(response.result).toBeTruthy();
+  return response.result?.structuredContent;
+}
+
+function createJsonRpcHarness(stdout: PassThrough): {
+  send(stdin: PassThrough, id: number, method: string, params: Record<string, unknown>): Promise<RpcResponse>;
+  dispose(): void;
+} {
+  type Pending = {
+    resolve: (value: RpcResponse) => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  };
+  const pending = new Map<number, Pending>();
+  let buffer = "";
+  const onData = (chunk: Buffer | string) => {
+    buffer += String(chunk);
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const response = JSON.parse(line) as RpcResponse;
+      const waiter = pending.get(response.id);
+      if (!waiter) continue;
+      pending.delete(response.id);
+      clearTimeout(waiter.timeout);
+      waiter.resolve(response);
+    }
+  };
+  stdout.on("data", onData);
+  return {
+    send(stdin, id, method, params) {
+      return new Promise<RpcResponse>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Timed out waiting for JSON-RPC response ${id}`));
+        }, 10_000);
+        pending.set(id, { resolve, reject, timeout });
+        stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      });
+    },
+    dispose() {
+      stdout.off("data", onData);
+      for (const waiter of pending.values()) {
+        clearTimeout(waiter.timeout);
+        waiter.reject(new Error("JSON-RPC harness disposed."));
+      }
+      pending.clear();
+    }
+  };
 }
