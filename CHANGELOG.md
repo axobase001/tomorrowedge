@@ -9,6 +9,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [0.5.1] - 2026-06-05
 
+0.5.1 is the first post-0.5 hardening release. It turns the project from a
+promising cockpit prototype into a more usable early open-source package:
+provider onboarding is easier, Anthropic/Gemini are real native adapters, the
+release gate is stricter, and the large issue/PR backlog from the first public
+feedback pass has been folded into the main branch.
+
 ### Added
 
 - OpenRouter onboarding model discovery via `tedge models --refresh-free`,
@@ -26,6 +32,10 @@ Changelog: newest changes first, grouped by release and by change type.
   and data URL image payload translation.
 - End-to-end workflow case study and troubleshooting guide for provider setup,
   MCP invocation, full mode, release archives, and Windows markdown encoding.
+- CI now runs `npm run secrets:scan` in addition to test, typecheck, build,
+  smoke, audit, and dry package checks.
+- Local LM frontend screenshots are included in the example README so users can
+  inspect the runnable demo before starting it.
 
 ### Changed
 
@@ -35,6 +45,83 @@ Changelog: newest changes first, grouped by release and by change type.
 - `tedge doctor`, provider routing profiles, connection tests, README provider
   matrix, and CI now treat Anthropic/Gemini as real native providers instead of
   placeholders.
+- README, provider docs, roadmap, productization baseline, and scope status were
+  updated to match the real provider state.
+- The 0.5.1 package metadata, lockfile, README current version, changelog, git
+  tag, and GitHub Release now agree on the same release number.
+
+### Fixed
+
+- TUI approval keys are gated by access policy so restricted/partial/full modes
+  cannot be bypassed from the cockpit.
+- Static/non-interactive TUI output now shows target, routing, access detail,
+  and recent trace context instead of hiding the important workflow state.
+- Full-mode and partial-mode traces are easier to distinguish, with clearer
+  access semantics and pending-action prompts.
+- Real model patch generation is more reliable through JSON response-format
+  requests and robust JSON extraction for non-OpenAI providers.
+- Release dry packing refuses untracked files that would accidentally enter the
+  npm package.
+- `npm run verify` is hardened for registries that do not expose the audit
+  endpoint.
+- MCP tool schemas are tighter for role-bound external agents, and brief export
+  reports stored artifact counts instead of duplicate refs.
+- Executor verification can run multi-step verification plans and repair reruns
+  the failing shell command instead of only the first command.
+- Autonomy limits now enforce wall-time/cost guardrails in the executor.
+- Budget status is preserved across workflow sections instead of being
+  overwritten by the latest section.
+- Provider registry creation is cached for repeated chat fallback calls.
+- `.env`-dependent defaults are read after local environment loading rather than
+  at module import time.
+- Shell command splitting handles backslash escaping.
+- Summarizer failure no longer destroys the whole workflow result.
+- Workflow reports are written as UTF-8 with BOM to avoid Chinese markdown
+  corruption in common Windows viewers.
+- `tedge run` supports `--cwd` / `--workdir` for targeting external project
+  directories.
+- `tedge tui --session latest|<id>` can open saved sessions.
+- Workflow and drill provider flags are more consistent through `--include-mock`.
+- Create/delete patches are supported by the patch parser and applier.
+- Tiny local LM startup and test speed are improved by lazy dense-parameter
+  initialization.
+
+### TUI / UX
+
+- Memory/budget/cost visibility moved higher in the cockpit.
+- Help layout no longer wastes the bottom half of the screen.
+- Debate pane shows review scores instead of only truncated summaries.
+- Agent cards show elapsed duration and distinguish patch/shell runner kinds.
+- Diff pane can inspect alternate and repair candidates.
+- Shell pane shows actual command output, exit code, and failure content.
+- Trace pane shows a larger recent-event window and total count.
+- Command palette copy now explains that model-route preview is temporary until
+  persisted through config/preferences.
+
+### PRs Merged
+
+- #82 Gate TUI approval actions by access policy.
+- #69 Align the 0.5 CLI surface.
+- #67 Harden release verify gates.
+- #60 Add 0.5.0 black-box contract coverage.
+- #58 Fix real model patch generation JSON handling.
+- #48 Apply v0.5 audit hardening for stale versions, redundant I/O, tool
+  selection, and security docs.
+- #41 Clarify access modes and static cockpit fallback.
+- #35 Tighten MCP schemas and brief export counts.
+
+### Issues Closed In This Hardening Pass
+
+- Access and TUI approval semantics: #74, #71, #38, #27.
+- TUI cockpit visibility and layout: #79, #78, #77, #76, #75, #73, #70, #68,
+  #52, #39.
+- Executor, verification, repair, and autonomy: #81, #80, #62, #61, #43.
+- Provider, fallback, JSON, env, and routing behavior: #66, #65, #64, #49, #46,
+  #42, #21, #20, #18.
+- Patch, shell, and report correctness: #63, #45, #44, #40, #34.
+- MCP, export, and trace contracts: #57, #56, #55, #54, #53, #51, #50, #32,
+  #31.
+- Release and packaging gates: #47, #37, #36, #33.
 
 ## [0.5.0] - 2026-06-04
 
