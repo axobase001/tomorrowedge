@@ -119,7 +119,7 @@ function renderBriefExport(sessionId: string, createdAt: string, state: Awaited<
   const eventCount = state.events?.length ?? 0;
   const patchCount = state.candidates.filter((candidate) => candidate.unifiedDiff.trim()).length;
   const shellCount = state.runResults.length;
-  const artifactCount = state.events.flatMap(artifactRefs).length;
+  const artifactCount = new Set(state.events.flatMap(artifactRefs)).size;
   return [
     `TomorrowEdge Session ${sessionId}`,
     `Created: ${createdAt}`,

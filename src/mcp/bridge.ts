@@ -14,7 +14,7 @@ import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgen
 import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
 import { runCommandExternalAgent } from "../core/externalAgents/runners/commandExternalAgentRunner.js";
 import { loadLatestSession, loadSession, type SessionRecord } from "../core/memory/sessionMemory.js";
-import type { AgentRole, AgentRunState } from "../schemas/agentTask.js";
+import { agentRoles, type AgentRole, type AgentRunState } from "../schemas/agentTask.js";
 import type { JudgeDecision } from "../schemas/judge.js";
 import type { PatchCandidate } from "../schemas/patchCandidate.js";
 import type { ReviewReport } from "../schemas/review.js";
@@ -357,17 +357,70 @@ export type McpToolDefinition = {
   inputSchema: Record<string, unknown>;
 };
 
+const stringArraySchema = { type: "array", items: { type: "string" } };
+const agentRoleJsonSchema = { type: "string", enum: [...agentRoles] };
+const trustLevelJsonSchema = { type: "string", enum: ["low", "medium", "high", "owner"] };
+const costUsageJsonSchema = objectSchema({
+  inputTokens: { type: "number", minimum: 0 },
+  outputTokens: { type: "number", minimum: 0 },
+  totalTokens: { type: "number", minimum: 0 },
+  estimatedCostUsd: { type: "number", minimum: 0 }
+});
+const patchCandidateInputJsonSchema = objectSchema({
+  candidateId: { type: "string" },
+  agentId: { type: "string" },
+  approach: { type: "string", enum: ["minimal_patch", "refactor", "test_first", "alternative", "repair"] },
+  summary: { type: "string" },
+  filesChanged: stringArraySchema,
+  unifiedDiff: { type: "string" },
+  testPlan: stringArraySchema,
+  knownTradeoffs: stringArraySchema,
+  estimatedRisk: { type: "string", enum: ["low", "medium", "high"] }
+});
+const redTeamFindingJsonSchema = objectSchema({
+  id: { type: "string" },
+  severity: { type: "string", enum: ["low", "medium", "high", "critical"] },
+  title: { type: "string" },
+  detail: { type: "string" },
+  requiresHumanAttention: { type: "boolean" }
+});
+const candidateReviewJsonSchema = objectSchema({
+  candidateId: { type: "string" },
+  correctnessScore: { type: "number" },
+  riskScore: { type: "number" },
+  invasiveness: { type: "string", enum: ["low", "medium", "high"] },
+  testCoverage: { type: "string", enum: ["none", "weak", "adequate", "strong"] },
+  securityConcerns: stringArraySchema,
+  regressionConcerns: stringArraySchema,
+  redTeamFindings: { type: "array", items: redTeamFindingJsonSchema },
+  recommendation: { type: "string", enum: ["accept", "accept_with_minor_change", "revise", "reject"] },
+  notes: stringArraySchema
+});
+const reviewReportInputJsonSchema = objectSchema({
+  mode: { type: "string", enum: ["standard", "red_team"] },
+  reviews: { type: "array", items: candidateReviewJsonSchema },
+  overallRecommendation: { type: "string" }
+});
+const judgmentInputJsonSchema = objectSchema({
+  selectedCandidateId: { type: "string" },
+  decision: { type: "string", enum: ["select", "request_revision", "ask_user", "abort"] },
+  reason: { type: "string" },
+  borrowIdeasFromOtherCandidates: stringArraySchema,
+  confidence: { type: "number", minimum: 0, maximum: 1 },
+  requiredUserDecision: { type: "string" }
+});
+
 export const mcpTools: McpToolDefinition[] = [
   tool("tomorrowedge.start_workflow", "Start a visible TomorrowEdge workflow session.", { goal: { type: "string" }, accessMode: { type: "string", enum: ["restricted", "partial", "full"] } }, ["goal"]),
   tool("tomorrowedge.get_workflow_state", "Read the current workflow state.", { sessionId: { type: "string" } }),
-  tool("tomorrowedge.register_external_agent", "Register a Claude Code, Codex, or other MCP external coding agent.", { id: { type: "string" }, name: { type: "string" }, sessionId: { type: "string" }, capabilities: { type: "array", items: { type: "string" } }, allowedRoles: { type: "array", items: { type: "string" } }, trustLevel: { type: "string" } }, ["id"]),
-  tool("tomorrowedge.submit_agent_result", "Submit a traced external agent result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, summary: { type: "string" }, result: {}, usage: {} }, ["sessionId", "externalAgentId", "role", "summary"]),
-  tool("tomorrowedge.invoke_external_agent", "Invoke a configured external MCP agent process and record the result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, toolName: { type: "string" }, prompt: { type: "string" }, arguments: { type: "object" } }, ["sessionId", "externalAgentId", "role"]),
-  tool("tomorrowedge.record_event", "Record a structured external agent event in the ledger.", { sessionId: { type: "string" }, event: { type: "object" } }, ["sessionId", "event"]),
+  tool("tomorrowedge.register_external_agent", "Register a Claude Code, Codex, or other MCP external coding agent.", { id: { type: "string" }, name: { type: "string" }, sessionId: { type: "string" }, capabilities: stringArraySchema, allowedRoles: { type: "array", items: agentRoleJsonSchema }, trustLevel: trustLevelJsonSchema }, ["id"]),
+  tool("tomorrowedge.submit_agent_result", "Submit a traced external agent result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, summary: { type: "string" }, result: {}, usage: costUsageJsonSchema }, ["sessionId", "externalAgentId", "role", "summary"]),
+  tool("tomorrowedge.invoke_external_agent", "Invoke a configured external MCP agent process and record the result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, toolName: { type: "string" }, prompt: { type: "string" }, arguments: { type: "object" } }, ["sessionId", "externalAgentId", "role"]),
+  tool("tomorrowedge.record_event", "Record a structured external agent event in the ledger.", { sessionId: { type: "string" }, event: { type: "object", additionalProperties: true } }, ["sessionId", "event"]),
   tool("tomorrowedge.get_context", "Get workflow context for an external role-bound agent.", { sessionId: { type: "string" } }),
-  tool("tomorrowedge.propose_patch", "Submit an external patch candidate.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, candidate: { type: "object" } }, ["sessionId", "externalAgentId", "candidate"]),
-  tool("tomorrowedge.submit_review", "Submit an external review report.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, review: { type: "object" } }, ["sessionId", "externalAgentId", "review"]),
-  tool("tomorrowedge.submit_judgment", "Submit an external judge decision.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, judgment: { type: "object" } }, ["sessionId", "externalAgentId", "judgment"]),
+  tool("tomorrowedge.propose_patch", "Submit an external patch candidate.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, candidate: patchCandidateInputJsonSchema }, ["sessionId", "externalAgentId", "candidate"]),
+  tool("tomorrowedge.submit_review", "Submit an external review report.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, review: reviewReportInputJsonSchema }, ["sessionId", "externalAgentId", "review"]),
+  tool("tomorrowedge.submit_judgment", "Submit an external judge decision.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, judgment: judgmentInputJsonSchema }, ["sessionId", "externalAgentId", "judgment"]),
   tool("tomorrowedge.get_trace", "Return the workflow event ledger.", { sessionId: { type: "string" } }),
   tool("tomorrowedge.export_session", "Export a workflow session as JSON or markdown.", { sessionId: { type: "string" }, format: { type: "string", enum: ["json", "markdown"] } })
 ];
@@ -383,12 +436,16 @@ function tool(name: string, description: string, properties: Record<string, unkn
   return {
     name,
     description,
-    inputSchema: {
-      type: "object",
-      properties,
-      required,
-      additionalProperties: true
-    }
+    inputSchema: objectSchema(properties, required)
+  };
+}
+
+function objectSchema(properties: Record<string, unknown>, required: string[] = []): Record<string, unknown> {
+  return {
+    type: "object",
+    properties,
+    required,
+    additionalProperties: false
   };
 }
 
