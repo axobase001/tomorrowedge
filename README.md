@@ -24,7 +24,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.5.0`。
+当前版本：`0.5.1`。
 
 这一版的重点是 **MCP Agent Bridge**：让 Claude Code / Codex 等外部 coding agents 通过 MCP 接入 TomorrowEdge，并被用户绑定到 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等 workflow roles。
 
@@ -35,7 +35,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 - `agents.<role>.provider: external:<id>` 支持把 workflow role 显式绑定到外部 agent
 - 外部 agent 的 patch、review、judgment、result、cost usage 都会写入 `events.jsonl`
 - TUI 的 Agents / Router / Trace panes 会显示 external agent badge、role binding 和 `external_agent_*` 事件
-- `0.5.0` 增加 Conversation Targets，并保留 `npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
+- `0.5.1` 增加 Conversation Targets，并保留 `npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
 
 ## TUI 实际运行截图
 
@@ -326,7 +326,7 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.5.0`.
+Current version: `0.5.1`.
 
 This release introduces **Conversation Targets**: the user can choose who a
 natural-language message is addressed to while TomorrowEdge still owns
@@ -365,7 +365,7 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `0.5.0` adds Conversation Targets while preserving the hardened release lane:
+- `0.5.1` adds Conversation Targets while preserving the hardened release lane:
   `npm run verify`, zip-safe secret scanning, full-access shell policy, an
   external command runner skeleton, and a locally runnable tiny LM demo.
 

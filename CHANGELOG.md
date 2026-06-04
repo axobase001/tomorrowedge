@@ -7,6 +7,8 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-05
+
 ### Added
 
 - OpenRouter onboarding model discovery via `tedge models --refresh-free`,
