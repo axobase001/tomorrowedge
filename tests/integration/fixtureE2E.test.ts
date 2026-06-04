@@ -8,6 +8,8 @@ import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { exportCommand } from "../../src/cli/commands/export.js";
+import { artifactRefs } from "../../src/core/events/eventRenderer.js";
+import { renderStaticCockpit } from "../../src/cli/renderCockpit.js";
 
 describe("fixture E2E workflow", () => {
   let tempRoot: string;
@@ -103,6 +105,69 @@ describe("fixture E2E workflow", () => {
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
   }, 15_000);
 
+  it("records the full repair loop in trace order and exports expanded artifacts", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    });
+    const sessionPath = await saveSession(tempRoot, state);
+    const sessionDir = path.dirname(sessionPath);
+
+    const repairTrace = state.events
+      .filter((event) => ["patch_apply", "shell_run", "repair_attempt", "summary"].includes(event.type))
+      .map((event) => {
+        if (event.type === "patch_apply") return `patch_apply:${event.phase}`;
+        if (event.type === "shell_run") return `shell_run:${event.success ? "passed" : "failed"}`;
+        if (event.type === "repair_attempt") return `repair_attempt:${event.candidateId}`;
+        return `summary:${event.result}`;
+      });
+    expect(repairTrace).toEqual([
+      "patch_apply:patch",
+      "shell_run:failed",
+      "repair_attempt:fixture_repair_candidate",
+      "patch_apply:repair",
+      "shell_run:passed",
+      "summary:completed"
+    ]);
+
+    const refs = [...new Set(state.events.flatMap(artifactRefs))];
+    expect(refs.length).toBeGreaterThan(0);
+    const artifactContents: string[] = [];
+    for (const ref of refs) {
+      artifactContents.push(await readFile(path.join(sessionDir, ref), "utf8"));
+    }
+    expect(artifactContents.some((content) => content.includes("AssertionError"))).toBe(true);
+    expect(artifactContents.some((content) => content.includes("node test.js"))).toBe(true);
+
+    const output = await captureStdout(() => exportCommand(tempRoot, "latest", { format: "markdown" }));
+    expect(output).toContain("## Artifact Details");
+    expect(output).not.toContain("No artifact refs recorded.");
+    expect(output).toContain("### shell_run artifacts/stdout/");
+    expect(output).toContain("### shell_run artifacts/stderr/");
+    expect(output).toContain("AssertionError");
+    expect(output).toContain("-  return a * b;");
+    expect(output).toContain("+  return a + b;");
+    expect(output).toContain("completed: Implement test task");
+  }, 15_000);
+
+  it("static TUI fallback shows recent failed repair and passing events", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    });
+    const output = renderStaticCockpit(state);
+
+    expect(output).toContain("Recent events:");
+    expect(output).toContain("npm test exit=1");
+    expect(output).toContain("repair candidate fixture_repair_candidate");
+    expect(output).toContain("npm test exit=0");
+    expect(output).toContain("result=completed");
+  }, 15_000);
+
   it("restricted access mode blocks patch application even when approval flags are present", async () => {
     const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
       provider: "fixture",
@@ -116,6 +181,64 @@ describe("fixture E2E workflow", () => {
     expect(state.changedFiles).toEqual([]);
     expect(source).toContain("return a - b");
   });
+
+  it.each([
+    {
+      label: "restricted ignores explicit approvals and stays non-mutating",
+      options: { headless: true, fixtureMode: true, accessMode: "restricted" as const, approvePatch: true, approveShell: true, approveRepair: true },
+      access: { mode: "restricted", patchApproved: false, shellApproved: false, repairApproved: false },
+      approvals: { patchApproved: false, shellApproved: false, repairApproved: false },
+      changedFiles: [],
+      runSuccesses: [],
+      expectedSource: "return a - b"
+    },
+    {
+      label: "partial plus patch approval mutates files without running shell",
+      options: { headless: true, fixtureMode: true, accessMode: "partial" as const, approvePatch: true },
+      access: { mode: "partial", patchApproved: true, shellApproved: false, repairApproved: false },
+      approvals: { patchApproved: true, shellApproved: false, repairApproved: false },
+      changedFiles: ["index.js"],
+      runSuccesses: [],
+      expectedSource: "return a + b"
+    },
+    {
+      label: "partial plus patch and shell approvals records explicit approvals",
+      options: { headless: true, fixtureMode: true, accessMode: "partial" as const, approvePatch: true, approveShell: true },
+      access: { mode: "partial", patchApproved: true, shellApproved: true, repairApproved: false },
+      approvals: { patchApproved: true, shellApproved: true, repairApproved: false },
+      changedFiles: ["index.js"],
+      runSuccesses: [true],
+      expectedSource: "return a + b"
+    },
+    {
+      label: "full automatically patches shells and repairs",
+      options: { headless: true, fixtureMode: true, accessMode: "full" as const, repairOnFail: true, fixtureFailingPatch: true },
+      access: { mode: "full", patchApproved: true, shellApproved: true, repairApproved: true },
+      approvals: { patchApproved: true, shellApproved: true, repairApproved: true },
+      changedFiles: ["index.js"],
+      runSuccesses: [false, true],
+      expectedSource: "return a + b"
+    }
+  ])("prints CLI-level access semantics for $label", async ({ options, access, approvals, changedFiles, runSuccesses, expectedSource }) => {
+    const output = await captureStdout(() => runCommand(tempRoot, "fix failing test", options));
+    const payload = JSON.parse(output) as {
+      access: Record<string, unknown>;
+      approvals: Record<string, unknown>;
+      changedFiles: string[];
+      runResults: Array<{ success: boolean }>;
+      repairCandidates: Array<{ candidateId: string }>;
+    };
+    const source = await readFile(path.join(tempRoot, "index.js"), "utf8");
+
+    expect(payload.access).toMatchObject(access);
+    expect(payload.approvals).toMatchObject(approvals);
+    expect(payload.changedFiles).toEqual(changedFiles);
+    expect(payload.runResults.map((result) => result.success)).toEqual(runSuccesses);
+    expect(source).toContain(expectedSource);
+    if (access.mode === "full") {
+      expect(payload.repairCandidates[0]?.candidateId).toBe("fixture_repair_candidate");
+    }
+  }, 15_000);
 
   it("records red-team review findings when enabled", async () => {
     const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {

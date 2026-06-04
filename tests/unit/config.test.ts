@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execa } from "execa";
 import { getConfigPath, loadConfig, writeConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
 import { initCommand } from "../../src/cli/commands/init.js";
 import { doctorCommand } from "../../src/cli/commands/doctor.js";
@@ -16,10 +17,10 @@ describe("config loader", () => {
     expect(config.project.safe_mode).toBe(true);
     expect(config.project.access_mode).toBe("partial");
     expect(config.project.telemetry).toBe(false);
-      expect(config.orchestration.backend).toBe("native");
-      expect(config.model_discovery.recommended_provider).toBe("openrouter");
-      expect(config.model_discovery.prefer_free_onboarding).toBe(true);
-      expect(config.orchestration.langgraph.enabled).toBe(false);
+    expect(config.orchestration.backend).toBe("native");
+    expect(config.model_discovery.recommended_provider).toBe("openrouter");
+    expect(config.model_discovery.prefer_free_onboarding).toBe(true);
+    expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
     expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
@@ -68,7 +69,7 @@ describe("config loader", () => {
     }
   });
 
-  it("prints actionable doctor diagnostics as JSON", async () => {
+  it("prints actionable doctor provider diagnostics as JSON", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-"));
     const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
     try {
@@ -76,8 +77,12 @@ describe("config loader", () => {
       await captureStdout(() => initCommand(cwd, { provider: "openrouter" }));
       const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
       const parsed = JSON.parse(output) as { providerDiagnostics: Array<{ id: string; status: string; fix?: string }> };
+      const mock = parsed.providerDiagnostics.find((item) => item.id === "mock");
+      const fixture = parsed.providerDiagnostics.find((item) => item.id === "fixture");
       const openrouter = parsed.providerDiagnostics.find((item) => item.id === "openrouter");
 
+      expect(mock?.status).toBe("ready");
+      expect(fixture?.status).toBe("ready");
       expect(openrouter?.status).toBe("error");
       expect(openrouter?.fix).toContain("OPENROUTER_API_KEY");
     } finally {
@@ -143,6 +148,31 @@ describe("config loader", () => {
       expect(config.agents.coder_b.provider).toBe("openrouter");
     } finally {
       globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when full mode is configured in a dirty git workspace", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-full-dirty-"));
+    try {
+      await execa("git", ["init"], { cwd });
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        project: {
+          ...config.project,
+          access_mode: "full"
+        }
+      });
+      await writeFile(path.join(cwd, "dirty.txt"), "pending change\n", "utf8");
+
+      const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
+      const parsed = JSON.parse(output) as { git: string; warnings: string[] };
+
+      expect(parsed.git).toMatch(/changed file/);
+      expect(parsed.warnings).toContain("full access mode auto-approves patch, shell, and repair actions.");
+      expect(parsed.warnings.join("\n")).toContain("full mode is configured while the workspace is");
+    } finally {
       await rm(cwd, { recursive: true, force: true });
     }
   });

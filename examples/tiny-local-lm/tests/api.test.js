@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createTinyLmServer } from "../src/server.js";
+import { createTinyCharModel } from "../src/model.js";
 
-test("API exposes health, model info, and generation endpoints", async () => {
-  const server = createTinyLmServer();
+test("API exposes health, model info, and generation endpoints with a fast smoke model", async () => {
+  const server = createTinyLmServer({
+    model: createTinyCharModel("TomorrowEdge tests local trace repair review with a tiny smoke corpus.", { order: 3, contextBuckets: 512, embeddingSize: 16 })
+  });
   await new Promise((resolve) => server.listen(0, resolve));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
@@ -13,8 +16,7 @@ test("API exposes health, model info, and generation endpoints", async () => {
 
     const info = await fetch(`${baseUrl}/model-info`).then((response) => response.json());
     assert.equal(info.cloudApi, false);
-    assert.ok(info.parameterCount >= 50_000_000);
-    assert.ok(info.parameterCount <= 60_000_000);
+    assert.ok(info.parameterCount < 20_000, `parameterCount=${info.parameterCount}`);
     assert.deepEqual(info.languages, ["zh-CN", "en"]);
 
     const generated = await fetch(`${baseUrl}/generate`, {

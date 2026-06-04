@@ -60,14 +60,14 @@ program
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
-  .option("--to <target>", "conversation target: core, planner, reviewer, judge, debate, or agent:<id>", "core")
+  .option("--to <target>", "conversation target: core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core")
   .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string }) => runCommand(cwd, task, options));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").action((goal: string | undefined, options: { to?: string }) => tuiCommand(cwd, goal, options));
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
 
-program.command("ask").description("Record a non-mutating directed natural-language message").argument("<message>", "message to route").option("--to <target>", "core, planner, reviewer, judge, debate, or agent:<id>", "core").option("--headless", "print JSON instead of a compact summary").action((message: string, options: { to?: string; headless?: boolean }) => askCommand(cwd, message, options));
+program.command("ask").description("Record a non-mutating directed natural-language message").argument("<message>", "message to route").option("--to <target>", "core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core").option("--headless", "print JSON instead of a compact summary").action((message: string, options: { to?: string; headless?: boolean }) => askCommand(cwd, message, options));
 
 program.command("config").description("Print resolved config").action(() => configCommand(cwd));
 

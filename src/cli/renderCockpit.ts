@@ -1,4 +1,5 @@
 import type { AgentGraphState } from "../core/agentGraph/state.js";
+import { renderEventLine } from "../core/events/eventRenderer.js";
 
 export async function renderCockpit(graph: AgentGraphState, safeMode: boolean, cwd: string): Promise<void> {
   if (!canUseRawMode()) {
@@ -16,8 +17,9 @@ export function canUseRawMode(): boolean {
   return Boolean(stdin.isTTY && typeof stdin.setRawMode === "function");
 }
 
-function renderStaticCockpit(graph: AgentGraphState): string {
+export function renderStaticCockpit(graph: AgentGraphState): string {
   const selected = graph.judge?.selectedCandidateId ?? "(none)";
+  const recentEvents = graph.events.slice(-8).map((event) => `- ${renderEventLine(event)}`);
   return [
     "TomorrowEdge cockpit summary",
     "",
@@ -30,6 +32,9 @@ function renderStaticCockpit(graph: AgentGraphState): string {
     `Events: ${graph.events.length}`,
     `Selected patch: ${selected}`,
     `Shell runs: ${graph.runResults.length}`,
-    `Result: ${graph.finalSummary?.result ?? "unknown"}`
+    `Result: ${graph.finalSummary?.result ?? "unknown"}`,
+    "",
+    "Recent events:",
+    ...(recentEvents.length ? recentEvents : ["- none"])
   ].join("\n") + "\n";
 }
