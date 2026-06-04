@@ -32,7 +32,8 @@ export async function mcpAgentsCommand(cwd: string, options: { probe?: boolean }
     return;
   }
   for (const agent of agents) {
-    process.stdout.write(`${agent.id}\t${agent.name}\troles=${agent.allowedRoles.join(",")}\tcapabilities=${agent.capabilities.join(",")}\ttrust=${agent.trustLevel}\tcommand=${agent.command || "(not configured)"}\n`);
+    const proxy = agent.proxyPort ? `\tproxy=127.0.0.1:${agent.proxyPort}` : "";
+    process.stdout.write(`${agent.id}\t${agent.name}\troles=${agent.allowedRoles.join(",")}\tcapabilities=${agent.capabilities.join(",")}\ttrust=${agent.trustLevel}\tcommand=${agent.command || "(not configured)"}${proxy}\n`);
   }
 }
 

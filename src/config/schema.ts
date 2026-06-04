@@ -41,6 +41,7 @@ export const externalAgentConfigSchema = z.object({
   args: z.array(z.string()).default([]),
   cwd: z.string().optional(),
   env: z.record(z.string()).default({}),
+  proxyPort: z.number().int().min(1).max(65_535).optional(),
   autoStart: z.boolean().default(false),
   startupTimeoutMs: z.number().int().positive().default(10_000),
   requestTimeoutMs: z.number().int().positive().default(60_000),

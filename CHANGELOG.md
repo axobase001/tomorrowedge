@@ -7,6 +7,21 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Added
+
+- Native workflow roles can execute through configured external MCP agents,
+  allowing external `core`, `coder_a`, `reviewer`, `judge`, and `repairer`
+  roles to return structured plans, patch candidates, reviews, and judgments
+  directly into the event ledger.
+- `external_agents.<id>.proxyPort` for injecting per-agent localhost proxy
+  environment variables into external MCP processes.
+
+### Fixed
+
+- Codex MCP stdio support now handles newline-delimited JSON-RPC framing and
+  recognizes common Windows launchers such as `codex.cmd`, `codex.exe`, and
+  `codex.ps1`.
+
 ## [0.5.1] - 2026-06-05
 
 0.5.1 is the first post-0.5 hardening release. It turns the project from a

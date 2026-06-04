@@ -71,6 +71,7 @@ external_agents:
     command: codex
     args: [mcp-server]
     cwd: /path/to/workspace
+    proxyPort: 7890
     env:
       NODE_ENV: development
     autoStart: true
@@ -91,6 +92,10 @@ agents:
 ```
 
 This keeps the external agent as a role-bound participant. TomorrowEdge still owns the session, event ledger, trace export, and cockpit visibility.
+
+Set `external_agents.<id>.proxyPort` when a stdio MCP process should use a
+local proxy. TomorrowEdge injects `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY`
+for that process only, using `http://127.0.0.1:<proxyPort>`.
 
 `codex mcp-server` is supported as a real stdio MCP process when Codex CLI is installed and authenticated. Claude Code currently exposes MCP management/consumption commands in its CLI; if your Claude Code setup exposes a stdio MCP server or wrapper, configure that command and args in the same `external_agents.<id>.command` / `args` fields.
 

@@ -11,6 +11,7 @@ export type ExternalAgentProfile = {
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
+  proxyPort?: number;
   autoStart?: boolean;
   startupTimeoutMs?: number;
   requestTimeoutMs?: number;
@@ -30,6 +31,7 @@ export type ExternalAgentRegistrationInput = {
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
+  proxyPort?: number;
   autoStart?: boolean;
   startupTimeoutMs?: number;
   requestTimeoutMs?: number;
