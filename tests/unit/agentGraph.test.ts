@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import path from "node:path";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
@@ -27,6 +27,55 @@ describe("offline agent graph", () => {
     expect(state.debateRounds.length).toBeGreaterThan(0);
     expect(state.judge?.decision).toBe("request_revision");
     expect(state.finalSummary?.evidence).toContain("offline graph completed");
+  });
+
+  it("lets configured external MCP agents execute core-led workflow roles", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-external-core-"));
+    await cp(source, cwd, { recursive: true });
+    const config = {
+      ...defaultConfig,
+      debate: { ...defaultConfig.debate, max_candidates: 1 },
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-role-external-mcp-server.mjs")],
+          autoStart: true,
+          roles: ["core", "coder_a", "reviewer", "judge"],
+          capabilities: ["core", "coding", "review", "judgment"],
+          requestTimeoutMs: 10_000
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        core: { provider: "external:codex", model: "auto" },
+        coder_a: { provider: "external:codex", model: "auto" },
+        reviewer: { provider: "external:codex", model: "auto" },
+        judge: { provider: "external:codex", model: "auto" }
+      }
+    };
+
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", config, {
+        accessMode: "partial",
+        approvePatch: true,
+        approveShell: true,
+        testCommand: "node test.js"
+      });
+
+      expect(state.agents.filter((agent) => agent.provider === "external:codex").map((agent) => agent.role)).toEqual(expect.arrayContaining(["core", "coder_a", "reviewer", "judge"]));
+      expect(state.candidates[0]?.candidateId).toBe("external_codex_patch");
+      expect(state.review?.overallRecommendation).toContain("External reviewer accepts");
+      expect(state.judge?.selectedCandidateId).toBe("external_codex_patch");
+      expect(state.changedFiles).toEqual(["index.js"]);
+      expect(state.runResults[0]?.success).toBe(true);
+      expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining(["external_agent_call", "external_agent_result", "patch_apply", "shell_run"]));
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("records live advisory notes without changing deterministic decisions", async () => {

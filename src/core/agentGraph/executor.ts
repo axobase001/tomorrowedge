@@ -26,8 +26,15 @@ import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
+import type { Plan } from "../../schemas/plan.js";
 import type { RunResult } from "../../schemas/evidence.js";
+import type { JudgeDecision } from "../../schemas/judge.js";
+import type { ReviewReport } from "../../schemas/review.js";
 import { resolveConversationTarget, targetPromptPrefix } from "../conversation/conversationTargets.js";
+import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../externalAgents/externalAgentRegistry.js";
+import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
+import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
+import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -49,6 +56,7 @@ export type OfflineGraphOptions = {
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
   const router = new ModelRouter(config);
+  const externalAgents = externalAgentRegistryFromConfig(config);
   const access = buildAccessPolicy(config, {
     mode: options.accessMode,
     approvePatch: options.approvePatch,
@@ -115,6 +123,29 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
 
   const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
+  const externalCore = externalProfileForRole(router, externalAgents, "core");
+  if (externalCore) {
+    const coreResult = await runAgentState(state, ledger, router, "core", () =>
+      invokeExternalRole({
+        cwd,
+        profile: externalCore,
+        role: "core",
+        prompt: `Act as TomorrowEdge Core. Plan and supervise this workflow: ${goal}`,
+        context: { goal, routing: state.routing, access: state.access, conversationTarget },
+        ledger
+      }),
+      "external"
+    );
+    const corePlan = normalizeExternalPlan(coreResult.payload, goal);
+    if (corePlan) state.plan = corePlan;
+    ledger.append({
+      type: "evidence_update",
+      phase: "planning",
+      role: "core",
+      evidence: [coreResult.summary],
+      evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(coreResult.payload, null, 2), "json")
+    });
+  }
   if (imagePaths.length) {
     const vision = new VisionAgent();
     if (options.liveVision && access.cloudAllowed) {
@@ -155,7 +186,19 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
 
   const planner = new PlannerAgent();
   const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
-  state.plan = await runAgentState(state, ledger, router, "planner", () => planner.run({ goal: plannerGoal }));
+  const externalPlanner = externalProfileForRole(router, externalAgents, "planner");
+  state.plan = state.plan ?? await runAgentState(state, ledger, router, "planner", async () => {
+    if (!externalPlanner) return planner.run({ goal: plannerGoal });
+    const result = await invokeExternalRole({
+      cwd,
+      profile: externalPlanner,
+      role: "planner",
+      prompt: `Create a TomorrowEdge plan for this goal: ${plannerGoal}`,
+      context: { goal: plannerGoal, visualSpec: state.visualSpec, routing: state.routing },
+      ledger
+    });
+    return normalizeExternalPlan(result.payload, goal) ?? planner.run({ goal: plannerGoal });
+  }, externalPlanner ? "external" : "offline");
   state.plan = { ...state.plan, goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
@@ -174,10 +217,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const coder = new CoderAgent();
-  state.candidates.push(await runAgentState(state, ledger, router, "coder_a", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "a", fixtureMode: (options.provider === "fixture" || options.fixtureMode), fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
+  state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options }));
   recordPatchCandidateEvent(ledger, "coder_a", state.candidates[state.candidates.length - 1]);
   if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runAgentState(state, ledger, router, "coder_b", () => coder.run({ plan: state.plan!, contextSelection: state.contextSelection!, variant: "b", fixtureMode: (options.provider === "fixture" || options.fixtureMode), fixtureFailingPatch: options.fixtureFailingPatch, visualSpec: state.visualSpec })));
+    state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options }));
     recordPatchCandidateEvent(ledger, "coder_b", state.candidates[state.candidates.length - 1]);
   }
 
@@ -217,7 +260,19 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const reviewer = new ReviewerAgent();
-  state.review = await runAgentState(state, ledger, router, "reviewer", () => reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview }));
+  const externalReviewer = externalProfileForRole(router, externalAgents, "reviewer");
+  state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
+    if (!externalReviewer) return reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
+    const result = await invokeExternalRole({
+      cwd,
+      profile: externalReviewer,
+      role: "reviewer",
+      prompt: "Review the current patch candidates and return a TomorrowEdge review report.",
+      context: { candidates: state.candidates, redTeam: options.redTeamReview },
+      ledger
+    });
+    return normalizeExternalReview(result.payload) ?? reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
+  }, externalReviewer ? "external" : "offline");
   ledger.append({
     type: "review_decision",
     phase: "review",
@@ -229,7 +284,19 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   ledger.append({ type: "evidence_update", phase: "review", role: "reviewer", evidence: [`debate rounds=${state.debateRounds.length}`] });
 
   const judge = new JudgeAgent();
-  state.judge = await runAgentState(state, ledger, router, "judge", () => judge.run({ candidates: state.candidates, review: state.review! }));
+  const externalJudge = externalProfileForRole(router, externalAgents, "judge");
+  state.judge = await runAgentState(state, ledger, router, "judge", async () => {
+    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review! });
+    const result = await invokeExternalRole({
+      cwd,
+      profile: externalJudge,
+      role: "judge",
+      prompt: "Judge the reviewed candidates and return a TomorrowEdge judge decision.",
+      context: { candidates: state.candidates, review: state.review },
+      ledger
+    });
+    return normalizeExternalJudgment(result.payload) ?? judge.run({ candidates: state.candidates, review: state.review! });
+  }, externalJudge ? "external" : "offline");
   ledger.append({
     type: "judge_decision",
     phase: "judge",
@@ -320,9 +387,19 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         if (!canAttemptRepair(config, repairAttempts, ledger)) return finalizeState(state, ledger, router);
         repairAttempts += 1;
         const repairer = new RepairerAgent();
-        const repairCandidate = await runAgentState(state, ledger, router, "repairer", () =>
-          repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) })
-        );
+        const externalRepairer = externalProfileForRole(router, externalAgents, "repairer");
+        const repairCandidate = await runAgentState(state, ledger, router, "repairer", async () => {
+          if (!externalRepairer) return repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          const externalResult = await invokeExternalRole({
+            cwd,
+            profile: externalRepairer,
+            role: "repairer",
+            prompt: "Repair the failed test run and return a TomorrowEdge patch candidate.",
+            context: { plan: state.plan, failedRun: result, appliedFiles: state.changedFiles },
+            ledger
+          });
+          return normalizeExternalPatch(externalResult.payload, "repairer", "repair") ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+        }, externalRepairer ? "external" : "offline");
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(ledger, "repairer", repairCandidate);
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
@@ -366,6 +443,187 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   return finalizeState(state, ledger, router);
+}
+
+async function runCoderCandidate(input: {
+  cwd: string;
+  state: AgentGraphState;
+  ledger: EventLedger;
+  router: ModelRouter;
+  externalAgents: ExternalAgentRegistry;
+  coder: CoderAgent;
+  role: "coder_a" | "coder_b";
+  variant: "a" | "b";
+  options: OfflineGraphOptions;
+}): Promise<PatchCandidate> {
+  const externalCoder = externalProfileForRole(input.router, input.externalAgents, input.role);
+  return runAgentState(input.state, input.ledger, input.router, input.role, async () => {
+    const fallback = () => input.coder.run({
+      plan: input.state.plan!,
+      contextSelection: input.state.contextSelection!,
+      variant: input.variant,
+      fixtureMode: input.options.provider === "fixture" || input.options.fixtureMode,
+      fixtureFailingPatch: input.options.fixtureFailingPatch,
+      visualSpec: input.state.visualSpec
+    });
+    if (!externalCoder) return fallback();
+    const result = await invokeExternalRole({
+      cwd: input.cwd,
+      profile: externalCoder,
+      role: input.role,
+      prompt: `Create a TomorrowEdge patch candidate for ${input.role}.`,
+      context: {
+        plan: input.state.plan,
+        contextSelection: input.state.contextSelection,
+        visualSpec: input.state.visualSpec,
+        variant: input.variant
+      },
+      ledger: input.ledger
+    });
+    return normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative") ?? fallback();
+  }, externalCoder ? "external" : "offline");
+}
+
+function externalProfileForRole(router: ModelRouter, registry: ExternalAgentRegistry, role: AgentRole): ExternalAgentProfile | undefined {
+  const assignment = router.getPlan().assignments.find((item) => item.role === role);
+  const externalAgentId = assignment ? externalAgentIdFromProvider(assignment.provider) : undefined;
+  if (!externalAgentId) return undefined;
+  return registry.get(externalAgentId);
+}
+
+function normalizeExternalPlan(payload: unknown, goal: string): Plan | undefined {
+  const source = unwrapNamed(payload, "plan");
+  const object = asRecord(source);
+  const steps = Array.isArray(object?.steps) ? object.steps.map(normalizePlanStep).filter((step): step is Plan["steps"][number] => Boolean(step)) : undefined;
+  if (!object || !steps?.length) return undefined;
+  return {
+    goal: stringOr(object.goal, goal),
+    constraints: stringArray(object.constraints),
+    riskLevel: riskLevel(object.riskLevel),
+    taskType: taskType(object.taskType),
+    steps,
+    expectedFiles: stringArray(object.expectedFiles),
+    verificationCommands: stringArray(object.verificationCommands),
+    debateRecommended: typeof object.debateRecommended === "boolean" ? object.debateRecommended : steps.length > 1,
+    reasonForDebate: typeof object.reasonForDebate === "string" ? object.reasonForDebate : undefined
+  };
+}
+
+function normalizeExternalPatch(payload: unknown, agentId: string, approach: PatchCandidate["approach"]): PatchCandidate | undefined {
+  const source = unwrapNamed(payload, "candidate");
+  const object = asRecord(source);
+  if (!object) return undefined;
+  const summary = typeof object.summary === "string" ? object.summary : "";
+  const unifiedDiff = typeof object.unifiedDiff === "string" ? object.unifiedDiff : "";
+  if (!summary && !unifiedDiff) return undefined;
+  return {
+    candidateId: stringOr(object.candidateId, `${agentId}_external_candidate`),
+    agentId: stringOr(object.agentId, agentId),
+    approach: patchApproach(object.approach, approach),
+    summary: summary || `External ${agentId} patch candidate.`,
+    filesChanged: stringArray(object.filesChanged),
+    unifiedDiff,
+    testPlan: stringArray(object.testPlan),
+    knownTradeoffs: stringArray(object.knownTradeoffs),
+    estimatedRisk: riskLevel(object.estimatedRisk)
+  };
+}
+
+function normalizeExternalReview(payload: unknown): ReviewReport | undefined {
+  const source = unwrapNamed(payload, "review");
+  const object = asRecord(source);
+  if (!object || !Array.isArray(object.reviews)) return undefined;
+  const reviews = object.reviews.map(normalizeCandidateReview).filter((review): review is ReviewReport["reviews"][number] => Boolean(review));
+  if (!reviews.length) return undefined;
+  return {
+    mode: object.mode === "red_team" ? "red_team" : "standard",
+    reviews,
+    overallRecommendation: stringOr(object.overallRecommendation, "External review completed.")
+  };
+}
+
+function normalizeExternalJudgment(payload: unknown): JudgeDecision | undefined {
+  const source = unwrapNamed(payload, "judgment");
+  const object = asRecord(source);
+  if (!object) return undefined;
+  const decision = ["select", "request_revision", "ask_user", "abort"].includes(String(object.decision)) ? object.decision as JudgeDecision["decision"] : undefined;
+  if (!decision) return undefined;
+  return {
+    selectedCandidateId: typeof object.selectedCandidateId === "string" ? object.selectedCandidateId : undefined,
+    decision,
+    reason: stringOr(object.reason, "External judge returned a decision."),
+    borrowIdeasFromOtherCandidates: stringArray(object.borrowIdeasFromOtherCandidates),
+    confidence: boundedNumber(object.confidence, 0.7),
+    requiredUserDecision: typeof object.requiredUserDecision === "string" ? object.requiredUserDecision : undefined
+  };
+}
+
+function normalizePlanStep(value: unknown): Plan["steps"][number] | undefined {
+  const object = asRecord(value);
+  if (!object) return undefined;
+  const title = typeof object.title === "string" ? object.title : "";
+  if (!title) return undefined;
+  const status = ["pending", "running", "done", "blocked"].includes(String(object.status)) ? object.status as Plan["steps"][number]["status"] : "pending";
+  return {
+    id: stringOr(object.id, title.toLowerCase().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "step"),
+    title,
+    detail: stringOr(object.detail, title),
+    status
+  };
+}
+
+function normalizeCandidateReview(value: unknown): ReviewReport["reviews"][number] | undefined {
+  const object = asRecord(value);
+  if (!object || typeof object.candidateId !== "string") return undefined;
+  const recommendation = ["accept", "accept_with_minor_change", "revise", "reject"].includes(String(object.recommendation)) ? object.recommendation as ReviewReport["reviews"][number]["recommendation"] : "revise";
+  const invasiveness = ["low", "medium", "high"].includes(String(object.invasiveness)) ? object.invasiveness as ReviewReport["reviews"][number]["invasiveness"] : "medium";
+  const testCoverage = ["none", "weak", "adequate", "strong"].includes(String(object.testCoverage)) ? object.testCoverage as ReviewReport["reviews"][number]["testCoverage"] : "weak";
+  return {
+    candidateId: object.candidateId,
+    correctnessScore: boundedNumber(object.correctnessScore, 50),
+    riskScore: boundedNumber(object.riskScore, 50),
+    invasiveness,
+    testCoverage,
+    securityConcerns: stringArray(object.securityConcerns),
+    regressionConcerns: stringArray(object.regressionConcerns),
+    redTeamFindings: [],
+    recommendation,
+    notes: stringArray(object.notes)
+  };
+}
+
+function unwrapNamed(payload: unknown, key: string): unknown {
+  const object = asRecord(payload);
+  return object && object[key] !== undefined ? object[key] : payload;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function stringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return typeof value === "string" && value.trim() ? [value] : [];
+}
+
+function boundedNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : fallback;
+}
+
+function riskLevel(value: unknown): Plan["riskLevel"] {
+  return value === "medium" || value === "high" ? value : "low";
+}
+
+function taskType(value: unknown): Plan["taskType"] {
+  return ["bugfix", "feature", "refactor", "test", "docs", "analysis", "unknown"].includes(String(value)) ? value as Plan["taskType"] : "unknown";
+}
+
+function patchApproach(value: unknown, fallback: PatchCandidate["approach"]): PatchCandidate["approach"] {
+  return ["minimal_patch", "refactor", "test_first", "alternative", "repair"].includes(String(value)) ? value as PatchCandidate["approach"] : fallback;
 }
 
 function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
@@ -416,7 +674,7 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
   return state;
 }
 
-async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind: "offline" | "live" = "offline"): Promise<T> {
+async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind: AgentRunState["agentKind"] = "offline"): Promise<T> {
   const assignment = router.assignmentFor(role);
   const agentState: AgentRunState = {
     id: role,
@@ -581,6 +839,7 @@ function shellExecutionOptions(config: TomorrowEdgeConfig, access: AgentGraphSta
 }
 
 function phaseForRole(role: AgentRole) {
+  if (role === "core") return "planning";
   if (role === "vision") return "vision";
   if (role === "planner") return "planning";
   if (role === "explorer") return "exploration";
