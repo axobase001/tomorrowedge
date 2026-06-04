@@ -35,7 +35,8 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
     registeredProviders: registry.list().map((provider) => provider.id),
     providerDiagnostics: diagnostics,
     git,
-    warnings
+    warnings,
+    mcpBridge: "experimental; stdio server and tool listing are available, external agent bridge depends on external_agents config"
   };
   if (options.json) {
     process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
@@ -49,6 +50,7 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
   process.stdout.write(`routing: ${payload.routing}\n`);
   process.stdout.write(`orchestration: ${payload.orchestration}\n`);
   process.stdout.write(`providers: ${payload.registeredProviders.join(", ")}\n`);
+  process.stdout.write(`mcp bridge: ${payload.mcpBridge}\n`);
   process.stdout.write(`git: ${payload.git}\n`);
   if (warnings.length) {
     process.stdout.write("warnings:\n");

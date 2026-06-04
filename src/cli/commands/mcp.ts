@@ -1,6 +1,11 @@
 import { TomorrowEdgeMcpBridge } from "../../mcp/bridge.js";
 import { serveMcpStdio } from "../../mcp/server.js";
 
+export function mcpStatusCommand(): void {
+  process.stdout.write("MCP Agent Bridge: experimental.\n");
+  process.stdout.write("stdio server and TomorrowEdge tool listing are available; external agent invocation requires external_agents config.\n");
+}
+
 export async function mcpServeCommand(cwd: string): Promise<void> {
   await serveMcpStdio({ cwd });
 }
