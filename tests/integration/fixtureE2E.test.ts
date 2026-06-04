@@ -327,6 +327,23 @@ describe("fixture E2E workflow", () => {
     expect(output).not.toContain("## Artifact Details");
   });
 
+  it("deduplicates artifact references in brief export counts", async () => {
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    });
+    await saveSession(tempRoot, state);
+    const allRefs = state.events.flatMap(artifactRefs);
+    const uniqueRefs = new Set(allRefs);
+    const output = await captureStdout(() => exportCommand(tempRoot, "latest", { format: "markdown", brief: true }));
+
+    expect(allRefs.length).toBeGreaterThan(uniqueRefs.size);
+    expect(output).toContain(`Artifacts: ${uniqueRefs.size}`);
+    expect(output).not.toContain(`Artifacts: ${allRefs.length}`);
+  });
+
   it("prepares a temporary fixture workspace for --fixture-mode from the project root", async () => {
     const projectRoot = await createProjectRootWithFixture();
     const workspace = await prepareRunWorkspace(projectRoot, { fixtureMode: true });

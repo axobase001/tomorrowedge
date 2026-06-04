@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { writeConfig } from "../../src/config/configLoader.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
-import { TomorrowEdgeMcpBridge } from "../../src/mcp/bridge.js";
+import { mcpTools, TomorrowEdgeMcpBridge } from "../../src/mcp/bridge.js";
 import { serveMcpStdio } from "../../src/mcp/server.js";
 import { loadSession } from "../../src/core/memory/sessionMemory.js";
 import { traceCommand } from "../../src/cli/commands/trace.js";
@@ -15,6 +15,23 @@ import { ModelRouter } from "../../src/core/routing/router.js";
 import { ExternalAgentProcessClient } from "../../src/core/externalAgents/externalAgentProcess.js";
 
 describe("MCP Agent Bridge", () => {
+  it("exposes narrow schemas for role-bound external agent tools", () => {
+    const byName = new Map(mcpTools.map((tool) => [tool.name, tool.inputSchema]));
+    const registerSchema = byName.get("tomorrowedge.register_external_agent") as JsonSchemaObject;
+    const patchSchema = byName.get("tomorrowedge.propose_patch") as JsonSchemaObject;
+    const reviewSchema = byName.get("tomorrowedge.submit_review") as JsonSchemaObject;
+    const judgmentSchema = byName.get("tomorrowedge.submit_judgment") as JsonSchemaObject;
+
+    expect(patchSchema.additionalProperties).toBe(false);
+    expect(reviewSchema.additionalProperties).toBe(false);
+    expect(judgmentSchema.additionalProperties).toBe(false);
+    expect((patchSchema.properties.role as JsonSchemaObject).enum).toEqual(expect.arrayContaining(["planner", "reviewer", "judge", "coder_a"]));
+    expect((registerSchema.properties.trustLevel as JsonSchemaObject).enum).toEqual(["low", "medium", "high", "owner"]);
+    expect(((patchSchema.properties.candidate as JsonSchemaObject).properties.estimatedRisk as JsonSchemaObject).enum).toEqual(["low", "medium", "high"]);
+    expect(((reviewSchema.properties.review as JsonSchemaObject).properties.mode as JsonSchemaObject).enum).toEqual(["standard", "red_team"]);
+    expect(((judgmentSchema.properties.judgment as JsonSchemaObject).properties.decision as JsonSchemaObject).enum).toEqual(["select", "request_revision", "ask_user", "abort"]);
+  });
+
   it("serves MCP tools over stdio in mock mode", async () => {
     const input = [
       JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
@@ -406,3 +423,9 @@ function createJsonRpcHarness(stdout: PassThrough): {
     }
   };
 }
+
+type JsonSchemaObject = {
+  additionalProperties?: boolean;
+  enum?: string[];
+  properties: Record<string, unknown>;
+};
