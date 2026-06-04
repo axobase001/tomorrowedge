@@ -39,9 +39,12 @@ export class ExternalAgentProcessClient {
   private child?: ChildProcessWithoutNullStreams;
   private nextId = 1;
   private buffer = "";
+  private readonly framing: "content-length" | "newline";
   private readonly pending = new Map<number, { resolve: (value: JsonRpcResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 
-  constructor(private readonly profile: ExternalAgentProfile, private readonly cwd: string) {}
+  constructor(private readonly profile: ExternalAgentProfile, private readonly cwd: string) {
+    this.framing = profile.command?.split(/[\\/]/).pop() === "codex" ? "newline" : "content-length";
+  }
 
   async start(): Promise<void> {
     if (this.child) return;
@@ -118,7 +121,7 @@ export class ExternalAgentProcessClient {
     if (!this.child) throw new Error(`External agent ${this.profile.id} is not running.`);
     const timeout = this.profile.requestTimeoutMs ?? 60_000;
     const body = JSON.stringify(request);
-    const framed = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
+    const framed = this.framing === "newline" ? `${body}\n` : `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.id);
