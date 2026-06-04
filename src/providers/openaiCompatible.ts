@@ -37,13 +37,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (!this.isConfigured()) {
       throw new Error(`${this.id} is disabled because API key or base URL is missing.`);
     }
-    const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
-    const response = await this.fetchWithRetry({
+    const body: Record<string, unknown> = {
       model: req.model || this.options.defaultModel,
       messages: req.messages,
-      temperature: req.temperature ?? 0.2,
-      ...(req.maxCompletionTokens ? { [tokenField]: req.maxCompletionTokens } : {})
-    });
+      temperature: req.temperature ?? 0.2
+    };
+    const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
+    if (req.maxCompletionTokens) body[tokenField] = req.maxCompletionTokens;
+    if (req.responseFormat) body.response_format = req.responseFormat;
+    const response = await this.fetchWithRetry(body);
     if (!response.ok) {
       throw new Error(`${this.id} request failed: ${response.status} ${await response.text()}`);
     }

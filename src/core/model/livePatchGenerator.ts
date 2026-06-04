@@ -149,7 +149,8 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
         { role: "user", content: prompt }
       ],
       temperature: plan.role === "coder_a" ? 0.15 : 0.35,
-      maxCompletionTokens: plan.maxOutputTokens
+      maxCompletionTokens: plan.maxOutputTokens,
+      responseFormat: { type: "json_object" }
     })
   });
   return { result };
@@ -276,15 +277,33 @@ function parsePatchJson(raw: string): {
   knownTradeoffs: string[];
   estimatedRisk: "low" | "medium" | "high";
 } {
-  const text = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const text = raw
+    .trim()
+    .split("\n")
+    .filter((line) => !/^```/.test(line.trim()))
+    .join("\n")
+    .trim();
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("Live patch response was not JSON.");
-  const parsed = livePatchResponseSchema.safeParse(JSON.parse(text.slice(start, end + 1)));
-  if (!parsed.success) {
-    throw new Error(`Live patch response schema mismatch: ${parsed.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
+  let jsonText = text.slice(start, end + 1);
+  try {
+    const parsed = livePatchResponseSchema.safeParse(JSON.parse(jsonText));
+    if (!parsed.success) {
+      throw new Error(`Live patch response schema mismatch: ${parsed.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
+    }
+    return parsed.data;
+  } catch (firstError) {
+    if (jsonText.startsWith("{")) {
+      const nestedStart = jsonText.indexOf("{\n");
+      if (nestedStart > 0) {
+        jsonText = jsonText.slice(nestedStart);
+        const parsed = livePatchResponseSchema.safeParse(JSON.parse(jsonText));
+        if (parsed.success) return parsed.data;
+      }
+    }
+    throw firstError;
   }
-  return parsed.data;
 }
 
 function inferFilesFromDiff(diff: string): string[] {
