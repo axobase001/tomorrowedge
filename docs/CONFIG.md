@@ -101,6 +101,11 @@ external_agents:
   codex:
     enabled: true
     transport: mcp
+    command: codex
+    args: [mcp-server]
+    autoStart: true
+    requestTimeoutMs: 60000
+    maxRetries: 1
     roles: [core, coder_a, repairer, reviewer]
     capabilities: [core, coding, repair, review]
     trustLevel: high
@@ -120,6 +125,11 @@ agents:
 `core` is optional. It appears in routing only when explicitly bound. External
 agents are visible in the TUI, and their patch/review/judgment/result
 submissions are written to `events.jsonl`.
+
+Use `tedge mcp agents --probe` to verify that configured commands start and
+return MCP tools. Use `tedge mcp invoke <agent-id> --session latest --role
+reviewer --prompt "..."` to call a configured external MCP process and record
+the call/result/error in the current session.
 
 ## Autonomy and budget bounds
 

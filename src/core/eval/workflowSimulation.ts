@@ -6,6 +6,9 @@ import type { ModelProvider } from "../../providers/types.js";
 import { makeId } from "../../utils/ids.js";
 import { estimateCostUsd, preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../schemas/modelNote.js";
+import { externalAgentRegistryFromConfig } from "../externalAgents/externalAgentRegistry.js";
+import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
+import { ExternalAgentProcessClient } from "../externalAgents/externalAgentProcess.js";
 
 export type WorkflowOptions = {
   providers?: string[];
@@ -68,6 +71,7 @@ type WorkflowProviders = {
   docs?: ModelProvider;
   judge?: ModelProvider;
   available: ModelProvider[];
+  externalAgents: ExternalAgentProfile[];
 };
 
 const maxWorkflowTokens = 900;
@@ -77,7 +81,7 @@ export async function runWorkflowSimulation(cwd: string, task: string, config: T
   const createdAt = new Date().toISOString();
   const corePlan = buildCorePlan(task);
   const registry = createProviderRegistry(config);
-  const providers = selectProviders(registry.list(), options.providers);
+  const providers = selectProviders(registry.list(), config, options.providers);
   const context = await loadWorkflowContext(cwd);
   const maxRounds = normalizeRounds(options.rounds ?? config.debate.max_rounds);
   const debate: WorkflowTurn[] = [];
@@ -89,7 +93,7 @@ export async function runWorkflowSimulation(cwd: string, task: string, config: T
     const preflight = preflightWorkflowBatch(debatePlans, config.debate.max_cost_usd, spentKnownUsd);
     budgetStatus = preflight.status;
     if (budgetStatus.status === "blocked") break;
-    const turns = await Promise.all(debatePlans.map((plan) => askProvider(plan.provider, "debate", round, plan.role, plan.prompt)));
+    const turns = await Promise.all(debatePlans.map((plan) => askWorkflowPlan(plan, "debate", round, cwd)));
     debate.push(...turns);
     spentKnownUsd += sumKnownCost(turns);
   }
@@ -102,7 +106,7 @@ export async function runWorkflowSimulation(cwd: string, task: string, config: T
     const preflight = preflightWorkflowBatch(executionPlans, config.debate.max_cost_usd, spentKnownUsd);
     budgetStatus = preflight.status;
     if (budgetStatus.status !== "blocked") {
-      executions = await Promise.all(executionPlans.map((plan) => askProvider(plan.provider, "execution", maxRounds + 1, plan.role, plan.prompt)));
+      executions = await Promise.all(executionPlans.map((plan) => askWorkflowPlan(plan, "execution", maxRounds + 1, cwd)));
       spentKnownUsd += sumKnownCost(executions);
     }
   }
@@ -160,15 +164,19 @@ function buildCorePlan(task: string): CorePlan {
   };
 }
 
-function selectProviders(providers: ModelProvider[], requested?: string[]): WorkflowProviders {
+function selectProviders(providers: ModelProvider[], config: TomorrowEdgeConfig, requested?: string[]): WorkflowProviders {
   const allowed = requested?.length ? new Set(requested) : undefined;
   const available = providers.filter((provider) => provider.id !== "fixture" && (!allowed || allowed.has(provider.id)));
+  const externalAgents = externalAgentRegistryFromConfig(config)
+    .list()
+    .filter((agent) => !allowed || allowed.has(`external:${agent.id}`) || allowed.has(agent.id));
   return {
     architect: chooseProvider(available, ["openrouter", "kimi", "deepseek", "openai_compatible", "mimo", "ollama", "mock"]),
     implementer: chooseProvider(available, ["deepseek", "kimi", "openai_compatible", "openrouter", "mimo", "ollama", "mock"]),
     docs: chooseProvider(available, ["mimo", "kimi", "openrouter", "deepseek", "openai_compatible", "ollama", "mock"]),
     judge: chooseProvider(available, ["openrouter", "kimi", "deepseek", "openai_compatible", "mimo", "ollama", "mock"]),
-    available
+    available,
+    externalAgents
   };
 }
 
@@ -225,6 +233,7 @@ async function loadWorkflowContext(cwd: string): Promise<string> {
 
 type WorkflowCallPlan = {
   provider?: ModelProvider;
+  externalAgent?: ExternalAgentProfile;
   role: string;
   prompt: string;
   maxOutputTokens: number;
@@ -238,7 +247,7 @@ function buildDebatePlans(
   round: number
 ): WorkflowCallPlan[] {
   if (round === 1) {
-    return [
+    const basePlans: WorkflowCallPlan[] = [
       {
         provider: providers.architect,
         role: "Architect/Judge",
@@ -258,10 +267,11 @@ function buildDebatePlans(
         maxOutputTokens: maxWorkflowTokens
       }
     ];
+    return [...basePlans, ...buildExternalDebatePlans(plan, context, providers.externalAgents, round)];
   }
 
   const transcript = renderTurns(priorDebate);
-  return [
+  const basePlans: WorkflowCallPlan[] = [
     {
       provider: providers.architect,
       role: "Architect/Judge",
@@ -281,10 +291,11 @@ function buildDebatePlans(
       maxOutputTokens: maxWorkflowTokens
     }
   ];
+  return [...basePlans, ...buildExternalCrossExaminationPlans(plan, transcript, providers.externalAgents, round)];
 }
 
 function buildExecutionPlans(plan: CorePlan, context: string, providers: WorkflowProviders): WorkflowCallPlan[] {
-  return [
+  const basePlans: WorkflowCallPlan[] = [
     {
       provider: providers.implementer,
       role: "Implementation Agent",
@@ -304,6 +315,40 @@ function buildExecutionPlans(plan: CorePlan, context: string, providers: Workflo
       maxOutputTokens: maxWorkflowTokens
     }
   ];
+  return [...basePlans, ...buildExternalExecutionPlans(plan, context, providers.externalAgents)];
+}
+
+function buildExternalDebatePlans(plan: CorePlan, context: string, agents: ExternalAgentProfile[], round: number): WorkflowCallPlan[] {
+  return agents
+    .filter((agent) => agent.allowedRoles.some((role) => ["core", "planner", "reviewer", "judge"].includes(role)))
+    .map((agent) => ({
+      externalAgent: agent,
+      role: `External ${bestExternalRole(agent)} (${agent.id})`,
+      prompt: buildDebatePrompt(plan, context, `as external agent ${agent.name}, challenge the plan from your allowed roles: ${agent.allowedRoles.join(", ")}`),
+      maxOutputTokens: maxWorkflowTokens
+    }));
+}
+
+function buildExternalCrossExaminationPlans(plan: CorePlan, transcript: string, agents: ExternalAgentProfile[], round: number): WorkflowCallPlan[] {
+  return agents
+    .filter((agent) => agent.allowedRoles.some((role) => ["core", "reviewer", "judge"].includes(role)))
+    .map((agent) => ({
+      externalAgent: agent,
+      role: `External Cross-Examiner (${agent.id})`,
+      prompt: buildCrossExaminationPrompt(plan, transcript, `as external ${agent.name}, cross-examine other agents and name one judge/reviewer decision you would make in round ${round}`),
+      maxOutputTokens: maxWorkflowTokens
+    }));
+}
+
+function buildExternalExecutionPlans(plan: CorePlan, context: string, agents: ExternalAgentProfile[]): WorkflowCallPlan[] {
+  return agents
+    .filter((agent) => agent.allowedRoles.some((role) => ["coder_a", "repairer", "reviewer", "judge", "core"].includes(role)))
+    .map((agent) => ({
+      externalAgent: agent,
+      role: `External Delivery (${agent.id})`,
+      prompt: buildExecutionPrompt(plan, context, `as external ${agent.name}, produce your role-bound delivery note and explicit approval risks`),
+      maxOutputTokens: maxWorkflowTokens
+    }));
 }
 
 function buildDebatePrompt(plan: CorePlan, context: string, instruction: string): string {
@@ -343,11 +388,60 @@ function preflightWorkflowBatch(plans: WorkflowCallPlan[], maxCostUsd: number, s
   };
 }
 
+async function askWorkflowPlan(plan: WorkflowCallPlan, phase: WorkflowTurn["phase"], round: number, cwd: string): Promise<WorkflowTurn> {
+  if (plan.externalAgent) return askExternalAgent(plan.externalAgent, phase, round, plan.role, plan.prompt, cwd);
+  return askProvider(plan.provider, phase, round, plan.role, plan.prompt);
+}
+
+async function askExternalAgent(agent: ExternalAgentProfile, phase: WorkflowTurn["phase"], round: number, role: string, prompt: string, cwd: string): Promise<WorkflowTurn> {
+  if (agent.command && agent.autoStart) {
+    const client = new ExternalAgentProcessClient(agent, cwd);
+    try {
+      await client.start();
+      const tools = await client.listTools();
+      const toolName = tools.find((tool) => /agent|chat|complete|prompt|run/i.test(tool.name))?.name ?? tools[0]?.name ?? "run";
+      const response = await client.callTool(toolName, { prompt, role, phase, round });
+      if (!response.ok) throw new Error(response.error ?? "external MCP call failed");
+      return {
+        phase,
+        round,
+        role,
+        provider: `external:${agent.id}`,
+        model: agent.name,
+        prompt,
+        content: stringifyExternalResponse(response.result),
+        estimatedCostUsd: estimateExternalCost(agent, prompt, stringifyExternalResponse(response.result))
+      };
+    } catch (error) {
+      return { phase, round, role, provider: `external:${agent.id}`, model: agent.name, prompt, content: "", error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      await client.stop();
+    }
+  }
+  return {
+    phase,
+    round,
+    role,
+    provider: `external:${agent.id}`,
+    model: agent.name,
+    prompt,
+    content: [
+      `${agent.name} participates as a configured external MCP agent.`,
+      `Allowed roles: ${agent.allowedRoles.join(", ") || "none"}.`,
+      phase === "debate"
+        ? "Position: challenge the plan, identify approval boundaries, and force reviewer/judge criteria into the transcript."
+        : "Delivery: provide role-bound implementation/review/judge notes without claiming local file changes.",
+      agent.command ? `Runtime configured: ${agent.command} ${(agent.args ?? []).join(" ")}`.trim() : "Runtime not auto-started; using configured-profile mock turn."
+    ].join("\n")
+  };
+}
+
 function buildAssignments(providers: WorkflowProviders): WorkflowAssignment[] {
   return [
     { role: "Architect/Judge", provider: providers.architect?.id ?? "unavailable", deliverable: "Risk critique, approval gate review, final judge notes." },
     { role: "Implementation Agent", provider: providers.implementer?.id ?? "unavailable", deliverable: "Implementation patch plan and test strategy." },
-    { role: "Docs/UX Agent", provider: providers.docs?.id ?? "unavailable", deliverable: "Chinese UX copy, docs updates, operator workflow notes." }
+    { role: "Docs/UX Agent", provider: providers.docs?.id ?? "unavailable", deliverable: "Chinese UX copy, docs updates, operator workflow notes." },
+    ...providers.externalAgents.map((agent) => ({ role: `External MCP Agent (${bestExternalRole(agent)})`, provider: `external:${agent.id}`, deliverable: `Role-bound debate/review/judge participation from ${agent.name}.` }))
   ];
 }
 
@@ -388,6 +482,27 @@ function turnToNote(turn: WorkflowTurn): ModelNote {
   };
 }
 
+function bestExternalRole(agent: ExternalAgentProfile): string {
+  return agent.allowedRoles.find((role) => ["core", "judge", "reviewer", "planner", "coder_a", "repairer"].includes(role)) ?? agent.allowedRoles[0] ?? "agent";
+}
+
+function stringifyExternalResponse(value: unknown): string {
+  if (typeof value === "string") return value;
+  const payload = value as { content?: Array<{ text?: string }>; structuredContent?: unknown };
+  const text = payload?.content?.map((item) => item.text).filter(Boolean).join("\n");
+  if (text) return text;
+  return JSON.stringify(value, null, 2);
+}
+
+function estimateExternalCost(agent: ExternalAgentProfile, prompt: string, content: string): number | undefined {
+  const inputPrice = Number(agent.costProfile?.inputPricePerMTok);
+  const outputPrice = Number(agent.costProfile?.outputPricePerMTok);
+  if (!Number.isFinite(inputPrice) || !Number.isFinite(outputPrice)) return undefined;
+  const inputTokens = Math.ceil(prompt.length / 4);
+  const outputTokens = Math.ceil(content.length / 4);
+  return Math.round(((inputTokens / 1_000_000) * inputPrice + (outputTokens / 1_000_000) * outputPrice) * 1_000_000) / 1_000_000;
+}
+
 function renderCorePlan(plan: CorePlan): string {
   return [
     `Objective: ${plan.objective}`,
@@ -409,6 +524,8 @@ function renderWorkflowReport(result: WorkflowResult): string {
     `Created: ${result.createdAt}`,
     `Debate rounds requested: ${result.debateRounds}`,
     `Budget: ${result.budgetStatus.status} (${result.budgetStatus.reason})`,
+    "## Cost Governance",
+    renderCostGovernance(result),
     "## Core Plan",
     renderCorePlan(result.corePlan),
     "## Debate",
@@ -423,6 +540,26 @@ function renderWorkflowReport(result: WorkflowResult): string {
     `Gaps:\n${result.review.gaps.length ? result.review.gaps.map((item) => `- ${item}`).join("\n") : "- none"}`,
     result.review.deliverySummary
   ].join("\n\n");
+}
+
+function renderCostGovernance(result: WorkflowResult): string {
+  const allTurns = [...result.debate, ...result.executions];
+  const byProvider = new Map<string, { turns: number; tokens: number; cost?: number }>();
+  for (const turn of allTurns) {
+    const item = byProvider.get(turn.provider) ?? { turns: 0, tokens: 0 };
+    item.turns += 1;
+    item.tokens += (turn.usage?.inputTokens ?? 0) + (turn.usage?.outputTokens ?? 0);
+    if (turn.estimatedCostUsd !== undefined) item.cost = (item.cost ?? 0) + turn.estimatedCostUsd;
+    byProvider.set(turn.provider, item);
+  }
+  const rows = [...byProvider.entries()].map(([provider, item]) => `- ${provider}: turns=${item.turns}, tokens=${item.tokens}${item.cost === undefined ? ", cost=unknown" : `, cost=$${item.cost.toFixed(6)}`}`);
+  return [
+    `Total tokens: ${result.usageSummary.totalTokens}`,
+    `Estimated cost: ${result.usageSummary.estimatedCostUsd === undefined ? "unknown" : `$${result.usageSummary.estimatedCostUsd.toFixed(6)}`}`,
+    `Budget status: ${result.budgetStatus.status}`,
+    "Budget allocation policy: reserve expensive/strong agents for core, planner, reviewer, and judge; route implementation and repair to efficient coding agents; keep privacy-sensitive work local or explicitly external.",
+    rows.length ? rows.join("\n") : "- no turns recorded"
+  ].join("\n");
 }
 
 function normalizeRounds(value: number | undefined): number {

@@ -9,7 +9,16 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ### Added
 
-- Nothing yet.
+- External MCP process runtime for configured Claude Code / Codex-style stdio
+  agents, including `tedge mcp agents --probe` and `tedge mcp invoke`.
+- Active external-agent participation in workflow debate, cross-examination,
+  and judge/reviewer-style delivery turns.
+- External-agent cost visibility in the TUI Memory pane and workflow reports.
+
+### Changed
+
+- MCP Agent Bridge docs now distinguish Codex's `mcp-server` path from Claude
+  Code setups that need a stdio MCP wrapper or future server command.
 
 ## [0.4.0] - 2026-06-04
 

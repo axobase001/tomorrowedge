@@ -55,6 +55,28 @@ Every external agent handoff should become trace data:
 
 The TUI shows external agents with an `EXTERNAL` badge, the router shows `role -> external:<id>`, and trace panes highlight `external_agent_*` events.
 
+## Debate Participation
+
+External agents are not limited to final answer submission. When enabled in the
+workflow simulation, external agents with `core`, `planner`, `reviewer`, or
+`judge` roles are inserted into debate and cross-examination rounds. This makes
+Claude Code, Codex, or another external agent visible as an internal role node:
+
+- round 1: challenge plan, risks, approval boundaries, and implementation route
+- later rounds: cross-examine prior transcript and name reviewer/judge decisions
+- execution: produce role-bound delivery notes without claiming local mutations
+
+If `command`, `args`, and `autoStart: true` are configured, TomorrowEdge invokes
+the external stdio MCP process. Otherwise it records a configured-profile mock
+turn so offline tests and demos remain deterministic.
+
+## Cost Governance
+
+External agents can report `external_agent_cost_usage`, and workflow reports now
+include a Cost Governance section with per-provider/external-agent turns,
+tokens, cost, and budget policy. The Memory pane surfaces external token/cost
+totals separately from normal provider usage.
+
 ## 中文说明
 
 外部 agent 是通过 MCP 接入 TomorrowEdge 的 Claude Code、Codex 或其他 coding agent。它们不是来替代 TomorrowEdge 的，而是被 TomorrowEdge 分配到具体 workflow role 里。

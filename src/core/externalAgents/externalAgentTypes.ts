@@ -7,6 +7,13 @@ export type ExternalAgentProfile = {
   id: string;
   name: string;
   transport: ExternalAgentTransport;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  autoStart?: boolean;
+  startupTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
   capabilities: string[];
   allowedRoles: AgentRole[];
   trustLevel: ExternalAgentTrustLevel;
@@ -18,6 +25,13 @@ export type ExternalAgentRegistrationInput = {
   id: string;
   name?: string;
   transport?: ExternalAgentTransport;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  autoStart?: boolean;
+  startupTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
   capabilities?: string[];
   allowedRoles?: AgentRole[];
   trustLevel?: ExternalAgentTrustLevel;

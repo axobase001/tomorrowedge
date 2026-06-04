@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
@@ -97,6 +97,40 @@ describe("workflow simulation", () => {
       if (originalKimiKey === undefined) delete process.env.KIMI_TEST_KEY;
       else process.env.KIMI_TEST_KEY = originalKimiKey;
       vi.unstubAllGlobals();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("includes enabled external agents in debate and cost governance report", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-workflow-external-"));
+    try {
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        external_agents: {
+          codex: {
+            ...defaultConfig.external_agents.codex,
+            enabled: true,
+            roles: ["reviewer", "judge"],
+            capabilities: ["review", "judgment"],
+            costProfile: { inputPricePerMTok: 1, outputPricePerMTok: 2 }
+          }
+        },
+        providers: {
+          ...defaultConfig.providers,
+          mock: { enabled: true, base_url: "" }
+        }
+      };
+      const result = await runWorkflowSimulation(cwd, "simulate external debate", config, {
+        providers: ["mock", "codex"],
+        rounds: 2
+      });
+      const report = await readFile(result.reportPath, "utf8");
+
+      expect(result.debate.some((turn) => turn.provider === "external:codex")).toBe(true);
+      expect(result.assignments.some((assignment) => assignment.provider === "external:codex")).toBe(true);
+      expect(report).toContain("Cost Governance");
+      expect(report).toContain("external:codex");
+    } finally {
       await rm(cwd, { recursive: true, force: true });
     }
   });

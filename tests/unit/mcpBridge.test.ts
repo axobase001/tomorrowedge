@@ -9,6 +9,7 @@ import { TomorrowEdgeMcpBridge } from "../../src/mcp/bridge.js";
 import { loadSession } from "../../src/core/memory/sessionMemory.js";
 import { traceCommand } from "../../src/cli/commands/trace.js";
 import { ModelRouter } from "../../src/core/routing/router.js";
+import { ExternalAgentProcessClient } from "../../src/core/externalAgents/externalAgentProcess.js";
 
 describe("MCP Agent Bridge", () => {
   it("serves MCP tools over stdio in mock mode", async () => {
@@ -120,6 +121,51 @@ describe("MCP Agent Bridge", () => {
     const output = await captureStdout(() => traceCommand(cwd, "latest", { verbose: true }));
     expect(output).toContain("claude_code");
     expect(output).toContain("codex_patch_1");
+  });
+
+  it("can invoke a configured external MCP stdio process", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-process-"));
+    const config = externalConfig();
+    config.external_agents.codex = {
+      ...config.external_agents.codex,
+      enabled: true,
+      command: process.execPath,
+      args: [path.join(process.cwd(), "tests", "fixtures", "mock-external-mcp-server.mjs")],
+      autoStart: true,
+      requestTimeoutMs: 10_000
+    };
+    const bridge = new TomorrowEdgeMcpBridge(cwd, config);
+    const started = await bridge.startWorkflow({ goal: "external process smoke" });
+    const result = await bridge.invokeExternalAgent({
+      sessionId: started.sessionId,
+      externalAgentId: "codex",
+      role: "reviewer",
+      prompt: "review this workflow"
+    });
+
+    expect(JSON.stringify(result.result)).toContain("mock external response");
+    const session = await loadSession(cwd, started.sessionId);
+    expect(session.state.events.map((event) => event.type)).toEqual(expect.arrayContaining(["external_agent_call", "external_agent_result"]));
+  });
+
+  it("probes configured external MCP stdio tools", async () => {
+    const profile = {
+      id: "codex",
+      name: "Codex",
+      transport: "mcp" as const,
+      command: process.execPath,
+      args: [path.join(process.cwd(), "tests", "fixtures", "mock-external-mcp-server.mjs")],
+      autoStart: true,
+      requestTimeoutMs: 10_000,
+      capabilities: ["review"],
+      allowedRoles: ["reviewer" as const],
+      trustLevel: "high" as const
+    };
+    const client = new ExternalAgentProcessClient(profile, process.cwd());
+    await client.start();
+    const tools = await client.listTools();
+    await client.stop();
+    expect(tools.map((tool) => tool.name)).toContain("agent.run");
   });
 });
 

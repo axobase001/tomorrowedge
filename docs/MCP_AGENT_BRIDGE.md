@@ -3,6 +3,7 @@
 TomorrowEdge is not replacing Claude Code / Codex.
 
 It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+TomorrowEdge does not replace the Claude Code / Codex subscriptions you already have. It turns them into orchestratable and observable role nodes.
 
 The MCP Agent Bridge exposes TomorrowEdge as a local MCP server so external coding agents can join a workflow as `core`, `planner`, `reviewer`, `judge`, `coder_a`, `repairer`, or another configured role. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision in its own core.
 
@@ -12,9 +13,12 @@ The MCP Agent Bridge exposes TomorrowEdge as a local MCP server so external codi
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --probe
+tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
 ```
 
 `tedge mcp serve` starts the stdio transport. The first implementation is intentionally transport-light and offline-testable. HTTP/SSE can be added later without changing the bridge state model.
+`tedge mcp agents --probe` starts configured external MCP commands, runs `initialize`, and lists available tools. `tedge mcp invoke` calls a configured external MCP process and writes start/success/failure/result events into the same session ledger.
 
 ## Exposed Tools
 
@@ -54,6 +58,9 @@ external_agents:
   codex:
     enabled: true
     transport: mcp
+    command: codex
+    args: [mcp-server]
+    autoStart: true
     roles: [core, coder_a, repairer, reviewer]
     capabilities: [core, coding, repair, review]
     trustLevel: high
@@ -72,10 +79,31 @@ agents:
 
 This keeps the external agent as a role-bound participant. TomorrowEdge still owns the session, event ledger, trace export, and cockpit visibility.
 
+`codex mcp-server` is supported as a real stdio MCP process when Codex CLI is installed and authenticated. Claude Code currently exposes MCP management/consumption commands in its CLI; if your Claude Code setup exposes a stdio MCP server or wrapper, configure that command and args in the same `external_agents.<id>.command` / `args` fields.
+
+## Context and Recovery
+
+When TomorrowEdge invokes an external MCP process, it sends structured workflow context:
+
+- session id and goal
+- routing assignments
+- current plan/context/candidates/review/judge state
+- role and prompt for the external agent
+
+The ledger records:
+
+- `external_agent_call` with `status=start`
+- `external_agent_call` with `status=success` or `status=failure`
+- `external_agent_result` when a result is returned
+- `external_agent_error` when the process fails after retries
+
+Configured `maxRetries`, `requestTimeoutMs`, and `startupTimeoutMs` bound long-running or failed external agents.
+
 ## Current Limits
 
-- The first phase uses mock/configured external profiles; it does not invoke a real Claude Code or Codex binary.
-- The stdio server implements the MCP tool surface and JSON-RPC method handling needed for bridge tests.
+- Real stdio MCP process invocation is supported through `command`, `args`, and `autoStart`.
+- Codex CLI can be configured with `command: codex` and `args: [mcp-server]`.
+- Claude Code requires a stdio MCP server command or wrapper on the local machine.
 - Full live handoff to external CLIs should be added through adapters that preserve the same event ledger semantics.
 
 ## 中文说明

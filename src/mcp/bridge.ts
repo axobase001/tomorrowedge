@@ -11,6 +11,7 @@ import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import { externalAgentRegistryFromConfig, ExternalAgentRegistry } from "../core/externalAgents/externalAgentRegistry.js";
 import type { ExternalAgentProfile, ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgentRouter.js";
+import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
 import { loadLatestSession, loadSession, type SessionRecord } from "../core/memory/sessionMemory.js";
 import type { AgentRole, AgentRunState } from "../schemas/agentTask.js";
 import type { JudgeDecision } from "../schemas/judge.js";
@@ -133,6 +134,46 @@ export class TomorrowEdgeMcpBridge {
     });
   }
 
+  async invokeExternalAgent(input: WorkflowRef & { externalAgentId: string; role: AgentRole; toolName?: string; prompt?: string; arguments?: Record<string, unknown> }): Promise<{ sessionId: string; result: unknown; attempts: number }> {
+    const sessionId = await this.resolveSessionId(requiredSession(input));
+    let payload: { sessionId: string; result: unknown; attempts: number } | undefined;
+    await this.withSession(sessionId, async (state, ledger) => {
+      const profile = this.requireProfile(input.externalAgentId);
+      const context = await this.getContext({ sessionId });
+      const requestRef = ledger.writeArtifact("external_requests", JSON.stringify({ role: input.role, prompt: input.prompt, context, arguments: input.arguments }, null, 2), "json");
+      appendExternalCall(ledger, input.role, profile, "tomorrowedge.invoke_external_agent", "start", requestRef);
+      upsertExternalAgentState(state, input.role, profile, "running", "External MCP process call started.");
+      const client = new ExternalAgentProcessClient(profile, this.cwd);
+      try {
+        await client.start();
+        const tools = await client.listTools();
+        const toolName = input.toolName ?? chooseExternalTool(tools.map((tool) => tool.name));
+        const result = await client.callTool(toolName, {
+          ...(input.arguments ?? {}),
+          prompt: input.prompt ?? `Act as ${input.role} for TomorrowEdge workflow ${sessionId}.`,
+          context
+        });
+        if (!result.ok) {
+          throw new Error(result.error ?? "External MCP tool call failed.");
+        }
+        const responseRef = ledger.writeArtifact("external_results", JSON.stringify(result.result, null, 2), "json");
+        appendExternalCall(ledger, input.role, profile, toolName, "success", requestRef, responseRef);
+        ledger.append({ type: "external_agent_result", phase: phaseForRole(input.role), role: input.role, provider: `external:${profile.id}`, model: profile.name, externalAgentId: profile.id, resultRef: responseRef, summary: `External MCP process returned ${toolName}.` });
+        upsertExternalAgentState(state, input.role, profile, "success", `External MCP process returned ${toolName}.`);
+        payload = { sessionId, result: result.result, attempts: result.attempts };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        appendExternalCall(ledger, input.role, profile, "tomorrowedge.invoke_external_agent", "failure", requestRef, undefined, message);
+        ledger.append({ type: "external_agent_error", phase: phaseForRole(input.role), role: input.role, provider: `external:${profile.id}`, model: profile.name, externalAgentId: profile.id, error: message });
+        upsertExternalAgentState(state, input.role, profile, "failed", message);
+        throw error;
+      } finally {
+        await client.stop();
+      }
+    });
+    return payload!;
+  }
+
   async recordEvent(input: WorkflowRef & { event: Record<string, unknown> }): Promise<{ sessionId: string; event: TomorrowEdgeEvent }> {
     const sessionId = requiredSession(input);
     let recorded!: TomorrowEdgeEvent;
@@ -239,6 +280,8 @@ export class TomorrowEdgeMcpBridge {
         return this.registerExternalAgent(args as ExternalAgentRegistrationInput & WorkflowRef);
       case "tomorrowedge.submit_agent_result":
         return this.submitAgentResult(args as WorkflowRef & { externalAgentId: string; role: AgentRole; summary: string; result?: unknown; usage?: CostUsageInput });
+      case "tomorrowedge.invoke_external_agent":
+        return this.invokeExternalAgent(args as WorkflowRef & { externalAgentId: string; role: AgentRole; toolName?: string; prompt?: string; arguments?: Record<string, unknown> });
       case "tomorrowedge.record_event":
         return this.recordEvent(args as WorkflowRef & { event: Record<string, unknown> });
       case "tomorrowedge.get_context":
@@ -258,6 +301,15 @@ export class TomorrowEdgeMcpBridge {
     }
   }
 
+  async probeAgents(): Promise<Array<{ id: string; name: string; command?: string; ok: boolean; detail: string; tools?: string[] }>> {
+    const rows = [];
+    for (const profile of this.registry.list()) {
+      const probe = await probeExternalAgent(profile, this.cwd);
+      rows.push({ id: profile.id, name: profile.name, command: profile.command, ok: probe.ok, detail: probe.detail, tools: probe.tools?.map((tool) => tool.name) });
+    }
+    return rows;
+  }
+
   private requireProfile(id: string): ExternalAgentProfile {
     const profile = this.registry.get(id);
     if (!profile) throw new Error(`External agent is not registered or enabled: ${id}`);
@@ -265,14 +317,22 @@ export class TomorrowEdgeMcpBridge {
   }
 
   private async withSession(sessionId: string, mutate: (state: AgentGraphState, ledger: EventLedger) => void | Promise<void>): Promise<{ sessionId: string }> {
-    const session = await loadSession(this.cwd, sessionId);
+    const actualSessionId = await this.resolveSessionId(sessionId);
+    const session = await loadSession(this.cwd, actualSessionId);
     const state = session.state;
     const ledger = ledgerFromState(state);
-    await mutate(state, ledger);
-    state.events = ledger.events;
-    state.eventArtifacts = [...(state.eventArtifacts ?? []), ...ledger.artifacts];
-    await saveBridgeSession(this.cwd, state);
-    return { sessionId };
+    try {
+      await mutate(state, ledger);
+    } finally {
+      state.events = ledger.events;
+      state.eventArtifacts = [...(state.eventArtifacts ?? []), ...ledger.artifacts];
+      await saveBridgeSession(this.cwd, state);
+    }
+    return { sessionId: actualSessionId };
+  }
+
+  private async resolveSessionId(sessionId: string): Promise<string> {
+    return sessionId === "latest" ? (await loadLatestSession(this.cwd)).sessionId : sessionId;
   }
 }
 
@@ -287,6 +347,7 @@ export const mcpTools: McpToolDefinition[] = [
   tool("tomorrowedge.get_workflow_state", "Read the current workflow state.", { sessionId: { type: "string" } }),
   tool("tomorrowedge.register_external_agent", "Register a Claude Code, Codex, or other MCP external coding agent.", { id: { type: "string" }, name: { type: "string" }, sessionId: { type: "string" }, capabilities: { type: "array", items: { type: "string" } }, allowedRoles: { type: "array", items: { type: "string" } }, trustLevel: { type: "string" } }, ["id"]),
   tool("tomorrowedge.submit_agent_result", "Submit a traced external agent result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, summary: { type: "string" }, result: {}, usage: {} }, ["sessionId", "externalAgentId", "role", "summary"]),
+  tool("tomorrowedge.invoke_external_agent", "Invoke a configured external MCP agent process and record the result.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, toolName: { type: "string" }, prompt: { type: "string" }, arguments: { type: "object" } }, ["sessionId", "externalAgentId", "role"]),
   tool("tomorrowedge.record_event", "Record a structured external agent event in the ledger.", { sessionId: { type: "string" }, event: { type: "object" } }, ["sessionId", "event"]),
   tool("tomorrowedge.get_context", "Get workflow context for an external role-bound agent.", { sessionId: { type: "string" } }),
   tool("tomorrowedge.propose_patch", "Submit an external patch candidate.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: { type: "string" }, candidate: { type: "object" } }, ["sessionId", "externalAgentId", "candidate"]),
@@ -442,6 +503,10 @@ function normalizeJudgment(input: Partial<JudgeDecision>): JudgeDecision {
     confidence: input.confidence ?? 0.5,
     requiredUserDecision: input.requiredUserDecision
   };
+}
+
+function chooseExternalTool(toolNames: string[]): string {
+  return toolNames.find((name) => /agent|chat|complete|prompt|run/i.test(name)) ?? toolNames[0] ?? "run";
 }
 
 function requiredSession(input: WorkflowRef): string {

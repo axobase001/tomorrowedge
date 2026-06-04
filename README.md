@@ -163,6 +163,7 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 ## MCP Agent Bridge
 
 TomorrowEdge 不替代 Claude Code / Codex，而是把它们纳入 full-access multi-model cockpit。Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+TomorrowEdge 不替代你已经订阅的 Claude Code / Codex，而是把它们变成可编排、可观测的角色节点。
 
 MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等角色。TomorrowEdge 继续负责 orchestration、routing、trace、event ledger、session export 和 TUI 可视化监督。详见 [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) 和 [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md)。
 
@@ -171,7 +172,9 @@ MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`
 ```bash
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --probe
 tedge mcp serve
+tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
 tedge trace latest --verbose
 ```
 
@@ -188,6 +191,9 @@ external_agents:
   codex:
     enabled: true
     transport: mcp
+    command: codex
+    args: [mcp-server]
+    autoStart: true
     roles: [core, coder_a, repairer, reviewer]
     capabilities: [core, coding, repair, review]
     trustLevel: high
@@ -411,13 +417,16 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 TomorrowEdge is not replacing Claude Code / Codex. It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
 
 The MCP bridge lets external coding agents take roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision. See [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) and [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md).
+TomorrowEdge does not replace the Claude Code / Codex subscriptions you already have. It turns them into orchestratable and observable role nodes.
 
 Basic usage:
 
 ```bash
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --probe
 tedge mcp serve
+tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
 tedge trace latest --verbose
 ```
 
@@ -434,6 +443,9 @@ external_agents:
   codex:
     enabled: true
     transport: mcp
+    command: codex
+    args: [mcp-server]
+    autoStart: true
     roles: [core, coder_a, repairer, reviewer]
     capabilities: [core, coding, repair, review]
     trustLevel: high
