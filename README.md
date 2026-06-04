@@ -137,6 +137,7 @@ tedge run "fix failing test" --headless --fixture-mode --approve-patch --approve
 ```
 
 没有 `--approve-patch` 不会应用 diff；没有 `--approve-shell` 不会运行测试；没有 `--approve-repair` 只会记录 repair candidate。
+从 TomorrowEdge 项目根目录运行 fixture demo 时，CLI 会复制 `tests/fixtures/sample-repo-basic` 到临时目录执行；headless 输出中的 `fixtureWorkspace` 会显示实际执行目录。
 
 ## 多模型工作流
 
@@ -285,6 +286,7 @@ All default tests and demos run offline without API keys. Cloud providers are
 disabled unless explicitly configured with environment variables; once enabled,
 `tedge run` prefers non-mutating live candidates, and `--offline` returns to the
 pure fixture/mock path.
+When the fixture demo is launched from the TomorrowEdge project root, the CLI copies `tests/fixtures/sample-repo-basic` into a temporary workspace; headless output reports the actual path as `fixtureWorkspace`.
 On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherited temp directory points at a Windows mount, avoiding `tsx` IPC socket failures.
 
 ## Core Features

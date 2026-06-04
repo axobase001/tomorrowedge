@@ -1,4 +1,6 @@
 import { existsSync } from "node:fs";
+import { cp, mkdtemp } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../../config/configLoader.js";
 import { accessModeSchema, type AccessMode } from "../../config/schema.js";
@@ -40,16 +42,17 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   if (options.live && options.offline) {
     throw new Error("Use either --live or --offline, not both.");
   }
+  const workspace = await prepareRunWorkspace(cwd, options);
   if (effectiveAccessMode === "full") {
-    await warnFullMode(cwd);
+    await warnFullMode(workspace.executionCwd);
   }
   const backend = createOrchestrationBackend(config);
   const backendInput = {
-    cwd,
+    cwd: workspace.executionCwd,
     goal,
     options: {
       provider: options.provider,
-      fixtureMode: options.fixtureMode,
+      fixtureMode: isFixtureRun(options),
       approvePatch: options.approvePatch,
       approveShell: options.approveShell,
       approveRepair: options.approveRepair,
@@ -70,13 +73,57 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     }
     throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
   }
-  const state = await backend.runGraph(cwd, goal, backendInput.options);
+  const state = await backend.runGraph(workspace.executionCwd, goal, backendInput.options);
   const sessionPath = await saveSession(cwd, state);
   if (options.headless) {
-    process.stdout.write(JSON.stringify({ sessionPath, access: state.access, agents: state.agents.map(a => ({ role: a.role, provider: a.provider, model: a.model, kind: a.agentKind ?? "offline", status: a.status, summary: a.summary })), approvals: state.approvals, capabilityRoute: state.capabilityRoute, visualSpec: state.visualSpec, review: state.review, judge: state.judge, debateRounds: state.debateRounds, modelNotes: state.modelNotes, usageSummary: state.usageSummary, budgetStatus: state.budgetStatus, changedFiles: state.changedFiles, runResults: state.runResults, repairCandidates: state.repairCandidates, summary: state.finalSummary }, null, 2) + "\n");
+    const headlessPayload = {
+      sessionPath,
+      executionCwd: workspace.executionCwd,
+      fixtureWorkspace: workspace.fixtureWorkspace,
+      access: state.access,
+      agents: state.agents.map(a => ({ role: a.role, provider: a.provider, model: a.model, kind: a.agentKind ?? "offline", status: a.status, summary: a.summary })),
+      approvals: state.approvals,
+      capabilityRoute: state.capabilityRoute,
+      visualSpec: state.visualSpec,
+      review: state.review,
+      judge: state.judge,
+      debateRounds: state.debateRounds,
+      modelNotes: state.modelNotes,
+      usageSummary: state.usageSummary,
+      budgetStatus: state.budgetStatus,
+      changedFiles: state.changedFiles,
+      runResults: state.runResults,
+      repairCandidates: state.repairCandidates,
+      summary: state.finalSummary
+    };
+    process.stdout.write(JSON.stringify(headlessPayload, null, 2) + "\n");
     return;
   }
-  await renderCockpit(state, config.project.safe_mode, cwd);
+  await renderCockpit(state, config.project.safe_mode, workspace.executionCwd);
+}
+
+export type RunWorkspace = {
+  executionCwd: string;
+  fixtureWorkspace?: string;
+};
+
+export async function prepareRunWorkspace(cwd: string, options: Pick<RunOptions, "provider" | "fixtureMode">): Promise<RunWorkspace> {
+  if (!isFixtureRun(options)) {
+    return { executionCwd: cwd };
+  }
+
+  if (existsSync(path.join(cwd, "index.js")) && existsSync(path.join(cwd, "package.json"))) {
+    return { executionCwd: cwd };
+  }
+
+  const fixtureSource = path.join(cwd, "tests", "fixtures", "sample-repo-basic");
+  if (!existsSync(path.join(fixtureSource, "index.js")) || !existsSync(path.join(fixtureSource, "package.json"))) {
+    return { executionCwd: cwd };
+  }
+
+  const fixtureWorkspace = await mkdtemp(path.join(os.tmpdir(), "tedge-fixture-demo-"));
+  await cp(fixtureSource, fixtureWorkspace, { recursive: true });
+  return { executionCwd: fixtureWorkspace, fixtureWorkspace };
 }
 
 function parseAccessMode(mode?: string): AccessMode | undefined {
@@ -96,13 +143,17 @@ function liveOption(offline: boolean | undefined, live: boolean | undefined, aut
 }
 
 function shouldAutoLive(config: ReturnType<typeof loadConfig>, options: RunOptions): boolean {
-  if (options.offline || options.fixtureMode) return false;
+  if (options.offline || isFixtureRun(options)) return false;
   if (options.live) return true;
   return Object.entries(config.providers).some(([id, provider]) => {
     if (!provider.enabled || !provider.base_url || provider.auth_header === "none") return false;
     if (["anthropic", "gemini"].includes(id)) return false;
     return Boolean(provider.api_key_env && process.env[provider.api_key_env]);
   });
+}
+
+function isFixtureRun(options: Pick<RunOptions, "provider" | "fixtureMode">): boolean {
+  return Boolean(options.fixtureMode || options.provider === "fixture");
 }
 
 async function warnFullMode(cwd: string): Promise<void> {
