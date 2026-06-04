@@ -7,6 +7,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded `examples/tiny-local-lm` from a 935-parameter character n-gram toy to
+  a local bilingual Chinese/English hashed neural n-gram model with roughly
+  540k parameters by default.
+
 ## [0.4.1] - 2026-06-04
 
 ### Added

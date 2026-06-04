@@ -192,7 +192,7 @@ npm start
 npm run verify
 ```
 
-这个 demo 是本地 char-level n-gram toy language model，不调用 OpenAI/OpenRouter API。它提供 `/health`、`/model-info`、`/generate`，前端支持 prompt、temperature 和 max tokens，用于验证 TomorrowEdge 的多 agent 分工、review、judge、repair 和 export 流程。
+这个 demo 是本地中英双语 hashed neural n-gram toy language model，默认约 54 万参数，不调用 OpenAI/OpenRouter API。它提供 `/health`、`/model-info`、`/generate`，前端支持 prompt、temperature 和 max tokens，用于验证 TomorrowEdge 的多 agent 分工、review、judge、repair 和 export 流程。
 
 角色绑定示例：
 
@@ -467,10 +467,10 @@ npm start
 npm run verify
 ```
 
-The demo is a local char-level n-gram toy language model, not an OpenAI or
-OpenRouter API call. It exposes `/health`, `/model-info`, and `/generate`, plus a
-frontend with prompt, temperature, and max token controls for orchestration
-acceptance drills.
+The demo is a local bilingual Chinese/English hashed neural n-gram toy language
+model with roughly 540k parameters by default, not an OpenAI or OpenRouter API
+call. It exposes `/health`, `/model-info`, and `/generate`, plus a frontend with
+prompt, temperature, and max token controls for orchestration acceptance drills.
 
 Role binding example:
 

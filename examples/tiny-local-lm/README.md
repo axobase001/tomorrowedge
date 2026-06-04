@@ -1,6 +1,6 @@
 # Tiny Local LM Demo
 
-A locally runnable small-parameter language model demo for TomorrowEdge 0.4.1 acceptance.
+A locally runnable 500k-1M parameter bilingual language model demo for TomorrowEdge acceptance.
 
 ## Setup
 
@@ -22,7 +22,7 @@ Example:
 ```bash
 curl -s http://127.0.0.1:8787/generate \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"TomorrowEdge routes","temperature":0.8,"maxTokens":80}'
+  -d '{"prompt":"明日边缘 routes","temperature":0.8,"maxTokens":80}'
 ```
 
 ## Tests
@@ -36,4 +36,4 @@ npm run verify
 
 ## Notes
 
-The model is a tiny local character-level n-gram model. It does not call OpenAI, OpenRouter, or any other cloud API. It is useful for validating a TomorrowEdge workflow that delegates planning, coding, review, repair, and final judgment while keeping implementation small enough to run on an ordinary machine.
+The model is a local bilingual hashed neural n-gram model with roughly 500k-1M parameters by default. It combines dense context bucket embeddings, output embeddings, and 5-gram transition boosts over a generated Chinese/English corpus. It does not call OpenAI, OpenRouter, or any other cloud API.

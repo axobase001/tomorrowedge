@@ -25,7 +25,7 @@ button.addEventListener("click", async () => {
     });
     const payload = await response.json();
     output.textContent = payload.text ?? JSON.stringify(payload, null, 2);
-    modelInfo.textContent = `${payload.modelInfo.type}, ${payload.modelInfo.parameterCount} tiny transition parameters, no cloud API`;
+    modelInfo.textContent = `${payload.modelInfo.type}, ${payload.modelInfo.parameterCount.toLocaleString()} local parameters, ${payload.modelInfo.languages.join(" + ")}, no cloud API`;
   } catch (error) {
     output.textContent = error instanceof Error ? error.message : String(error);
   } finally {
@@ -36,6 +36,6 @@ button.addEventListener("click", async () => {
 fetch("/model-info")
   .then((response) => response.json())
   .then((info) => {
-    modelInfo.textContent = `${info.type}, ${info.parameterCount} tiny transition parameters, no cloud API`;
+    modelInfo.textContent = `${info.type}, ${info.parameterCount.toLocaleString()} local parameters, ${info.languages.join(" + ")}, no cloud API`;
   })
   .catch(() => {});
