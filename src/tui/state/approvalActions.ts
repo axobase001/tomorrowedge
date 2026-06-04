@@ -11,6 +11,9 @@ export type TuiActionResult = {
 };
 
 export async function approveSelectedPatch(cwd: string, graph: AgentGraphState): Promise<TuiActionResult> {
+  if (!graph.access.patchAllowed) {
+    return { graph, message: accessBlockedMessage(graph, "patch") };
+  }
   const selected = getSelectedCandidate(graph);
   if (!selected?.unifiedDiff) {
     return { graph, message: "当前没有可应用的候选补丁。" };
@@ -36,6 +39,9 @@ export async function approveSelectedPatch(cwd: string, graph: AgentGraphState):
 }
 
 export async function approveTestCommand(cwd: string, graph: AgentGraphState): Promise<TuiActionResult> {
+  if (!graph.access.shellAllowed) {
+    return { graph, message: accessBlockedMessage(graph, "shell") };
+  }
   const command = graph.plan?.verificationCommands?.[0];
   if (!command) return { graph, message: "当前没有建议的测试命令。" };
   if (!graph.changedFiles.length) return { graph, message: "请先应用补丁，再运行测试。" };
@@ -61,6 +67,9 @@ export async function approveTestCommand(cwd: string, graph: AgentGraphState): P
 }
 
 export async function undoLatestPatch(cwd: string, graph: AgentGraphState): Promise<TuiActionResult> {
+  if (!graph.access.patchAllowed) {
+    return { graph, message: accessBlockedMessage(graph, "undo") };
+  }
   const restored = await restoreLatestUndoSnapshot(cwd);
   const nextGraph = await refreshSummary({
     ...graph,
@@ -94,4 +103,9 @@ async function refreshSummary(graph: AgentGraphState): Promise<AgentGraphState> 
     evidence: ["offline graph completed", ...graph.runResults.map(evidenceFromRun)]
   });
   return { ...graph, finalSummary };
+}
+
+function accessBlockedMessage(graph: AgentGraphState, action: "patch" | "shell" | "undo"): string {
+  const label = action === "patch" ? "应用补丁" : action === "shell" ? "运行命令" : "回滚补丁";
+  return `当前 ${graph.access.mode} 访问模式不允许${label}。`;
 }

@@ -39,4 +39,32 @@ describe("TUI approval actions", () => {
     expect(source).toContain("return a - b");
     expect(undone.message).toContain("已从");
   });
+
+  it("does not bypass restricted access mode from TUI actions", async () => {
+    const initial = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, { provider: "fixture", accessMode: "restricted" });
+    const blockedPatch = await approveSelectedPatch(tempRoot, initial);
+    const sourceAfterPatch = await readFile(path.join(tempRoot, "index.js"), "utf8");
+    const blockedShell = await approveTestCommand(tempRoot, { ...initial, changedFiles: ["index.js"] });
+
+    expect(sourceAfterPatch).toContain("return a - b");
+    expect(blockedPatch.graph).toBe(initial);
+    expect(blockedPatch.message).toContain("restricted");
+    expect(blockedPatch.graph.approvals.patchApproved).toBe(false);
+    expect(blockedShell.graph.runResults).toEqual([]);
+    expect(blockedShell.graph.approvals.shellApproved).toBe(false);
+
+    const unrestricted = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, { provider: "fixture" });
+    const applied = await approveSelectedPatch(tempRoot, unrestricted);
+    const restrictedApplied = {
+      ...applied.graph,
+      access: initial.access,
+      approvals: initial.approvals
+    };
+    const blockedUndo = await undoLatestPatch(tempRoot, restrictedApplied);
+    const sourceAfterUndo = await readFile(path.join(tempRoot, "index.js"), "utf8");
+
+    expect(sourceAfterUndo).toContain("return a + b");
+    expect(blockedUndo.graph).toBe(restrictedApplied);
+    expect(blockedUndo.message).toContain("restricted");
+  }, 15_000);
 });
