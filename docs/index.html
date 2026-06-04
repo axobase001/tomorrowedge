@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="TomorrowEdge is a full-access cockpit for multi-model coding agent workflows, with orchestration, observability, and governance."
+      content="TomorrowEdge turns Codex, Claude Code, and other full-access coding agents into governed, observable, orchestrated roles."
     />
     <meta property="og:title" content="TomorrowEdge" />
     <meta
       property="og:description"
-      content="Full autonomy. Full visibility. A multi-model agent cockpit for full-access coding workflows."
+      content="Turn strong coding agents into governed roles. Full autonomy, full visibility, and an event ledger for every run."
     />
     <meta property="og:type" content="website" />
     <title>TomorrowEdge | Full autonomy. Full visibility.</title>
@@ -58,21 +58,21 @@
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy reveal">
-          <p class="eyebrow">Multi-model agent cockpit</p>
-          <h1 id="hero-title">Full autonomy.<span></span> Full visibility.<span></span></h1>
+          <p class="eyebrow">External-agent control layer</p>
+          <h1 id="hero-title">Turn strong coding agents into governed roles.<span></span></h1>
           <p class="hero-subtitle">
-            TomorrowEdge is a full-access cockpit for multi-model coding agent workflows.
-            Orchestrate execution, observe every trace, and govern autonomy without turning
-            the system back into a slow approval queue.
+            TomorrowEdge does not replace Codex or Claude Code. It connects them through
+            MCP-style adapters and turns full-access agents into schedulable, observable,
+            policy-governed roles inside one cockpit.
           </p>
           <div class="hero-rule"></div>
           <div class="hero-actions">
-            <a class="primary-action" href="./product/#cockpit">
-              <span>Explore the cockpit</span>
+            <a class="primary-action" href="#external-agents">
+              <span>See agent orchestration</span>
               <span aria-hidden="true">/</span>
             </a>
-            <a class="secondary-action" href="https://github.com/axobase001/tomorrowedge">
-              View on GitHub
+            <a class="secondary-action" href="#runtime">
+              View runtime screenshots
             </a>
           </div>
         </div>
@@ -99,19 +99,19 @@
                     <span>RUNNER <i></i></span>
                   </div>
                   <div class="terminal">
-                    <p>&gt; goal: cpp-to-rust migration</p>
-                    <p>&gt; mode: full</p>
-                    <p>&gt; workflow: multi-model</p>
-                    <p>&gt; strategy: adaptive routing</p>
+                    <p>&gt; goal: legacy C++ rewrite</p>
+                    <p>&gt; mode: governed full-access</p>
+                    <p>&gt; orchestrator: codex via mcp</p>
+                    <p>&gt; worker: claude-code role</p>
                     <br />
-                    <p>[planner] generating execution plan...</p>
-                    <p>[explorer] scanning source graph...</p>
-                    <p>[coder-a] applying patch...</p>
-                    <p>[reviewer] checking invariants...</p>
+                    <p>[codex] decomposing migration plan...</p>
+                    <p>[router] assigning cheap repair lane...</p>
+                    <p>[claude-code] patch proposal received...</p>
+                    <p>[policy] shell gate accepted...</p>
                     <p>[runner] cargo test --workspace</p>
-                    <p>[judge] replay accepted</p>
+                    <p>[ledger] trace checkpoint written</p>
                     <br />
-                    <p class="terminal-hot">&gt; execution healthy <span></span></p>
+                    <p class="terminal-hot">&gt; external agent governed <span></span></p>
                   </div>
                 </div>
               </div>
@@ -127,19 +127,57 @@
       <section id="product" class="pillar-band">
         <article class="pillar reveal">
           <div class="line-icon icon-stack" aria-hidden="true"></div>
-          <h2>Multi-model orchestration</h2>
-          <p>Route planning, coding, review, judging, and repair to the model or backend that fits the job.</p>
+          <h2>External-agent orchestration</h2>
+          <p>Make Codex, Claude Code, local tools, and model providers act as roles instead of isolated command-line agents.</p>
         </article>
         <article class="pillar reveal">
           <div class="line-icon icon-eye" aria-hidden="true"></div>
-          <h2>Full workflow observability</h2>
-          <p>Every model call, patch, shell command, fallback, cost update, and verification result becomes traceable.</p>
+          <h2>Runtime cockpit visibility</h2>
+          <p>See agents, routes, patches, tests, shell runs, fallbacks, and review decisions as live operating state.</p>
         </article>
         <article class="pillar reveal">
           <div class="line-icon icon-lock" aria-hidden="true"></div>
-          <h2>Autonomous execution governance</h2>
-          <p>Full mode can move fast while access modes, policy gates, undo snapshots, and ledgers keep control intact.</p>
+          <h2>Policy-first autonomy</h2>
+          <p>Keep full-access execution fast while permission modes, MCP boundaries, undo snapshots, and event ledgers keep control intact.</p>
         </article>
+      </section>
+
+      <section id="runtime" class="runtime-section" aria-labelledby="runtime-title">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Real cockpit runtime</p>
+          <h2 id="runtime-title">This is the product surface.</h2>
+          <p>
+            TomorrowEdge is not only an architecture diagram. The TUI shows the live run:
+            agent roles, provider routes, patch candidates, review decisions, shell output,
+            and the trace ledger that explains what happened.
+          </p>
+        </div>
+        <div class="screenshot-grid">
+          <figure class="runtime-shot reveal">
+            <img src="./assets/screenshots/tui-runtime-cockpit.png" alt="TomorrowEdge TUI runtime cockpit showing agents, provider routes, patch candidate, and review state" />
+            <figcaption><span>Runtime cockpit</span><b>Multi-pane operating view for governed agent execution.</b></figcaption>
+          </figure>
+          <figure class="runtime-shot reveal">
+            <img src="./assets/screenshots/tui-runtime-trace.png" alt="TomorrowEdge trace ledger showing event history, shell output artifacts, and repair diff" />
+            <figcaption><span>Trace ledger</span><b>Replayable evidence for full-access repair runs.</b></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="scenario-section" aria-labelledby="scenario-title">
+        <div class="scenario-card reveal">
+          <p class="eyebrow">Why it exists</p>
+          <h2 id="scenario-title">You have ten dollars of token budget and a legacy codebase that still has to move.</h2>
+          <p>
+            Sending the whole job to one premium full-access agent is expensive and hard to audit.
+            Sending it to a cheap single model is brittle. TomorrowEdge lets a strong agent plan
+            and judge while cheaper or specialized roles execute, repair, and verify under a visible policy layer.
+          </p>
+        </div>
+        <div class="scenario-result reveal">
+          <span>Outcome</span>
+          <h3>Strong agents become orchestrators. Execution becomes inspectable. Cost becomes a routing decision.</h3>
+        </div>
       </section>
 
       <section class="quality-section" aria-labelledby="quality-title">
@@ -149,8 +187,8 @@
           <div class="hero-rule"></div>
           <p>
             TomorrowEdge separates judgment from execution. Strong models handle high-value
-            decisions, efficient models carry routine work, local models protect sensitive context,
-            and the cockpit records the whole run.
+            decisions, external coding agents become governed roles, efficient models carry
+            routine work, local models protect sensitive context, and the cockpit records the whole run.
           </p>
         </div>
         <div class="quality-chart reveal" aria-label="Quality and cost comparison chart">
@@ -186,7 +224,7 @@
         <div class="comparison-grid">
           <article class="compare-card reveal">
             <h3>Official strong agent</h3>
-            <p>High capability and deep tool access, but the workflow can become a black box when execution runs freely.</p>
+            <p>High capability and deep tool access, but execution can become hard to route, budget, or audit once the run is moving.</p>
             <span>Strong autonomy</span>
           </article>
           <article class="compare-card reveal">
@@ -196,9 +234,22 @@
           </article>
           <article class="compare-card active reveal">
             <h3>TomorrowEdge</h3>
-            <p>Full-access execution with role-routed agents, policy-aware gates, event replay, and visible cost accounting.</p>
+            <p>Codex, Claude Code, providers, and tools become role-routed nodes with policy gates, event replay, and visible cost accounting.</p>
             <span>Autonomy with a cockpit</span>
           </article>
+        </div>
+      </section>
+
+      <section id="external-agents" class="agent-flow-section" aria-labelledby="agent-flow-title">
+        <div class="section-heading reveal">
+          <p class="eyebrow">External agents via MCP</p>
+          <h2 id="agent-flow-title">How strong agents plug into the cockpit.</h2>
+        </div>
+        <div class="agent-flow reveal" aria-label="External agent orchestration flow">
+          <div><span>01</span><b>Goal enters TomorrowEdge</b><p>Budget, access mode, provider policy, and repo context are loaded first.</p></div>
+          <div><span>02</span><b>Codex / Claude Code connect as roles</b><p>MCP-style adapters expose external agents without handing them the whole product contract.</p></div>
+          <div><span>03</span><b>Router assigns work</b><p>Planning, coding, review, shell, and repair can be split across agents, models, and local tools.</p></div>
+          <div><span>04</span><b>Cockpit records the run</b><p>Every patch, command, fallback, approval, and judge decision lands in the event ledger.</p></div>
         </div>
       </section>
 

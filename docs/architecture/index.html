@@ -21,8 +21,33 @@
     <main class="subpage-main">
       <section class="detail-hero">
         <p class="eyebrow">Architecture</p>
-        <h1>Six contracts keep full access visible.</h1>
-        <p>Each layer can evolve independently, but every step returns to one cockpit contract: route, authorize, observe, record, replay.</p>
+        <h1>One cockpit contract for external coding agents.</h1>
+        <p>Codex, Claude Code, model providers, local runners, and MCP tools can all execute work. TomorrowEdge keeps routing, authorization, observability, and replay in one control layer.</p>
+      </section>
+      <section class="layer-section">
+        <div class="layer-copy">
+          <p class="eyebrow">Layer map</p>
+          <h2>Frameworks and agents execute. TomorrowEdge supervises.</h2>
+          <p>The architecture is designed so external agents can plug in without owning the product surface. Every backend or MCP bridge emits events back into the cockpit.</p>
+        </div>
+        <div class="layer-diagram" aria-label="TomorrowEdge layered architecture diagram">
+          <div class="layer-node cockpit">Cockpit runtime</div>
+          <div class="layer-row">
+            <div class="layer-node">Policy gates</div>
+            <div class="layer-node red">Role router</div>
+            <div class="layer-node">Event ledger</div>
+          </div>
+          <div class="layer-row">
+            <div class="layer-node">MCP adapters</div>
+            <div class="layer-node">Orchestration backend</div>
+            <div class="layer-node">Provider registry</div>
+          </div>
+          <div class="layer-row">
+            <div class="layer-node dark">Codex</div>
+            <div class="layer-node dark">Claude Code</div>
+            <div class="layer-node dark">Models / shell / local tools</div>
+          </div>
+        </div>
       </section>
       <section class="detail-split">
         <div><p class="eyebrow">Explore</p><h2>Open a layer.</h2><p>These pages mirror the six function cells on the homepage and explain what each layer owns.</p></div>
