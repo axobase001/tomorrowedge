@@ -25,6 +25,12 @@ curl -s http://127.0.0.1:8787/generate \
   -d '{"prompt":"明日边缘 routes","temperature":0.8,"maxTokens":80}'
 ```
 
+## Screenshots
+
+![Tiny Local LM frontend](../../docs/assets/screenshots/tiny-local-lm-frontend.png)
+
+![Bilingual Local LM frontend](../../docs/assets/screenshots/bilingual-local-lm-frontend.png)
+
 ## Tests
 
 ```bash
