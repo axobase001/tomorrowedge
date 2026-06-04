@@ -22,16 +22,17 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.3.0`。
+当前版本：`0.4.0`。
 
-这一版的重点是把 TomorrowEdge 从离线产品化骨架推进到 **可配置 live 路由原型**：
+这一版的重点是 **MCP Agent Bridge**：让 Claude Code / Codex 等外部 coding agents 通过 MCP 接入 TomorrowEdge，并被用户绑定到 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等 workflow roles。
 
-- `tedge run` 在检测到已启用且带 API key 的云 provider 时，会自动启用非破坏性 live advisory / patch / vision 路由
-- `--live` 可以显式启用 live 路径，`--offline` 可以强制回到确定性离线路径
-- OpenAI-compatible provider 具备 120s timeout、429/5xx retry、provider fallback 和 model call trace
-- live patch / live vision 的 JSON 输出会经过 Zod runtime validation
-- `doctor` 会提前暴露 provider、placeholder backend、full-mode dirty workspace 等风险
-- `mock` / `fixture` / native backend 可执行；LangGraph、CrewAI、AutoGen、Anthropic、Gemini native adapter 仍是 placeholder
+- `tedge mcp serve` 启动 TomorrowEdge MCP stdio server
+- `tedge mcp tools` 查看暴露给外部 agent 的 MCP tools
+- `tedge mcp agents` 查看当前启用的 external MCP agents
+- `external_agents` 配置块支持 Claude Code / Codex mock profile 和角色允许列表
+- `agents.<role>.provider: external:<id>` 支持把 workflow role 显式绑定到外部 agent
+- 外部 agent 的 patch、review、judgment、result、cost usage 都会写入 `events.jsonl`
+- TUI 的 Agents / Router / Trace panes 会显示 external agent badge、role binding 和 `external_agent_*` 事件
 
 ## TUI 实际运行截图
 
@@ -165,6 +166,44 @@ TomorrowEdge 不替代 Claude Code / Codex，而是把它们纳入 full-access m
 
 MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等角色。TomorrowEdge 继续负责 orchestration、routing、trace、event ledger、session export 和 TUI 可视化监督。详见 [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) 和 [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md)。
 
+基本用法：
+
+```bash
+tedge mcp tools
+tedge mcp agents
+tedge mcp serve
+tedge trace latest --verbose
+```
+
+角色绑定示例：
+
+```yaml
+external_agents:
+  claude_code:
+    enabled: true
+    transport: mcp
+    roles: [core, planner, reviewer, judge]
+    capabilities: [core, planning, review, judgment]
+    trustLevel: high
+  codex:
+    enabled: true
+    transport: mcp
+    roles: [core, coder_a, repairer, reviewer]
+    capabilities: [core, coding, repair, review]
+    trustLevel: high
+
+agents:
+  planner:
+    provider: external:claude_code
+    model: auto
+  reviewer:
+    provider: external:codex
+    model: auto
+  judge:
+    provider: external:claude_code
+    model: auto
+```
+
 ## 能力拼接
 
 ```bash
@@ -248,22 +287,23 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.3.0`.
+Current version: `0.4.0`.
 
-This release moves TomorrowEdge from a productized offline skeleton toward a
-configurable live-routing prototype:
+This release introduces the **MCP Agent Bridge**: Claude Code / Codex and other
+external coding agents can connect through MCP and be bound to workflow roles
+such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`.
 
-- `tedge run` auto-enables non-mutating live advisory / patch / vision routing
-  when configured cloud providers and API keys are available
-- `--live` explicitly enables live routing; `--offline` forces deterministic
-  offline execution
-- OpenAI-compatible providers now have 120s timeout, 429/5xx retry, provider
-  fallback, and model-call trace visibility
-- Live patch and live vision JSON responses are validated with Zod at runtime
-- `doctor` surfaces provider readiness, placeholder backends, and full-mode dirty
-  workspace risk before execution
-- `mock` / `fixture` / native backend are executable today; LangGraph, CrewAI,
-  AutoGen, Anthropic, and Gemini native adapters remain placeholders
+- `tedge mcp serve` starts the TomorrowEdge MCP stdio server
+- `tedge mcp tools` lists the MCP tools exposed to external agents
+- `tedge mcp agents` lists currently enabled external MCP agents
+- `external_agents` config supports Claude Code / Codex mock profiles and role
+  allowlists
+- `agents.<role>.provider: external:<id>` binds a workflow role to an external
+  agent
+- external patch, review, judgment, result, and cost usage submissions are
+  written to `events.jsonl`
+- the TUI Agents / Router / Trace panes show external agent badges, role
+  bindings, and `external_agent_*` events
 
 ## TUI Runtime Screenshots
 
@@ -371,6 +411,44 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 TomorrowEdge is not replacing Claude Code / Codex. It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
 
 The MCP bridge lets external coding agents take roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision. See [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) and [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md).
+
+Basic usage:
+
+```bash
+tedge mcp tools
+tedge mcp agents
+tedge mcp serve
+tedge trace latest --verbose
+```
+
+Role binding example:
+
+```yaml
+external_agents:
+  claude_code:
+    enabled: true
+    transport: mcp
+    roles: [core, planner, reviewer, judge]
+    capabilities: [core, planning, review, judgment]
+    trustLevel: high
+  codex:
+    enabled: true
+    transport: mcp
+    roles: [core, coder_a, repairer, reviewer]
+    capabilities: [core, coding, repair, review]
+    trustLevel: high
+
+agents:
+  planner:
+    provider: external:claude_code
+    model: auto
+  reviewer:
+    provider: external:codex
+    model: auto
+  judge:
+    provider: external:claude_code
+    model: auto
+```
 
 ## Orchestration Backends
 

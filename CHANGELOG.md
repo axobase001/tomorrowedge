@@ -9,6 +9,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ### Added
 
+- Nothing yet.
+
+## [0.4.0] - 2026-06-04
+
+### Added
+
 - MCP Agent Bridge skeleton with `tedge mcp serve`, `tedge mcp tools`, and
   `tedge mcp agents`.
 - External MCP agent registry, role binding via `external:<id>`, and
@@ -17,6 +23,16 @@ Changelog: newest changes first, grouped by release and by change type.
 - Docs for MCP external agent roles and Claude Code / Codex cockpit integration.
 - WSL-safe `tsx` dev wrapper for `npm run dev`, `doctor`, `tui`, and
   `smoke:real`.
+
+### Usage
+
+- Start the MCP stdio server with `tedge mcp serve`.
+- Inspect exposed MCP tools with `tedge mcp tools`.
+- Inspect enabled external MCP agents with `tedge mcp agents`.
+- Enable role-bound external agents with `external_agents.<id>.enabled=true`.
+- Bind workflow roles with `agents.<role>.provider: external:<id>`.
+- Review external agent activity with `tedge trace latest --verbose` or the TUI
+  Trace pane.
 
 ### Changed
 

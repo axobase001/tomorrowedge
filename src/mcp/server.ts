@@ -64,7 +64,7 @@ async function handleRequest(request: JsonRpcRequest, bridge: TomorrowEdgeMcpBri
     if (request.method === "initialize") {
       return ok(request.id, {
         protocolVersion: "2024-11-05",
-        serverInfo: { name: "tomorrowedge", version: "0.3.0" },
+        serverInfo: { name: "tomorrowedge", version: "0.4.0" },
         capabilities: { tools: {} }
       });
     }
