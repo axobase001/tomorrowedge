@@ -53,7 +53,7 @@ export class ExternalAgentProcessClient {
     }
     this.child = spawn(this.profile.command, this.profile.args ?? [], {
       cwd: this.cwd,
-      env: { ...process.env, ...(this.profile.env ?? {}) },
+      env: buildExternalAgentEnv(this.profile),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
@@ -165,6 +165,11 @@ export class ExternalAgentProcessClient {
   }
 }
 
+export function buildExternalAgentEnv(profile: ExternalAgentProfile, baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const proxyEnv = profile.proxyPort ? proxyEnvForPort(profile.proxyPort) : {};
+  return { ...baseEnv, ...proxyEnv, ...(profile.env ?? {}) };
+}
+
 export async function probeExternalAgent(profile: ExternalAgentProfile, cwd: string): Promise<{ ok: boolean; detail: string; tools?: ExternalAgentTool[] }> {
   if (!profile.command) {
     return { ok: false, detail: "no command configured" };
@@ -179,6 +184,18 @@ export async function probeExternalAgent(profile: ExternalAgentProfile, cwd: str
   } finally {
     await client.stop();
   }
+}
+
+function proxyEnvForPort(port: number): Record<string, string> {
+  const proxyUrl = `http://127.0.0.1:${port}`;
+  return {
+    HTTP_PROXY: proxyUrl,
+    HTTPS_PROXY: proxyUrl,
+    ALL_PROXY: proxyUrl,
+    http_proxy: proxyUrl,
+    https_proxy: proxyUrl,
+    all_proxy: proxyUrl
+  };
 }
 
 function drainContentLength(buffer: string): { item: string; rest: string } | undefined {

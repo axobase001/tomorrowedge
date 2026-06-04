@@ -127,6 +127,7 @@ external_agents:
     command: codex
     args: [mcp-server]
     cwd: /path/to/workspace
+    proxyPort: 7890
     env:
       NODE_ENV: development
     autoStart: true
@@ -151,6 +152,10 @@ agents:
 `core` is optional. It appears in routing only when explicitly bound. External
 agents are visible in the TUI, and their patch/review/judgment/result
 submissions are written to `events.jsonl`.
+
+`proxyPort` is optional. When set, TomorrowEdge starts that MCP process with
+`HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` pointing at
+`http://127.0.0.1:<proxyPort>`. Values in `env` still take final precedence.
 
 Use `tedge mcp agents --probe` to verify that configured commands start and
 return MCP tools. Use `tedge mcp invoke <agent-id> --session latest --role

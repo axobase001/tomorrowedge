@@ -112,6 +112,34 @@ describe("config loader", () => {
     }
   });
 
+  it("loads external MCP proxy port configuration", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-proxy-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "external_agents:",
+          "  codex:",
+          "    enabled: true",
+          "    transport: mcp",
+          "    command: codex",
+          "    args: [mcp-server]",
+          "    proxyPort: 7890",
+          "    roles: [core]",
+          "    capabilities: [core]",
+          "    trustLevel: high"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const config = loadConfig(cwd);
+      expect(config.external_agents.codex.proxyPort).toBe(7890);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("can configure an OpenRouter free onboarding model from the live-catalog command path", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-free-model-"));
     const originalFetch = globalThis.fetch;
