@@ -18,7 +18,7 @@ import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
 import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
 import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
-import { buildAccessPolicy } from "../permissions/accessPolicy.js";
+import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
 import { buildDebateRounds } from "../debate/debateEngine.js";
@@ -87,7 +87,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     patchApproved: access.patchApproved,
     shellApproved: access.shellApproved,
     repairApproved: access.repairApproved,
-    description: accessModeDescription(access.mode)
+    description: describeAccessPolicy(access)
   });
   ledger.append({
     type: "conversation_target",
@@ -544,10 +544,4 @@ function phaseForRole(role: AgentRole) {
   if (role === "summarizer") return "summary";
   if (role === "runner") return "shell";
   return "coding";
-}
-
-function accessModeDescription(mode: AccessMode): string {
-  if (mode === "full") return "MODE: FULL AUTONOMY - every step is visible and logged.";
-  if (mode === "restricted") return "MODE: RESTRICTED - offline/read-only.";
-  return "MODE: PARTIAL SUPERVISION - patch/shell/repair require approval.";
 }

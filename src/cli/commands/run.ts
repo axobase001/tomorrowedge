@@ -8,6 +8,7 @@ import { saveSession } from "../../core/memory/sessionMemory.js";
 import { loadProjectPreferences } from "../../core/memory/preferences.js";
 import { NativeBackend } from "../../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../../core/orchestration/registry.js";
+import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
 import { getGitStatus } from "../../core/tools/gitTool.js";
 import { renderCockpit } from "../renderCockpit.js";
 
@@ -83,6 +84,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       executionCwd: workspace.executionCwd,
       fixtureWorkspace: workspace.fixtureWorkspace,
       access: state.access,
+      accessSummary: describeAccessPolicy(state.access),
       agents: state.agents.map(a => ({ role: a.role, provider: a.provider, model: a.model, kind: a.agentKind ?? "offline", status: a.status, summary: a.summary })),
       approvals: state.approvals,
       capabilityRoute: state.capabilityRoute,

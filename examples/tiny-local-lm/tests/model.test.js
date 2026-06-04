@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createTinyCharModel } from "../src/model.js";
 
 test("default bilingual local model reports 50M-60M local parameters", () => {
@@ -10,6 +11,12 @@ test("default bilingual local model reports 50M-60M local parameters", () => {
   assert.ok(info.parameterCount >= 50_000_000, `parameterCount=${info.parameterCount}`);
   assert.ok(info.parameterCount <= 60_000_000, `parameterCount=${info.parameterCount}`);
   assert.deepEqual(info.languages, ["zh-CN", "en"]);
+});
+
+test("package metadata matches the current bilingual hashed model", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(packageJson.description, /bilingual hashed neural n-gram/);
+  assert.doesNotMatch(packageJson.description, /character-level/);
 });
 
 test("bilingual local model generates bounded English text from a prompt", () => {

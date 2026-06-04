@@ -1,4 +1,6 @@
 import type { AgentGraphState } from "../core/agentGraph/state.js";
+import { renderEventLine } from "../core/events/eventRenderer.js";
+import { describeAccessPolicy } from "../core/permissions/accessPolicy.js";
 
 export async function renderCockpit(graph: AgentGraphState, safeMode: boolean, cwd: string): Promise<void> {
   if (!canUseRawMode()) {
@@ -16,8 +18,14 @@ export function canUseRawMode(): boolean {
   return Boolean(stdin.isTTY && typeof stdin.setRawMode === "function");
 }
 
-function renderStaticCockpit(graph: AgentGraphState): string {
+export function renderStaticCockpit(graph: AgentGraphState): string {
   const selected = graph.judge?.selectedCandidateId ?? "(none)";
+  const target = graph.conversationTarget ? `${graph.conversationTarget.id} (${graph.conversationTarget.label})` : "core (TomorrowEdge Core)";
+  const route = graph.routing.assignments
+    .filter((assignment) => ["planner", "coder_a", "reviewer", "judge", "runner"].includes(assignment.role))
+    .map((assignment) => `${assignment.role}:${assignment.provider}/${assignment.model}`)
+    .join(" | ");
+  const recentEvents = graph.events.slice(-5).map((event) => `- ${renderEventLine(event)}`);
   return [
     "TomorrowEdge cockpit summary",
     "",
@@ -25,11 +33,17 @@ function renderStaticCockpit(graph: AgentGraphState): string {
     "Run with --headless for JSON, or use a terminal that supports raw mode for the full cockpit.",
     "",
     `Goal: ${graph.goal}`,
+    `Target: ${target}`,
     `Access: ${graph.access.mode}`,
+    `Access detail: ${describeAccessPolicy(graph.access)}`,
+    `Route: ${route || "(none)"}`,
     `Agents: ${graph.agents.length}`,
     `Events: ${graph.events.length}`,
     `Selected patch: ${selected}`,
     `Shell runs: ${graph.runResults.length}`,
-    `Result: ${graph.finalSummary?.result ?? "unknown"}`
+    `Result: ${graph.finalSummary?.result ?? "unknown"}`,
+    "",
+    "Recent events:",
+    ...(recentEvents.length ? recentEvents : ["- (none)"])
   ].join("\n") + "\n";
 }
