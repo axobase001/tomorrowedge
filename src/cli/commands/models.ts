@@ -2,7 +2,7 @@ import { loadConfig, writeConfig } from "../../config/configLoader.js";
 import { createProviderRegistry } from "../../providers/registry.js";
 import { testProviderConnections } from "../../providers/connectionTest.js";
 import { fetchOpenRouterCatalog, formatOpenRouterModelLine, recommendFreeOpenRouterModels } from "../../providers/openrouterCatalog.js";
-import { redactText } from "../../safety/secretScanner.js";
+import { formatProviderError, redactProviderError } from "../../safety/providerRedaction.js";
 
 export type ModelsOptions = {
   realSmoke?: boolean;
@@ -224,7 +224,7 @@ async function smokeVision(provider: Parameters<typeof runSmokeSuite>[0], model:
 }
 
 function errorMessage(error: unknown): string {
-  return redactText(error instanceof Error ? error.message : String(error));
+  return formatProviderError(redactProviderError(error));
 }
 
 function tokenDetail(usage?: { inputTokens: number; outputTokens: number }): string {

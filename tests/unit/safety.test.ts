@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canSendToCloud } from "../../src/safety/privacyGuard.js";
 import { redactText, scanSecrets } from "../../src/safety/secretScanner.js";
+import { classifyProviderError, formatProviderError, redactProviderError, redactSessionRecord } from "../../src/safety/providerRedaction.js";
 import { assessShellCommand } from "../../src/safety/shellGuard.js";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
 
@@ -23,6 +24,36 @@ describe("safety", () => {
     expect(redacted).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
     expect(redacted).not.toContain("acct_live_123");
     expect(redacted).toContain("provider_name");
+  });
+
+  it("classifies provider errors into actionable categories", () => {
+    expect(classifyProviderError("provider failed: 429 too many requests")).toBe("rate_limited");
+    expect(classifyProviderError("insufficient quota; please add credits")).toBe("quota_exhausted");
+    expect(classifyProviderError("401 invalid api key")).toBe("invalid_key");
+    expect(classifyProviderError("404 invalid model")).toBe("invalid_model");
+    expect(classifyProviderError("503 upstream unavailable")).toBe("upstream_unavailable");
+  });
+
+  it("formats redacted provider errors without account identifiers", () => {
+    const report = redactProviderError(new Error('429 {"user_id":"user_3EfqcfPXAjQTwahh8KSxAxJJYP9","accountId":"acct_live_123"}'));
+    const formatted = formatProviderError(report);
+
+    expect(report.category).toBe("rate_limited");
+    expect(formatted).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
+    expect(formatted).not.toContain("acct_live_123");
+    expect(formatted).toContain("[redacted]");
+  });
+
+  it("redacts nested session records before persistence or API return", () => {
+    const record = redactSessionRecord({
+      state: {
+        events: [{ error: "Bearer abcdefghijklmnopqrstuvwxyz123456" }],
+        eventArtifacts: [{ content: "OPENAI_API_KEY=sk-123456789012345678901234" }]
+      }
+    });
+
+    expect(JSON.stringify(record)).not.toContain("abcdefghijklmnopqrstuvwxyz");
+    expect(JSON.stringify(record)).not.toContain("sk-");
   });
 
   it("blocks raw cloud context in privacy mode", () => {

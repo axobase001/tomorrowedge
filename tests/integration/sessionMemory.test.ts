@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -26,5 +26,35 @@ describe("session memory", () => {
     const sessions = await listSessions(tempRoot);
     expect(sessions.length).toBe(2);
     expect((await loadLatestSession(tempRoot)).state.goal).toBe("second task");
+  });
+
+  it("redacts session records and artifacts before writing to disk", async () => {
+    const state = await runOfflineGraph(tempRoot, "redaction task", defaultConfig);
+    state.events.push({
+      id: "event_redaction",
+      timestamp: new Date().toISOString(),
+      sessionId: state.sessionId,
+      mode: state.access.mode,
+      phase: "routing",
+      type: "provider_fallback",
+      fromProvider: "openrouter",
+      fromModel: "demo",
+      toProvider: "fixture",
+      toModel: "fixture",
+      reason: '429 {"user_id":"user_3EfqcfPXAjQTwahh8KSxAxJJYP9"}'
+    });
+    state.eventArtifacts.push({
+      ref: "artifacts/provider/error.txt",
+      content: "OPENAI_API_KEY=sk-123456789012345678901234"
+    });
+
+    const sessionPath = await saveSession(tempRoot, state);
+    const sessionText = await readFile(sessionPath, "utf8");
+    const eventsText = await readFile(path.join(path.dirname(sessionPath), "events.jsonl"), "utf8");
+    const artifactText = await readFile(path.join(path.dirname(sessionPath), "artifacts/provider/error.txt"), "utf8");
+
+    expect(sessionText).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
+    expect(eventsText).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
+    expect(artifactText).not.toContain("sk-");
   });
 });

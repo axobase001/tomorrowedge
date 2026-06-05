@@ -6,13 +6,14 @@ import type { ChatRequest, ChatResponse } from "../../providers/types.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import { makeId } from "../../utils/ids.js";
-import { redactText } from "../../safety/secretScanner.js";
+import { formatProviderError, redactProviderError, shouldSkipAfterProviderError, type ProviderErrorCategory } from "../../safety/providerRedaction.js";
 
 export type ProviderFallbackResult = {
   provider: string;
   model: string;
   response?: ChatResponse;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
   fallbackUsed?: boolean;
   fallbackFrom?: {
     provider: string;
@@ -22,6 +23,7 @@ export type ProviderFallbackResult = {
 };
 
 const registryCache = new WeakMap<TomorrowEdgeConfig, ProviderRegistry>();
+const blockedProviderCache = new WeakMap<EventLedger, Map<string, ProviderErrorCategory>>();
 
 export async function chatWithProviderFallback(input: {
   config: TomorrowEdgeConfig;
@@ -48,6 +50,7 @@ export async function chatWithProviderFallback(input: {
     return {
       ...primary,
       error: `${primaryResult.error} Fallback ${fallback.provider}/${fallback.model} also failed: ${fallbackResult.error}`,
+      errorCategory: primaryResult.errorCategory ?? fallbackResult.errorCategory,
       fallbackReason: primaryResult.error
     };
   }
@@ -80,11 +83,29 @@ async function tryChat(
   model: string,
   buildRequest: (model: string, provider: string) => ChatRequest,
   ledger?: EventLedger
-): Promise<Pick<ProviderFallbackResult, "response" | "error">> {
+): Promise<Pick<ProviderFallbackResult, "response" | "error" | "errorCategory">> {
   const provider = cachedProviderRegistry(config).get(providerId);
   const requestId = makeId(`request_${role}`);
   const request = buildRequest(model, providerId);
   const promptRef = ledger?.writeArtifact("prompts", JSON.stringify(request.messages, null, 2), "json");
+  const blockedCategory = ledger ? blockedProviderCache.get(ledger)?.get(providerId) : undefined;
+  if (blockedCategory) {
+    const error = `${blockedCategory}: skipped ${providerId}/${model} because a prior live call in this run hit ${blockedCategory}.`;
+    ledger?.append({
+      type: "model_call",
+      status: "failure",
+      phase: phaseForRole(role),
+      role,
+      provider: providerId,
+      model,
+      requestId,
+      promptRef,
+      error,
+      errorCategory: blockedCategory,
+      skipped: true
+    });
+    return { error, errorCategory: blockedCategory };
+  }
   ledger?.append({
     type: "model_call",
     status: "start",
@@ -108,7 +129,7 @@ async function tryChat(
       promptRef,
       error
     });
-    return { error };
+    return { error, errorCategory: "unknown" };
   }
   try {
     const response = await provider.chat(request);
@@ -127,7 +148,11 @@ async function tryChat(
     });
     return { response };
   } catch (error) {
-    const message = redactText(error instanceof Error ? error.message : String(error));
+    const report = redactProviderError(error);
+    const message = formatProviderError(report);
+    if (ledger && shouldSkipAfterProviderError(report.category)) {
+      markProviderBlocked(ledger, providerId, report.category);
+    }
     ledger?.append({
       type: "model_call",
       status: "failure",
@@ -137,10 +162,29 @@ async function tryChat(
       model,
       requestId,
       promptRef,
-      error: message
+      error: message,
+      errorCategory: report.category,
+      statusCode: report.statusCode,
+      retryable: report.retryable
     });
-    return { error: message };
+    return { error: message, errorCategory: report.category };
   }
+}
+
+function markProviderBlocked(ledger: EventLedger, providerId: string, category: ProviderErrorCategory): void {
+  const existing = blockedProviderCache.get(ledger) ?? new Map<string, ProviderErrorCategory>();
+  existing.set(providerId, category);
+  blockedProviderCache.set(ledger, existing);
+  ledger.append({
+    type: "provider_fallback",
+    phase: "routing",
+    fromProvider: providerId,
+    fromModel: "*",
+    toProvider: "fallback",
+    toModel: "*",
+    reason: `${category}: provider marked unavailable for this run after live call failure.`,
+    errorCategory: category
+  });
 }
 
 function cachedProviderRegistry(config: TomorrowEdgeConfig): ProviderRegistry {
