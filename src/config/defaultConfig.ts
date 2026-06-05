@@ -37,6 +37,12 @@ export const defaultConfig: TomorrowEdgeConfig = {
     reserve_for_roles: ["planner", "reviewer", "judge"],
     escalate_on: ["high_risk_patch", "repeated_test_failure", "reviewer_disagreement", "security_sensitive_change"]
   },
+  strategy_memory: {
+    enabled: false,
+    max_records: 20,
+    prefer_successful_routes: true,
+    suggest_test_command: true
+  },
   privacy: {
     mode: "normal",
     allow_cloud_repo_context: true,

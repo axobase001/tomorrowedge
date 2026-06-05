@@ -30,7 +30,8 @@ export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),
-  model: z.string().default("auto")
+  model: z.string().default("auto"),
+  reason: z.string().optional()
 });
 
 export const externalAgentConfigSchema = z.object({
@@ -112,6 +113,17 @@ export const configSchema = z.object({
     max_cost_usd: 2,
     reserve_for_roles: ["planner", "reviewer", "judge"],
     escalate_on: ["high_risk_patch", "repeated_test_failure", "reviewer_disagreement", "security_sensitive_change"]
+  }),
+  strategy_memory: z.object({
+    enabled: z.boolean().default(false),
+    max_records: z.number().int().min(1).max(200).default(20),
+    prefer_successful_routes: z.boolean().default(true),
+    suggest_test_command: z.boolean().default(true)
+  }).default({
+    enabled: false,
+    max_records: 20,
+    prefer_successful_routes: true,
+    suggest_test_command: true
   }),
   privacy: z.object({
     mode: z.enum(["normal", "privacy", "local"]).default("normal"),

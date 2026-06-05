@@ -16,4 +16,5 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Local browser cockpit API | experimental | Local-first dashboard with nonce-protected API routes. Keep it bound to loopback unless you deliberately accept local-network exposure. |
 | Orchestration backend abstraction | placeholder | Native backend is real. LangGraph, CrewAI, AutoGen, and MCP tool backend entries are adapter placeholders. |
 | Real Ink raw-mode TUI keyboard CI | planned | Static/non-raw and extracted action tests exist; PTY/raw-mode keyboard coverage is tracked separately. |
-| Benchmark quality-cost-trace frontier | planned | Benchmark scaffolding exists, but public comparative benchmark claims are not yet established. |
+| Strategy memory routing | experimental | Disabled by default. When explicitly enabled, recent completed workflows can recommend role routes and test commands. |
+| Benchmark quality-cost-trace frontier | experimental | `tedge benchmark` provides a deterministic no-key product demo. It is not a live provider leaderboard claim. |

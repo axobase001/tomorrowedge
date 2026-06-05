@@ -37,7 +37,7 @@ function overridesFromConfig(config: TomorrowEdgeConfig): AgentRouteOverrides {
   const overrides: AgentRouteOverrides = {};
   for (const role of agentRoles) {
     const agent = config.agents[role];
-    if (agent) overrides[role] = { provider: agent.provider, model: agent.model };
+    if (agent) overrides[role] = { provider: agent.provider, model: agent.model, reason: agent.reason };
   }
   return overrides;
 }

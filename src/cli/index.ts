@@ -12,6 +12,7 @@ import { undoCommand } from "./commands/undo.js";
 import { modeCommand } from "./commands/mode.js";
 import { prefsCommand } from "./commands/prefs.js";
 import { drillCommand } from "./commands/drill.js";
+import { benchmarkCommand } from "./commands/benchmark.js";
 import { workflowCommand } from "./commands/workflow.js";
 import { memoryCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
@@ -100,6 +101,12 @@ program
   .action((task: string, options: { fixture?: string; providers?: string; includeMock?: boolean }) => drillCommand(cwd, task, options));
 
 program
+  .command("benchmark")
+  .description("Run the offline quality-cost-trace benchmark demo")
+  .option("--format <format>", "markdown or json", "markdown")
+  .action((options: { format?: "json" | "markdown" }) => benchmarkCommand(cwd, options));
+
+program
   .command("workflow")
   .description("Run a core-led multi-model workflow simulation and save a report")
   .argument("<task>", "task goal")
@@ -149,7 +156,7 @@ program
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
-program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").action((options: { limit?: string }) => memoryCommand(cwd, options));
+program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").option("--strategy", "show opt-in strategy memory routing and test-command hints").action((options: { limit?: string; strategy?: boolean }) => memoryCommand(cwd, options));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));

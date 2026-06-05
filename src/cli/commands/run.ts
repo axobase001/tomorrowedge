@@ -6,6 +6,7 @@ import { loadConfig } from "../../config/configLoader.js";
 import { accessModeSchema, type AccessMode } from "../../config/schema.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
 import { loadProjectPreferences } from "../../core/memory/preferences.js";
+import { buildStrategyMemoryHints } from "../../core/memory/taskMemory.js";
 import { NativeBackend } from "../../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../../core/orchestration/registry.js";
 import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
@@ -40,7 +41,9 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
   const loadedConfig = loadConfig(targetCwd);
   const prefs = loadProjectPreferences(targetCwd);
-  const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
+  const baseConfig = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
+  const memoryHints = baseConfig.strategy_memory.enabled ? await buildStrategyMemoryHints(targetCwd, { limit: baseConfig.strategy_memory.max_records }) : undefined;
+  const config = memoryHints ? applyStrategyMemory(baseConfig, memoryHints) : baseConfig;
   const effectiveAccessMode = accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {
@@ -67,7 +70,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       livePatch: liveOption(options.offline, options.live, autoLive, options.livePatch ?? prefs.preferredLivePatch),
       liveVision: liveOption(options.offline, options.live, autoLive && imagePaths.length > 0, options.liveVision),
       fixtureFailingPatch: options.fixtureFailingPatch,
-      testCommand: options.testCommand ?? prefs.preferredTestCommand,
+      testCommand: options.testCommand ?? prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
       imagePaths,
       conversationTarget: options.to
     }
@@ -157,6 +160,17 @@ function shouldAutoLive(config: ReturnType<typeof loadConfig>, options: RunOptio
     if (!provider.enabled || !provider.base_url || provider.auth_header === "none") return false;
     return Boolean(provider.api_key_env && process.env[provider.api_key_env]);
   });
+}
+
+function applyStrategyMemory(config: ReturnType<typeof loadConfig>, hints: Awaited<ReturnType<typeof buildStrategyMemoryHints>>): ReturnType<typeof loadConfig> {
+  if (!config.strategy_memory.prefer_successful_routes || !hints.routeAssignments.length) return config;
+  const agents = { ...config.agents };
+  for (const route of hints.routeAssignments) {
+    const current = agents[route.role];
+    if (!current || (current.provider !== "auto" && current.model !== "auto")) continue;
+    agents[route.role] = { provider: route.provider, model: route.model, reason: route.reason };
+  }
+  return { ...config, agents };
 }
 
 function isFixtureRun(options: Pick<RunOptions, "provider" | "fixtureMode">): boolean {
