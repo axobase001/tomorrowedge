@@ -43,6 +43,7 @@ export type ModelCallEvent = BaseEvent & {
 
 export type AgentRunEvent = BaseEvent & {
   type: "agent_run";
+  agentKind?: "offline" | "live" | "external";
   status: "success" | "failure";
   runId: string;
   responseRef?: string;

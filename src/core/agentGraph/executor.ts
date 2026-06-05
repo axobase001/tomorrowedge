@@ -259,7 +259,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const plan = normalizeExternalPlan(result.payload, goal);
     if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
     return plan ?? planner.run({ goal: plannerGoal });
-  }, externalPlanner ? "external" : "offline");
+  }, externalPlanner ? "external" : undefined);
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
@@ -335,7 +335,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const review = normalizeExternalReview(result.payload);
     if (!review) recordExternalNormalizeFallback(ledger, "reviewer", externalReviewer, "review", "native reviewer");
     return review ?? reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
-  }, externalReviewer ? "external" : "offline");
+  }, externalReviewer ? "external" : undefined);
   const reviewJson = JSON.stringify(state.review, null, 2);
   const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
   recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
@@ -365,7 +365,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const judgment = normalizeExternalJudgment(result.payload);
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
     return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
-  }, externalJudge ? "external" : "offline");
+  }, externalJudge ? "external" : undefined);
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
   recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
@@ -476,7 +476,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
           const patch = normalizeExternalPatch(externalResult.payload, "repairer", "repair");
           if (!patch) recordExternalNormalizeFallback(ledger, "repairer", externalRepairer, "patch candidate", "native repairer");
           return patch ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
-        }, externalRepairer ? "external" : "offline");
+        }, externalRepairer ? "external" : undefined);
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(state, ledger, "repairer", repairCandidate);
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
@@ -561,7 +561,7 @@ async function runCoderCandidate(input: {
     const patch = normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative");
     if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
     return patch ?? fallback();
-  }, externalCoder ? "external" : "offline");
+  }, externalCoder ? "external" : undefined);
 }
 
 function recordExternalNormalizeFallback(ledger: EventLedger, role: AgentRole, profile: ExternalAgentProfile, expected: string, fallback: string): void {
@@ -802,15 +802,16 @@ function workflowStopReason(state: AgentGraphState): string {
   return "no patch applied; workflow finalized after review and judge";
 }
 
-async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind: AgentRunState["agentKind"] = "offline"): Promise<T> {
+async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind?: AgentRunState["agentKind"]): Promise<T> {
   const assignment = router.assignmentFor(role);
+  const effectiveAgentKind = agentKind ?? determineAgentKind(assignment.provider);
   const agentState: AgentRunState = {
     id: role,
     role,
     provider: assignment.provider,
     model: assignment.model,
     status: "running",
-    agentKind,
+    agentKind: effectiveAgentKind,
     startedAt: nowIso(),
     summary: assignment.reason
   };
@@ -828,6 +829,7 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
         role,
         provider: assignment.provider,
         model: assignment.model,
+        agentKind: effectiveAgentKind,
         status: "success",
         runId: agentState.id,
         responseRef: ledger.writeArtifact("responses", JSON.stringify(result, null, 2), "json")
@@ -845,6 +847,7 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
         role,
         provider: assignment.provider,
         model: assignment.model,
+        agentKind: effectiveAgentKind,
         status: "failure",
         runId: agentState.id,
         error: agentState.summary
@@ -855,6 +858,12 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
     agentState.endedAt = nowIso();
     agentState.elapsedMs = Date.now() - start;
   }
+}
+
+function determineAgentKind(provider: string): AgentRunState["agentKind"] {
+  if (provider.startsWith("external:")) return "external";
+  if (["mock", "fixture", "local_tool"].includes(provider)) return "offline";
+  return "live";
 }
 
 function updateCapabilityStep(state: AgentGraphState, role: AgentRole, status: "success" | "blocked", summary: string): void {

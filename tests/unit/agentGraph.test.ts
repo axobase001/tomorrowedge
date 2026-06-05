@@ -42,6 +42,39 @@ describe("offline agent graph", () => {
     ]));
   });
 
+  it("marks configured cloud/local model providers as live agent runs", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      debate: { ...defaultConfig.debate, max_candidates: 1 },
+      providers: {
+        ...defaultConfig.providers,
+        deepseek: {
+          ...defaultConfig.providers.deepseek,
+          enabled: true,
+          base_url: "https://api.deepseek.example/v1",
+          api_key_env: "",
+          auth_header: "none" as const
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "deepseek", model: "deepseek-v4-pro" },
+        coder_a: { provider: "deepseek", model: "deepseek-v4-pro" },
+        reviewer: { provider: "deepseek", model: "deepseek-v4-pro" },
+        judge: { provider: "deepseek", model: "deepseek-v4-pro" }
+      }
+    };
+
+    const state = await runOfflineGraph(cwd, "fix failing test", config);
+    const agentKinds = new Map(state.agents.map((agent) => [agent.role, agent.agentKind]));
+    expect(agentKinds.get("planner")).toBe("live");
+    expect(agentKinds.get("coder_a")).toBe("live");
+    expect(agentKinds.get("reviewer")).toBe("live");
+    expect(agentKinds.get("judge")).toBe("live");
+    expect(state.events.find((event) => event.type === "agent_run" && event.role === "planner")).toMatchObject({ agentKind: "live" });
+  });
+
   it("lets configured external MCP agents execute core-led workflow roles", async () => {
     const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-external-core-"));
