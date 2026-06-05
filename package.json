@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A TUI cockpit for multi-model coding agents.",
   "type": "module",
   "bin": {

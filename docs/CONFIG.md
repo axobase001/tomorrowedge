@@ -192,9 +192,14 @@ Defaults:
 
 - `restricted`: shell is disabled by access approval state.
 - `partial`: shell requires explicit approval.
-- `full`: shell is unrestricted by default and fully logged.
+- `full`: shell is `unrestricted` by default and fully logged.
 - CI/demo lanes can set `shell.policy: verification_allowlist` to constrain
   verification commands without changing full-access semantics.
+
+`unrestricted` means unrestricted executable invocation, not raw shell-script
+execution. TomorrowEdge still splits the command into an executable plus args
+and runs it with `shell: false`; shell metacharacters such as `&&`, pipes,
+redirects, backticks, and newlines are blocked.
 
 ## Autonomy and budget bounds
 

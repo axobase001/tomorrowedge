@@ -21,6 +21,15 @@ tedge mcp invoke codex --session latest --role reviewer --prompt "review the cur
 `tedge mcp serve` starts the stdio transport. The first implementation is intentionally transport-light and offline-testable. HTTP/SSE can be added later without changing the bridge state model.
 `tedge mcp agents --probe` starts configured external MCP commands, runs `initialize`, and lists available tools. `tedge mcp invoke` calls a configured external MCP process and writes start/success/failure/result events into the same session ledger.
 
+## Integration Status
+
+| External agent | Status | Notes |
+|---|---|---|
+| Codex CLI | experimental | `codex mcp-server` is supported as a stdio MCP process when installed and authenticated. |
+| Claude Code | wrapper required | Configure a local stdio MCP server or wrapper command for your Claude Code setup. |
+| Mock external agent | stable | Used by the test suite for role-bound workflow execution. |
+| Custom MCP agent | experimental | Any stdio command can be configured if it exposes MCP tools and returns structured role payloads. |
+
 ## Bridge Mode vs Command Runner Mode
 
 TomorrowEdge supports two first-stage external agent modes:

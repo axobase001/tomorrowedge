@@ -78,6 +78,38 @@ describe("offline agent graph", () => {
     }
   });
 
+  it("records unparseable external role payloads before falling back to native agents", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-role-external-mcp-server.mjs")],
+          env: { TOMORROWEDGE_UNPARSEABLE_ROLE: "reviewer" },
+          autoStart: true,
+          roles: ["reviewer"],
+          capabilities: ["review"],
+          requestTimeoutMs: 10_000
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        reviewer: { provider: "external:codex", model: "auto" }
+      }
+    };
+
+    const state = await runOfflineGraph(cwd, "fix failing test", config);
+    const fallbackEvent = state.events.find((event) => event.type === "external_agent_error" && event.role === "reviewer");
+
+    expect(state.review?.overallRecommendation).toBeTruthy();
+    expect(fallbackEvent).toBeTruthy();
+    expect(fallbackEvent && "error" in fallbackEvent ? fallbackEvent.error : "").toContain("falling back to native reviewer");
+  });
+
   it("records live advisory notes without changing deterministic decisions", async () => {
     delete process.env.MOCK_INPUT_PRICE_PER_MTOK;
     delete process.env.MOCK_OUTPUT_PRICE_PER_MTOK;

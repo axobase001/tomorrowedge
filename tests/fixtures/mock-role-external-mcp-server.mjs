@@ -32,6 +32,9 @@ function handle(request) {
 }
 
 function structuredForRole(role, context) {
+  if (process.env.TOMORROWEDGE_UNPARSEABLE_ROLE === role) {
+    return { summary: `Unparseable fixture payload for ${role}.` };
+  }
   if (role === "core") {
     return {
       summary: "External core planned the workflow.",

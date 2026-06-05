@@ -24,18 +24,30 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.5.1`。
+当前版本：`0.5.2`。
 
-这一版的重点是 **MCP Agent Bridge**：让 Claude Code / Codex 等外部 coding agents 通过 MCP 接入 TomorrowEdge，并被用户绑定到 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等 workflow roles。
+这一版的重点是 **Experience Polish**：把新用户的第一条路径、MCP 真实接入状态、shell policy 语义、roadmap 和 external role fallback trace 收口。
 
-- `tedge mcp serve` 启动 TomorrowEdge MCP stdio server
-- `tedge mcp tools` 查看暴露给外部 agent 的 MCP tools
-- `tedge mcp agents` 查看当前启用的 external MCP agents
-- `external_agents` 配置块支持 Claude Code / Codex mock profile 和角色允许列表
-- `agents.<role>.provider: external:<id>` 支持把 workflow role 显式绑定到外部 agent
-- 外部 agent 的 patch、review、judgment、result、cost usage 都会写入 `events.jsonl`
-- TUI 的 Agents / Router / Trace panes 会显示 external agent badge、role binding 和 `external_agent_*` 事件
-- `0.5.1` 增加 Conversation Targets，并保留 `npm run verify`、非 git 压缩包 secret scan、full access shell policy、external command runner skeleton，以及本地可运行的 tiny LM demo。
+- README 和 GitHub Pages 增加无 API key 的 3-minute tryout
+- MCP Agent Bridge 文档标清 Codex CLI、Claude Code、mock agent、自定义 MCP agent 的真实状态
+- `shell.policy: unrestricted` 明确为 executable invocation，不是 raw shell script
+- external role payload 无法 normalize 时会写入 `external_agent_error`，再 fallback 到 native agent
+- Roadmap 收敛为 0.5.x 体验打磨、0.6.x 真实外部 agent workflow、0.7.x benchmark demo
+
+## 3-minute tryout
+
+```bash
+git clone https://github.com/axobase001/tomorrowedge
+cd tomorrowedge
+npm ci
+npm run verify
+npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
+npm run dev -- trace latest --verbose
+npm run dev -- tui
+```
+
+No API key required. This runs the offline fixture workflow, applies a safe
+fixture patch, runs verification, and shows the replayable event ledger.
 
 ## TUI 实际运行截图
 
@@ -140,6 +152,15 @@ tedge run "task" --access-mode restricted
 - `full`：自治执行；自动应用 patch、运行 shell、执行 repair loop，并把每一步写入事件账本
 
 `full` 会自动批准 patch/shell/repair。CLI 会在进入 full autonomy 时输出风险提示；建议先在 clean repo、sandbox 或 fixture 中使用。
+
+Shell execution is governed by `shell.policy`:
+
+- `unrestricted`: Codex-style executable invocation with arbitrary executable
+  plus args, executed with `shell: false`; shell metacharacters such as `&&`,
+  pipes, and redirects are still blocked.
+- `verification_allowlist`: only common verification commands such as `npm`,
+  `node`, `pytest`, `cargo`, `make`, `cmake`, `go`, `uv`, `bun`, and `deno`.
+- `approval_required`: user confirmation is required before shell execution.
 
 ## Fixture 演示
 
@@ -326,28 +347,21 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.5.1`.
+Current version: `0.5.2`.
 
-This release introduces **Conversation Targets**: the user can choose who a
-natural-language message is addressed to while TomorrowEdge still owns
-orchestration, trace, event ledger, and full-access supervision.
+This release focuses on **Experience Polish**: a shorter first-run path, clearer
+MCP integration status, clearer shell policy semantics, a tighter roadmap, and
+visible fallback when external role payloads cannot be normalized.
 
-- `tedge targets` lists available targets such as `core`, `planner`,
-  `reviewer`, `judge`, `debate`, and enabled `agent:<id>` external agents
-- `tedge ask --to reviewer "..."` records a non-mutating directed conversation
-  trace
-- `tedge run --to debate "..."` runs a full workflow while recording the user's
-  chosen conversation target in `events.jsonl`, TUI, trace, and export
-- the TUI Goal pane shows `Talk to: <target>` so the cockpit makes the current
-  communication object explicit
-- `conversation_target` and `conversation_message` events make the handoff
-  replayable and auditable
-- reviewer/judge quality gates are stricter: parseable diffs, target matching,
-  verification plan, encoding hygiene, and blocking concerns affect automatic
-  selection
-- context selection no longer treats common binary/image assets as safe text
-  context
-- the local LM demo now reports roughly 50M parameters by default
+- README and GitHub Pages include a no-key 3-minute tryout.
+- MCP Agent Bridge docs label Codex CLI, Claude Code, mock agents, and custom
+  MCP agents with their real integration status.
+- `shell.policy: unrestricted` is documented as executable invocation, not raw
+  shell-script execution.
+- Unparseable external role payloads now emit `external_agent_error` before
+  falling back to native agents.
+- Roadmap is organized into 0.5.x experience polish, 0.6.x real external-agent
+  workflows, and 0.7.x benchmark demos.
 
 The previous **MCP Agent Bridge** remains available: Claude Code / Codex and
 other external coding agents can connect through MCP and be bound to workflow
@@ -365,9 +379,25 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `0.5.1` adds Conversation Targets while preserving the hardened release lane:
-  `npm run verify`, zip-safe secret scanning, full-access shell policy, an
-  external command runner skeleton, and a locally runnable tiny LM demo.
+- `0.5.2` keeps the hardened release lane while making the first-run and
+  external-agent experience easier to understand: `npm run verify`, zip-safe
+  secret scanning, full-access shell policy, command runner skeletons, and the
+  locally runnable tiny LM demo remain available.
+
+## 3-minute tryout
+
+```bash
+git clone https://github.com/axobase001/tomorrowedge
+cd tomorrowedge
+npm ci
+npm run verify
+npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
+npm run dev -- trace latest --verbose
+npm run dev -- tui
+```
+
+No API key required. This runs the offline fixture workflow, applies a safe
+fixture patch, runs verification, and shows the replayable event ledger.
 
 ## TUI Runtime Screenshots
 
@@ -494,6 +524,15 @@ target, and the TUI Goal pane shows `Talk to: <target>`.
 
 `full` auto-approves patch, shell, and repair actions. The CLI prints a risk
 warning before full-autonomy runs; prefer a clean repo, sandbox, or fixture.
+
+Shell execution is governed by `shell.policy`:
+
+- `unrestricted`: Codex-style executable invocation with arbitrary executable
+  plus args, executed with `shell: false`; shell metacharacters such as `&&`,
+  pipes, and redirects are still blocked.
+- `verification_allowlist`: only common verification commands such as `npm`,
+  `node`, `pytest`, `cargo`, `make`, `cmake`, `go`, `uv`, `bun`, and `deno`.
+- `approval_required`: user confirmation is required before shell execution.
 
 ## Workflow
 

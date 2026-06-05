@@ -335,9 +335,9 @@
 
       <section id="start" class="start-section" aria-labelledby="start-title">
         <div class="start-copy reveal">
-          <p class="eyebrow">Get started</p>
+          <p class="eyebrow">Try without API key</p>
           <h2 id="start-title">Install the cockpit. Run the workflow.</h2>
-          <p>Default tests and demos run offline with mock and fixture providers. Cloud providers are opt-in.</p>
+          <p>Run the offline fixture path first: patch, verification, trace, and TUI all work before any cloud provider is configured.</p>
         </div>
         <div class="code-panel reveal">
           <div class="code-bar">
@@ -345,11 +345,12 @@
             <span></span>
             <span></span>
           </div>
-          <pre><code>node --version   # requires Node &gt;=20.19.0
-npm install
-npm test
-npm run dev -- doctor
+          <pre><code>git clone https://github.com/axobase001/tomorrowedge
+cd tomorrowedge
+npm ci
+npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
+npm run dev -- trace latest --verbose
 npm run dev -- tui</code></pre>
         </div>
       </section>

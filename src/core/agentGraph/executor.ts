@@ -138,6 +138,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     );
     const corePlan = normalizeExternalPlan(coreResult.payload, goal);
     if (corePlan) state.plan = corePlan;
+    else recordExternalNormalizeFallback(ledger, "core", externalCore, "plan", "native planner");
     ledger.append({
       type: "evidence_update",
       phase: "planning",
@@ -197,7 +198,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       context: { goal: plannerGoal, visualSpec: state.visualSpec, routing: state.routing },
       ledger
     });
-    return normalizeExternalPlan(result.payload, goal) ?? planner.run({ goal: plannerGoal });
+    const plan = normalizeExternalPlan(result.payload, goal);
+    if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
+    return plan ?? planner.run({ goal: plannerGoal });
   }, externalPlanner ? "external" : "offline");
   state.plan = { ...state.plan, goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
@@ -271,7 +274,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       context: { candidates: state.candidates, redTeam: options.redTeamReview },
       ledger
     });
-    return normalizeExternalReview(result.payload) ?? reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
+    const review = normalizeExternalReview(result.payload);
+    if (!review) recordExternalNormalizeFallback(ledger, "reviewer", externalReviewer, "review", "native reviewer");
+    return review ?? reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
   }, externalReviewer ? "external" : "offline");
   ledger.append({
     type: "review_decision",
@@ -295,7 +300,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       context: { candidates: state.candidates, review: state.review },
       ledger
     });
-    return normalizeExternalJudgment(result.payload) ?? judge.run({ candidates: state.candidates, review: state.review! });
+    const judgment = normalizeExternalJudgment(result.payload);
+    if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
+    return judgment ?? judge.run({ candidates: state.candidates, review: state.review! });
   }, externalJudge ? "external" : "offline");
   ledger.append({
     type: "judge_decision",
@@ -398,7 +405,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             context: { plan: state.plan, failedRun: result, appliedFiles: state.changedFiles },
             ledger
           });
-          return normalizeExternalPatch(externalResult.payload, "repairer", "repair") ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          const patch = normalizeExternalPatch(externalResult.payload, "repairer", "repair");
+          if (!patch) recordExternalNormalizeFallback(ledger, "repairer", externalRepairer, "patch candidate", "native repairer");
+          return patch ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
         }, externalRepairer ? "external" : "offline");
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(ledger, "repairer", repairCandidate);
@@ -480,8 +489,22 @@ async function runCoderCandidate(input: {
       },
       ledger: input.ledger
     });
-    return normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative") ?? fallback();
+    const patch = normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative");
+    if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
+    return patch ?? fallback();
   }, externalCoder ? "external" : "offline");
+}
+
+function recordExternalNormalizeFallback(ledger: EventLedger, role: AgentRole, profile: ExternalAgentProfile, expected: string, fallback: string): void {
+  ledger.append({
+    type: "external_agent_error",
+    phase: phaseForRole(role),
+    role,
+    provider: `external:${profile.id}`,
+    model: profile.name,
+    externalAgentId: profile.id,
+    error: `External ${role} result was unparseable as ${expected}; falling back to ${fallback}.`
+  });
 }
 
 function externalProfileForRole(router: ModelRouter, registry: ExternalAgentRegistry, role: AgentRole): ExternalAgentProfile | undefined {

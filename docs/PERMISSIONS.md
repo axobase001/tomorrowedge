@@ -28,3 +28,24 @@ tedge undo --list
 tedge undo
 tedge undo --snapshot <id>
 ```
+
+## Shell policy
+
+Access mode decides whether shell execution is approved. `shell.policy` decides
+how approved shell commands are parsed and constrained:
+
+```yaml
+shell:
+  policy: unrestricted # unrestricted | verification_allowlist | approval_required
+```
+
+- `restricted`: shell is disabled by access approval state.
+- `partial`: shell requires explicit approval.
+- `full`: shell is `unrestricted` by default and fully logged.
+- `verification_allowlist`: useful for CI/demo lanes that should only run known
+  verification commands.
+
+`unrestricted` means unrestricted executable invocation, not raw shell-script
+execution. TomorrowEdge parses the command into an executable plus args and
+runs it with `shell: false`; shell metacharacters such as `&&`, pipes,
+redirects, backticks, and newlines are blocked.

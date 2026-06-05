@@ -1,5 +1,39 @@
 # Roadmap
 
+## 0.5.x Experience Polish / Cockpit Hardening
+
+Acceptance criteria:
+
+- README has a 3-minute no-key tryout path.
+- TUI layout, screenshots, and docs present the same restrained cockpit style.
+- Full/partial/restricted semantics and `shell.policy` are easy to understand.
+- Trace/export quality makes fallback, repair, shell output, and artifact refs
+  inspectable.
+- MCP bridge status is explicit: Codex experimental, Claude Code wrapper
+  required, mock stable, custom MCP experimental.
+
+## 0.6.x Real External Agent Workflows
+
+Acceptance criteria:
+
+- Codex CLI role runner has a documented, reproducible demo path.
+- Claude Code wrapper path is documented with a local stdio MCP wrapper.
+- External role normalize failures are visible in the event ledger before
+  native fallback.
+- External agent cost accounting is visible in TUI and exports.
+- Role-bound execution demos cover planner, coder, reviewer, judge, and repairer.
+
+## 0.7.x Benchmark Demo
+
+Acceptance criteria:
+
+- Public benchmark demo compares strong single-agent, cheap single-model, and
+  TomorrowEdge multi-model cockpit workflows.
+- Include at least one substantial migration or repair task such as C++ to Rust,
+  state-machine generation, or UI reconstruction from screenshot.
+- Report quality, cost, time, trace completeness, and repair visibility.
+- Publish a hero figure that explains capability routing and auditability.
+
 ## 0.2 Usable CLI
 
 Acceptance criteria:

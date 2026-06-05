@@ -7,20 +7,43 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-05
+
+0.5.2 is an experience-polish release. It narrows the first-run path, clarifies
+full-access shell semantics, labels real MCP integration status, and makes
+external-role fallback visible in traces instead of silently falling back.
+
 ### Added
 
+- README and GitHub Pages now include a short 3-minute no-key tryout path that
+  runs the offline fixture workflow, verification, trace, and TUI.
 - Native workflow roles can execute through configured external MCP agents,
   allowing external `core`, `coder_a`, `reviewer`, `judge`, and `repairer`
   roles to return structured plans, patch candidates, reviews, and judgments
   directly into the event ledger.
 - `external_agents.<id>.proxyPort` for injecting per-agent localhost proxy
   environment variables into external MCP processes.
+- MCP Agent Bridge docs now include a status table for Codex CLI, Claude Code,
+  mock external agents, and custom MCP agents.
+- Roadmap now has explicit 0.5.x experience polish, 0.6.x real external-agent
+  workflow, and 0.7.x benchmark-demo milestones.
 
 ### Fixed
 
 - Codex MCP stdio support now handles newline-delimited JSON-RPC framing and
   recognizes common Windows launchers such as `codex.cmd`, `codex.exe`, and
   `codex.ps1`.
+- External role payloads that cannot be normalized into internal Plan/Patch/
+  Review/Judge shapes now write `external_agent_error` events before falling
+  back to native agents.
+
+### Changed
+
+- README, `docs/CONFIG.md`, and `docs/PERMISSIONS.md` now clarify that
+  `shell.policy: unrestricted` means unrestricted executable invocation with
+  `shell: false`, not raw shell-script execution with metacharacters.
+- Tiny local LM docs remain consistently framed as a 50M-60M local toy model;
+  old 540k references remain only inside patch-regression fixtures.
 
 ## [0.5.1] - 2026-06-05
 
