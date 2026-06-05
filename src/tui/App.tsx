@@ -344,10 +344,10 @@ async function submitComposer(args: SubmitComposerArgs): Promise<void> {
   const text = args.draft.trim();
   if (!text) return;
   args.setBusy(true);
-  args.setDraft("");
   try {
     const command = parseComposerCommand(text, args.target?.id ?? "core", args.accessMode);
     if (command.kind === "mode") {
+      args.setDraft("");
       const access = buildAccessPolicy(args.config, { mode: command.mode });
       args.setAccessMode(command.mode);
       args.setViewGraph((current) => ({ ...current, access, approvals: { patchApproved: access.patchApproved, shellApproved: access.shellApproved, repairApproved: access.repairApproved } }));
@@ -355,12 +355,14 @@ async function submitComposer(args: SubmitComposerArgs): Promise<void> {
       return;
     }
     if (command.kind === "palette") {
+      args.setDraft("");
       args.setMessage("Commands: natural text runs a workflow. Use /ask for non-mutating notes, /to reviewer ..., /mode full.");
       return;
     }
     const state = command.kind === "ask"
       ? createConversationSession({ message: command.goal, target: command.target, config: args.config })
       : await runOfflineGraph(args.cwd, command.goal, args.config, { conversationTarget: command.target, accessMode: args.accessMode });
+    args.setDraft("");
     await saveSession(args.cwd, state);
     args.setViewGraph(state);
     args.setMessage(command.kind === "ask" ? "Recorded non-mutating directed conversation." : `Workflow completed: ${state.finalSummary?.result ?? "unknown"}.`);

@@ -197,11 +197,11 @@ export class TomorrowEdgeMcpBridge {
     let recorded!: TomorrowEdgeEvent;
     await this.withSession(sessionId, (_state, ledger) => {
       recorded = ledger.append({
+        ...input.event,
         type: "external_agent_result",
         phase: "summary",
         externalAgentId: String(input.event.externalAgentId ?? "external"),
-        summary: String(input.event.summary ?? input.event.type ?? "external event recorded"),
-        ...input.event
+        summary: String(input.event.summary ?? input.event.type ?? "external event recorded")
       } as never);
     });
     return { sessionId, event: recorded };

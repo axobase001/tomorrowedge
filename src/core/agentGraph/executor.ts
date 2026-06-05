@@ -250,7 +250,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
     return plan ?? planner.run({ goal: plannerGoal });
   }, externalPlanner ? "external" : "offline");
-  state.plan = { ...state.plan, goal };
+  state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();
@@ -405,7 +405,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
 
-  if (state.judge.decision === "select" && state.judge.selectedCandidateId) {
+  if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     if (selected?.unifiedDiff) {
       const diffRef = ledger.writeArtifact("diffs", selected.unifiedDiff);
