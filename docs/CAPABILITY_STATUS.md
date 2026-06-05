@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.0.0. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.0.1. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -15,6 +15,6 @@ whether a surface is stable, experimental, placeholder, or planned.
 | MCP Agent Bridge | experimental | MCP server, tool surface, role binding, external agent registry, and command runner skeleton exist. Real Claude Code/Codex process integration still needs adapter hardening. |
 | Local browser cockpit API | experimental | Local-first dashboard with nonce-protected API routes. Keep it bound to loopback unless you deliberately accept local-network exposure. |
 | Orchestration backend abstraction | placeholder | Native backend is real. LangGraph, CrewAI, AutoGen, and MCP tool backend entries are adapter placeholders. |
-| Real Ink raw-mode TUI keyboard CI | planned | Static/non-raw and extracted action tests exist; PTY/raw-mode keyboard coverage is tracked separately. |
+| Real Ink raw-mode TUI keyboard CI | stable | The Ink cockpit boots in a TTY-like raw-mode smoke test, accepts operator input, changes focus, and exits through Ctrl+Q in CI. |
 | Strategy memory routing | experimental | Disabled by default. When explicitly enabled, recent completed workflows can recommend role routes and test commands. |
 | Benchmark quality-cost-trace frontier | experimental | `tedge benchmark` provides a deterministic no-key product demo. It is not a live provider leaderboard claim. |

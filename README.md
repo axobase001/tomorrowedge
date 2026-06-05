@@ -24,9 +24,10 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.0.0`。
+当前版本：`1.0.1`。
 
-- 这一版的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
+- `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode TUI 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
+- `1.0.0` 的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
 
 - TomorrowEdge preserves full artifacts for replay, but projects compact evidence packets to models.
 - Reviewer/Judge 可以消费结构化 evidence packets，而不是只看 raw diff/log。
@@ -368,9 +369,13 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.0.0`.
+Current version: `1.0.1`.
 
-This release promotes TomorrowEdge to **1.0.0**: the project now has a
+`1.0.1` is the first post-1.0 stability release. It fixes live routed agent
+classification, adds a real Ink raw-mode TUI keyboard smoke test, and closes
+the current public issue/PR queue after the 1.0 hardening pass.
+
+`1.0.0` promoted TomorrowEdge to a stable major baseline: the project now has a
 usable TUI-first cockpit surface, a full-access workflow ledger, role-routed
 multi-model execution, provider onboarding, MCP/external-agent contracts, and
 the first architecture upgrade layers needed for auditable engineering runs.
@@ -403,7 +408,7 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `1.0.0` keeps the hardened release lane: `npm run verify`, zip-safe secret
+- `1.0.1` keeps the hardened release lane: `npm run verify`, zip-safe secret
   scanning, full-access shell policy, command runner skeletons, and the locally
   runnable tiny LM demo remain available.
 
