@@ -44,6 +44,23 @@ In `privacy` and `local` modes, cloud overrides are ignored and the route stays
 local-safe. This lets experiments freely compare models in normal modes without
 accidentally violating privacy-mode expectations.
 
+## Strategy memory
+
+By default, routing is deterministic and ignores learned memory. When
+`memory.strategy_routing=true` or `tedge prefs --strategy-memory-routing true`
+is set, TomorrowEdge reads recent `.tomorrowedge/task-memory.jsonl` summaries
+for the matching task type and may:
+
+- prefer provider/model pairs with successful recent outcomes,
+- avoid provider/model pairs with recent `rate_limited`, `quota_exhausted`,
+  `invalid_key`, or `invalid_model` failures,
+- use the most common remembered verification command when the user did not
+  pass `--test-command`.
+
+Explicit `agents.<role>.provider/model` config still wins over memory. In
+`privacy` and `local` modes, cloud memory suggestions are ignored by the same
+privacy guard as manual overrides.
+
 This keeps the product principle visible in cockpit state:
 
 ```text

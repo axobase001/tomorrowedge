@@ -102,6 +102,13 @@ export const configSchema = z.object({
     hard_cap_usd: z.number().nonnegative().default(10),
     warn_at_percent: z.number().min(1).max(100).default(80)
   }),
+  memory: z.object({
+    strategy_routing: z.boolean().default(false),
+    history_limit: z.number().int().min(1).max(200).default(50)
+  }).default({
+    strategy_routing: false,
+    history_limit: 50
+  }),
   strong_agents: z.object({
     max_calls_per_task: z.number().int().nonnegative().default(3),
     max_cost_usd: z.number().nonnegative().default(2),

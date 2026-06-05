@@ -82,6 +82,7 @@ npm run dev -- tui
 深度演示与排障：
 
 - [端到端工作流案例：fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
+- [Benchmark demo：质量/成本/trace 对比](docs/BENCHMARK_DEMO.md)
 - [Provider / MCP / full mode troubleshooting](docs/TROUBLESHOOTING.md)
 
 默认测试和演示都可以离线运行，不需要 API key。云端 provider 只有在显式配置环境变量后才会启用；启用后 `tedge run` 会优先尝试非破坏性 live 候选，必要时仍可用 `--offline` 回到纯离线 fixture/mock 路径。
@@ -98,6 +99,8 @@ npm run dev -- tui
 - provider fallback：主路由不可用时按计划 fallback，并在 `modelNotes` 里记录原因
 - 多模型 drill：Core/River 作为 planner/reviewer，比较不同模型完成同一任务的能力
 - Core-led workflow：任务拆分、多轮模型辩论、角色执行、Core 审核、报告落盘
+- 策略记忆：用户显式开启后，历史 provider 成功/失败、rate limit 和常用测试命令会影响后续路由
+- Benchmark demo：离线对比强单模型、便宜单模型和 TomorrowEdge 多角色工作流的质量、成本、耗时、trace 和 repair
 - MCP Agent Bridge：把 Claude Code / Codex 等外部 coding agents 绑定为 core/planner/reviewer/judge/coder/repairer
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
 - 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
@@ -127,8 +130,10 @@ tedge mode restricted
 tedge mode partial
 tedge mode full
 tedge prefs
+tedge prefs --strategy-memory-routing true
 tedge drill "task"
 tedge workflow "task"
+tedge benchmark-demo --output markdown
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
@@ -141,6 +146,7 @@ tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
+tedge memory --strategy "fix failing test"
 tedge review-export latest --format github
 tedge undo --list
 tedge undo
@@ -443,6 +449,7 @@ screenshot style; `tui` starts the keyboard-driven Ink terminal panels.
 Deep demo and troubleshooting:
 
 - [End-to-end workflow case study: fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
+- [Benchmark demo: quality/cost/trace comparison](docs/BENCHMARK_DEMO.md)
 - [Provider / MCP / full mode troubleshooting](docs/TROUBLESHOOTING.md)
 
 All default tests and demos run offline without API keys. Cloud providers are
@@ -466,6 +473,8 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Explicit provider fallback recorded in `modelNotes`
 - Multi-model capability drills with Core/River as planner/reviewer
 - Core-led workflow with decomposition, multi-round debate, role execution, Core review, and saved reports
+- Strategy memory can influence routing only after explicit opt-in, using recent provider outcomes, rate-limit failures, and common test commands
+- Offline benchmark demo comparing strong single-model, cheap single-model, and TomorrowEdge multi-role workflows across quality, cost, time, trace, and repair visibility
 - MCP Agent Bridge for binding Claude Code / Codex or other external coding agents to core/planner/reviewer/judge/coder/repairer roles
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
@@ -497,8 +506,10 @@ tedge mode restricted
 tedge mode partial
 tedge mode full
 tedge prefs
+tedge prefs --strategy-memory-routing true
 tedge drill "task"
 tedge workflow "task"
+tedge benchmark-demo --output markdown
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
@@ -510,6 +521,8 @@ tedge export latest --format markdown
 tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
+tedge memory
+tedge memory --strategy "fix failing test"
 tedge undo --list
 tedge undo
 ```

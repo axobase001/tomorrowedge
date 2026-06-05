@@ -40,7 +40,11 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
   const loadedConfig = loadConfig(targetCwd);
   const prefs = loadProjectPreferences(targetCwd);
-  const config = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
+  const config = {
+    ...loadedConfig,
+    routing: prefs.routingMode ? { ...loadedConfig.routing, mode: prefs.routingMode } : loadedConfig.routing,
+    memory: prefs.strategyMemoryRouting !== undefined ? { ...loadedConfig.memory, strategy_routing: prefs.strategyMemoryRouting } : loadedConfig.memory
+  };
   const effectiveAccessMode = accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {

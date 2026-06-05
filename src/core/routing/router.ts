@@ -4,11 +4,15 @@ import { validateExternalAssignment } from "../externalAgents/externalAgentRoute
 import { profilesFromConfig } from "./modelProfiles.js";
 import { buildRoutingPlan, type AgentRouteOverrides, type RouteAssignment, type RoutingPlan } from "./policies.js";
 
+export type ModelRouterOptions = {
+  routeOverrides?: AgentRouteOverrides;
+};
+
 export class ModelRouter {
   private readonly plan: RoutingPlan;
 
-  constructor(config: TomorrowEdgeConfig) {
-    const plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config));
+  constructor(config: TomorrowEdgeConfig, options: ModelRouterOptions = {}) {
+    const plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config, options.routeOverrides));
     this.plan = {
       ...plan,
       assignments: plan.assignments.map((assignment) => validateExternalAssignment(config, assignment)),
@@ -33,11 +37,15 @@ export class ModelRouter {
   }
 }
 
-function overridesFromConfig(config: TomorrowEdgeConfig): AgentRouteOverrides {
-  const overrides: AgentRouteOverrides = {};
+function overridesFromConfig(config: TomorrowEdgeConfig, memoryOverrides: AgentRouteOverrides = {}): AgentRouteOverrides {
+  const overrides: AgentRouteOverrides = { ...memoryOverrides };
   for (const role of agentRoles) {
     const agent = config.agents[role];
-    if (agent) overrides[role] = { provider: agent.provider, model: agent.model };
+    if (agent && (agent.provider !== "auto" || agent.model !== "auto")) {
+      overrides[role] = { provider: agent.provider, model: agent.model };
+    } else if (agent && !overrides[role]) {
+      overrides[role] = { provider: agent.provider, model: agent.model };
+    }
   }
   return overrides;
 }

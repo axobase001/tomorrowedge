@@ -18,6 +18,8 @@ describe("learned task memory", () => {
       expect(records[0]?.taskType).toBe("test");
       expect(records[0]?.routingMode).toBe("balanced");
       expect(records[0]?.verificationCommands).toContain("npm test");
+      expect(records[0]?.routingAssignments?.some((assignment) => assignment.role === "planner")).toBe(true);
+      expect(records[0]?.providerOutcomes?.some((outcome) => outcome.role === "planner" && outcome.status === "success")).toBe(true);
       expect(records[0]?.goalFingerprint).toMatch(/^[0-9a-f]+$/);
     } finally {
       await rm(cwd, { recursive: true, force: true });

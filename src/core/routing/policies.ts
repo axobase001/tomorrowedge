@@ -20,6 +20,7 @@ export type RoutingPlan = {
 export type AgentRouteOverride = {
   provider?: string;
   model?: string;
+  reason?: string;
 };
 
 export type AgentRouteOverrides = Partial<Record<AgentRole, AgentRouteOverride>>;
@@ -82,7 +83,7 @@ function applyOverride(assignment: RouteAssignment, mode: RoutingMode, profiles:
     role: assignment.role,
     provider,
     model,
-    reason: `user-configured agent route override${matchingProfile ? "" : " (provider/model profile not pre-registered)"}`
+    reason: override.reason ?? `user-configured agent route override${matchingProfile ? "" : " (provider/model profile not pre-registered)"}`
   };
 }
 

@@ -38,9 +38,10 @@ This file tracks the full-scope request against the current implementation.
 - Shell command execution only after explicit approval
 - Session memory, session directory artifacts, session listing, replay latest, trace latest, and export latest
 - Project preferences stored in `.tomorrowedge/preferences.json`
-- Learned task memory stored as compact `.tomorrowedge/task-memory.jsonl`
+- Learned task memory stored as `.tomorrowedge/task-memory.jsonl`, including opt-in strategy routing summaries for provider outcomes, recent rate limits, and common test commands
 - Multi-model non-mutating capability drill with local planner/reviewer rubric
 - Core-led workflow simulation with task decomposition, multi-round model debate, role execution, Core review, budget preflight, and saved report
+- Offline `tedge benchmark-demo` comparing strong single-model, cheap single-model, and TomorrowEdge multi-role repair workflows across quality, cost, time, trace completeness, and repair visibility
 - `tedge run --image <path>` image/screenshot/diagram handoff with structured visual spec in session output
 - `tedge review-export latest --format github|google-docs` local review/comment draft export
 - Ink TUI panes, command palette, access/model panels, and interactive `a`, `t`, `u`, `c`, `p`, `m`, `q` controls
@@ -59,12 +60,11 @@ This file tracks the full-scope request against the current implementation.
 - Privacy mode: cloud repo context is enforced for live patch prompts; broader provider operations still need full audit
 - TUI: panes, focus navigation, command/access/model panels, Trace pane, full-mode badge, and temporary model-route preview exist; richer editing modal persistence is not complete
 - Verification: test runner, repair loop, and evidence matcher exist but are still minimal
-- Memory: session memory, project preferences, and compact learned task memory exist; deeper cross-session strategy learning is still minimal
+- Memory: session memory, project preferences, compact learned task memory, and opt-in strategy routing influence exist; deeper longitudinal strategy learning is still minimal
 
 ## Not Yet Implemented
 
 - External Google/GitHub comment publishing connectors beyond local draft export
 - Provider-specific live vision smoke assertions across every configured model
 - Persistent TUI model-change modal that writes config/preferences directly from the cockpit
-- Deeper learned memory that recommends routes based on historical outcomes
 - Public release publishing automation beyond CI and pack dry-run

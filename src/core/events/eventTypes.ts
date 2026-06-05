@@ -1,5 +1,6 @@
 import type { AccessMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { ProviderErrorCategory } from "../../safety/providerRedaction.js";
 
 export type EventPhase =
   | "planning"
@@ -39,6 +40,10 @@ export type ModelCallEvent = BaseEvent & {
   fallbackUsed?: boolean;
   fallbackFrom?: string;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
+  statusCode?: number;
+  retryable?: boolean;
+  skipped?: boolean;
 };
 
 export type AgentRunEvent = BaseEvent & {
@@ -259,6 +264,16 @@ export type RoutingDecisionEvent = BaseEvent & {
   policyTags: string[];
 };
 
+export type StrategyMemoryEvent = BaseEvent & {
+  type: "strategy_memory";
+  taskType: string;
+  recordsConsidered: number;
+  preferredTestCommands: string[];
+  routeOverrides: Array<{ role: AgentRole; provider: string; model: string; reason: string }>;
+  avoidedRoutes: Array<{ role: AgentRole; provider: string; model: string; errorCategory: string }>;
+  reasons: string[];
+};
+
 export type ContextProjectionEvent = BaseEvent & {
   type: "context_projection";
   selectedArtifacts: string[];
@@ -346,6 +361,7 @@ export type TomorrowEdgeEvent =
   | AccessModeEvent
   | AutonomyLimitEvent
   | RoutingDecisionEvent
+  | StrategyMemoryEvent
   | ContextProjectionEvent
   | ArtifactProjectionEvent
   | EvidencePacketEvent

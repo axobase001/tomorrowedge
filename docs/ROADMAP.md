@@ -34,6 +34,10 @@ Acceptance criteria:
 
 ## 0.7.x Benchmark Demo
 
+Initial no-key demo path: `tedge benchmark-demo` compares strong single-model,
+cheap single-model, and TomorrowEdge multi-role fixture repair workflows. It is
+an experimental product demo, not a live provider leaderboard.
+
 Acceptance criteria:
 
 - Public benchmark demo compares strong single-agent, cheap single-model, and

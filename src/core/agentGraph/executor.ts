@@ -35,6 +35,7 @@ import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
+import { buildStrategyMemoryRouting } from "../memory/strategyMemory.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
 import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
 import { buildPatchEvidence } from "../evidence/patchEvidence.js";
@@ -66,7 +67,8 @@ export type OfflineGraphOptions = {
 };
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
-  const router = new ModelRouter(config);
+  const strategyMemory = config.memory.strategy_routing ? await buildStrategyMemoryRouting(cwd, goal, config) : undefined;
+  const router = new ModelRouter(config, { routeOverrides: strategyMemory?.routeOverrides });
   const externalAgents = externalAgentRegistryFromConfig(config);
   const access = buildAccessPolicy(config, {
     mode: options.accessMode,
@@ -128,6 +130,23 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     messageRef: ledger.writeArtifact("conversation_messages", goal),
     summary: `${conversationTarget.id}: ${goal.slice(0, 120)}${goal.length > 120 ? "..." : ""}`
   });
+  if (strategyMemory?.enabled) {
+    ledger.append({
+      type: "strategy_memory",
+      phase: "memory",
+      taskType: strategyMemory.taskType,
+      recordsConsidered: strategyMemory.recordsConsidered,
+      preferredTestCommands: strategyMemory.preferredTestCommands,
+      routeOverrides: strategyMemory.routes.map((route) => ({
+        role: route.role,
+        provider: route.provider,
+        model: route.model,
+        reason: route.reason
+      })),
+      avoidedRoutes: strategyMemory.avoid,
+      reasons: strategyMemory.reasons
+    });
+  }
   ledger.append({
     type: "evidence_update",
     phase: "routing",
@@ -442,7 +461,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     }
   }
 
-  const testCommands = options.testCommand ? [options.testCommand] : state.plan.verificationCommands ?? [];
+  const testCommands = options.testCommand
+    ? [options.testCommand]
+    : strategyMemory?.preferredTestCommands[0]
+      ? [strategyMemory.preferredTestCommands[0]]
+      : state.plan.verificationCommands ?? [];
   let shellRuns = 0;
   let repairAttempts = 0;
   if (state.changedFiles.length && testCommands.length) {

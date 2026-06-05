@@ -64,6 +64,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.status}: ${event.reason}`;
     case "routing_decision":
       return `${event.assignedRole} -> ${event.assignedProvider}/${event.assignedModel}: ${event.reason}`;
+    case "strategy_memory":
+      return `strategy memory records=${event.recordsConsidered} routes=${event.routeOverrides.length} tests=${event.preferredTestCommands.length}`;
     case "context_projection":
       return `${event.projectedArtifacts.length}/${event.selectedArtifacts.length} artifact views tokens~${event.tokenEstimate} omitted=${event.omittedBytes}`;
     case "artifact_projection":

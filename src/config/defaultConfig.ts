@@ -31,6 +31,10 @@ export const defaultConfig: TomorrowEdgeConfig = {
     hard_cap_usd: 10,
     warn_at_percent: 80
   },
+  memory: {
+    strategy_routing: false,
+    history_limit: 50
+  },
   strong_agents: {
     max_calls_per_task: 3,
     max_cost_usd: 2,

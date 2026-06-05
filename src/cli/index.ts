@@ -19,6 +19,7 @@ import { traceCommand } from "./commands/trace.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
 import { serveCommand } from "./commands/serve.js";
 import { exportCommand } from "./commands/export.js";
+import { benchmarkCommand } from "./commands/benchmark.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 
@@ -85,9 +86,10 @@ program
   .option("--test-command <command>", "preferred test command")
   .option("--live-patch", "prefer live patch candidates")
   .option("--live-advisory", "prefer live advisory notes")
+  .option("--strategy-memory-routing <value>", "true/false: allow learned strategy memory to influence routing")
   .option("--json", "print raw preferences JSON")
   .option("--list-keys", "show available preference keys")
-  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean; json?: boolean; listKeys?: boolean }) => prefsCommand(cwd, options));
+  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean; strategyMemoryRouting?: string; json?: boolean; listKeys?: boolean }) => prefsCommand(cwd, options));
 
 program
   .command("drill")
@@ -107,6 +109,14 @@ program
   .option("--rounds <n>", "debate rounds, 1-5")
   .option("--output <format>", "json or markdown", "markdown")
   .action((task: string, options: { providers?: string; rounds?: string; output?: "json" | "markdown"; includeMock?: boolean }) => workflowCommand(cwd, task, options));
+
+program
+  .command("benchmark-demo")
+  .description("Run the public offline quality-cost-trace benchmark demo")
+  .option("--task <task>", "benchmark task goal")
+  .option("--fixture <name>", "fixture repo under tests/fixtures", "sample-repo-basic")
+  .option("--output <format>", "markdown or json", "markdown")
+  .action((options: { task?: string; fixture?: string; output?: "json" | "markdown" }) => benchmarkCommand(cwd, options));
 
 program
   .command("models")
@@ -135,7 +145,7 @@ program.command("export").description("Export a saved session report").argument(
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
-program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").action((options: { limit?: string }) => memoryCommand(cwd, options));
+program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").option("--strategy <task>", "preview memory-backed routing and test-command suggestions for a task").action((options: { limit?: string; strategy?: string }) => memoryCommand(cwd, options));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));

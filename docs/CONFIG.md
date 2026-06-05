@@ -241,6 +241,21 @@ resources. It currently feeds `budget_decision` diagnostics; later releases can
 turn those decisions into hard routing gates.
 
 Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
-sessions are saved. It records compact metadata only: task type, risk level,
-routing mode, verification commands, visual page type, judge decision, and
+sessions are saved. It records compact, redacted strategy metadata: task type,
+risk level, routing mode, verification commands, provider/model outcomes,
+recent provider failure categories, visual page type, judge decision, and
 result. It does not store file contents or long model outputs.
+
+Strategy memory does not affect routing by default. Enable it explicitly:
+
+```yaml
+memory:
+  strategy_routing: true
+  history_limit: 50
+```
+
+or with project preferences:
+
+```bash
+tedge prefs --strategy-memory-routing true
+```
