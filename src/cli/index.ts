@@ -125,13 +125,13 @@ program.command("doctor").description("Check local configuration and provider re
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 
-program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").option("--diagnostics", "append routing, projection, fallback, budget, and trace completeness diagnostics").action((sessionId: string, options: { verbose?: boolean; diagnostics?: boolean }) => traceCommand(cwd, sessionId, options));
+program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").option("--diagnostics", "append routing, projection, fallback, budget, and trace completeness diagnostics").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { verbose?: boolean; diagnostics?: boolean; cwd?: string; workdir?: string }) => traceCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("diagnostics").description("Inspect workflow diagnostics for a saved session").argument("[action]", "on, latest, or a session id", "latest").action((action: string) => diagnosticsCommand(cwd, action));
 
 program.command("serve").description("Start the local browser cockpit and narrow session API").option("--port <port>", "local port", "18792").option("--host <host>", "bind host", "127.0.0.1").option("--open", "open the cockpit in the default browser").action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, options));
 
-program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean }) => exportCommand(cwd, sessionId, options));
+program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean; cwd?: string; workdir?: string }) => exportCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 

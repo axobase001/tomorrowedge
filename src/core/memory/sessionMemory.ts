@@ -50,8 +50,10 @@ export async function saveSession(cwd: string, state: AgentGraphState): Promise<
 export async function loadSession(cwd: string, sessionId: string): Promise<SessionRecord> {
   const sessionDirPath = path.join(cwd, ".tomorrowedge", "sessions", sessionId, "session.json");
   const flatPath = path.join(cwd, ".tomorrowedge", "sessions", `${sessionId}.json`);
-  const text = await readFile(sessionDirPath, "utf8").catch(() => readFile(flatPath, "utf8"));
-  return redactSessionRecord(await hydrateEvents(JSON.parse(text) as SessionRecord, path.dirname(sessionDirPath)));
+  const dirText = await readFile(sessionDirPath, "utf8").catch(() => undefined);
+  if (dirText !== undefined) return redactSessionRecord(await hydrateEvents(JSON.parse(dirText) as SessionRecord, path.dirname(sessionDirPath)));
+  const flatText = await readFile(flatPath, "utf8");
+  return redactSessionRecord(await hydrateEvents(JSON.parse(flatText) as SessionRecord, path.dirname(flatPath)));
 }
 
 export async function listSessions(cwd: string): Promise<Array<SessionRecord & { path: string }>> {

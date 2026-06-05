@@ -10,11 +10,13 @@ export type ExportOptions = {
   format?: "markdown" | "json";
   includeArtifacts?: boolean;
   brief?: boolean;
+  cwd?: string;
 };
 
 export async function exportCommand(cwd: string, sessionId: string, options: ExportOptions = {}): Promise<void> {
-  const session = sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
-  const sessionDir = resolveSessionDir(cwd, session.sessionId);
+  const targetCwd = options.cwd ? path.resolve(cwd, options.cwd) : cwd;
+  const session = sessionId === "latest" ? await loadLatestSession(targetCwd) : await loadSession(targetCwd, sessionId);
+  const sessionDir = resolveSessionDir(targetCwd, session.sessionId);
   const artifacts = await loadArtifacts(session.state.events, sessionDir);
 
   if (options.format === "json") {

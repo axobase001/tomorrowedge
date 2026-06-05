@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { exportCommand } from "../../src/cli/commands/export.js";
+import { traceCommand } from "../../src/cli/commands/trace.js";
 import { tuiCommand } from "../../src/cli/commands/tui.js";
 import { artifactRefs } from "../../src/core/events/eventRenderer.js";
 import { renderStaticCockpit } from "../../src/cli/renderCockpit.js";
@@ -439,6 +440,38 @@ describe("fixture E2E workflow", () => {
     expect(payload.summary?.result).toBe("completed");
     await expect(readFile(path.join(payload.executionCwd, "index.js"), "utf8")).resolves.toContain("return a + b");
     await expect(readFile(path.join(projectRoot, "tests", "fixtures", "sample-repo-basic", "index.js"), "utf8")).resolves.toContain("return a - b");
+  });
+
+  it("does not fail a patched greenfield project when default npm test is missing", async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-greenfield-"));
+    trackCleanup(projectRoot);
+    await writeFile(path.join(projectRoot, "index.js"), "export function add(a, b) {\n  return a - b;\n}\n", "utf8");
+    await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({ name: "greenfield-no-test", type: "module" }, null, 2), "utf8");
+
+    const state = await runOfflineGraph(projectRoot, "fix failing test", defaultConfig, {
+      fixtureMode: true,
+      approvePatch: true,
+      approveShell: true
+    });
+
+    expect(state.changedFiles).toContain("index.js");
+    expect(state.runResults[0]?.skipped).toBe(true);
+    expect(state.runResults[0]?.success).toBe(true);
+    expect(state.finalSummary?.result).toBe("completed");
+    expect(state.finalSummary?.risksRemaining).toContain("Patch applied but verification was skipped.");
+  });
+
+  it("traces and exports sessions from an explicit --cwd root", async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-session-cwd-"));
+    trackCleanup(projectRoot);
+    const state = await runOfflineGraph(projectRoot, "cwd scoped trace export task", defaultConfig);
+    await saveSession(projectRoot, state);
+
+    const traceOutput = await captureStdout(() => traceCommand(tempRoot, "latest", { cwd: projectRoot, verbose: true }));
+    const exportOutput = await captureStdout(() => exportCommand(tempRoot, "latest", { cwd: projectRoot, format: "markdown", brief: true }));
+
+    expect(traceOutput).toContain("cwd scoped trace export task");
+    expect(exportOutput).toContain(`TomorrowEdge Session ${state.sessionId}`);
   });
 
   function trackCleanup(cleanupPath: string | undefined): void {

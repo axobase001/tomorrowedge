@@ -443,6 +443,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const testCommands = options.testCommand ? [options.testCommand] : state.plan.verificationCommands ?? [];
+  const defaultVerification = !options.testCommand;
   let shellRuns = 0;
   let repairAttempts = 0;
   if (state.changedFiles.length && testCommands.length) {
@@ -451,7 +452,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
         if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
         shellRuns += 1;
-        const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+        const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+        const result = normalizeVerificationResult(rawResult, { defaultVerification });
         state.runResults.push(result);
         recordShellRunEvent(state, ledger, cwd, result);
         if (result.success) continue;
@@ -487,7 +489,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
             if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
             shellRuns += 1;
-            const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+            const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+            const repairedRun = normalizeVerificationResult(rawRepairedRun, { defaultVerification });
             state.runResults.push(repairedRun);
             recordShellRunEvent(state, ledger, cwd, repairedRun);
             if (!repairedRun.success) break;
@@ -898,8 +901,27 @@ function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: s
     stdoutRef,
     stderrRef,
     durationMs: result.durationMs,
-    success: result.success
+    success: result.success,
+    skipped: result.skipped,
+    skipReason: result.skipReason
   });
+}
+
+function normalizeVerificationResult(result: RunResult, options: { defaultVerification: boolean }): RunResult {
+  if (options.defaultVerification && isMissingNpmTestScript(result)) {
+    return {
+      ...result,
+      success: true,
+      skipped: true,
+      skipReason: "package.json has no npm test script; default verification skipped"
+    };
+  }
+  return result;
+}
+
+function isMissingNpmTestScript(result: RunResult): boolean {
+  if (result.success || result.command.trim() !== "npm test") return false;
+  return /Missing script:\s*"?test"?/i.test(`${result.stdout}\n${result.stderr}`);
 }
 
 function recordArtifactProjection(state: AgentGraphState, ledger: EventLedger, phase: TomorrowEdgeProjectionPhase, artifactRef: string, content: string, kind: RuntimeArtifactKind, role?: AgentRole): ProviderView {

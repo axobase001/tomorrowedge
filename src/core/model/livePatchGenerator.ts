@@ -138,7 +138,7 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
     provider: plan.provider,
     model: plan.model,
     ledger: input.ledger,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       messages: [
         {
@@ -150,7 +150,7 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
       ],
       temperature: plan.role === "coder_a" ? 0.15 : 0.35,
       maxCompletionTokens: plan.maxOutputTokens,
-      responseFormat: { type: "json_object" }
+      responseFormat: shouldUseJsonResponseFormat(provider, model) ? { type: "json_object" } : undefined
     })
   });
   return { result };
@@ -284,10 +284,7 @@ function parsePatchJson(raw: string): {
     .filter((line) => !/^```/.test(line.trim()))
     .join("\n")
     .trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end < start) throw new Error("Live patch response was not JSON.");
-  let jsonText = text.slice(start, end + 1);
+  let jsonText = extractFirstJsonObject(text);
   try {
     const parsed = livePatchResponseSchema.safeParse(JSON.parse(jsonText));
     if (!parsed.success) {
@@ -309,6 +306,38 @@ function parsePatchJson(raw: string): {
 
 function inferFilesFromDiff(diff: string): string[] {
   return [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1]).filter(Boolean);
+}
+
+function shouldUseJsonResponseFormat(provider: string, model: string): boolean {
+  const value = `${provider}/${model}`.toLowerCase();
+  return !value.includes("deepseek");
+}
+
+function extractFirstJsonObject(text: string): string {
+  const start = text.indexOf("{");
+  if (start < 0) throw new Error("Live patch response was not JSON.");
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === "\"") inString = false;
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  throw new Error("Live patch response JSON object was not balanced.");
 }
 
 function validateUsableUnifiedDiff(diff: string, claimedFiles: string[]): void {

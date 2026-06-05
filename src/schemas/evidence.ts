@@ -5,6 +5,8 @@ export type RunResult = {
   stderr: string;
   durationMs: number;
   success: boolean;
+  skipped?: boolean;
+  skipReason?: string;
 };
 
 export type FinalSummary = {
