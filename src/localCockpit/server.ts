@@ -9,6 +9,7 @@ import { renderCockpitHtml } from "./html.js";
 import type { AccessMode } from "../config/schema.js";
 import type { ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { agentRoles, type AgentRole } from "../schemas/agentTask.js";
+import { redactSessionRecord, redactText } from "../safety/secretScanner.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -166,7 +167,7 @@ async function sendArtifact(cwd: string, response: ServerResponse, sessionId: st
   const effectiveSessionId = sessionId === "latest" ? (await loadLatestSession(cwd)).sessionId : sessionId;
   const artifactPath = path.join(cwd, ".tomorrowedge", "sessions", effectiveSessionId, ref);
   const content = await readFile(artifactPath, "utf8");
-  return send(response, 200, content, "text/plain; charset=utf-8");
+  return send(response, 200, redactText(content), "text/plain; charset=utf-8");
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -178,7 +179,7 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  send(response, status, JSON.stringify(body, null, 2), "application/json; charset=utf-8");
+  send(response, status, JSON.stringify(redactSessionRecord(body), null, 2), "application/json; charset=utf-8");
 }
 
 function send(response: ServerResponse, status: number, body: string, contentType: string): void {

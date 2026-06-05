@@ -14,9 +14,11 @@ const patterns: Array<[string, RegExp]> = [
   ["npm_token", /\bnpm_[A-Za-z0-9]{30,}\b/],
   ["slack_token", /\bxox[abprs]-[A-Za-z0-9-]{20,}\b/],
   ["openai_like_key", /\bsk-[A-Za-z0-9_-]{20,}\b/],
-  ["provider_user_identifier", /["']?(?:user|account|tenant|organization|org)[_-]?id["']?\s*[:=]\s*["']?[^"',}\s]+["']?/i],
+  ["provider_identifier", /(?:["'](?:user|account|tenant|organization|org|request|trace|correlation)[_-]?id["']\s*[:=]\s*["']?[^"',}\s]+["']?|\b(?:x[-_])?(?:user|account|tenant|organization|org|request|trace|correlation)[_-]id\b\s*[:=]\s*["']?[^"',}\s]+["']?)/i],
   ["high_entropy_token", /\b(?=[A-Za-z0-9_/-]{48,}\b)(?=[A-Za-z0-9_/-]*[a-z])(?=[A-Za-z0-9_/-]*[A-Z])(?=[A-Za-z0-9_/-]*[0-9])[A-Za-z0-9_/-]{48,}\b/]
 ];
+
+const providerIdentifierKeyPattern = /^(?:x[-_])?(?:user|account|tenant|organization|org|request|trace|correlation)[_-]?id$/i;
 
 export function scanSecrets(content: string): SecretFinding[] {
   const findings: SecretFinding[] = [];
@@ -51,7 +53,17 @@ export function redactValue<T>(value: T): T {
   if (typeof value === "string") return redactText(value) as T;
   if (Array.isArray(value)) return value.map((item) => redactValue(item)) as T;
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactValue(item)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactStructuredValue(key, item)])) as T;
   }
   return value;
+}
+
+export function redactSessionRecord<T>(record: T): T {
+  return redactValue(record);
+}
+
+function redactStructuredValue(key: string, value: unknown): unknown {
+  if (!providerIdentifierKeyPattern.test(key)) return redactValue(value);
+  if (value === undefined || value === null) return value;
+  return redact(String(value));
 }

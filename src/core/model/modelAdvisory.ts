@@ -36,7 +36,11 @@ export type AdvisoryInput = {
 
 export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]> {
   const plans = buildAdvisoryPlans(input);
-  return Promise.all(plans.map((plan) => runRoleAdvice(input, plan)));
+  const notes: ModelNote[] = [];
+  for (const plan of plans) {
+    notes.push(await runRoleAdvice(input, plan));
+  }
+  return notes;
 }
 
 export function buildAdvisoryPlans(input: AdvisoryInput): AdvisoryCallPlan[] {
@@ -96,7 +100,14 @@ async function runRoleAdvice(input: AdvisoryInput, plan: AdvisoryCallPlan): Prom
     })
   });
   if (!result.response) {
-    return { ...base, error: result.error, fallbackReason: result.fallbackReason };
+    return {
+      ...base,
+      error: result.error,
+      fallbackReason: result.fallbackReason,
+      errorCategory: result.errorCategory,
+      retryable: result.retryable,
+      skippedLiveCall: result.skippedLiveCall
+    };
   }
   const content = result.response.content.trim();
   return {
@@ -109,6 +120,9 @@ async function runRoleAdvice(input: AdvisoryInput, plan: AdvisoryCallPlan): Prom
     fallbackUsed: result.fallbackUsed,
     fallbackFrom: result.fallbackFrom,
     fallbackReason: result.fallbackReason,
+    errorCategory: result.errorCategory,
+    retryable: result.retryable,
+    skippedLiveCall: result.skippedLiveCall,
     error: content ? undefined : "Provider returned an empty advisory response."
   };
 }

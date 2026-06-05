@@ -78,6 +78,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
         const response = await this.fetchOnce(body);
+        if (await shouldReturnWithoutRetry(response)) return response;
         if (!isRetryableStatus(response.status) || attempt === maxRetries) return response;
         lastError = new Error(`${this.id} retryable response: ${response.status}`);
       } catch (error) {
@@ -123,6 +124,12 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
+}
+
+async function shouldReturnWithoutRetry(response: Response): Promise<boolean> {
+  if (response.status !== 429) return false;
+  const body = await response.clone().text().catch(() => "");
+  return /quota|insufficient[_ -]?quota|credits?|free-models-per-day|daily.*limit|exhausted|out of balance/i.test(body);
 }
 
 function isRetryableError(error: unknown): boolean {

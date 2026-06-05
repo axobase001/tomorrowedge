@@ -1,5 +1,6 @@
 import type { AccessMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { ProviderErrorCategory } from "../../providers/providerErrors.js";
 
 export type EventPhase =
   | "planning"
@@ -29,7 +30,7 @@ export type BaseEvent = {
 
 export type ModelCallEvent = BaseEvent & {
   type: "model_call";
-  status?: "start" | "success" | "failure";
+  status?: "start" | "success" | "failure" | "skipped";
   requestId: string;
   promptRef?: string;
   responseRef?: string;
@@ -39,6 +40,9 @@ export type ModelCallEvent = BaseEvent & {
   fallbackUsed?: boolean;
   fallbackFrom?: string;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
+  retryable?: boolean;
+  skippedLiveCall?: boolean;
 };
 
 export type AgentRunEvent = BaseEvent & {
@@ -127,6 +131,8 @@ export type ProviderFallbackEvent = BaseEvent & {
   toModel: string;
   reason: string;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
+  retryable?: boolean;
 };
 
 export type CostUsageEvent = BaseEvent & {

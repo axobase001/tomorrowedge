@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canSendToCloud } from "../../src/safety/privacyGuard.js";
-import { redactText, scanSecrets } from "../../src/safety/secretScanner.js";
+import { redactSessionRecord, redactText, scanSecrets } from "../../src/safety/secretScanner.js";
 import { assessShellCommand } from "../../src/safety/shellGuard.js";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
 
@@ -17,12 +17,43 @@ describe("safety", () => {
   });
 
   it("redacts provider account identifiers from raw error metadata", () => {
-    const content = 'openrouter request failed: 429 {"error":{"metadata":{"provider_name":"Crucible"}},"user_id":"user_3EfqcfPXAjQTwahh8KSxAxJJYP9","accountId":"acct_live_123"}';
+    const content = [
+      "openrouter request failed: 429",
+      "x-request-id: req_live_123",
+      "x-ratelimit-reset: 1712345678",
+      '{"error":{"metadata":{"provider_name":"Crucible"}},"user_id":"user_3EfqcfPXAjQTwahh8KSxAxJJYP9","accountId":"acct_live_123","request_id":"req_live_456","org_id":"org_live_789"}'
+    ].join("\n");
     const redacted = redactText(content);
 
     expect(redacted).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
     expect(redacted).not.toContain("acct_live_123");
+    expect(redacted).not.toContain("req_live_123");
+    expect(redacted).not.toContain("req_live_456");
+    expect(redacted).not.toContain("org_live_789");
     expect(redacted).toContain("provider_name");
+    expect(redacted).toContain("x-ratelimit-reset");
+    expect(redacted).toContain("1712345678");
+  });
+
+  it("redacts structured provider identifiers from session-like records", () => {
+    const record = {
+      request_id: "req_live_456",
+      orgId: "org_live_789",
+      accountId: "acct_live_123",
+      headers: {
+        "x-ratelimit-reset": "1712345678"
+      },
+      error: {
+        message: "quota exhausted"
+      }
+    };
+    const serialized = JSON.stringify(redactSessionRecord(record));
+
+    expect(serialized).not.toContain("req_live_456");
+    expect(serialized).not.toContain("org_live_789");
+    expect(serialized).not.toContain("acct_live_123");
+    expect(serialized).toContain("x-ratelimit-reset");
+    expect(serialized).toContain("1712345678");
   });
 
   it("blocks raw cloud context in privacy mode", () => {

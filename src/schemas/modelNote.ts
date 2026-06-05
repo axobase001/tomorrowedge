@@ -1,4 +1,5 @@
 import type { AgentRole } from "./agentTask.js";
+import type { ProviderErrorCategory } from "../providers/providerErrors.js";
 
 export type ModelNote = {
   id: string;
@@ -20,6 +21,9 @@ export type ModelNote = {
   fallbackReason?: string;
   retryUsed?: boolean;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
+  retryable?: boolean;
+  skippedLiveCall?: boolean;
 };
 
 export type ModelUsageSummary = {

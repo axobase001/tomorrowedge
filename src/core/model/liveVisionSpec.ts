@@ -78,7 +78,10 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
       note: {
         ...noteBase,
         error: result.error,
-        fallbackReason: result.fallbackReason
+        fallbackReason: result.fallbackReason,
+        errorCategory: result.errorCategory,
+        retryable: result.retryable,
+        skippedLiveCall: result.skippedLiveCall
       }
     };
   }
@@ -98,7 +101,10 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
         estimatedCostUsd: estimateCostUsd(result.provider, result.response.usage),
         fallbackUsed: result.fallbackUsed,
         fallbackFrom: result.fallbackFrom,
-        fallbackReason: result.fallbackReason
+        fallbackReason: result.fallbackReason,
+        errorCategory: result.errorCategory,
+        retryable: result.retryable,
+        skippedLiveCall: result.skippedLiveCall
       }
     };
   } catch (error) {
@@ -112,6 +118,9 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
         fallbackUsed: result.fallbackUsed,
         fallbackFrom: result.fallbackFrom,
         fallbackReason: result.fallbackReason,
+        errorCategory: result.errorCategory,
+        retryable: result.retryable,
+        skippedLiveCall: result.skippedLiveCall,
         error: error instanceof Error ? error.message : String(error)
       }
     };

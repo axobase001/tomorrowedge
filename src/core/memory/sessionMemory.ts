@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import { appendLearnedTaskMemory } from "./taskMemory.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
+import { redactSessionRecord, redactText } from "../../safety/secretScanner.js";
 
 export type SessionRecord = {
   sessionId: string;
@@ -24,15 +25,17 @@ export async function saveSession(cwd: string, state: AgentGraphState): Promise<
       eventArtifacts: state.eventArtifacts.map((artifact) => ({ ref: artifact.ref, content: "[stored in artifact file]" }))
     }
   };
+  const redactedRecord = redactSessionRecord(record);
+  const redactedEvents = redactSessionRecord(state.events);
   const sessionDir = path.join(cwd, ".tomorrowedge", "sessions", sessionId);
   await mkdir(sessionDir, { recursive: true });
   const filePath = path.join(sessionDir, "session.json");
-  await writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
-  await writeFile(path.join(sessionDir, "events.jsonl"), state.events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
+  await writeFile(filePath, JSON.stringify(redactedRecord, null, 2), "utf8");
+  await writeFile(path.join(sessionDir, "events.jsonl"), redactedEvents.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
   for (const artifact of state.eventArtifacts) {
     const artifactPath = path.join(sessionDir, artifact.ref);
     await mkdir(path.dirname(artifactPath), { recursive: true });
-    await writeFile(artifactPath, artifact.content, "utf8");
+    await writeFile(artifactPath, redactText(artifact.content), "utf8");
   }
   await appendLearnedTaskMemory(cwd, state);
   return filePath;
@@ -42,7 +45,7 @@ export async function loadSession(cwd: string, sessionId: string): Promise<Sessi
   const sessionDirPath = path.join(cwd, ".tomorrowedge", "sessions", sessionId, "session.json");
   const flatPath = path.join(cwd, ".tomorrowedge", "sessions", `${sessionId}.json`);
   const text = await readFile(sessionDirPath, "utf8").catch(() => readFile(flatPath, "utf8"));
-  return hydrateEvents(JSON.parse(text) as SessionRecord, path.dirname(sessionDirPath));
+  return redactSessionRecord(await hydrateEvents(JSON.parse(text) as SessionRecord, path.dirname(sessionDirPath)));
 }
 
 export async function listSessions(cwd: string): Promise<Array<SessionRecord & { path: string }>> {
@@ -54,7 +57,7 @@ export async function listSessions(cwd: string): Promise<Array<SessionRecord & {
       .map(async (name) => {
         const filePath = name.endsWith(".json") ? path.join(dir, name) : path.join(dir, name, "session.json");
         const record = JSON.parse(await readFile(filePath, "utf8")) as SessionRecord;
-        return { ...record, path: filePath };
+        return redactSessionRecord({ ...record, path: filePath });
       })
   );
   return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -73,5 +76,5 @@ async function hydrateEvents(record: SessionRecord, sessionDir: string): Promise
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line) as TomorrowEdgeEvent);
-  return { ...record, state: { ...record.state, events, eventArtifacts: record.state.eventArtifacts ?? [] } };
+  return { ...record, state: { ...record.state, events: redactSessionRecord(events), eventArtifacts: record.state.eventArtifacts ?? [] } };
 }

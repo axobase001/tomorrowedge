@@ -953,7 +953,10 @@ function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSum
       estimatedCostUsd: note.estimatedCostUsd,
       fallbackUsed: note.fallbackUsed,
       fallbackFrom: note.fallbackFrom ? `${note.fallbackFrom.provider}/${note.fallbackFrom.model}` : undefined,
-      error: note.error
+      error: note.error,
+      errorCategory: note.errorCategory,
+      retryable: note.retryable,
+      skippedLiveCall: note.skippedLiveCall
     });
   }
   ledger.append({

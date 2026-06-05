@@ -16,7 +16,7 @@ describe("provider fallback", () => {
   });
 
   it("redacts provider account identifiers from fallback errors and events", async () => {
-    const { server, url } = await startErrorServer();
+    const { server, url, requestCount } = await startErrorServer();
     servers.push(server);
     const config: TomorrowEdgeConfig = {
       ...defaultConfig,
@@ -50,19 +50,43 @@ describe("provider fallback", () => {
     const serialized = JSON.stringify({ result, events: ledger.events });
 
     expect(result.fallbackUsed).toBe(true);
+    expect(result.errorCategory).toBe("quota_exhausted");
     expect(serialized).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
     expect(serialized).not.toContain("acct_live_123");
     expect(serialized).toContain("[redacted]");
     expect(serialized).toContain("provider_fallback");
+    expect(requestCount()).toBe(1);
+
+    const second = await chatWithProviderFallback({
+      config,
+      router: new ModelRouter(config),
+      role: "planner",
+      provider: "openai_compatible",
+      model: "free-test-model",
+      ledger,
+      buildRequest: (model) => ({
+        model,
+        messages: [{ role: "user", content: "second smoke" }],
+        maxCompletionTokens: 16
+      })
+    });
+
+    expect(second.fallbackUsed).toBe(true);
+    expect(second.errorCategory).toBe("quota_exhausted");
+    expect(second.skippedLiveCall).toBe(true);
+    expect(requestCount()).toBe(1);
+    expect(ledger.events.some((event) => event.type === "model_call" && event.status === "skipped" && event.errorCategory === "quota_exhausted")).toBe(true);
   }, 10_000);
 });
 
-async function startErrorServer(): Promise<{ server: Server; url: string }> {
+async function startErrorServer(): Promise<{ server: Server; url: string; requestCount: () => number }> {
+  let requests = 0;
   const server = createServer((_request, response) => {
+    requests += 1;
     response.writeHead(429, { "content-type": "application/json" });
     response.end(JSON.stringify({
       error: {
-        message: "temporarily rate-limited upstream",
+        message: "Rate limit exceeded: free-models-per-day quota exhausted",
         metadata: { provider_name: "Crucible" }
       },
       user_id: "user_3EfqcfPXAjQTwahh8KSxAxJJYP9",
@@ -78,5 +102,5 @@ async function startErrorServer(): Promise<{ server: Server; url: string }> {
   });
   const address = server.address();
   if (!address || typeof address !== "object") throw new Error("test server did not bind to a port");
-  return { server, url: `http://127.0.0.1:${address.port}` };
+  return { server, url: `http://127.0.0.1:${address.port}`, requestCount: () => requests };
 }

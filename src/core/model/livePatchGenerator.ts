@@ -55,7 +55,10 @@ export async function buildLivePatchPlans(input: LivePatchInput): Promise<LivePa
 
 export async function runLivePatchCandidates(input: LivePatchInput): Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> {
   const plans = await buildLivePatchPlans(input);
-  const results = await Promise.all(plans.map((plan) => runPatchPlan(input, plan)));
+  const results = [];
+  for (const plan of plans) {
+    results.push(await runPatchPlan(input, plan));
+  }
   return {
     candidates: results.map((result) => result.candidate),
     notes: results.map((result) => result.note)
@@ -110,7 +113,15 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
     const message = result.error ?? "Live patch provider failed.";
     return {
       candidate: emptyCandidate(plan.role, message, input.plan),
-      note: { ...noteBase, error: message, fallbackReason: result.fallbackReason, retryUsed }
+      note: {
+        ...noteBase,
+        error: message,
+        fallbackReason: result.fallbackReason,
+        retryUsed,
+        errorCategory: result.errorCategory,
+        retryable: result.retryable,
+        skippedLiveCall: result.skippedLiveCall
+      }
     };
   }
 
@@ -125,7 +136,10 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
       fallbackFrom: result.fallbackFrom,
       fallbackReason: result.fallbackReason,
       error: message,
-      retryUsed
+      retryUsed,
+      errorCategory: result.errorCategory,
+      retryable: result.retryable,
+      skippedLiveCall: result.skippedLiveCall
     }
   };
 }
@@ -182,6 +196,9 @@ function buildCandidateFromResponse(input: LivePatchInput, plan: LivePatchPlan, 
       fallbackUsed: result.fallbackUsed,
       fallbackFrom: result.fallbackFrom,
       fallbackReason: result.fallbackReason,
+      errorCategory: result.errorCategory,
+      retryable: result.retryable,
+      skippedLiveCall: result.skippedLiveCall,
       error: candidate.unifiedDiff.trim() ? undefined : "Live patch response did not contain a usable unified diff."
     }
   };

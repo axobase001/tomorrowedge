@@ -2,7 +2,7 @@ import { loadConfig, writeConfig } from "../../config/configLoader.js";
 import { createProviderRegistry } from "../../providers/registry.js";
 import { testProviderConnections } from "../../providers/connectionTest.js";
 import { fetchOpenRouterCatalog, formatOpenRouterModelLine, recommendFreeOpenRouterModels } from "../../providers/openrouterCatalog.js";
-import { redactText } from "../../safety/secretScanner.js";
+import { classifyProviderError, redactProviderError, type ProviderErrorCategory } from "../../providers/providerErrors.js";
 
 export type ModelsOptions = {
   realSmoke?: boolean;
@@ -55,7 +55,8 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
           const status = isExactOk(content) ? "ok" : content ? "warning: expected exact ok" : "warning: empty response";
           process.stdout.write(`    smoke: ${status} (${response.usage ? `${response.usage.inputTokens}/${response.usage.outputTokens} tokens` : "usage unavailable"})\n`);
         } catch (error) {
-          process.stdout.write(`    smoke: failed (${errorMessage(error)})\n`);
+          const diagnostic = classifyProviderError(error);
+          process.stdout.write(`    smoke: ${diagnostic.category} (${diagnostic.message})\n`);
         }
       }
       if (options.smokeSuite && provider.kind === "cloud") {
@@ -148,14 +149,25 @@ function parseLimit(value: string | undefined, fallback: number): number {
 
 type SmokeCheck = {
   name: string;
-  status: "ok" | "warning" | "failed" | "skipped";
+  status: "ok" | "warning" | "failed" | "skipped" | ProviderErrorCategory;
   detail?: string;
 };
 
 async function runSmokeSuite(provider: ReturnType<typeof createProviderRegistry>["list"] extends () => Array<infer P> ? P : never, model: string): Promise<SmokeCheck[]> {
   const checks: SmokeCheck[] = [];
-  checks.push(await smokeText(provider, model));
-  checks.push(await smokeJson(provider, model));
+  const text = await smokeText(provider, model);
+  checks.push(text);
+  if (shouldSkipRemainingLiveChecks(text.status)) {
+    checks.push(skippedSmokeCheck("smoke:json", text.status));
+    checks.push(skippedSmokeCheck("smoke:vision", text.status));
+    return checks;
+  }
+  const json = await smokeJson(provider, model);
+  checks.push(json);
+  if (shouldSkipRemainingLiveChecks(json.status)) {
+    checks.push(skippedSmokeCheck("smoke:vision", json.status));
+    return checks;
+  }
   checks.push(await smokeVision(provider, model));
   return checks;
 }
@@ -172,7 +184,7 @@ async function smokeText(provider: Parameters<typeof runSmokeSuite>[0], model: s
     if (isExactOk(content)) return { name: "smoke:text", status: "ok", detail: tokenDetail(response.usage) };
     return { name: "smoke:text", status: "warning", detail: content ? "expected exact ok" : "empty response" };
   } catch (error) {
-    return { name: "smoke:text", status: "failed", detail: errorMessage(error) };
+    return failedSmokeCheck("smoke:text", error);
   }
 }
 
@@ -190,7 +202,7 @@ async function smokeJson(provider: Parameters<typeof runSmokeSuite>[0], model: s
     const parsed = start >= 0 && end >= start ? JSON.parse(text.slice(start, end + 1)) : undefined;
     return parsed?.ok === true ? { name: "smoke:json", status: "ok", detail: tokenDetail(response.usage) } : { name: "smoke:json", status: "warning", detail: "JSON shape mismatch" };
   } catch (error) {
-    return { name: "smoke:json", status: "failed", detail: errorMessage(error) };
+    return failedSmokeCheck("smoke:json", error);
   }
 }
 
@@ -219,12 +231,38 @@ async function smokeVision(provider: Parameters<typeof runSmokeSuite>[0], model:
     const parsed = start >= 0 && end >= start ? JSON.parse(text.slice(start, end + 1)) : undefined;
     return parsed?.image === true ? { name: "smoke:vision", status: "ok", detail: tokenDetail(response.usage) } : { name: "smoke:vision", status: "warning", detail: "vision JSON shape mismatch" };
   } catch (error) {
-    return { name: "smoke:vision", status: "failed", detail: errorMessage(error) };
+    return failedSmokeCheck("smoke:vision", error);
   }
 }
 
 function errorMessage(error: unknown): string {
-  return redactText(error instanceof Error ? error.message : String(error));
+  return redactProviderError(error);
+}
+
+function failedSmokeCheck(name: SmokeCheck["name"], error: unknown): SmokeCheck {
+  const diagnostic = classifyProviderError(error);
+  return {
+    name,
+    status: diagnostic.category === "unknown" ? "failed" : diagnostic.category,
+    detail: diagnostic.message
+  };
+}
+
+function skippedSmokeCheck(name: SmokeCheck["name"], status: SmokeCheck["status"]): SmokeCheck {
+  return { name, status: "skipped", detail: `skipped after provider status ${status}` };
+}
+
+function shouldSkipRemainingLiveChecks(status: SmokeCheck["status"]): boolean {
+  return [
+    "rate_limited",
+    "quota_exhausted",
+    "upstream_unavailable",
+    "invalid_model",
+    "invalid_key",
+    "network",
+    "timeout",
+    "configuration"
+  ].includes(status);
 }
 
 function tokenDetail(usage?: { inputTokens: number; outputTokens: number }): string {

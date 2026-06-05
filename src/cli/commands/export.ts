@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
 import { artifactRefs, renderEventMarkdown } from "../../core/events/eventRenderer.js";
 import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
+import { redactSessionRecord, redactText } from "../../safety/secretScanner.js";
 
 export type ExportOptions = {
   format?: "markdown" | "json";
@@ -17,7 +18,7 @@ export async function exportCommand(cwd: string, sessionId: string, options: Exp
   const artifacts = await loadArtifacts(session.state.events, sessionDir);
 
   if (options.format === "json") {
-    process.stdout.write(JSON.stringify(options.includeArtifacts ? { ...session, artifacts } : session, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(redactSessionRecord(options.includeArtifacts ? { ...session, artifacts } : session), null, 2) + "\n");
     return;
   }
 
@@ -90,7 +91,7 @@ async function loadArtifacts(events: TomorrowEdgeEvent[], sessionDir: string): P
   const entries = await Promise.all(
     refs.map(async (ref) => {
       const content = await readFile(path.join(sessionDir, ref), "utf8").catch(() => "");
-      return [ref, content] as const;
+      return [ref, redactText(content)] as const;
     })
   );
   return Object.fromEntries(entries.filter(([, content]) => content.length));

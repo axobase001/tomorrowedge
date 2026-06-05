@@ -6,7 +6,7 @@ import type { ChatRequest, ChatResponse } from "../../providers/types.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import { makeId } from "../../utils/ids.js";
-import { redactText } from "../../safety/secretScanner.js";
+import { classifyProviderError, type ProviderErrorCategory, type ProviderErrorDiagnostic } from "../../providers/providerErrors.js";
 
 export type ProviderFallbackResult = {
   provider: string;
@@ -19,9 +19,13 @@ export type ProviderFallbackResult = {
     model: string;
   };
   fallbackReason?: string;
+  errorCategory?: ProviderErrorCategory;
+  retryable?: boolean;
+  skippedLiveCall?: boolean;
 };
 
 const registryCache = new WeakMap<TomorrowEdgeConfig, ProviderRegistry>();
+const skippedLiveCallProviders = new WeakMap<EventLedger, Map<string, ProviderErrorDiagnostic>>();
 
 export async function chatWithProviderFallback(input: {
   config: TomorrowEdgeConfig;
@@ -48,7 +52,10 @@ export async function chatWithProviderFallback(input: {
     return {
       ...primary,
       error: `${primaryResult.error} Fallback ${fallback.provider}/${fallback.model} also failed: ${fallbackResult.error}`,
-      fallbackReason: primaryResult.error
+      fallbackReason: primaryResult.error,
+      errorCategory: primaryResult.errorCategory,
+      retryable: primaryResult.retryable,
+      skippedLiveCall: primaryResult.skippedLiveCall
     };
   }
 
@@ -60,7 +67,9 @@ export async function chatWithProviderFallback(input: {
     fromModel: primary.model,
     toProvider: fallback.provider,
     toModel: fallback.model,
-    reason: primaryResult.error ?? "provider fallback used"
+    reason: primaryResult.error ?? "provider fallback used",
+    errorCategory: primaryResult.errorCategory,
+    retryable: primaryResult.retryable
   });
 
   return {
@@ -69,7 +78,10 @@ export async function chatWithProviderFallback(input: {
     response: fallbackResult.response,
     fallbackUsed: true,
     fallbackFrom: primary,
-    fallbackReason: primaryResult.error
+    fallbackReason: primaryResult.error,
+    errorCategory: primaryResult.errorCategory,
+    retryable: primaryResult.retryable,
+    skippedLiveCall: primaryResult.skippedLiveCall
   };
 }
 
@@ -80,9 +92,61 @@ async function tryChat(
   model: string,
   buildRequest: (model: string, provider: string) => ChatRequest,
   ledger?: EventLedger
-): Promise<Pick<ProviderFallbackResult, "response" | "error">> {
-  const provider = cachedProviderRegistry(config).get(providerId);
+): Promise<Pick<ProviderFallbackResult, "response" | "error" | "errorCategory" | "retryable" | "skippedLiveCall">> {
   const requestId = makeId(`request_${role}`);
+  const skipped = ledger ? skippedDiagnosticFor(ledger, providerId) : undefined;
+  if (skipped) {
+    ledger?.append({
+      type: "model_call",
+      status: "skipped",
+      phase: phaseForRole(role),
+      role,
+      provider: providerId,
+      model,
+      requestId,
+      error: skipped.message,
+      errorCategory: skipped.category,
+      retryable: false,
+      skippedLiveCall: true
+    });
+    return {
+      error: `Skipped live call for ${providerId}/${model}: ${skipped.category}. ${skipped.message}`,
+      errorCategory: skipped.category,
+      retryable: false,
+      skippedLiveCall: true
+    };
+  }
+  const provider = cachedProviderRegistry(config).get(providerId);
+  if (!provider) {
+    const missingProvider = classifyProviderError(new Error(`Provider ${providerId} is not configured or unavailable.`));
+    ledger?.append({
+      type: "model_call",
+      status: "start",
+      phase: phaseForRole(role),
+      role,
+      provider: providerId,
+      model,
+      requestId
+    });
+    rememberSkippedProvider(ledger, providerId, missingProvider);
+    ledger?.append({
+      type: "model_call",
+      status: "failure",
+      phase: phaseForRole(role),
+      role,
+      provider: providerId,
+      model,
+      requestId,
+      error: missingProvider.message,
+      errorCategory: missingProvider.category,
+      retryable: missingProvider.retryable
+    });
+    return {
+      error: missingProvider.message,
+      errorCategory: missingProvider.category,
+      retryable: missingProvider.retryable
+    };
+  }
   const request = buildRequest(model, providerId);
   const promptRef = ledger?.writeArtifact("prompts", JSON.stringify(request.messages, null, 2), "json");
   ledger?.append({
@@ -95,21 +159,6 @@ async function tryChat(
     requestId,
     promptRef
   });
-  if (!provider) {
-    const error = `Provider ${providerId} is not configured or unavailable.`;
-    ledger?.append({
-      type: "model_call",
-      status: "failure",
-      phase: phaseForRole(role),
-      role,
-      provider: providerId,
-      model,
-      requestId,
-      promptRef,
-      error
-    });
-    return { error };
-  }
   try {
     const response = await provider.chat(request);
     ledger?.append({
@@ -127,7 +176,8 @@ async function tryChat(
     });
     return { response };
   } catch (error) {
-    const message = redactText(error instanceof Error ? error.message : String(error));
+    const diagnostic = classifyProviderError(error);
+    rememberSkippedProvider(ledger, providerId, diagnostic);
     ledger?.append({
       type: "model_call",
       status: "failure",
@@ -137,10 +187,23 @@ async function tryChat(
       model,
       requestId,
       promptRef,
-      error: message
+      error: diagnostic.message,
+      errorCategory: diagnostic.category,
+      retryable: diagnostic.retryable
     });
-    return { error: message };
+    return { error: diagnostic.message, errorCategory: diagnostic.category, retryable: diagnostic.retryable };
   }
+}
+
+function skippedDiagnosticFor(ledger: EventLedger, providerId: string): ProviderErrorDiagnostic | undefined {
+  return skippedLiveCallProviders.get(ledger)?.get(providerId);
+}
+
+function rememberSkippedProvider(ledger: EventLedger | undefined, providerId: string, diagnostic: ProviderErrorDiagnostic): void {
+  if (!ledger || !diagnostic.skipLiveCalls) return;
+  const existing = skippedLiveCallProviders.get(ledger) ?? new Map<string, ProviderErrorDiagnostic>();
+  existing.set(providerId, diagnostic);
+  skippedLiveCallProviders.set(ledger, existing);
 }
 
 function cachedProviderRegistry(config: TomorrowEdgeConfig): ProviderRegistry {

@@ -203,7 +203,7 @@ describe("config loader", () => {
         new Response(
           JSON.stringify({
             error: {
-              message: "temporarily rate-limited upstream",
+              message: "Rate limit exceeded: free-models-per-day quota exhausted",
               metadata: { provider_name: "Crucible" }
             },
             user_id: "user_3EfqcfPXAjQTwahh8KSxAxJJYP9",
@@ -214,7 +214,9 @@ describe("config loader", () => {
 
       const output = await captureStdout(() => modelsCommand(cwd, { smokeSuite: true, provider: "openai_compatible" }));
 
-      expect(output).toContain("smoke:text: failed");
+      expect(output).toContain("smoke:text: quota_exhausted");
+      expect(output).toContain("smoke:json: skipped");
+      expect(output).toContain("smoke:vision: skipped");
       expect(output).toContain("[redacted]");
       expect(output).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
       expect(output).not.toContain("acct_live_123");
