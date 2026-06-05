@@ -1,11 +1,12 @@
-import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { prepareRunWorkspace, runCommand } from "../../src/cli/commands/run.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
-import { listUndoSnapshots, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
+import { listUndoSnapshots, restoreLatestSessionUndoSnapshot, restoreLatestUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { exportCommand } from "../../src/cli/commands/export.js";
 import { tuiCommand } from "../../src/cli/commands/tui.js";
@@ -115,8 +116,12 @@ describe("fixture E2E workflow", () => {
     expect(state.runResults[0]?.success).toBe(true);
     expect(state.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(true);
     expect(state.events.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+    expect(state.events.some((event) => event.type === "safety_check" && event.action === "project")).toBe(true);
+    expect(state.events.some((event) => event.type === "safety_check" && event.action === "patch" && event.riskLevel === "low")).toBe(true);
+    expect(state.events.some((event) => event.type === "safety_check" && event.action === "shell" && event.explanation.includes("shell=false"))).toBe(true);
+    expect(state.sessionUndoSnapshotId).toBeTruthy();
     const eventTypes = new Set(state.events.map((event) => event.type));
-    expect(["access_mode", "context_select", "patch_candidate", "review_decision", "judge_decision", "patch_apply", "shell_run", "summary"].every((type) => eventTypes.has(type as never))).toBe(true);
+    expect(["access_mode", "safety_check", "context_select", "patch_candidate", "review_decision", "judge_decision", "patch_apply", "shell_run", "summary"].every((type) => eventTypes.has(type as never))).toBe(true);
   });
 
   it("full access mode auto-applies repair and reruns tests", async () => {
@@ -133,6 +138,46 @@ describe("fixture E2E workflow", () => {
     expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
+  }, 15_000);
+
+  it("can restore a session-level pre-run snapshot after patch and repair", async () => {
+    await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    });
+    expect((await readFile(path.join(tempRoot, "index.js"), "utf8"))).toContain("return a + b");
+
+    const restored = await restoreLatestSessionUndoSnapshot(tempRoot);
+
+    expect(restored.restoredPaths).toContain("index.js");
+    expect((await readFile(path.join(tempRoot, "index.js"), "utf8"))).toContain("return a - b");
+  }, 15_000);
+
+  it("moves full mode from a clean master branch to a dedicated work branch", async () => {
+    await initGitRepo(tempRoot);
+
+    const state = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    });
+    const currentBranch = (await execa("git", ["branch", "--show-current"], { cwd: tempRoot })).stdout;
+
+    expect(currentBranch).toMatch(/^tedge\/full-/);
+    expect(state.projectSafety?.branch).toBe("master");
+    expect(state.projectSafety?.createdBranch).toBe(currentBranch);
+  }, 15_000);
+
+  it("refuses full mode on a dirty master branch", async () => {
+    await initGitRepo(tempRoot);
+    await writeFile(path.join(tempRoot, "README.md"), "dirty local work\n", "utf8");
+
+    await expect(runOfflineGraph(tempRoot, "fix failing test", defaultConfig, {
+      provider: "fixture",
+      accessMode: "full"
+    })).rejects.toThrow("Full mode blocked on dirty master");
+    expect((await execa("git", ["branch", "--show-current"], { cwd: tempRoot })).stdout).toBe("master");
   }, 15_000);
 
   it("records the full repair loop in trace order and exports expanded artifacts", async () => {
@@ -468,4 +513,12 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
     process.stdout.write = originalWrite;
   }
   return output;
+}
+
+async function initGitRepo(cwd: string): Promise<void> {
+  await execa("git", ["init", "-b", "master"], { cwd });
+  await execa("git", ["config", "user.email", "test@example.com"], { cwd });
+  await execa("git", ["config", "user.name", "TomorrowEdge Test"], { cwd });
+  await execa("git", ["add", "index.js", "package.json", "test.js"], { cwd });
+  await execa("git", ["commit", "-m", "fixture baseline"], { cwd });
 }

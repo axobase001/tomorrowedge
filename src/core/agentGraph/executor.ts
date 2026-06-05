@@ -19,6 +19,8 @@ import type { AgentGraphState } from "./state.js";
 import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
 import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
+import { assessPatchAction, assessShellAction, affectedFilePaths, type ActionRiskAssessment } from "../../safety/actionRisk.js";
+import { prepareProjectSafety } from "../../safety/projectSafety.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
 import { buildDebateRounds } from "../debate/debateEngine.js";
@@ -52,6 +54,16 @@ export type OfflineGraphOptions = {
   testCommand?: string;
   imagePaths?: string[];
   conversationTarget?: string;
+};
+
+type SafetyCheckInput = {
+  action: "project" | "patch" | "shell";
+  target?: string;
+  riskLevel: "low" | "medium" | "high";
+  affectedFiles: ActionRiskAssessment["affectedFiles"];
+  explanation: string;
+  policy: string[];
+  blocked: boolean;
 };
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
@@ -89,6 +101,21 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       repairApproved: access.repairApproved
     }
   };
+  if (access.mode === "full") {
+    state.projectSafety = await prepareProjectSafety(cwd, access.mode, state.sessionId);
+    recordSafetyCheck(ledger, {
+      action: "project",
+      riskLevel: state.projectSafety.dirty ? "medium" : "low",
+      affectedFiles: [],
+      explanation: state.projectSafety.summary,
+      policy: [
+        "full mode refuses dirty protected branches such as main and master",
+        "full mode creates a dedicated work branch when started from a clean protected branch",
+        "non-git fixture workspaces are allowed but reported explicitly"
+      ],
+      blocked: false
+    });
+  }
   ledger.append({
     type: "access_mode",
     phase: "routing",
@@ -346,12 +373,15 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     if (selected?.unifiedDiff) {
       const diffRef = ledger.writeArtifact("diffs", selected.unifiedDiff);
+      const patchRisk = assessPatchAction(cwd, selected.unifiedDiff);
+      recordSafetyCheck(ledger, { ...patchRisk, target: selected.candidateId });
       try {
-        const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved));
+        const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved, { sessionUndoSnapshotId: state.sessionUndoSnapshotId }));
+        state.sessionUndoSnapshotId = applyResult.sessionUndoSnapshotId ?? state.sessionUndoSnapshotId;
         state.changedFiles = applyResult.changedFiles;
-        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: applyResult.changedFiles, diffRef, undoSnapshotIds: applyResult.undoSnapshotIds, applied: true });
+        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: applyResult.changedFiles, diffRef, undoSnapshotIds: applyResult.undoSnapshotIds, sessionUndoSnapshotId: applyResult.sessionUndoSnapshotId, riskLevel: patchRisk.riskLevel, riskExplanation: patchRisk.explanation, riskPolicy: patchRisk.policy, applied: true });
       } catch (error) {
-        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: selected.filesChanged, diffRef, undoSnapshotIds: [], applied: false, error: error instanceof Error ? error.message : String(error) });
+        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: selected.filesChanged, diffRef, undoSnapshotIds: [], riskLevel: patchRisk.riskLevel, riskExplanation: patchRisk.explanation, riskPolicy: patchRisk.policy, applied: false, error: error instanceof Error ? error.message : String(error) });
         state.agents.push({
           id: "approval_patch",
           role: "runner",
@@ -378,9 +408,12 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
         if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
         shellRuns += 1;
-        const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+        const shellOptions = shellExecutionOptions(config, access);
+        const shellRisk = assessShellAction(testCommand, { policy: shellOptions.policy, verificationAllowlist: shellOptions.verificationAllowlist });
+        recordSafetyCheck(ledger, { ...shellRisk, target: testCommand });
+        const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellOptions));
         state.runResults.push(result);
-        recordShellRunEvent(ledger, cwd, result);
+        recordShellRunEvent(ledger, cwd, result, shellRisk);
         if (result.success) continue;
         if (!options.repairOnFail) break;
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return finalizeState(state, ledger, router);
@@ -405,16 +438,22 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
         ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
         if (repairCandidate.unifiedDiff) {
+          const repairPatchRisk = assessPatchAction(cwd, repairCandidate.unifiedDiff);
+          recordSafetyCheck(ledger, { ...repairPatchRisk, target: repairCandidate.candidateId });
           try {
-            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved));
+            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved, { sessionUndoSnapshotId: state.sessionUndoSnapshotId }));
+            state.sessionUndoSnapshotId = repairApplyResult.sessionUndoSnapshotId ?? state.sessionUndoSnapshotId;
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
-            ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
+            ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, sessionUndoSnapshotId: repairApplyResult.sessionUndoSnapshotId, riskLevel: repairPatchRisk.riskLevel, riskExplanation: repairPatchRisk.explanation, riskPolicy: repairPatchRisk.policy, applied: true });
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
             if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
             shellRuns += 1;
-            const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+            const repairedShellOptions = shellExecutionOptions(config, access);
+            const repairedShellRisk = assessShellAction(testCommand, { policy: repairedShellOptions.policy, verificationAllowlist: repairedShellOptions.verificationAllowlist });
+            recordSafetyCheck(ledger, { ...repairedShellRisk, target: testCommand });
+            const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, repairedShellOptions));
             state.runResults.push(repairedRun);
-            recordShellRunEvent(ledger, cwd, repairedRun);
+            recordShellRunEvent(ledger, cwd, repairedRun, repairedShellRisk);
             if (!repairedRun.success) break;
           } catch (error) {
             ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: error instanceof Error ? error.message : String(error) });
@@ -751,7 +790,24 @@ function recordPatchCandidateEvent(ledger: EventLedger, role: AgentRole, candida
   });
 }
 
-function recordShellRunEvent(ledger: EventLedger, cwd: string, result: RunResult): void {
+function recordSafetyCheck(ledger: EventLedger, assessment: SafetyCheckInput): void {
+  ledger.append({
+    type: "safety_check",
+    phase: assessment.action === "shell" ? "shell" : assessment.action === "patch" ? "patch" : "routing",
+    role: assessment.action === "project" ? undefined : "runner",
+    provider: "local_tool",
+    model: "safety",
+    action: assessment.action ?? "patch",
+    target: assessment.target,
+    riskLevel: assessment.riskLevel,
+    affectedFiles: assessment.action === "project" ? [] : affectedFilePaths(assessment.affectedFiles),
+    explanation: assessment.explanation,
+    policy: assessment.policy,
+    blocked: assessment.blocked
+  });
+}
+
+function recordShellRunEvent(ledger: EventLedger, cwd: string, result: RunResult, assessment?: ActionRiskAssessment): void {
   ledger.append({
     type: "shell_run",
     phase: "shell",
@@ -760,6 +816,10 @@ function recordShellRunEvent(ledger: EventLedger, cwd: string, result: RunResult
     model: "shell",
     command: result.command,
     cwd,
+    affectedFiles: assessment ? affectedFilePaths(assessment.affectedFiles) : undefined,
+    riskLevel: assessment?.riskLevel,
+    riskExplanation: assessment?.explanation,
+    riskPolicy: assessment?.policy,
     exitCode: result.exitCode,
     stdoutRef: ledger.writeArtifact("stdout", result.stdout),
     stderrRef: ledger.writeArtifact("stderr", result.stderr),

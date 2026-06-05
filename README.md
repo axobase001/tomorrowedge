@@ -124,6 +124,7 @@ tedge memory
 tedge review-export latest --format github
 tedge undo --list
 tedge undo
+tedge undo --session
 ```
 
 ## 权限模式
@@ -465,6 +466,7 @@ tedge export latest --format json --include-artifacts
 tedge sessions
 tedge undo --list
 tedge undo
+tedge undo --session
 ```
 
 ## Conversation Targets

@@ -27,9 +27,9 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "judge_decision":
       return `${event.decision}${event.selectedCandidateId ? ` ${event.selectedCandidateId}` : ""}: ${event.reason}`;
     case "patch_apply":
-      return event.applied ? `applied ${event.filesChanged.join(", ") || event.candidateId}` : `patch blocked: ${event.error ?? "not applied"}`;
+      return event.applied ? `applied ${event.filesChanged.join(", ") || event.candidateId}${event.riskLevel ? ` risk=${event.riskLevel}` : ""}` : `patch blocked${event.riskLevel ? ` risk=${event.riskLevel}` : ""}: ${event.error ?? "not applied"}`;
     case "shell_run":
-      return event.success === undefined ? `shell blocked: ${event.error ?? event.command}` : `${event.command} exit=${event.exitCode}`;
+      return event.success === undefined ? `shell blocked${event.riskLevel ? ` risk=${event.riskLevel}` : ""}: ${event.error ?? event.command}` : `${event.command} exit=${event.exitCode}${event.riskLevel ? ` risk=${event.riskLevel}` : ""}`;
     case "repair_attempt":
       return event.applied ? `repair applied ${event.candidateId}` : `repair candidate ${event.candidateId}`;
     case "provider_fallback":
@@ -62,6 +62,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `result=${event.result}`;
     case "autonomy_limit_reached":
       return `${event.status}: ${event.reason}`;
+    case "safety_check":
+      return `${event.action} safety ${event.blocked ? "blocked" : "ok"} risk=${event.riskLevel}: ${event.explanation}`;
   }
 }
 

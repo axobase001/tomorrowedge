@@ -3,13 +3,18 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseUnifiedDiff } from "./patchParser.js";
 import { normalizeUnifiedDiffHunkCounts } from "./patchParser.js";
-import { createUndoSnapshot } from "./undoManager.js";
+import { createOrUpdateSessionUndoSnapshot, createUndoSnapshot } from "./undoManager.js";
 import { resolveInside } from "../tools/fsTool.js";
 import { assertPatchSafe } from "./patchValidator.js";
 
 export type PatchApplyResult = {
   changedFiles: string[];
   undoSnapshotIds: string[];
+  sessionUndoSnapshotId?: string;
+};
+
+export type PatchApplyOptions = {
+  sessionUndoSnapshotId?: string;
 };
 
 export async function applyUnifiedDiff(cwd: string, unifiedDiff: string, approved: boolean): Promise<string[]> {
@@ -17,7 +22,7 @@ export async function applyUnifiedDiff(cwd: string, unifiedDiff: string, approve
   return result.changedFiles;
 }
 
-export async function applyUnifiedDiffWithResult(cwd: string, unifiedDiff: string, approved: boolean): Promise<PatchApplyResult> {
+export async function applyUnifiedDiffWithResult(cwd: string, unifiedDiff: string, approved: boolean, options: PatchApplyOptions = {}): Promise<PatchApplyResult> {
   if (!approved) throw new Error("Patch application blocked: approval required.");
   const normalizedDiff = normalizeUnifiedDiffHunkCounts(unifiedDiff);
   assertPatchSafe(cwd, normalizedDiff);
@@ -50,10 +55,15 @@ export async function applyUnifiedDiffWithResult(cwd: string, unifiedDiff: strin
     plans.push({ target, absolute, original, existed, next, isDelete: file.isDelete });
   }
   const applied: typeof plans = [];
+  const sessionUndoSnapshotId = await createOrUpdateSessionUndoSnapshot(
+    cwd,
+    options.sessionUndoSnapshotId,
+    plans.map((plan) => ({ relativePath: plan.target, content: plan.original, existed: plan.existed }))
+  );
   try {
     for (const plan of plans) {
       await mkdir(path.dirname(plan.absolute), { recursive: true });
-      undoSnapshotIds.push(await createUndoSnapshot(cwd, plan.target, plan.original));
+      undoSnapshotIds.push(await createUndoSnapshot(cwd, plan.target, plan.original, plan.existed));
       if (plan.isDelete) {
         await rm(plan.absolute, { force: true });
       } else {
@@ -66,7 +76,7 @@ export async function applyUnifiedDiffWithResult(cwd: string, unifiedDiff: strin
     await rollbackAppliedPlans(applied);
     throw error;
   }
-  return { changedFiles: changed, undoSnapshotIds };
+  return { changedFiles: changed, undoSnapshotIds, sessionUndoSnapshotId };
 }
 
 function applyUniqueDeletionAnchoredPatch(original: string, patch: StructuredPatch): string | false {

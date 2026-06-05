@@ -13,6 +13,7 @@ import type { RoutingPlan } from "../routing/policies.js";
 import type { AccessPolicy } from "../permissions/accessPolicy.js";
 import type { EventArtifact, TomorrowEdgeEvent } from "../events/eventTypes.js";
 import type { ConversationTarget } from "../../schemas/conversation.js";
+import type { ProjectSafetyResult } from "../../safety/projectSafety.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -20,6 +21,8 @@ export type AgentGraphState = {
   conversationTarget?: ConversationTarget;
   routing: RoutingPlan;
   access: AccessPolicy;
+  projectSafety?: ProjectSafetyResult;
+  sessionUndoSnapshotId?: string;
   events: TomorrowEdgeEvent[];
   eventArtifacts: EventArtifact[];
   agents: AgentRunState[];

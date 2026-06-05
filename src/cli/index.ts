@@ -144,7 +144,7 @@ program
   .option("--format <format>", "github or google-docs", "github")
   .action((sessionId: string, options: { format?: "github" | "google-docs" }) => reviewExportCommand(cwd, sessionId, options));
 
-program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").action((options: { list?: boolean; snapshot?: string }) => undoCommand(cwd, options));
+program.command("undo").description("List or restore patch undo snapshots").option("--list", "list undo snapshots").option("--snapshot <id>", "restore a specific undo snapshot id").option("--session", "restore or list session-level pre-run snapshots").action((options: { list?: boolean; snapshot?: string; session?: boolean }) => undoCommand(cwd, options));
 
 try {
   await program.parseAsync(process.argv);

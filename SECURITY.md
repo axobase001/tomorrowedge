@@ -32,6 +32,16 @@ TomorrowEdge is a **full-access agent cockpit**. Understanding its security boun
 - **partial**: Write actions permitted but require explicit user approval per action.
 - **full**: All actions auto-approved. **Always run in a sandbox, clean git repo, or fixture workspace.**
 
+### Project Workspace Safety
+
+- In `full` mode, TomorrowEdge refuses to run on a dirty protected branch (`main` or `master`).
+- If `full` mode starts from a clean protected branch, TomorrowEdge automatically creates a
+  dedicated `tedge/full-<session>` work branch before applying patches or running shell commands.
+- Non-git fixture or sandbox workspaces are allowed, but the trace records that the branch guard was
+  skipped.
+- Every run writes `safety_check` events before project, patch, and shell actions so the trace shows
+  risk level, affected files, and policy rationale before mutation.
+
 ### Shell Execution
 
 - In `full` and `partial` modes, TomorrowEdge can execute shell commands through a **verification
@@ -42,6 +52,20 @@ TomorrowEdge is a **full-access agent cockpit**. Understanding its security boun
 - Dangerous executables (`rm`, `shutdown`, `reboot`, `curl`, `wget`, `bash`, `sh`) are blocked by
   default.
 - Customize the allowlist in `.tomorrowedge/config.yaml` under `shell.verification_allowlist`.
+- Before each shell run, TomorrowEdge records a risk explanation, parsed command, and obvious path
+  arguments in the event ledger.
+
+### Patch And Rollback Policy
+
+- Patches must stay inside the project root.
+- Ignored files, binary patches, rename patches, and sensitive paths require manual handling and are
+  blocked by default.
+- Sensitive paths include `.env*`, `*.pem`, `*.key`, `*.sqlite`, `*.db`, and names containing
+  `credential`, `secret`, `token`, or `password`.
+- Before each patch apply, TomorrowEdge records affected files and a risk grade.
+- File-level undo snapshots are still created for each patched file.
+- Session-level undo snapshots preserve the pre-run state for all files touched by patches in the
+  session. Use `tedge undo --session` to restore the latest session-level snapshot.
 
 ### API Keys and Secrets
 

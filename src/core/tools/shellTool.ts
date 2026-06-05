@@ -1,7 +1,7 @@
 import { execa } from "execa";
 import type { RunResult } from "../../schemas/evidence.js";
 import type { ShellPolicy } from "../../config/schema.js";
-import { assessShellCommand, parseShellCommand } from "../../safety/shellGuard.js";
+import { explainShellCommand } from "../../safety/shellGuard.js";
 
 export type ShellExecutionOptions = {
   approved: boolean;
@@ -14,7 +14,7 @@ export async function runApprovedCommand(cwd: string, command: string, approvedO
   if (!options.approved) {
     throw new Error("Shell command blocked: approval required.");
   }
-  const risk = options.policy === "verification_allowlist" ? assessShellCommand(command, options.verificationAllowlist) : parseShellCommand(command);
+  const risk = explainShellCommand(command, options.verificationAllowlist, options.policy === "verification_allowlist");
   if (!risk.allowed || !risk.argv?.length) {
     throw new Error(`Shell command blocked: ${risk.reason}.`);
   }

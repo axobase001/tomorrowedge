@@ -94,6 +94,10 @@ export type PatchApplyEvent = BaseEvent & {
   filesChanged: string[];
   diffRef: string;
   undoSnapshotIds: string[];
+  sessionUndoSnapshotId?: string;
+  riskLevel?: "low" | "medium" | "high";
+  riskExplanation?: string;
+  riskPolicy?: string[];
   applied: boolean;
   error?: string;
 };
@@ -102,6 +106,10 @@ export type ShellRunEvent = BaseEvent & {
   type: "shell_run";
   command: string;
   cwd: string;
+  affectedFiles?: string[];
+  riskLevel?: "low" | "medium" | "high";
+  riskExplanation?: string;
+  riskPolicy?: string[];
   exitCode?: number;
   stdoutRef?: string;
   stderrRef?: string;
@@ -250,6 +258,17 @@ export type AutonomyLimitEvent = BaseEvent & {
   reason: string;
 };
 
+export type SafetyCheckEvent = BaseEvent & {
+  type: "safety_check";
+  action: "project" | "patch" | "shell";
+  target?: string;
+  riskLevel: "low" | "medium" | "high";
+  affectedFiles: string[];
+  explanation: string;
+  policy: string[];
+  blocked: boolean;
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -276,7 +295,8 @@ export type TomorrowEdgeEvent =
   | EvidenceEvent
   | SummaryEvent
   | AccessModeEvent
-  | AutonomyLimitEvent;
+  | AutonomyLimitEvent
+  | SafetyCheckEvent;
 
 export type EventArtifact = {
   ref: string;

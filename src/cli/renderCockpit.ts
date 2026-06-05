@@ -20,7 +20,7 @@ export function canUseRawMode(): boolean {
 
 export function renderStaticCockpit(graph: AgentGraphState): string {
   const selected = graph.judge?.selectedCandidateId ?? "(none)";
-  const recentEvents = graph.events.slice(-8).map((event) => `- ${renderEventLine(event)}`);
+  const recentEvents = graph.events.slice(-12).map((event) => `- ${renderEventLine(event)}`);
   const target = graph.conversationTarget ? `${graph.conversationTarget.id} (${graph.conversationTarget.label})` : "core (TomorrowEdge Core)";
   const route = graph.routing.assignments
     .filter((assignment) => ["planner", "coder_a", "reviewer", "judge", "runner"].includes(assignment.role))

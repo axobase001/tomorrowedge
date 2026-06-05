@@ -4,6 +4,13 @@ export type ShellRisk = {
   argv?: string[];
 };
 
+export type ShellCommandExplanation = ShellRisk & {
+  executable?: string;
+  dangerous: boolean;
+  pathArguments: string[];
+  explanation: string;
+};
+
 const blockedExecutables = new Set(["rm", "del", "erase", "rmdir", "shutdown", "reboot", "format", "mkfs", "curl", "wget", "powershell", "pwsh", "cmd", "bash", "sh"]);
 const defaultAllowedExecutables = ["npm", "node", "npx", "pnpm", "yarn", "python", "python3", "pytest", "tsx", "tsc", "vitest", "jest", "cargo", "rustc", "make", "cmake", "go", "uv", "pip", "bun", "deno"];
 const shellMetacharacters = /[;&|`<>]|\$\(|\r|\n/;
@@ -46,6 +53,28 @@ export function parseShellCommand(command: string): ShellRisk {
   }
 }
 
+export function explainShellCommand(command: string, allowedExecutables = defaultAllowedExecutables, enforceAllowlist = true): ShellCommandExplanation {
+  const assessed = enforceAllowlist ? assessShellCommand(command, allowedExecutables) : parseShellCommand(command);
+  const argv = assessed.argv ?? parseShellCommand(command).argv ?? [];
+  const executable = argv[0] ? normalizeExecutable(argv[0]) : undefined;
+  const dangerous = Boolean(executable && blockedExecutables.has(executable));
+  const allowed = assessed.allowed && !dangerous;
+  const reason = dangerous ? `dangerous executable blocked: ${argv[0]}` : assessed.reason;
+  const pathArguments = argv.slice(1).filter(isLikelyPathArgument);
+  return {
+    ...assessed,
+    allowed,
+    reason,
+    argv,
+    executable,
+    dangerous,
+    pathArguments,
+    explanation: argv.length
+      ? `Command ${argv[0]} runs with shell=false, ${pathArguments.length ? `references path argument(s): ${pathArguments.join(", ")}` : "has no obvious file path arguments"}, and ${allowed ? "passes" : "does not pass"} the configured verification policy: ${reason}.`
+      : `Command is not runnable: ${reason}.`
+  };
+}
+
 export function splitCommand(command: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -84,4 +113,10 @@ export function splitCommand(command: string): string[] {
 
 function normalizeExecutable(executable: string): string {
   return executable.toLowerCase().replace(/\.(cmd|exe|bat|ps1)$/i, "");
+}
+
+function isLikelyPathArgument(value: string): boolean {
+  if (!value || value.startsWith("-")) return false;
+  if (/^(https?:|npm:|node:)/i.test(value)) return false;
+  return value.includes("/") || value.includes("\\") || value.startsWith(".") || /\.[A-Za-z0-9]{1,8}$/.test(value);
 }
