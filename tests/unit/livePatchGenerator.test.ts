@@ -6,7 +6,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { PlannerAgent } from "../../src/core/agents/planner.js";
 import { ExplorerAgent } from "../../src/core/agents/explorer.js";
-import { buildLivePatchPlans } from "../../src/core/model/livePatchGenerator.js";
+import { buildLivePatchPlans, runLivePatchCandidates } from "../../src/core/model/livePatchGenerator.js";
 import { ModelRouter } from "../../src/core/routing/router.js";
 
 describe("live patch generator", () => {
@@ -107,6 +107,79 @@ describe("live patch generator", () => {
       expect(contextSelection.selectedFiles.map((file) => file.path)).not.toContain("screen.png");
       expect(contextSelection.excludedFiles).toContainEqual({ path: "screen.png", reason: "Excluded as binary." });
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects schema-valid live patch responses with empty diffs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-empty-diff-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      await writeFile(path.join(cwd, "index.js"), "export const value = 1;\n", "utf8");
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "Explained the change but did not provide a patch.",
+                    filesChanged: ["index.js"],
+                    unifiedDiff: "",
+                    testPlan: ["npm test"],
+                    knownTradeoffs: [],
+                    estimatedRisk: "low"
+                  })
+                }
+              }
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 10 }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          openai_compatible: {
+            ...defaultConfig.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "openai_compatible", model: "free-test-model" },
+          coder_b: { provider: "openai_compatible", model: "free-test-model" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const plan = await planner.run({ goal: "update index.js" });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal: "Update index.js",
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [{ path: "index.js", reason: "target file", risk: "safe" }],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "single file"
+        }
+      });
+
+      expect(result.candidates).toHaveLength(2);
+      expect(result.candidates.every((candidate) => candidate.filesChanged.length === 0 && candidate.unifiedDiff === "")).toBe(true);
+      expect(result.notes.every((note) => note.retryUsed)).toBe(true);
+      expect(result.notes.map((note) => note.error).join("\n")).toContain("usable unified diff");
+    } finally {
+      globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });
     }
   });

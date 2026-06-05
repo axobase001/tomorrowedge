@@ -132,8 +132,12 @@ function diagnoseProvider(id: string, provider: ProviderConfig, hasProfile: bool
   if (localOrOffline) {
     checks.push("price not required for offline/local provider");
   } else {
+    if (status !== "error") {
+      status = "warning";
+      checks.push("static configuration only; chat quota/readiness not verified by doctor");
+      fix = `Run \`tedge models --smoke-suite --provider ${id}\` to verify live chat readiness.`;
+    }
     checks.push(estimated === undefined ? "price unknown" : `price defaults available (~$${estimated}/1k+1k tokens)`);
-    if (estimated === undefined && status === "ready") status = "warning";
   }
   return { id, status, checks, fix };
 }

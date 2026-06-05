@@ -117,7 +117,7 @@ program
   .option("--configure-free <model-id>", "enable OpenRouter and set the selected free or low-cost model in .tomorrowedge/config.yaml")
   .option("--free-first", "when used with --configure-free, bind low-risk execution roles to the selected free model")
   .option("--connection-test", "test enabled provider endpoints with a lightweight HTTP /models request")
-  .option("--provider <id>", "limit connection tests or catalog refresh to one provider; free refresh currently supports openrouter")
+  .option("--provider <id>", "limit provider listing, smoke checks, connection tests, or catalog refresh to one provider; free refresh currently supports openrouter")
   .option("--limit <n>", "number of free/low-cost recommendations to print")
   .action((options: { realSmoke?: boolean; smokeSuite?: boolean; refreshFree?: boolean; configureFree?: string; freeFirst?: boolean; connectionTest?: boolean; provider?: string; limit?: string }) => modelsCommand(cwd, options));
 

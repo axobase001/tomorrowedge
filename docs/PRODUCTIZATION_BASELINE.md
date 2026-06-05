@@ -1,9 +1,10 @@
 # Productization Baseline
 
-TomorrowEdge 0.2.0 focuses on the minimum product surface needed for users to
-run a real repository safely, understand what happened, and recover.
+TomorrowEdge 1.0.0 focuses on the minimum product surface needed for users to
+run a real repository safely, understand what happened, and recover. Capability
+maturity is tracked in [Capability Status](CAPABILITY_STATUS.md).
 
-## Implemented In 0.2.0
+## Implemented By 1.0.0
 
 - First-run config options for access mode, routing mode, default test command,
   provider/model selection, and cloud repo-context policy.

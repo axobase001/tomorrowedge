@@ -27,7 +27,12 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
     config = loadConfig(cwd);
   }
   const registry = createProviderRegistry(config);
-  for (const provider of registry.list()) {
+  const providers = options.provider ? registry.list().filter((provider) => provider.id === options.provider) : registry.list();
+  if (options.provider && !providers.length) {
+    process.stdout.write(`No configured provider matched --provider ${options.provider}\n`);
+    return;
+  }
+  for (const provider of providers) {
     let models: Awaited<ReturnType<typeof provider.listModels>>;
     try {
       models = await provider.listModels();
@@ -154,7 +159,14 @@ type SmokeCheck = {
 
 async function runSmokeSuite(provider: ReturnType<typeof createProviderRegistry>["list"] extends () => Array<infer P> ? P : never, model: string): Promise<SmokeCheck[]> {
   const checks: SmokeCheck[] = [];
-  checks.push(await smokeText(provider, model));
+  const text = await smokeText(provider, model);
+  checks.push(text);
+  const blocked = blockingProviderStatus(text.detail);
+  if (text.status === "failed" && blocked) {
+    checks.push({ name: "smoke:json", status: "skipped", detail: `skipped after provider status ${blocked}` });
+    checks.push({ name: "smoke:vision", status: "skipped", detail: `skipped after provider status ${blocked}` });
+    return checks;
+  }
   checks.push(await smokeJson(provider, model));
   checks.push(await smokeVision(provider, model));
   return checks;
@@ -245,4 +257,8 @@ function onePixelPngDataUrl(): string {
     "AAAAASUVORK5CYII="
   ];
   return `data:image/png;base64,${chunks.join("")}`;
+}
+
+function blockingProviderStatus(detail?: string): string | undefined {
+  return detail?.match(/^(rate_limited|quota_exhausted|invalid_key|invalid_model|upstream_unavailable)(?:\s|:)/)?.[1];
 }

@@ -62,6 +62,24 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("rejects cross-origin mutating API requests", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-origin-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://evil.example" },
+        body: JSON.stringify({ goal: "fix failing test" })
+      });
+
+      expect(response.status).toBe(403);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+
   it("rejects artifact path traversal and absolute refs", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-artifact-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

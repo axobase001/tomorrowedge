@@ -97,6 +97,9 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (url.pathname.startsWith("/api/") && !isAuthorized(request, url, nonce)) {
       return sendJson(response, 403, { error: "forbidden", message: "Missing or invalid local cockpit access token." });
     }
+    if (url.pathname.startsWith("/api/") && isMutatingMethod(request.method) && !isAllowedBrowserOrigin(request)) {
+      return sendJson(response, 403, { error: "forbidden", message: "Cross-origin cockpit API writes are not allowed." });
+    }
     if (request.method === "GET" && url.pathname === "/api/sessions") {
       const sessions = await listSessions(cwd);
       return sendJson(response, 200, sessions.map((session) => ({
@@ -166,6 +169,23 @@ function isAuthorized(request: IncomingMessage, url: URL, nonce: string): boolea
 
 function parseAccessMode(value: unknown): AccessMode | undefined {
   return value === "restricted" || value === "partial" || value === "full" ? value : undefined;
+}
+
+function isMutatingMethod(method?: string): boolean {
+  return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+}
+
+function isAllowedBrowserOrigin(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  if (!origin || Array.isArray(origin)) return !Array.isArray(origin);
+  const host = request.headers.host;
+  if (!host) return false;
+  try {
+    const parsed = new URL(origin);
+    return parsed.host === host && (parsed.protocol === "http:" || parsed.protocol === "https:");
+  } catch {
+    return false;
+  }
 }
 
 function parseExternalAgentRegistration(value: Record<string, unknown>): ExternalAgentRegistrationInput {

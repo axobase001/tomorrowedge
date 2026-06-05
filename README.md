@@ -33,6 +33,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 - `tedge trace latest --diagnostics` 和 `tedge diagnostics latest` 会显示 routing、fallback、projection、budget、repair、trace completeness。
 - 外部 agent handoff 新增 typed task/result envelopes，为真实 Codex/Claude Code role binding 打基础。
 
+Capability maturity: see [Capability Status](docs/CAPABILITY_STATUS.md) for the
+authoritative stable / experimental / placeholder / planned table.
+
 ## 3-minute tryout
 
 ```bash

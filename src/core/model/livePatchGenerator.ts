@@ -159,6 +159,7 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
 function buildCandidateFromResponse(input: LivePatchInput, plan: LivePatchPlan, noteBase: ModelNote, result: Awaited<ReturnType<typeof chatWithProviderFallback>>, content: string): { candidate: PatchCandidate; note: ModelNote } {
   if (!result.response) throw new Error(result.error ?? "Live patch provider failed.");
   const parsed = parsePatchJson(content);
+  validateUsableUnifiedDiff(parsed.unifiedDiff, parsed.filesChanged);
   const candidate: PatchCandidate = {
     candidateId: makeId(`live_${plan.role}`),
     agentId: plan.role,
@@ -181,8 +182,7 @@ function buildCandidateFromResponse(input: LivePatchInput, plan: LivePatchPlan, 
       estimatedCostUsd: estimateCostUsd(result.provider, result.response.usage),
       fallbackUsed: result.fallbackUsed,
       fallbackFrom: result.fallbackFrom,
-      fallbackReason: result.fallbackReason,
-      error: candidate.unifiedDiff.trim() ? undefined : "Live patch response did not contain a usable unified diff."
+      fallbackReason: result.fallbackReason
     }
   };
 }
@@ -260,9 +260,10 @@ function buildRetryPrompt(originalPrompt: string, previousResponse: string, erro
   return [
     originalPrompt,
     "",
-    "Your previous response could not be parsed as the required patch JSON.",
-    `Parse/schema error: ${error}`,
+    "Your previous response could not be used as a patch.",
+    `Patch error: ${error}`,
     "Return ONLY one valid JSON object with exactly these keys: summary, unifiedDiff, filesChanged, testPlan, knownTradeoffs, estimatedRisk.",
+    "The unifiedDiff value must be a non-empty git-style unified diff with --- and +++ file headers and at least one hunk.",
     "Do not include markdown fences. Escape newlines inside unifiedDiff as JSON string characters.",
     "Previous invalid response excerpt:",
     previousResponse.slice(0, 1600)
@@ -308,6 +309,19 @@ function parsePatchJson(raw: string): {
 
 function inferFilesFromDiff(diff: string): string[] {
   return [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1]).filter(Boolean);
+}
+
+function validateUsableUnifiedDiff(diff: string, claimedFiles: string[]): void {
+  const trimmed = diff.trim();
+  if (!trimmed) throw new Error("Live patch response did not contain a usable unified diff.");
+  if (!/^---\s+/m.test(trimmed) || !/^\+\+\+\s+/m.test(trimmed) || !/^@@\s+/m.test(trimmed)) {
+    throw new Error("Live patch response did not contain a git-style unified diff with file headers and hunks.");
+  }
+  const diffFiles = inferFilesFromDiff(trimmed);
+  const missing = claimedFiles.filter((file) => !diffFiles.includes(file));
+  if (claimedFiles.length && diffFiles.length && missing.length === claimedFiles.length) {
+    throw new Error(`Live patch response diff did not touch claimed files: ${claimedFiles.join(", ")}`);
+  }
 }
 
 function emptyCandidate(role: "coder_a" | "coder_b", reason: string, plan: Plan): PatchCandidate {

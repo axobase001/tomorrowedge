@@ -242,6 +242,8 @@ describe("config loader", () => {
       const output = await captureStdout(() => modelsCommand(cwd, { smokeSuite: true, provider: "openai_compatible" }));
 
       expect(output).toContain("smoke:text: failed");
+      expect(output).toContain("smoke:json: skipped");
+      expect(output).toContain("smoke:vision: skipped");
       expect(output).toContain("[redacted]");
       expect(output).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
       expect(output).not.toContain("acct_live_123");
@@ -250,6 +252,66 @@ describe("config loader", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   }, 20_000);
+
+  it("filters normal model listing by provider", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-model-provider-filter-"));
+    try {
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        providers: {
+          ...config.providers,
+          openai_compatible: {
+            ...config.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        }
+      });
+
+      const output = await captureStdout(() => modelsCommand(cwd, { provider: "openai_compatible" }));
+
+      expect(output).toContain("openai_compatible [cloud]");
+      expect(output).not.toContain("mock [mock]");
+      expect(output).not.toContain("fixture [mock]");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("marks configured cloud providers as static readiness until live smoke passes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-cloud-static-"));
+    try {
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        providers: {
+          ...config.providers,
+          openai_compatible: {
+            ...config.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        }
+      });
+
+      const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
+      const parsed = JSON.parse(output) as { providerDiagnostics: Array<{ id: string; status: string; checks: string[]; fix?: string }> };
+      const provider = parsed.providerDiagnostics.find((item) => item.id === "openai_compatible");
+
+      expect(provider?.status).toBe("warning");
+      expect(provider?.checks.join("\n")).toContain("static configuration only");
+      expect(provider?.fix).toContain("smoke-suite");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 
   it("warns when full mode is configured in a dirty git workspace", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-full-dirty-"));
