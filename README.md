@@ -102,6 +102,7 @@ npm run dev -- tui
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
 - 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
 - TUI 驾驶舱：agent 状态、路由、辩论、diff、shell、证据、记忆、帮助面板
+- TUI 内持久化偏好：`/mode`、`/model`、`/routing`、`/test-command`、`/save-route`
 
 ## 常用命令
 
@@ -142,9 +143,20 @@ tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
 tedge review-export latest --format github
+tedge github-report latest --repo owner/repo --pr 123 --dry-run
+tedge github-report latest --repo owner/repo --pr 123 --post-comment
+tedge github-report latest --repo owner/repo --pr 123 --post-check
 tedge undo --list
 tedge undo
 ```
+
+`--post-check` 会通过 `gh api` 创建 GitHub Checks API check run；目标仓库的 token
+需要允许创建 check run。
+
+TUI composer 支持直接写入项目偏好和配置：`/mode full` 保存 access mode，
+`/model planner openrouter openai/gpt-5.2` 保存单个角色模型，`/routing quality` 保存 routing mode，
+`/test-command npm test` 保存默认验证命令，`/save-route` 会把当前模型路由预览写入
+`agents.<role>.provider/model`。
 
 ## 权限模式
 
@@ -470,6 +482,7 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
+- TUI-persisted preferences for access mode, role model overrides, routing mode, preferred test command, and route overrides
 - Conversation Targets for `core`, role-specific questions, debate-room broadcasts, and external agents
 - Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
@@ -510,9 +523,21 @@ tedge export latest --format markdown
 tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
+tedge memory
+tedge review-export latest --format github
+tedge github-report latest --repo owner/repo --pr 123 --dry-run
+tedge github-report latest --repo owner/repo --pr 123 --post-comment
+tedge github-report latest --repo owner/repo --pr 123 --post-check
 tedge undo --list
 tedge undo
 ```
+
+`--post-check` creates a GitHub Checks API check run through `gh api`; the token must be
+allowed to create check runs for the target repository.
+
+The TUI composer can persist project settings without leaving the cockpit:
+`/mode full`, `/model planner openrouter openai/gpt-5.2`, `/routing quality`,
+`/test-command npm test`, and `/save-route`.
 
 ## Conversation Targets
 

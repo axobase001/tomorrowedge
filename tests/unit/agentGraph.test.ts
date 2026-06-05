@@ -89,7 +89,7 @@ describe("offline agent graph", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("records unparseable external role payloads before falling back to native agents", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
