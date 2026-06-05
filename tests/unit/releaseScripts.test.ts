@@ -4,7 +4,7 @@ import path from "node:path";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
-import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns } from "../../scripts/pack-dry.js";
+import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -34,6 +34,23 @@ describe("release verification scripts", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("warns in everyday pack mode but fails in strict release mode", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-pack-strict-"));
+    try {
+      await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "pack-strict-fixture", version: "0.0.0", files: ["docs/*.md"] }), "utf8");
+      await mkdir(path.join(cwd, "docs"));
+      await writeFile(path.join(cwd, "docs", "draft.md"), "draft\n", "utf8");
+      await execa("git", ["init"], { cwd });
+      await execa("git", ["add", "package.json"], { cwd });
+
+      expect(await runPackDry(cwd, ["--strict"])).toBe(1);
+      expect(await runPackDry(cwd, [])).toBe(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  }, 30_000);
+
 
   it("expands package directories into recursive pack patterns", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-pack-patterns-"));

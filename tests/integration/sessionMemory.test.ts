@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -26,6 +26,20 @@ describe("session memory", () => {
     const sessions = await listSessions(tempRoot);
     expect(sessions.length).toBe(2);
     expect((await loadLatestSession(tempRoot)).state.goal).toBe("second task");
+  });
+
+  it("uses the active latest-session pointer when present", async () => {
+    const first = await runOfflineGraph(tempRoot, "pinned first task", defaultConfig);
+    await saveSession(tempRoot, first);
+    const second = await runOfflineGraph(tempRoot, "newer second task", defaultConfig);
+    await saveSession(tempRoot, second);
+    await writeFile(path.join(tempRoot, ".tomorrowedge", "latest-session.json"), JSON.stringify({
+      sessionId: first.sessionId,
+      updatedAt: new Date().toISOString(),
+      goal: first.goal
+    }), "utf8");
+
+    expect((await loadLatestSession(tempRoot)).state.goal).toBe("pinned first task");
   });
 
   it("redacts session records and artifacts before writing to disk", async () => {

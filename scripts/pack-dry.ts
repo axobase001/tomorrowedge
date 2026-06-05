@@ -24,15 +24,20 @@ export function packageFilesToGlobPatterns(cwd: string, packageFiles: string[]):
 }
 
 export async function runPackDry(cwd = process.cwd(), args = process.argv.slice(2)): Promise<number> {
+  const strict = args.includes("--strict");
+  const npmArgs = args.filter((arg) => arg !== "--strict");
   const riskyFiles = await findPackRelevantUntrackedFiles(cwd);
   if (riskyFiles.length) {
-    process.stderr.write("Refusing npm pack --dry-run because untracked files would be included in the package:\n");
+    const prefix = strict ? "Refusing" : "Warning:";
+    process.stderr.write(`${prefix} npm pack --dry-run because untracked files would be included in the package:\n`);
     for (const file of riskyFiles) process.stderr.write(`- ${file}\n`);
-    process.stderr.write("Track, move, or ignore these files before running the release pack gate.\n");
-    return 1;
+    process.stderr.write(strict
+      ? "Track, move, or ignore these files before running the release pack gate.\n"
+      : "Continuing because this is the everyday pack check. Run npm run pack:dry:strict before release.\n");
+    if (strict) return 1;
   }
 
-  const result = await execa("npm", ["pack", "--dry-run", ...args], {
+  const result = await execa("npm", ["pack", "--dry-run", ...npmArgs], {
     cwd,
     stdio: "inherit",
     reject: false

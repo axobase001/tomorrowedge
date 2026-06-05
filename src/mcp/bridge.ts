@@ -14,7 +14,7 @@ import { diagnoseExternalAgentProfile, type ExternalAgentDiagnostic } from "../c
 import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgentRouter.js";
 import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
 import { runCommandExternalAgent } from "../core/externalAgents/runners/commandExternalAgentRunner.js";
-import { loadLatestSession, loadSession, type SessionRecord } from "../core/memory/sessionMemory.js";
+import { loadLatestSession, loadSession, writeLatestSessionPointer, type SessionRecord } from "../core/memory/sessionMemory.js";
 import { agentRoles, type AgentRole, type AgentRunState } from "../schemas/agentTask.js";
 import type { JudgeDecision } from "../schemas/judge.js";
 import type { PatchCandidate } from "../schemas/patchCandidate.js";
@@ -577,6 +577,7 @@ async function saveBridgeSession(cwd: string, state: AgentGraphState): Promise<v
     await mkdir(path.dirname(artifactPath), { recursive: true });
     await writeFile(artifactPath, artifact.content, "utf8");
   }
+  await writeLatestSessionPointer(cwd, safeState);
 }
 
 function appendExternalRegistered(ledger: EventLedger, profile: ExternalAgentProfile): void {

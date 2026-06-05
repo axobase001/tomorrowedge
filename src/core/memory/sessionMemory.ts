@@ -13,6 +13,12 @@ export type SessionRecord = {
   state: AgentGraphState;
 };
 
+export type LatestSessionPointer = {
+  sessionId: string;
+  updatedAt: string;
+  goal?: string;
+};
+
 export async function saveSession(cwd: string, state: AgentGraphState): Promise<string> {
   const sessionId = state.sessionId;
   const safeState = redactSessionRecord(state);
@@ -37,6 +43,7 @@ export async function saveSession(cwd: string, state: AgentGraphState): Promise<
     await writeFile(artifactPath, artifact.content, "utf8");
   }
   await appendLearnedTaskMemory(cwd, safeState);
+  await writeLatestSessionPointer(cwd, safeState);
   return filePath;
 }
 
@@ -63,9 +70,36 @@ export async function listSessions(cwd: string): Promise<Array<SessionRecord & {
 }
 
 export async function loadLatestSession(cwd: string): Promise<SessionRecord> {
+  const pointer = await readLatestSessionPointer(cwd);
+  if (pointer?.sessionId) {
+    const pinned = await loadSession(cwd, pointer.sessionId).catch(() => undefined);
+    if (pinned) return pinned;
+  }
   const [latest] = await listSessions(cwd);
   if (!latest) throw new Error("No sessions found.");
   return latest;
+}
+
+export async function writeLatestSessionPointer(cwd: string, state: Pick<AgentGraphState, "sessionId" | "goal">): Promise<void> {
+  const dir = path.join(cwd, ".tomorrowedge");
+  await mkdir(dir, { recursive: true });
+  const pointer: LatestSessionPointer = {
+    sessionId: state.sessionId,
+    updatedAt: new Date().toISOString(),
+    goal: state.goal
+  };
+  await writeFile(path.join(dir, "latest-session.json"), JSON.stringify(redactSessionRecord(pointer), null, 2), "utf8");
+}
+
+async function readLatestSessionPointer(cwd: string): Promise<LatestSessionPointer | undefined> {
+  const pointerPath = path.join(cwd, ".tomorrowedge", "latest-session.json");
+  const text = await readFile(pointerPath, "utf8").catch(() => "");
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text) as LatestSessionPointer;
+  } catch {
+    return undefined;
+  }
 }
 
 async function hydrateEvents(record: SessionRecord, sessionDir: string): Promise<SessionRecord> {
