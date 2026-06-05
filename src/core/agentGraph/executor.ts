@@ -13,6 +13,7 @@ import { RepairerAgent } from "../agents/repairer.js";
 import { SummarizerAgent } from "../agents/summarizer.js";
 import { applyUnifiedDiffWithResult } from "../patch/patchApplier.js";
 import { ModelRouter } from "../routing/router.js";
+import type { RoutingPlan } from "../routing/policies.js";
 import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
@@ -66,11 +67,12 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const ledger = createEventLedger(access.mode);
   const startedAtMs = Date.now();
   const conversationTarget = resolveConversationTarget(config, options.conversationTarget);
+  const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
   const state: AgentGraphState = {
     sessionId: ledger.sessionId,
     goal,
     conversationTarget,
-    routing: router.getPlan(),
+    routing: visibleRoutingForTask(router.getPlan(), imagePaths.length > 0),
     access,
     events: ledger.events,
     eventArtifacts: ledger.artifacts,
@@ -121,7 +123,6 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
 
-  const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
   const externalCore = externalProfileForRole(router, externalAgents, "core");
   if (externalCore) {
@@ -634,6 +635,15 @@ function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
     }
     return resolved;
   });
+}
+
+function visibleRoutingForTask(plan: RoutingPlan, hasImageInputs: boolean): RoutingPlan {
+  if (hasImageInputs) return plan;
+  return {
+    ...plan,
+    assignments: plan.assignments.filter((assignment) => assignment.role !== "vision"),
+    fallbacks: plan.fallbacks.filter((assignment) => assignment.role !== "vision")
+  };
 }
 
 async function finalizeState(state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {

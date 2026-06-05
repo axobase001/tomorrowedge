@@ -80,11 +80,14 @@ describe("config loader", () => {
       const mock = parsed.providerDiagnostics.find((item) => item.id === "mock");
       const fixture = parsed.providerDiagnostics.find((item) => item.id === "fixture");
       const openrouter = parsed.providerDiagnostics.find((item) => item.id === "openrouter");
+      const ollama = parsed.providerDiagnostics.find((item) => item.id === "ollama");
 
       expect(mock?.status).toBe("ready");
       expect(fixture?.status).toBe("ready");
       expect(openrouter?.status).toBe("error");
       expect(openrouter?.fix).toContain("OPENROUTER_API_KEY");
+      expect(ollama?.status).toBe("warning");
+      expect(ollama?.fix).toContain("connection-test");
     } finally {
       if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
       else process.env.OPENROUTER_API_KEY = originalOpenRouterKey;

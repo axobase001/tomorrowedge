@@ -122,10 +122,16 @@ function diagnoseProvider(id: string, provider: ProviderConfig, hasProfile: bool
     status = status === "error" ? status : "warning";
     checks.push("no routing profile registered");
   }
-  const localOrOffline = ["mock", "fixture", "ollama"].includes(id);
+  const offlineProvider = ["mock", "fixture"].includes(id);
+  const localHttpProvider = id === "ollama";
   const estimated = estimateCostUsd(id, { inputTokens: 1000, outputTokens: 1000 });
-  if (localOrOffline) {
+  if (offlineProvider || localHttpProvider) {
     checks.push("price not required for offline/local provider");
+    if (localHttpProvider && status !== "error") {
+      status = "warning";
+      checks.push(`runtime HTTP connectivity not checked; run tedge models --connection-test --provider ${id}`);
+      fix = `Start ${displayProviderName(id)} or run tedge models --connection-test --provider ${id} to verify the local endpoint.`;
+    }
   } else {
     checks.push(estimated === undefined ? "price unknown" : `price defaults available (~$${estimated}/1k+1k tokens)`);
     if (estimated === undefined && status === "ready") status = "warning";
@@ -140,4 +146,8 @@ function isValidUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function displayProviderName(id: string): string {
+  return id === "ollama" ? "Ollama" : id;
 }

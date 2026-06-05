@@ -27,6 +27,7 @@ describe("offline agent graph", () => {
     expect(state.debateRounds.length).toBeGreaterThan(0);
     expect(state.judge?.decision).toBe("request_revision");
     expect(state.finalSummary?.evidence).toContain("offline graph completed");
+    expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(false);
   });
 
   it("lets configured external MCP agents execute core-led workflow roles", async () => {
@@ -184,6 +185,7 @@ describe("offline agent graph", () => {
         imagePaths: [imagePath]
       });
 
+      expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(true);
       expect(state.agents[0].role).toBe("vision");
       expect(state.capabilityRoute?.trigger).toBe("image_input");
       expect(state.capabilityRoute?.steps.map((step) => step.role)).toContain("vision");
