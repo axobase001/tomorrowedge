@@ -14,6 +14,7 @@ const patterns: Array<[string, RegExp]> = [
   ["npm_token", /\bnpm_[A-Za-z0-9]{30,}\b/],
   ["slack_token", /\bxox[abprs]-[A-Za-z0-9-]{20,}\b/],
   ["openai_like_key", /\bsk-[A-Za-z0-9_-]{20,}\b/],
+  ["provider_user_identifier", /["']?(?:user|account|tenant|organization|org)[_-]?id["']?\s*[:=]\s*["']?[^"',}\s]+["']?/i],
   ["high_entropy_token", /\b(?=[A-Za-z0-9_/-]{48,}\b)(?=[A-Za-z0-9_/-]*[a-z])(?=[A-Za-z0-9_/-]*[A-Z])(?=[A-Za-z0-9_/-]*[0-9])[A-Za-z0-9_/-]{48,}\b/]
 ];
 

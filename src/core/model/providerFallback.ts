@@ -6,6 +6,7 @@ import type { ChatRequest, ChatResponse } from "../../providers/types.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import { makeId } from "../../utils/ids.js";
+import { redactText } from "../../safety/secretScanner.js";
 
 export type ProviderFallbackResult = {
   provider: string;
@@ -126,7 +127,7 @@ async function tryChat(
     });
     return { response };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = redactText(error instanceof Error ? error.message : String(error));
     ledger?.append({
       type: "model_call",
       status: "failure",
