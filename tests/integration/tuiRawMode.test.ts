@@ -53,6 +53,7 @@ describe("raw-mode TUI keyboard workflow", () => {
       stdin,
       stdout,
       stderr,
+      debug: true,
       exitOnCtrlC: false,
       patchConsole: false
     });
