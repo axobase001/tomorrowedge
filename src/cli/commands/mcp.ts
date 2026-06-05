@@ -17,11 +17,23 @@ export function mcpToolsCommand(cwd: string): void {
   }
 }
 
-export async function mcpAgentsCommand(cwd: string, options: { probe?: boolean } = {}): Promise<void> {
+export async function mcpAgentsCommand(cwd: string, options: { probe?: boolean; diagnose?: boolean } = {}): Promise<void> {
   const bridge = new TomorrowEdgeMcpBridge(cwd);
   const agents = bridge.listAgents();
   if (!agents.length) {
     process.stdout.write("No enabled external MCP agents. Configure external_agents in .tomorrowedge/config.yaml.\n");
+    return;
+  }
+  if (options.diagnose) {
+    const diagnostics = bridge.diagnoseAgents();
+    for (const diagnostic of diagnostics) {
+      process.stdout.write(`${diagnostic.id}\t${diagnostic.name}\t${diagnostic.status}\tmode=${diagnostic.mode}\tcommand=${diagnostic.command || "(not configured)"}\tcwd=${diagnostic.cwd}\n`);
+      process.stdout.write(`  checks: ${diagnostic.checks.join("; ")}\n`);
+      if (diagnostic.detectedCommand) {
+        process.stdout.write(`  detected: ${diagnostic.detectedCommand.detail} command=${diagnostic.detectedCommand.command} args=${diagnostic.detectedCommand.args.join(" ")}\n`);
+      }
+      if (diagnostic.fix) process.stdout.write(`  fix: ${diagnostic.fix}\n`);
+    }
     return;
   }
   if (options.probe) {

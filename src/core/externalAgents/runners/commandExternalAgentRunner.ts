@@ -4,6 +4,7 @@ import path from "node:path";
 import { execa } from "execa";
 import type { AgentRole } from "../../../schemas/agentTask.js";
 import type { EventPhase } from "../../events/eventTypes.js";
+import { diagnoseExternalAgentProfile, formatExternalAgentDiagnostic, resolveExternalAgentWorkingDirectory } from "../externalAgentDiagnostics.js";
 import type { ExternalAgentRunnerInput, ExternalAgentRunnerResult } from "./runnerTypes.js";
 
 export async function runCommandExternalAgent(input: ExternalAgentRunnerInput): Promise<ExternalAgentRunnerResult> {
@@ -31,6 +32,10 @@ export async function runCommandExternalAgent(input: ExternalAgentRunnerInput): 
     requestRef
   });
 
+  const diagnostic = diagnoseExternalAgentProfile(input.profile, input.cwd);
+  if (diagnostic.status === "error") {
+    return recordCommandError(input, phase, startedAt, `External agent is not invokable: ${formatExternalAgentDiagnostic(diagnostic)}`, requestRef);
+  }
   if (!input.profile.command) {
     return recordCommandError(input, phase, startedAt, "External agent command is not configured.", requestRef);
   }
@@ -41,7 +46,7 @@ export async function runCommandExternalAgent(input: ExternalAgentRunnerInput): 
 
   try {
     const subprocess = await execa(input.profile.command, input.profile.args ?? [], {
-      cwd: input.profile.cwd ?? input.cwd,
+      cwd: resolveExternalAgentWorkingDirectory(input.profile, input.cwd),
       env: {
         ...process.env,
         ...(input.profile.env ?? {}),

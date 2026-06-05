@@ -129,6 +129,7 @@ tedge workflow "task"
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --diagnose
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
@@ -213,6 +214,7 @@ MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`
 ```bash
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --diagnose
 tedge mcp agents --probe
 tedge mcp serve
 tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
@@ -497,6 +499,7 @@ tedge workflow "task"
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --diagnose
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
@@ -566,6 +569,7 @@ Basic usage:
 ```bash
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --diagnose
 tedge mcp agents --probe
 tedge mcp serve
 tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"

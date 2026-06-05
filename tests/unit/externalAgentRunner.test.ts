@@ -1,7 +1,8 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
-import { buildExternalAgentEnv, isCodexCommand } from "../../src/core/externalAgents/externalAgentProcess.js";
+import { diagnoseExternalAgentProfile, resolveExternalAgentWorkingDirectory } from "../../src/core/externalAgents/externalAgentDiagnostics.js";
+import { buildExternalAgentEnv, isCodexCommand, probeExternalAgent } from "../../src/core/externalAgents/externalAgentProcess.js";
 import { runCommandExternalAgent } from "../../src/core/externalAgents/runners/commandExternalAgentRunner.js";
 import { runMockExternalAgent } from "../../src/core/externalAgents/runners/mockExternalAgentRunner.js";
 import type { ExternalAgentProfile } from "../../src/core/externalAgents/externalAgentTypes.js";
@@ -72,6 +73,40 @@ describe("external agent runners", () => {
     expect(isCodexCommand("C:\\Users\\PC\\AppData\\Roaming\\npm\\codex.cmd")).toBe(true);
     expect(isCodexCommand("/usr/local/bin/codex")).toBe(true);
     expect(isCodexCommand("claude")).toBe(false);
+  });
+
+  it("diagnoses invokable external agent process configuration", () => {
+    const diagnostic = diagnoseExternalAgentProfile(
+      {
+        ...profileFor("codex_mcp"),
+        command: process.execPath,
+        args: [path.join(process.cwd(), "tests", "fixtures", "mock-external-mcp-server.mjs")],
+        cwd: "tests/fixtures",
+        autoStart: true
+      },
+      process.cwd()
+    );
+
+    expect(diagnostic.status).toBe("ready");
+    expect(diagnostic.mode).toBe("stdio_mcp");
+    expect(diagnostic.resolvedCommand).toBe(process.execPath);
+    expect(diagnostic.cwd).toBe(path.join(process.cwd(), "tests", "fixtures"));
+    expect(resolveExternalAgentWorkingDirectory({ ...profileFor("relative"), cwd: "tests" }, process.cwd())).toBe(path.join(process.cwd(), "tests"));
+  });
+
+  it("fails probe before spawning when the configured command is missing", async () => {
+    const result = await probeExternalAgent(
+      {
+        ...profileFor("missing_agent"),
+        command: "tomorrowedge-missing-external-agent-command",
+        autoStart: true,
+        requestTimeoutMs: 100
+      },
+      process.cwd()
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("command not found");
   });
 });
 
