@@ -24,7 +24,7 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.6.0`。
+当前版本：`1.0.0`。
 
 - 这一版的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
 
@@ -351,11 +351,12 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.6.0`.
+Current version: `1.0.0`.
 
-This release starts **Architecture Upgrade Phase 1**: context projection,
-evidence packets, role-routing diagnostics, strong-agent budget scaffolding,
-and typed external-agent handoff contracts.
+This release promotes TomorrowEdge to **1.0.0**: the project now has a
+usable TUI-first cockpit surface, a full-access workflow ledger, role-routed
+multi-model execution, provider onboarding, MCP/external-agent contracts, and
+the first architecture upgrade layers needed for auditable engineering runs.
 
 - TomorrowEdge preserves full artifacts for replay, but projects compact
   evidence packets to models.
@@ -365,6 +366,9 @@ and typed external-agent handoff contracts.
   routing, fallback, projection, budget, repair, and trace completeness signals.
 - External agent handoff now has typed task/result envelopes for real
   Codex/Claude Code role binding.
+- The default TUI is aligned with the README runtime cockpit: status strip,
+  Agents, Capability Route, Patch Candidate, Judge/Review, and a fixed
+  Command/Talk input console for natural-language workflow control.
 
 The previous **MCP Agent Bridge** remains available: Claude Code / Codex and
 other external coding agents can connect through MCP and be bound to workflow
@@ -382,11 +386,9 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `0.6.0` keeps the hardened release lane while adding the first architecture
-  upgrade layer on top of the existing first-run and
-  external-agent experience easier to understand: `npm run verify`, zip-safe
-  secret scanning, full-access shell policy, command runner skeletons, and the
-  locally runnable tiny LM demo remain available.
+- `1.0.0` keeps the hardened release lane: `npm run verify`, zip-safe secret
+  scanning, full-access shell policy, command runner skeletons, and the locally
+  runnable tiny LM demo remain available.
 
 ## 3-minute tryout
 
