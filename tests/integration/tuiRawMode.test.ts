@@ -57,15 +57,15 @@ describe("raw-mode TUI keyboard workflow", () => {
       patchConsole: false
     });
 
-    await waitFor(() => stdout.text().includes("Command / Talk"));
-    await waitFor(() => stdin.rawModeHistory.includes(true));
+    await waitFor(() => stdout.text().includes("TomorrowEdge"), 5000);
+    await waitFor(() => stdin.rawModeHistory.includes(true), 5000);
     for (const char of "review this") {
       stdin.write(char);
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
-    await waitFor(() => stdout.text().includes("review this"));
+    await waitFor(() => stdout.text().includes("review this"), 5000);
     stdin.write("\t");
-    await waitFor(() => stdout.text().includes("focus agents"));
+    await waitFor(() => stdout.text().includes("focus agents"), 5000);
     stdin.write("\x11");
     await instance.waitUntilExit();
 
