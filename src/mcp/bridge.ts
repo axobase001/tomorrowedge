@@ -20,6 +20,8 @@ import type { JudgeDecision } from "../schemas/judge.js";
 import type { PatchCandidate } from "../schemas/patchCandidate.js";
 import type { ReviewReport } from "../schemas/review.js";
 import { makeId } from "../utils/ids.js";
+import { redactText } from "../safety/secretScanner.js";
+import { redactSessionRecord } from "../safety/providerRedaction.js";
 
 export type StartWorkflowInput = {
   goal: string;
@@ -555,19 +557,20 @@ function ledgerFromState(state: AgentGraphState): EventLedger {
 async function saveBridgeSession(cwd: string, state: AgentGraphState): Promise<void> {
   const sessionDir = path.join(cwd, ".tomorrowedge", "sessions", state.sessionId);
   await mkdir(sessionDir, { recursive: true });
-  const artifacts = state.eventArtifacts ?? [];
-  const record: SessionRecord = {
-    sessionId: state.sessionId,
+  const safeState = redactSessionRecord(state);
+  const artifacts = safeState.eventArtifacts ?? [];
+  const record: SessionRecord = redactSessionRecord({
+    sessionId: safeState.sessionId,
     createdAt: new Date().toISOString(),
-    eventCount: state.events.length,
+    eventCount: safeState.events.length,
     artifactCount: artifacts.length,
     state: {
-      ...state,
+      ...safeState,
       eventArtifacts: artifacts.map((artifact) => ({ ref: artifact.ref, content: "[stored in artifact file]" }))
     }
-  };
+  });
   await writeFile(path.join(sessionDir, "session.json"), JSON.stringify(record, null, 2), "utf8");
-  await writeFile(path.join(sessionDir, "events.jsonl"), state.events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
+  await writeFile(path.join(sessionDir, "events.jsonl"), safeState.events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
   for (const artifact of artifacts) {
     if (artifact.content === "[stored in artifact file]") continue;
     const artifactPath = path.join(sessionDir, artifact.ref);
@@ -704,5 +707,5 @@ function phaseForRole(role: AgentRole) {
 }
 
 export async function readArtifact(cwd: string, sessionId: string, ref: string): Promise<string> {
-  return readFile(path.join(cwd, ".tomorrowedge", "sessions", sessionId, ref), "utf8");
+  return redactText(await readFile(path.join(cwd, ".tomorrowedge", "sessions", sessionId, ref), "utf8"));
 }

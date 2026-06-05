@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
 import { artifactRefs, renderEventMarkdown } from "../../core/events/eventRenderer.js";
 import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
+import { redactText } from "../../safety/secretScanner.js";
 
 export type ExportOptions = {
   format?: "markdown" | "json";
@@ -89,7 +90,7 @@ async function loadArtifacts(events: TomorrowEdgeEvent[], sessionDir: string): P
   const refs = [...new Set(events.flatMap(artifactRefs))];
   const entries = await Promise.all(
     refs.map(async (ref) => {
-      const content = await readFile(path.join(sessionDir, ref), "utf8").catch(() => "");
+      const content = redactText(await readFile(path.join(sessionDir, ref), "utf8").catch(() => ""));
       return [ref, content] as const;
     })
   );

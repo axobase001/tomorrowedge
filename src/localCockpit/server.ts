@@ -10,6 +10,7 @@ import { renderCockpitHtml } from "./html.js";
 import type { AccessMode } from "../config/schema.js";
 import type { ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { agentRoles, type AgentRole } from "../schemas/agentTask.js";
+import { redactText } from "../safety/secretScanner.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -194,7 +195,7 @@ async function sendArtifact(cwd: string, response: ServerResponse, sessionId: st
   const sessionDir = path.resolve(cwd, ".tomorrowedge", "sessions", effectiveSessionId);
   const artifactPath = path.resolve(sessionDir, ref);
   if (!isPathInside(sessionDir, artifactPath)) return sendJson(response, 400, { error: "invalid artifact ref" });
-  const content = await readFile(artifactPath, "utf8");
+  const content = redactText(await readFile(artifactPath, "utf8"));
   return send(response, 200, content, "text/plain; charset=utf-8");
 }
 

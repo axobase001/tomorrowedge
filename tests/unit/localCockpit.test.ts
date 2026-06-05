@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
@@ -70,6 +70,23 @@ describe("local cockpit server", () => {
       const response = await fetch(`${server.url}/api/sessions/session_test/artifacts/${absoluteRef}?nonce=${server.nonce}`);
 
       expect(response.status).toBe(400);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts artifact content returned through the local API", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-redact-"));
+    const sessionDir = path.join(cwd, ".tomorrowedge", "sessions", "session_api_redact", "artifacts", "stdout");
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(path.join(sessionDir, "secret.txt"), "OPENAI_API_KEY=sk-123456789012345678901234", "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const text = await fetch(`${server.url}/api/sessions/session_api_redact/artifacts/artifacts/stdout/secret.txt?nonce=${server.nonce}`).then((response) => response.text());
+
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("sk-");
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
