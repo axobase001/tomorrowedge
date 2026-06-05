@@ -8,11 +8,11 @@ import { createConversationSession } from "../core/conversation/conversationSess
 import { listConversationTargets, renderConversationTarget } from "../core/conversation/conversationTargets.js";
 import { renderEventLine } from "../core/events/eventRenderer.js";
 import { saveSession } from "../core/memory/sessionMemory.js";
-import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { ConversationTarget } from "../schemas/conversation.js";
 import { approveSelectedPatch, approveTestCommand, undoLatestPatch } from "./state/approvalActions.js";
 import { ApprovalPrompt } from "./components/ApprovalPrompt.js";
 import { CommandPalette, type PaletteMode } from "./components/CommandPalette.js";
+import { applyTuiConfigCommand, parseTuiConfigCommand } from "./state/configCommands.js";
 
 const focusPanes = ["memory", "agents", "goal", "routing", "trace", "debate", "evidence", "diff", "shell", "help"] as const;
 type FocusPane = (typeof focusPanes)[number];
@@ -98,6 +98,7 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
         accessMode,
         cwd,
         config,
+        graph: viewGraph,
         setAccessMode,
         setBusy,
         setDraft,
@@ -291,7 +292,7 @@ function OperatorConsole({ draft, target, accessMode, message }: { draft: string
       {draft ? lines.slice(-2).map((line, index) => <Text key={`${index}-${line}`}>{index === 0 ? "&gt; " : "  "}{clip(line, 120)}</Text>) : <Text color="gray">&gt; Type a task, or use /run /ask /to reviewer /mode full</Text>}
       <Box justifyContent="space-between">
         <Text color="cyan">{clip(message, 92)}</Text>
-        <Text color="gray">Enter run | Ctrl+T target | Tab focus | Ctrl+Q quit</Text>
+        <Text color="gray">Enter run | /model | /routing | /test-command | /save-route | Ctrl+Q quit</Text>
       </Box>
     </Box>
   );
@@ -333,6 +334,7 @@ type SubmitComposerArgs = {
   accessMode: AccessMode;
   cwd: string;
   config: ReturnType<typeof loadConfig>;
+  graph: AgentGraphState;
   setAccessMode: (mode: AccessMode) => void;
   setBusy: (busy: boolean) => void;
   setDraft: (draft: string) => void;
@@ -345,23 +347,25 @@ async function submitComposer(args: SubmitComposerArgs): Promise<void> {
   if (!text) return;
   args.setBusy(true);
   try {
-    const command = parseComposerCommand(text, args.target?.id ?? "core", args.accessMode);
-    if (command.kind === "mode") {
+    const configCommand = parseTuiConfigCommand(text);
+    if (configCommand) {
+      const result = await applyTuiConfigCommand(args.cwd, args.graph, configCommand);
       args.setDraft("");
-      const access = buildAccessPolicy(args.config, { mode: command.mode });
-      args.setAccessMode(command.mode);
-      args.setViewGraph((current) => ({ ...current, access, approvals: { patchApproved: access.patchApproved, shellApproved: access.shellApproved, repairApproved: access.repairApproved } }));
-      args.setMessage(`Mode switched to ${command.mode}.`);
+      args.setViewGraph(result.graph);
+      if (configCommand.kind === "mode") args.setAccessMode(configCommand.mode);
+      args.setMessage(result.message);
       return;
     }
+    const command = parseComposerCommand(text, args.target?.id ?? "core", args.accessMode);
     if (command.kind === "palette") {
       args.setDraft("");
-      args.setMessage("Commands: natural text runs a workflow. Use /ask for non-mutating notes, /to reviewer ..., /mode full.");
+      args.setMessage("Commands: /ask, /to reviewer, /mode full, /model planner openrouter openai/gpt-5.2, /routing quality, /test-command npm test, /save-route.");
       return;
     }
+    const currentConfig = loadConfig(args.cwd);
     const state = command.kind === "ask"
-      ? createConversationSession({ message: command.goal, target: command.target, config: args.config })
-      : await runOfflineGraph(args.cwd, command.goal, args.config, { conversationTarget: command.target, accessMode: args.accessMode });
+      ? createConversationSession({ message: command.goal, target: command.target, config: currentConfig })
+      : await runOfflineGraph(args.cwd, command.goal, currentConfig, { conversationTarget: command.target, accessMode: args.accessMode });
     args.setDraft("");
     await saveSession(args.cwd, state);
     args.setViewGraph(state);
@@ -376,15 +380,9 @@ async function submitComposer(args: SubmitComposerArgs): Promise<void> {
 type ParsedComposerCommand =
   | { kind: "run"; goal: string; target: string }
   | { kind: "ask"; goal: string; target: string }
-  | { kind: "mode"; mode: AccessMode }
   | { kind: "palette" };
 
 function parseComposerCommand(text: string, defaultTarget: string, currentMode: AccessMode): ParsedComposerCommand {
-  if (text.startsWith("/mode")) {
-    const mode = text.split(/\s+/)[1] as AccessMode | undefined;
-    if (mode !== "restricted" && mode !== "partial" && mode !== "full") throw new Error("Usage: /mode restricted|partial|full");
-    return { kind: "mode", mode };
-  }
   if (text === "/commands" || text === "/help") return { kind: "palette" };
   if (text.startsWith("/ask ")) {
     return { kind: "ask", goal: text.slice("/ask ".length).trim(), target: defaultTarget };

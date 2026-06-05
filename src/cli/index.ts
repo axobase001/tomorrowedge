@@ -19,6 +19,7 @@ import { traceCommand } from "./commands/trace.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
 import { serveCommand } from "./commands/serve.js";
 import { exportCommand } from "./commands/export.js";
+import { githubReportCommand } from "./commands/githubReport.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 
@@ -132,6 +133,16 @@ program.command("diagnostics").description("Inspect workflow diagnostics for a s
 program.command("serve").description("Start the local browser cockpit and narrow session API").option("--port <port>", "local port", "18792").option("--host <host>", "bind host", "127.0.0.1").option("--open", "open the cockpit in the default browser").action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, options));
 
 program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean }) => exportCommand(cwd, sessionId, options));
+
+program
+  .command("github-report")
+  .description("Render or post a TomorrowEdge session report for a GitHub PR")
+  .argument("[session-id]", "session id or latest", "latest")
+  .option("--repo <owner/name>", "GitHub repository for --post-comment")
+  .option("--pr <number>", "pull request number for --post-comment")
+  .option("--dry-run", "print the report instead of posting")
+  .option("--post-comment", "post the report as a GitHub PR comment through gh")
+  .action((sessionId: string, options: { repo?: string; pr?: string; dryRun?: boolean; postComment?: boolean }) => githubReportCommand(cwd, sessionId, options));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
