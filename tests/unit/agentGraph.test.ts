@@ -27,6 +27,18 @@ describe("offline agent graph", () => {
     expect(state.debateRounds.length).toBeGreaterThan(0);
     expect(state.judge?.decision).toBe("request_revision");
     expect(state.finalSummary?.evidence).toContain("offline graph completed");
+    expect(state.evidencePackets.length).toBeGreaterThan(0);
+    expect(state.providerViews.length).toBeGreaterThan(0);
+    expect(state.traceCompleteness?.score).toBeGreaterThan(0);
+    expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "routing_decision",
+      "budget_decision",
+      "artifact_projection",
+      "context_projection",
+      "evidence_packet",
+      "workflow_stop_reason",
+      "trace_completeness"
+    ]));
   });
 
   it("lets configured external MCP agents execute core-led workflow roles", async () => {

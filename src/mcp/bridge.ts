@@ -57,6 +57,8 @@ export class TomorrowEdgeMcpBridge {
       access,
       events: ledger.events,
       eventArtifacts: ledger.artifacts,
+      providerViews: [],
+      evidencePackets: [],
       agents: [],
       candidates: [],
       repairCandidates: [],

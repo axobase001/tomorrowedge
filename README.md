@@ -24,15 +24,14 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`0.5.2`。
+当前版本：`0.6.0`。
 
-这一版的重点是 **Experience Polish**：把新用户的第一条路径、MCP 真实接入状态、shell policy 语义、roadmap 和 external role fallback trace 收口。
+- 这一版的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
 
-- README 和 GitHub Pages 增加无 API key 的 3-minute tryout
-- MCP Agent Bridge 文档标清 Codex CLI、Claude Code、mock agent、自定义 MCP agent 的真实状态
-- `shell.policy: unrestricted` 明确为 executable invocation，不是 raw shell script
-- external role payload 无法 normalize 时会写入 `external_agent_error`，再 fallback 到 native agent
-- Roadmap 收敛为 0.5.x 体验打磨、0.6.x 真实外部 agent workflow、0.7.x benchmark demo
+- TomorrowEdge preserves full artifacts for replay, but projects compact evidence packets to models.
+- Reviewer/Judge 可以消费结构化 evidence packets，而不是只看 raw diff/log。
+- `tedge trace latest --diagnostics` 和 `tedge diagnostics latest` 会显示 routing、fallback、projection、budget、repair、trace completeness。
+- 外部 agent handoff 新增 typed task/result envelopes，为真实 Codex/Claude Code role binding 打基础。
 
 ## 3-minute tryout
 
@@ -347,21 +346,20 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `0.5.2`.
+Current version: `0.6.0`.
 
-This release focuses on **Experience Polish**: a shorter first-run path, clearer
-MCP integration status, clearer shell policy semantics, a tighter roadmap, and
-visible fallback when external role payloads cannot be normalized.
+This release starts **Architecture Upgrade Phase 1**: context projection,
+evidence packets, role-routing diagnostics, strong-agent budget scaffolding,
+and typed external-agent handoff contracts.
 
-- README and GitHub Pages include a no-key 3-minute tryout.
-- MCP Agent Bridge docs label Codex CLI, Claude Code, mock agents, and custom
-  MCP agents with their real integration status.
-- `shell.policy: unrestricted` is documented as executable invocation, not raw
-  shell-script execution.
-- Unparseable external role payloads now emit `external_agent_error` before
-  falling back to native agents.
-- Roadmap is organized into 0.5.x experience polish, 0.6.x real external-agent
-  workflows, and 0.7.x benchmark demos.
+- TomorrowEdge preserves full artifacts for replay, but projects compact
+  evidence packets to models.
+- Reviewer/Judge can consume structured evidence packets rather than only raw
+  diffs and logs.
+- `tedge trace latest --diagnostics` and `tedge diagnostics latest` expose
+  routing, fallback, projection, budget, repair, and trace completeness signals.
+- External agent handoff now has typed task/result envelopes for real
+  Codex/Claude Code role binding.
 
 The previous **MCP Agent Bridge** remains available: Claude Code / Codex and
 other external coding agents can connect through MCP and be bound to workflow
@@ -379,7 +377,8 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `0.5.2` keeps the hardened release lane while making the first-run and
+- `0.6.0` keeps the hardened release lane while adding the first architecture
+  upgrade layer on top of the existing first-run and
   external-agent experience easier to understand: `npm run verify`, zip-safe
   secret scanning, full-access shell policy, command runner skeletons, and the
   locally runnable tiny LM demo remain available.

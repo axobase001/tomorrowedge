@@ -58,6 +58,8 @@ export function createConversationSession(input: ConversationSessionInput): Agen
     access,
     events: ledger.events,
     eventArtifacts: ledger.artifacts,
+    providerViews: [],
+    evidencePackets: [],
     agents: [],
     candidates: [],
     repairCandidates: [],

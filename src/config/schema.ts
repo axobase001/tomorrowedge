@@ -102,6 +102,17 @@ export const configSchema = z.object({
     hard_cap_usd: z.number().nonnegative().default(10),
     warn_at_percent: z.number().min(1).max(100).default(80)
   }),
+  strong_agents: z.object({
+    max_calls_per_task: z.number().int().nonnegative().default(3),
+    max_cost_usd: z.number().nonnegative().default(2),
+    reserve_for_roles: z.array(agentRoleSchema).default(["planner", "reviewer", "judge"]),
+    escalate_on: z.array(z.string()).default(["high_risk_patch", "repeated_test_failure", "reviewer_disagreement", "security_sensitive_change"])
+  }).default({
+    max_calls_per_task: 3,
+    max_cost_usd: 2,
+    reserve_for_roles: ["planner", "reviewer", "judge"],
+    escalate_on: ["high_risk_patch", "repeated_test_failure", "reviewer_disagreement", "security_sensitive_change"]
+  }),
   privacy: z.object({
     mode: z.enum(["normal", "privacy", "local"]).default("normal"),
     allow_cloud_repo_context: z.boolean().default(true),

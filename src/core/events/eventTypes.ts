@@ -250,6 +250,74 @@ export type AutonomyLimitEvent = BaseEvent & {
   reason: string;
 };
 
+export type RoutingDecisionEvent = BaseEvent & {
+  type: "routing_decision";
+  assignedRole: AgentRole;
+  assignedProvider: string;
+  assignedModel: string;
+  reason: string;
+  policyTags: string[];
+};
+
+export type ContextProjectionEvent = BaseEvent & {
+  type: "context_projection";
+  selectedArtifacts: string[];
+  projectedArtifacts: string[];
+  tokenEstimate: number;
+  omittedBytes: number;
+  policySummary: string;
+};
+
+export type ArtifactProjectionEvent = BaseEvent & {
+  type: "artifact_projection";
+  artifactRef: string;
+  artifactKind: "stdout" | "stderr" | "diff" | "file" | "review" | "judge" | "trace" | "json";
+  previewRef: string;
+  handle: string;
+  policy: "tail" | "head_tail" | "structured" | "summary" | "full";
+  omittedBytes?: number;
+  tokenEstimate?: number;
+};
+
+export type EvidencePacketEvent = BaseEvent & {
+  type: "evidence_packet";
+  packetId: string;
+  evidencePhase: "plan" | "patch" | "test" | "repair" | "review" | "judge";
+  summary: string;
+  verificationStatus: "unverified" | "passed" | "failed" | "partial";
+  supportingArtifacts: string[];
+  packetRef: string;
+};
+
+export type BudgetDecisionEvent = BaseEvent & {
+  type: "budget_decision";
+  status: "allowed" | "blocked" | "warn";
+  reason: string;
+  maxCostUsd?: number;
+  estimatedCostUsd?: number;
+  strongAgentCallsUsed?: number;
+  strongAgentCallsRemaining?: number;
+};
+
+export type WorkflowStopReasonEvent = BaseEvent & {
+  type: "workflow_stop_reason";
+  reason: string;
+  result: string;
+};
+
+export type FallbackToNativeEvent = BaseEvent & {
+  type: "fallback_to_native";
+  externalAgentId?: string;
+  fallbackRole: AgentRole;
+  reason: string;
+};
+
+export type TraceCompletenessEvent = BaseEvent & {
+  type: "trace_completeness";
+  score: number;
+  missing: string[];
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -276,7 +344,15 @@ export type TomorrowEdgeEvent =
   | EvidenceEvent
   | SummaryEvent
   | AccessModeEvent
-  | AutonomyLimitEvent;
+  | AutonomyLimitEvent
+  | RoutingDecisionEvent
+  | ContextProjectionEvent
+  | ArtifactProjectionEvent
+  | EvidencePacketEvent
+  | BudgetDecisionEvent
+  | WorkflowStopReasonEvent
+  | FallbackToNativeEvent
+  | TraceCompletenessEvent;
 
 export type EventArtifact = {
   ref: string;

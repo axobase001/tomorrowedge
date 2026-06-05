@@ -62,6 +62,22 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `result=${event.result}`;
     case "autonomy_limit_reached":
       return `${event.status}: ${event.reason}`;
+    case "routing_decision":
+      return `${event.assignedRole} -> ${event.assignedProvider}/${event.assignedModel}: ${event.reason}`;
+    case "context_projection":
+      return `${event.projectedArtifacts.length}/${event.selectedArtifacts.length} artifact views tokens~${event.tokenEstimate} omitted=${event.omittedBytes}`;
+    case "artifact_projection":
+      return `${event.artifactKind} ${event.artifactRef} -> ${event.policy} tokens~${event.tokenEstimate ?? 0}`;
+    case "evidence_packet":
+      return `${event.evidencePhase} ${event.verificationStatus}: ${event.summary}`;
+    case "budget_decision":
+      return `${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "workflow_stop_reason":
+      return `${event.result}: ${event.reason}`;
+    case "fallback_to_native":
+      return `${event.fallbackRole} fallback: ${event.reason}`;
+    case "trace_completeness":
+      return `score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}`;
   }
 }
 
@@ -88,5 +104,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("messageRef" in event && event.messageRef) refs.push(event.messageRef);
   if ("requestRef" in event && event.requestRef) refs.push(event.requestRef);
   if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
+  if ("previewRef" in event && event.previewRef) refs.push(event.previewRef);
+  if ("packetRef" in event && event.packetRef) refs.push(event.packetRef);
   return refs;
 }

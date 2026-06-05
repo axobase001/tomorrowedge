@@ -20,7 +20,11 @@ export function canUseRawMode(): boolean {
 
 export function renderStaticCockpit(graph: AgentGraphState): string {
   const selected = graph.judge?.selectedCandidateId ?? "(none)";
-  const recentEvents = graph.events.slice(-8).map((event) => `- ${renderEventLine(event)}`);
+  const recentEvents = [
+    ...graph.events.filter((event) => ["shell_run", "repair_attempt", "patch_apply"].includes(event.type)).slice(-6),
+    ...graph.events.slice(-8)
+  ];
+  const uniqueRecentEvents = [...new Map(recentEvents.map((event) => [event.id, event])).values()].map((event) => `- ${renderEventLine(event)}`);
   const target = graph.conversationTarget ? `${graph.conversationTarget.id} (${graph.conversationTarget.label})` : "core (TomorrowEdge Core)";
   const route = graph.routing.assignments
     .filter((assignment) => ["planner", "coder_a", "reviewer", "judge", "runner"].includes(assignment.role))
@@ -44,6 +48,6 @@ export function renderStaticCockpit(graph: AgentGraphState): string {
     `Result: ${graph.finalSummary?.result ?? "unknown"}`,
     "",
     "Recent events:",
-    ...(recentEvents.length ? recentEvents : ["- none"])
+    ...(uniqueRecentEvents.length ? uniqueRecentEvents : ["- none"])
   ].join("\n") + "\n";
 }

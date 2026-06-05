@@ -1,12 +1,13 @@
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../schemas/review.js";
+import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport }, JudgeDecision> {
+export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }, JudgeDecision> {
   readonly role = "judge";
 
-  async run(input: { candidates: PatchCandidate[]; review: ReviewReport }): Promise<JudgeDecision> {
+  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }): Promise<JudgeDecision> {
     const acceptable = input.review.reviews
       .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
       .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
@@ -27,10 +28,11 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
       };
     }
     const redTeamSuffix = input.review.mode === "red_team" ? " Red-team findings were included in the decision." : "";
+    const evidenceSuffix = input.evidencePackets?.length ? ` Evidence packets considered=${input.evidencePackets.length}.` : "";
     return {
       selectedCandidateId: acceptable.candidateId,
       decision: "select",
-      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}`,
+      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}`,
       confidence: 0.78
     };
   }

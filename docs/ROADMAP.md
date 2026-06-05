@@ -14,6 +14,15 @@ Acceptance criteria:
 
 ## 0.6.x Real External Agent Workflows
 
+0.6.0 starts this track with the architecture base:
+
+- Context projection separates full runtime artifacts from provider-visible
+  previews.
+- Evidence packets give reviewer/judge roles structured coding evidence.
+- Routing, budget, fallback, projection, stop reason, and trace completeness
+  diagnostics are recorded in the event ledger.
+- External-agent invocation now has typed task/result envelope contracts.
+
 Acceptance criteria:
 
 - Codex CLI role runner has a documented, reproducible demo path.

@@ -16,6 +16,7 @@ import { workflowCommand } from "./commands/workflow.js";
 import { memoryCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
+import { diagnosticsCommand } from "./commands/diagnostics.js";
 import { exportCommand } from "./commands/export.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
@@ -123,7 +124,9 @@ program.command("doctor").description("Check local configuration and provider re
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 
-program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").action((sessionId: string, options: { verbose?: boolean }) => traceCommand(cwd, sessionId, options));
+program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").option("--diagnostics", "append routing, projection, fallback, budget, and trace completeness diagnostics").action((sessionId: string, options: { verbose?: boolean; diagnostics?: boolean }) => traceCommand(cwd, sessionId, options));
+
+program.command("diagnostics").description("Inspect workflow diagnostics for a saved session").argument("[action]", "on, latest, or a session id", "latest").action((action: string) => diagnosticsCommand(cwd, action));
 
 program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean }) => exportCommand(cwd, sessionId, options));
 

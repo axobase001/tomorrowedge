@@ -1,8 +1,10 @@
 import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
 import { renderEventLine, renderVerboseEventLine } from "../../core/events/eventRenderer.js";
+import { renderDiagnostics } from "./diagnostics.js";
 
 export type TraceOptions = {
   verbose?: boolean;
+  diagnostics?: boolean;
 };
 
 export async function traceCommand(cwd: string, sessionId: string, options: TraceOptions = {}): Promise<void> {
@@ -13,5 +15,8 @@ export async function traceCommand(cwd: string, sessionId: string, options: Trac
   }
   for (const event of session.state.events) {
     process.stdout.write(`${options.verbose ? renderVerboseEventLine(event) : renderEventLine(event)}\n`);
+  }
+  if (options.diagnostics) {
+    process.stdout.write(`\n${renderDiagnostics(session.state.events)}`);
   }
 }

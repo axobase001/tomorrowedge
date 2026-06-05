@@ -1,13 +1,14 @@
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { RedTeamFinding, ReviewReport } from "../../schemas/review.js";
+import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { parseUnifiedDiff } from "../patch/patchParser.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class ReviewerAgent extends BaseAgent<{ candidates: PatchCandidate[]; redTeam?: boolean }, ReviewReport> {
+export class ReviewerAgent extends BaseAgent<{ candidates: PatchCandidate[]; evidencePackets?: EvidencePacket[]; redTeam?: boolean }, ReviewReport> {
   readonly role = "reviewer";
 
-  async run(input: { candidates: PatchCandidate[]; redTeam?: boolean }): Promise<ReviewReport> {
-    const reviews = input.candidates.map((candidate) => reviewCandidate(candidate, Boolean(input.redTeam)));
+  async run(input: { candidates: PatchCandidate[]; evidencePackets?: EvidencePacket[]; redTeam?: boolean }): Promise<ReviewReport> {
+    const reviews = input.candidates.map((candidate) => reviewCandidate(candidate, Boolean(input.redTeam), input.evidencePackets ?? []));
     return {
       mode: input.redTeam ? "red_team" : "standard",
       reviews,
@@ -20,7 +21,7 @@ export class ReviewerAgent extends BaseAgent<{ candidates: PatchCandidate[]; red
   }
 }
 
-function reviewCandidate(candidate: PatchCandidate, redTeam: boolean): ReviewReport["reviews"][number] {
+function reviewCandidate(candidate: PatchCandidate, redTeam: boolean, evidencePackets: EvidencePacket[]): ReviewReport["reviews"][number] {
   const parsedTargets = parseTargets(candidate.unifiedDiff);
   const securityConcerns: string[] = [];
   const regressionConcerns: string[] = [];
@@ -73,6 +74,7 @@ function reviewCandidate(candidate: PatchCandidate, redTeam: boolean): ReviewRep
     recommendation,
     notes: [
       "Offline reviewer used deterministic scoring.",
+      `Evidence packets visible to reviewer: ${evidencePackets.length}.`,
       "Blocking concerns prevent automatic judge selection.",
       ...(redTeam ? ["Red-team pass checked missing diff, broad blast radius, and missing verification."] : [])
     ]

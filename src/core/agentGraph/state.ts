@@ -13,6 +13,9 @@ import type { RoutingPlan } from "../routing/policies.js";
 import type { AccessPolicy } from "../permissions/accessPolicy.js";
 import type { EventArtifact, TomorrowEdgeEvent } from "../events/eventTypes.js";
 import type { ConversationTarget } from "../../schemas/conversation.js";
+import type { EvidencePacket } from "../evidence/evidencePacket.js";
+import type { ProviderView } from "../contextProjection/providerView.js";
+import type { TraceCompleteness } from "../diagnostics/traceCompleteness.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -22,6 +25,8 @@ export type AgentGraphState = {
   access: AccessPolicy;
   events: TomorrowEdgeEvent[];
   eventArtifacts: EventArtifact[];
+  providerViews: ProviderView[];
+  evidencePackets: EvidencePacket[];
   agents: AgentRunState[];
   capabilityRoute?: CapabilityRoute;
   visualSpec?: StructuredVisualSpec;
@@ -44,4 +49,5 @@ export type AgentGraphState = {
     repairApproved: boolean;
   };
   finalSummary?: FinalSummary;
+  traceCompleteness?: TraceCompleteness;
 };

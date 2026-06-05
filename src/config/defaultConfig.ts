@@ -31,6 +31,12 @@ export const defaultConfig: TomorrowEdgeConfig = {
     hard_cap_usd: 10,
     warn_at_percent: 80
   },
+  strong_agents: {
+    max_calls_per_task: 3,
+    max_cost_usd: 2,
+    reserve_for_roles: ["planner", "reviewer", "judge"],
+    escalate_on: ["high_risk_patch", "repeated_test_failure", "reviewer_disagreement", "security_sensitive_change"]
+  },
   privacy: {
     mode: "normal",
     allow_cloud_repo_context: true,

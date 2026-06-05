@@ -35,6 +35,17 @@ import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
+import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
+import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
+import { buildPatchEvidence } from "../evidence/patchEvidence.js";
+import { buildTestEvidence } from "../evidence/testEvidence.js";
+import { buildReviewEvidence } from "../evidence/reviewEvidence.js";
+import { buildJudgeEvidence } from "../evidence/judgeEvidence.js";
+import type { EvidencePacket } from "../evidence/evidencePacket.js";
+import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
+import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
+import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
+import { isStrongAgentRole } from "../budget/strongAgentBudget.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -74,6 +85,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     access,
     events: ledger.events,
     eventArtifacts: ledger.artifacts,
+    providerViews: [],
+    evidencePackets: [],
     agents: [],
     candidates: [],
     repairCandidates: [],
@@ -120,6 +133,41 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     phase: "routing",
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
+  let strongAgentCallsUsed = 0;
+  for (const assignment of state.routing.assignments) {
+    const decision = buildRoleRoutingDecision(config, assignment);
+    const budgetDecision = allocateStrongAgentCall(assignment.role, strongAgentCallsUsed, {
+      maxCallsPerTask: config.strong_agents.max_calls_per_task,
+      maxCostUsd: config.strong_agents.max_cost_usd,
+      reserveForRoles: config.strong_agents.reserve_for_roles,
+      escalateOn: config.strong_agents.escalate_on
+    });
+    if (isStrongAgentRole(assignment.role)) strongAgentCallsUsed += 1;
+    ledger.append({
+      type: "routing_decision",
+      phase: "routing",
+      role: assignment.role,
+      provider: assignment.provider,
+      model: assignment.model,
+      assignedRole: decision.role,
+      assignedProvider: decision.provider,
+      assignedModel: decision.model,
+      reason: decision.reason,
+      policyTags: decision.policyTags
+    });
+    ledger.append({
+      type: "budget_decision",
+      phase: "routing",
+      role: assignment.role,
+      provider: assignment.provider,
+      model: assignment.model,
+      status: budgetDecision.allowed ? "allowed" : "blocked",
+      reason: budgetDecision.reason,
+      maxCostUsd: config.routing.max_cost_usd,
+      strongAgentCallsUsed,
+      strongAgentCallsRemaining: budgetDecision.remainingCalls
+    });
+  }
 
   const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
@@ -221,10 +269,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
 
   const coder = new CoderAgent();
   state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options }));
-  recordPatchCandidateEvent(ledger, "coder_a", state.candidates[state.candidates.length - 1]);
+  recordPatchCandidateEvent(state, ledger, "coder_a", state.candidates[state.candidates.length - 1]);
   if (config.debate.enabled && config.debate.max_candidates > 1) {
     state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options }));
-    recordPatchCandidateEvent(ledger, "coder_b", state.candidates[state.candidates.length - 1]);
+    recordPatchCandidateEvent(state, ledger, "coder_b", state.candidates[state.candidates.length - 1]);
   }
 
   if (options.livePatch && access.cloudAllowed) {
@@ -246,7 +294,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (budgetStatus.status !== "blocked") {
       const livePatchResult = await runLivePatchCandidates(livePatchInput);
       state.candidates.push(...livePatchResult.candidates);
-      for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(ledger, candidate.agentId as AgentRole, candidate);
+      for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
       state.modelNotes.push(...livePatchResult.notes);
       state.usageSummary = summarizeModelUsage(state.modelNotes);
       recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
@@ -265,24 +313,28 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const reviewer = new ReviewerAgent();
   const externalReviewer = externalProfileForRole(router, externalAgents, "reviewer");
   state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
-    if (!externalReviewer) return reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
+    if (!externalReviewer) return reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
     const result = await invokeExternalRole({
       cwd,
       profile: externalReviewer,
       role: "reviewer",
       prompt: "Review the current patch candidates and return a TomorrowEdge review report.",
-      context: { candidates: state.candidates, redTeam: options.redTeamReview },
+      context: { candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview },
       ledger
     });
     const review = normalizeExternalReview(result.payload);
     if (!review) recordExternalNormalizeFallback(ledger, "reviewer", externalReviewer, "review", "native reviewer");
-    return review ?? reviewer.run({ candidates: state.candidates, redTeam: options.redTeamReview });
+    return review ?? reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
   }, externalReviewer ? "external" : "offline");
+  const reviewJson = JSON.stringify(state.review, null, 2);
+  const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
+  recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
+  recordEvidencePacket(state, ledger, buildReviewEvidence(state.review, reviewRef), "reviewer");
   ledger.append({
     type: "review_decision",
     phase: "review",
     role: "reviewer",
-    reviewRef: ledger.writeArtifact("reviews", JSON.stringify(state.review, null, 2), "json"),
+    reviewRef,
     recommendation: state.review.overallRecommendation
   });
   state.debateRounds = buildDebateRounds(state.candidates, state.review, config.debate.max_rounds);
@@ -291,19 +343,23 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const judge = new JudgeAgent();
   const externalJudge = externalProfileForRole(router, externalAgents, "judge");
   state.judge = await runAgentState(state, ledger, router, "judge", async () => {
-    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review! });
+    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
     const result = await invokeExternalRole({
       cwd,
       profile: externalJudge,
       role: "judge",
       prompt: "Judge the reviewed candidates and return a TomorrowEdge judge decision.",
-      context: { candidates: state.candidates, review: state.review },
+      context: { candidates: state.candidates, review: state.review, evidencePackets: state.evidencePackets },
       ledger
     });
     const judgment = normalizeExternalJudgment(result.payload);
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
-    return judgment ?? judge.run({ candidates: state.candidates, review: state.review! });
+    return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
   }, externalJudge ? "external" : "offline");
+  const judgeJson = JSON.stringify(state.judge, null, 2);
+  const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
+  recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
+  recordEvidencePacket(state, ledger, buildJudgeEvidence(state.judge, decisionRef), "judge");
   ledger.append({
     type: "judge_decision",
     phase: "judge",
@@ -312,7 +368,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     selectedCandidateId: state.judge.selectedCandidateId,
     reason: state.judge.reason,
     confidence: state.judge.confidence,
-    decisionRef: ledger.writeArtifact("judge_decisions", JSON.stringify(state.judge, null, 2), "json")
+    decisionRef
   });
 
   if (options.liveAdvisory && access.cloudAllowed) {
@@ -387,7 +443,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         shellRuns += 1;
         const result = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
         state.runResults.push(result);
-        recordShellRunEvent(ledger, cwd, result);
+        recordShellRunEvent(state, ledger, cwd, result);
         if (result.success) continue;
         if (!options.repairOnFail) break;
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return finalizeState(state, ledger, router);
@@ -410,7 +466,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
           return patch ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
         }, externalRepairer ? "external" : "offline");
         state.repairCandidates.push(repairCandidate);
-        recordPatchCandidateEvent(ledger, "repairer", repairCandidate);
+        recordPatchCandidateEvent(state, ledger, "repairer", repairCandidate);
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
         ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
         if (repairCandidate.unifiedDiff) {
@@ -423,7 +479,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             shellRuns += 1;
             const repairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
             state.runResults.push(repairedRun);
-            recordShellRunEvent(ledger, cwd, repairedRun);
+            recordShellRunEvent(state, ledger, cwd, repairedRun);
             if (!repairedRun.success) break;
           } catch (error) {
             ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: error instanceof Error ? error.message : String(error) });
@@ -504,6 +560,16 @@ function recordExternalNormalizeFallback(ledger: EventLedger, role: AgentRole, p
     model: profile.name,
     externalAgentId: profile.id,
     error: `External ${role} result was unparseable as ${expected}; falling back to ${fallback}.`
+  });
+  ledger.append({
+    type: "fallback_to_native",
+    phase: phaseForRole(role),
+    role,
+    provider: `external:${profile.id}`,
+    model: profile.name,
+    externalAgentId: profile.id,
+    fallbackRole: role,
+    reason: `External ${role} result was unparseable as ${expected}; using ${fallback}.`
   });
 }
 
@@ -617,6 +683,7 @@ function normalizeCandidateReview(value: unknown): ReviewReport["reviews"][numbe
 
 function unwrapNamed(payload: unknown, key: string): unknown {
   const object = asRecord(payload);
+  if (object?.payload !== undefined) return unwrapNamed(object.payload, key);
   return object && object[key] !== undefined ? object[key] : payload;
 }
 
@@ -693,8 +760,31 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
     summaryRef: ledger.writeArtifact("summaries", JSON.stringify(state.finalSummary, null, 2), "json"),
     result: state.finalSummary.result
   });
+  ledger.append({
+    type: "workflow_stop_reason",
+    phase: "summary",
+    role: "summarizer",
+    reason: workflowStopReason(state),
+    result: state.finalSummary.result
+  });
+  state.traceCompleteness = computeTraceCompleteness(ledger.events);
+  ledger.append({
+    type: "trace_completeness",
+    phase: "summary",
+    role: "summarizer",
+    score: state.traceCompleteness.score,
+    missing: state.traceCompleteness.missing
+  });
 
   return state;
+}
+
+function workflowStopReason(state: AgentGraphState): string {
+  if (state.judge?.decision === "abort") return "judge aborted workflow";
+  if (state.judge?.decision === "ask_user") return "judge requested user decision";
+  if (state.runResults.some((result) => !result.success)) return "verification failed or repair budget ended";
+  if (state.changedFiles.length) return "selected patch applied and workflow finalized";
+  return "no patch applied; workflow finalized after review and judge";
 }
 
 async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind: AgentRunState["agentKind"] = "offline"): Promise<T> {
@@ -760,21 +850,30 @@ function updateCapabilityStep(state: AgentGraphState, role: AgentRole, status: "
   };
 }
 
-function recordPatchCandidateEvent(ledger: EventLedger, role: AgentRole, candidate: PatchCandidate): void {
+function recordPatchCandidateEvent(state: AgentGraphState, ledger: EventLedger, role: AgentRole, candidate: PatchCandidate): void {
+  const diffRef = candidate.unifiedDiff ? ledger.writeArtifact("diffs", candidate.unifiedDiff) : undefined;
+  const phase = role === "repairer" ? "repair" : "coding";
+  if (diffRef) recordArtifactProjection(state, ledger, phase, diffRef, candidate.unifiedDiff, "diff", role);
+  recordEvidencePacket(state, ledger, buildPatchEvidence(candidate, diffRef), role);
   ledger.append({
     type: "patch_candidate",
-    phase: role === "repairer" ? "repair" : "coding",
+    phase,
     role,
     candidateId: candidate.candidateId,
     approach: candidate.approach,
     summary: candidate.summary,
     filesChanged: candidate.filesChanged,
-    diffRef: candidate.unifiedDiff ? ledger.writeArtifact("diffs", candidate.unifiedDiff) : undefined,
+    diffRef,
     estimatedRisk: candidate.estimatedRisk
   });
 }
 
-function recordShellRunEvent(ledger: EventLedger, cwd: string, result: RunResult): void {
+function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: string, result: RunResult): void {
+  const stdoutRef = ledger.writeArtifact("stdout", result.stdout);
+  const stderrRef = ledger.writeArtifact("stderr", result.stderr);
+  recordArtifactProjection(state, ledger, "shell", stdoutRef, result.stdout, "stdout", "runner");
+  recordArtifactProjection(state, ledger, "shell", stderrRef, result.stderr, "stderr", "runner");
+  recordEvidencePacket(state, ledger, buildTestEvidence(result, { stdoutRef, stderrRef }), "runner");
   ledger.append({
     type: "shell_run",
     phase: "shell",
@@ -784,12 +883,58 @@ function recordShellRunEvent(ledger: EventLedger, cwd: string, result: RunResult
     command: result.command,
     cwd,
     exitCode: result.exitCode,
-    stdoutRef: ledger.writeArtifact("stdout", result.stdout),
-    stderrRef: ledger.writeArtifact("stderr", result.stderr),
+    stdoutRef,
+    stderrRef,
     durationMs: result.durationMs,
     success: result.success
   });
 }
+
+function recordArtifactProjection(state: AgentGraphState, ledger: EventLedger, phase: TomorrowEdgeProjectionPhase, artifactRef: string, content: string, kind: RuntimeArtifactKind, role?: AgentRole): ProviderView {
+  const view = projectRuntimeArtifact(runtimeArtifactFromText(artifactRef, kind, content));
+  const previewRef = ledger.writeArtifact("provider_views", view.preview);
+  state.providerViews.push(view);
+  ledger.append({
+    type: "artifact_projection",
+    phase,
+    role,
+    artifactRef,
+    artifactKind: kind,
+    previewRef,
+    handle: view.handle,
+    policy: view.policy,
+    omittedBytes: view.omittedBytes,
+    tokenEstimate: view.tokenEstimate
+  });
+  ledger.append({
+    type: "context_projection",
+    phase,
+    role,
+    selectedArtifacts: [artifactRef],
+    projectedArtifacts: [previewRef],
+    tokenEstimate: view.tokenEstimate ?? 0,
+    omittedBytes: view.omittedBytes ?? 0,
+    policySummary: `${kind}:${view.policy}`
+  });
+  return view;
+}
+
+function recordEvidencePacket(state: AgentGraphState, ledger: EventLedger, packet: EvidencePacket, role?: AgentRole): void {
+  state.evidencePackets.push(packet);
+  ledger.append({
+    type: "evidence_packet",
+    phase: packet.phase === "plan" ? "planning" : packet.phase === "patch" ? "coding" : packet.phase === "test" ? "verification" : packet.phase,
+    role,
+    packetId: packet.id,
+    evidencePhase: packet.phase,
+    summary: packet.summary,
+    verificationStatus: packet.verificationStatus,
+    supportingArtifacts: packet.supportingArtifacts,
+    packetRef: ledger.writeArtifact("evidence_packets", JSON.stringify(packet, null, 2), "json")
+  });
+}
+
+type TomorrowEdgeProjectionPhase = "coding" | "review" | "judge" | "shell" | "repair" | "verification";
 
 function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSummary: AgentGraphState["usageSummary"]): void {
   for (const note of notes) {

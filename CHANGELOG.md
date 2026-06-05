@@ -7,6 +7,42 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-05
+
+0.6.0 starts the Architecture Upgrade track. It keeps TomorrowEdge focused on a
+full-access coding workflow cockpit, while adding the first context,
+evidence, diagnostics, budget, and external handoff layers inspired by
+OpenSquilla's artifact/context split.
+
+### Added
+
+- Context Projection layer with runtime artifact views, provider views, and
+  reducers for stdout, stderr, diffs, files, test logs, and JSON.
+- Evidence Packet layer for patch, review, judge, and test evidence, with
+  `evidence_packet` events and model-visible packet text.
+- `artifact_projection` and `context_projection` events so traces show what was
+  preserved as full artifact data and what was projected to model context.
+- `routing_decision`, `budget_decision`, `workflow_stop_reason`,
+  `fallback_to_native`, and `trace_completeness` events.
+- `tedge trace latest --diagnostics` and `tedge diagnostics latest` for routing,
+  fallback, projection, budget, repair, and trace-completeness inspection.
+- Typed external-agent handoff contracts for task, result, patch, review, and
+  judge envelopes.
+- Role-routing policy scaffolding and strong-agent budget scaffolding.
+- Architecture and positioning docs:
+  `docs/CONTEXT_PROJECTION.md`, `docs/EVIDENCE_PACKETS.md`,
+  `docs/ARCHITECTURE_UPGRADE.md`, `docs/COMPARISONS.md`,
+  `docs/PRODUCT_POSITIONING.md`, `docs/WHY_TOMORROWEDGE.md`, and
+  `README.product.md`.
+
+### Changed
+
+- Reviewer and Judge roles can consume structured evidence packets alongside
+  patch candidates, reviews, and judge decisions.
+- External role invocation now passes a typed task envelope and accepts result
+  envelopes via `payload`.
+- README current-version section now describes Architecture Upgrade Phase 1.
+
 ## [0.5.2] - 2026-06-05
 
 0.5.2 is an experience-polish release. It narrows the first-run path, clarifies

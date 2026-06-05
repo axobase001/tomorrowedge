@@ -3,6 +3,7 @@ import type { EventLedger } from "../events/eventLedger.js";
 import type { ExternalAgentProfile } from "./externalAgentTypes.js";
 import { ExternalAgentProcessClient, type ExternalAgentTool } from "./externalAgentProcess.js";
 import { runCommandExternalAgent } from "./runners/commandExternalAgentRunner.js";
+import type { ExternalOutputContract, ExternalTaskEnvelope } from "./contracts/externalTaskEnvelope.js";
 
 export type ExternalRoleInvocation = {
   externalAgentId: string;
@@ -20,14 +21,16 @@ export async function invokeExternalRole(input: {
   context?: unknown;
   ledger: EventLedger;
   toolName?: string;
+  outputContract?: ExternalOutputContract;
 }): Promise<ExternalRoleInvocation> {
+  const envelope = buildTaskEnvelope(input);
   if (input.profile.command && !input.profile.autoStart) {
     const result = await runCommandExternalAgent({
       cwd: input.cwd,
       profile: input.profile,
       role: input.role,
       task: input.prompt,
-      context: input.context,
+      context: envelope,
       ledger: input.ledger
     });
     if (!result.ok) throw new Error(result.error ?? "External command runner failed.");
@@ -44,7 +47,7 @@ export async function invokeExternalRole(input: {
   const requestRef = input.ledger.writeArtifact("external_requests", JSON.stringify({
     role: input.role,
     prompt: input.prompt,
-    context: input.context
+    context: envelope
   }, null, 2), "json");
   input.ledger.append({
     type: "external_agent_call",
@@ -66,7 +69,8 @@ export async function invokeExternalRole(input: {
     const result = await client.callTool(toolName, {
       role: input.role,
       prompt: input.prompt,
-      context: input.context
+      context: envelope,
+      outputContract: envelope.outputContract
     });
     if (!result.ok) throw new Error(result.error ?? "External MCP tool call failed.");
     const payload = unwrapMcpToolResult(result.result);
@@ -127,6 +131,30 @@ export async function invokeExternalRole(input: {
   } finally {
     await client.stop();
   }
+}
+
+function buildTaskEnvelope(input: { ledger: EventLedger; role: AgentRole; prompt: string; context?: unknown; outputContract?: ExternalOutputContract }): ExternalTaskEnvelope {
+  return {
+    sessionId: input.ledger.sessionId,
+    role: input.role,
+    goal: extractGoal(input.context) ?? input.prompt,
+    instructions: input.prompt,
+    context: (asRecord(input.context) ?? {}) as ExternalTaskEnvelope["context"],
+    outputContract: input.outputContract ?? outputContractForRole(input.role)
+  };
+}
+
+function outputContractForRole(role: AgentRole): ExternalOutputContract {
+  if (role === "core" || role === "planner") return "plan";
+  if (role === "coder_a" || role === "coder_b" || role === "repairer") return "patch";
+  if (role === "reviewer") return "review";
+  if (role === "judge") return "judgment";
+  return "freeform";
+}
+
+function extractGoal(context: unknown): string | undefined {
+  const object = asRecord(context);
+  return typeof object?.goal === "string" ? object.goal : undefined;
 }
 
 export function unwrapExternalPayload(value: unknown): unknown {

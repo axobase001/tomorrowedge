@@ -217,12 +217,26 @@ autonomy:
 budget:
   hard_cap_usd: 10
   warn_at_percent: 80
+
+strong_agents:
+  max_calls_per_task: 3
+  max_cost_usd: 2.0
+  reserve_for_roles: [planner, reviewer, judge]
+  escalate_on:
+    - high_risk_patch
+    - repeated_test_failure
+    - reviewer_disagreement
+    - security_sensitive_change
 ```
 
 Currently enforced bounds: `max_repairs` and `max_shell_runs`. Cost and wall
 time are estimated and reported, but `max_iterations`, `max_cost_usd`, and
 `max_wall_time_sec` are planned enforcement points for the next autonomous loop
 upgrade.
+
+`strong_agents` treats expensive or external agents as scarce decision
+resources. In 0.6.0 it feeds `budget_decision` diagnostics; later releases can
+turn those decisions into hard routing gates.
 
 Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
 sessions are saved. It records compact metadata only: task type, risk level,
