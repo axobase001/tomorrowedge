@@ -17,7 +17,7 @@ import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
 import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
-import { preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
+import { estimateCostUsd, preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
@@ -141,6 +141,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       maxCostUsd: config.strong_agents.max_cost_usd,
       reserveForRoles: config.strong_agents.reserve_for_roles,
       escalateOn: config.strong_agents.escalate_on
+    }, {
+      estimatedCostUsd: estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
+      escalationSignals: inferStrongAgentEscalationSignals(goal)
     });
     if (isStrongAgentRole(assignment.role)) strongAgentCallsUsed += 1;
     ledger.append({
@@ -163,13 +166,20 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       model: assignment.model,
       status: budgetDecision.allowed ? "allowed" : "blocked",
       reason: budgetDecision.reason,
-      maxCostUsd: config.routing.max_cost_usd,
+      maxCostUsd: config.strong_agents.max_cost_usd,
+      estimatedCostUsd: budgetDecision.estimatedCostUsd,
       strongAgentCallsUsed,
       strongAgentCallsRemaining: budgetDecision.remainingCalls
     });
   }
 
   const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
+  if (!imagePaths.length) {
+    state.routing = {
+      ...state.routing,
+      assignments: state.routing.assignments.filter((assignment) => assignment.role !== "vision")
+    };
+  }
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
   const externalCore = externalProfileForRole(router, externalAgents, "core");
   if (externalCore) {
@@ -1006,6 +1016,16 @@ function shellExecutionOptions(config: TomorrowEdgeConfig, access: AgentGraphSta
     policy,
     verificationAllowlist: config.shell.verification_allowlist
   };
+}
+
+function inferStrongAgentEscalationSignals(goal: string): string[] {
+  const normalized = goal.toLowerCase();
+  const signals: string[] = [];
+  if (/\b(auth|secret|token|credential|password|permission|security|crypto|payment)\b/.test(normalized)) signals.push("security_sensitive_change");
+  if (/\b(repair|failing again|still failing|repeated failure|flaky)\b/.test(normalized)) signals.push("repeated_test_failure");
+  if (/\b(high risk|risky|dangerous|production|database|migration)\b/.test(normalized)) signals.push("high_risk_patch");
+  if (/\b(disagree|disagreement|debate|tie-break|judge)\b/.test(normalized)) signals.push("reviewer_disagreement");
+  return signals;
 }
 
 function phaseForRole(role: AgentRole) {

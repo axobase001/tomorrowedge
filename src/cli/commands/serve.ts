@@ -6,10 +6,10 @@ export async function serveCommand(cwd: string, options: { port?: string; host?:
   if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
     process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
   }
-  process.stdout.write(`TomorrowEdge local cockpit: ${handle.url}\n`);
+  process.stdout.write(`TomorrowEdge local cockpit: ${handle.openUrl}\n`);
   process.stdout.write("Press Ctrl+C to stop.\n");
   if (options.open) {
-    await openBrowser(handle.url);
+    await openBrowser(handle.openUrl);
   }
 }
 

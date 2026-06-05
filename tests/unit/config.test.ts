@@ -112,6 +112,33 @@ describe("config loader", () => {
     }
   });
 
+  it("warns that Ollama readiness still needs a local HTTP connection test", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-ollama-"));
+    try {
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        providers: {
+          ...config.providers,
+          ollama: {
+            ...config.providers.ollama,
+            enabled: true,
+            model: "llama3",
+            base_url: "http://127.0.0.1:11434/v1"
+          }
+        }
+      });
+      const output = await captureStdout(() => doctorCommand(cwd, { json: true }));
+      const parsed = JSON.parse(output) as { providerDiagnostics: Array<{ id: string; status: string; fix?: string }> };
+      const ollama = parsed.providerDiagnostics.find((item) => item.id === "ollama");
+
+      expect(ollama?.status).toBe("warning");
+      expect(ollama?.fix).toContain("connection-test");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("loads external MCP proxy port configuration", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-proxy-"));
     try {

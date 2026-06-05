@@ -4,7 +4,13 @@ import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
 
 export async function diagnosticsCommand(cwd: string, action = "latest"): Promise<void> {
   if (action === "on") {
+    const session = await loadSession(cwd, action).catch(() => undefined);
+    if (session) {
+      process.stdout.write(renderDiagnostics(session.state.events));
+      return;
+    }
     process.stdout.write("Diagnostics are recorded automatically in TomorrowEdge event ledgers.\n");
+    process.stdout.write("Use \"tedge diagnostics latest\" or \"tedge diagnostics <session-id>\" to inspect a run.\n");
     return;
   }
   const session = action === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, action);

@@ -18,12 +18,58 @@ describe("local cockpit server", () => {
     try {
       const health = await fetch(`${server.url}/health`).then((response) => response.json()) as { ok: boolean };
       const html = await fetch(server.url).then((response) => response.text());
-      const sessions = await fetch(`${server.url}/api/sessions`).then((response) => response.json()) as unknown[];
+      const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
 
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge / 明日边缘");
       expect(html).toContain("Trace Ledger");
       expect(sessions).toEqual([]);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("requires the local cockpit token for API routes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-auth-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const denied = await fetch(`${server.url}/api/sessions`);
+      const allowed = await fetch(`${server.url}/api/sessions`, { headers: { "x-tomorrowedge-token": server.nonce } });
+
+      expect(denied.status).toBe(403);
+      expect(allowed.status).toBe(200);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects oversized JSON request bodies", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-body-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-tomorrowedge-token": server.nonce },
+        body: JSON.stringify({ goal: "x".repeat(1_000_100) })
+      });
+
+      expect(response.status).toBe(413);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects artifact path traversal and absolute refs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-artifact-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const absoluteRef = encodeURIComponent(path.resolve(cwd, "outside.txt"));
+      const response = await fetch(`${server.url}/api/sessions/session_test/artifacts/${absoluteRef}?nonce=${server.nonce}`);
+
+      expect(response.status).toBe(400);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

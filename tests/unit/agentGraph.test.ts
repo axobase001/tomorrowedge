@@ -30,6 +30,7 @@ describe("offline agent graph", () => {
     expect(state.evidencePackets.length).toBeGreaterThan(0);
     expect(state.providerViews.length).toBeGreaterThan(0);
     expect(state.traceCompleteness?.score).toBeGreaterThan(0);
+    expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(false);
     expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
       "routing_decision",
       "budget_decision",

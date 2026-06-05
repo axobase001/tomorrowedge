@@ -118,6 +118,11 @@ function diagnoseProvider(id: string, provider: ProviderConfig, hasProfile: bool
     checks.push(`missing env ${provider.api_key_env}`);
     fix = `Set ${provider.api_key_env} in your shell or disable providers.${id}.enabled.`;
   }
+  if (id === "ollama" && status !== "error") {
+    status = "warning";
+    checks.push("local HTTP connectivity not checked by doctor");
+    fix = "Run `tedge models --connection-test --provider ollama` while Ollama is running.";
+  }
   if (!hasProfile) {
     status = status === "error" ? status : "warning";
     checks.push("no routing profile registered");

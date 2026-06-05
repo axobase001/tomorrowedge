@@ -216,6 +216,7 @@ function cockpitJs(): string {
   return `
 const el = (id) => document.getElementById(id);
 let selectedSession = "latest";
+const nonce = new URLSearchParams(location.search).get("nonce") || "";
 
 el("refresh").addEventListener("click", () => load());
 el("sessions").addEventListener("change", (event) => {
@@ -224,9 +225,9 @@ el("sessions").addEventListener("change", (event) => {
 });
 el("run-preview").addEventListener("click", async () => {
   el("status").textContent = "running preview workflow";
-  const response = await fetch("/api/runs", {
+  const response = await fetch(withToken("/api/runs"), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: apiHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ goal: el("goal").value || "fix failing test", fixtureMode: true })
   });
   const payload = await response.json();
@@ -257,9 +258,19 @@ async function loadSession(id) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url);
+  const response = await fetch(withToken(url), { headers: apiHeaders() });
   if (!response.ok) throw new Error(await response.text());
   return response.json();
+}
+
+function withToken(url) {
+  if (!nonce || !url.startsWith("/api/")) return url;
+  const joiner = url.includes("?") ? "&" : "?";
+  return url + joiner + "nonce=" + encodeURIComponent(nonce);
+}
+
+function apiHeaders(extra = {}) {
+  return nonce ? { ...extra, "x-tomorrowedge-token": nonce } : extra;
 }
 
 function render(state) {

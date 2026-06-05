@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runtimeArtifactFromText } from "../../src/core/contextProjection/artifactView.js";
+import { reduceTestLog } from "../../src/core/contextProjection/reducers/testLogReducer.js";
 import { projectRuntimeArtifact } from "../../src/core/contextProjection/providerView.js";
 import { buildPatchEvidence } from "../../src/core/evidence/patchEvidence.js";
 
@@ -33,5 +34,18 @@ describe("context projection and evidence packets", () => {
     expect(packet.supportingArtifacts).toEqual(["artifacts/diffs/patch.diff"]);
     expect(packet.modelVisibleText).toContain("Evidence Packet: patch");
     expect(packet.modelVisibleText).toContain("node test.js");
+  });
+
+  it("keeps the log tail even when signal lines are found", () => {
+    const log = [
+      "AssertionError: expected values to match",
+      ...Array.from({ length: 200 }, (_, index) => `ordinary tail line ${index}`),
+      "final cleanup line"
+    ].join("\n");
+
+    const reduced = reduceTestLog(log, 1200);
+
+    expect(reduced).toContain("AssertionError");
+    expect(reduced).toContain("final cleanup line");
   });
 });
