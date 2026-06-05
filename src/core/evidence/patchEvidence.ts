@@ -13,7 +13,7 @@ export function buildPatchEvidence(candidate: PatchCandidate, diffRef?: string):
     ],
     supportingArtifacts: diffRef ? [diffRef] : [],
     riskSignals: [
-      candidate.estimatedRisk !== "low" ? `self-reported risk=${candidate.estimatedRisk}` : "",
+      typeof candidate.estimatedRisk === "string" && candidate.estimatedRisk !== "low" ? `self-reported risk=${candidate.estimatedRisk}` : "",
       !candidate.unifiedDiff.trim() ? "candidate has no unified diff" : "",
       !candidate.testPlan.length ? "candidate has no verification plan" : ""
     ].filter(Boolean),

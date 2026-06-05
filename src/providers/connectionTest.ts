@@ -59,8 +59,9 @@ function providerCatalogUrl(id: string, baseUrl: string): string {
 }
 
 function providerHeaders(id: string, authHeader: ProviderAuthHeader, key?: string): Record<string, string> {
-  if (id === "anthropic" && key) return { "x-api-key": key, "anthropic-version": "2023-06-01" };
-  if (id === "gemini" && key) return { "x-goog-api-key": key };
+  if (authHeader === "none" || !key) return {};
+  if (id === "anthropic") return { "x-api-key": key, "anthropic-version": "2023-06-01" };
+  if (id === "gemini") return { "x-goog-api-key": key };
   return authHeaders(authHeader, key);
 }
 

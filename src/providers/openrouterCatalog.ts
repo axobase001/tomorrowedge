@@ -42,7 +42,8 @@ export async function fetchOpenRouterCatalog(config: ProviderConfig, apiKey?: st
     throw new Error(`OpenRouter model catalog failed: HTTP ${response.status}${detail ? ` ${detail.slice(0, 160)}` : ""}`);
   }
   const payload = (await response.json()) as { data?: RawOpenRouterModel[] };
-  return (payload.data ?? []).map(normalizeOpenRouterModel).filter((model): model is OpenRouterCatalogModel => Boolean(model));
+  const models = Array.isArray(payload.data) ? payload.data : [];
+  return models.map(normalizeOpenRouterModel).filter((model): model is OpenRouterCatalogModel => Boolean(model));
 }
 
 export function recommendFreeOpenRouterModels(models: OpenRouterCatalogModel[], options: OpenRouterRecommendationOptions = {}): OpenRouterCatalogModel[] {
