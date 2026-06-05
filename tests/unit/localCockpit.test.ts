@@ -22,4 +22,22 @@ describe("local cockpit server", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("falls forward when the requested port is already in use", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-port-"));
+    const first = await startLocalCockpitServer(cwd, { port: 0 });
+    const occupiedPort = new URL(first.url).port;
+    const second = await startLocalCockpitServer(cwd, { port: Number(occupiedPort) });
+    try {
+      expect(second.url).not.toBe(first.url);
+      expect(second.requestedPort).toBe(Number(occupiedPort));
+      expect(second.port).not.toBe(Number(occupiedPort));
+      const health = await fetch(`${second.url}/health`).then((response) => response.json()) as { ok: boolean };
+      expect(health.ok).toBe(true);
+    } finally {
+      await second.close();
+      await first.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

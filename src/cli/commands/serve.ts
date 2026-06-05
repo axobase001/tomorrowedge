@@ -4,6 +4,9 @@ export async function serveCommand(cwd: string, options: { port?: string; host?:
   const port = options.port ? Number(options.port) : 18792;
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) throw new Error(`Invalid port: ${options.port}`);
   const handle = await startLocalCockpitServer(cwd, { port, host: options.host });
+  if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
+    process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
+  }
   process.stdout.write(`TomorrowEdge local cockpit: ${handle.url}\n`);
   process.stdout.write("Press Ctrl+C to stop.\n");
   if (options.open) {

@@ -18,22 +18,61 @@ export type LocalCockpitServerOptions = {
 export type LocalCockpitHandle = {
   server: Server;
   url: string;
+  requestedPort: number;
+  port: number;
   close: () => Promise<void>;
 };
 
 export async function startLocalCockpitServer(cwd: string, options: LocalCockpitServerOptions = {}): Promise<LocalCockpitHandle> {
   const host = options.host ?? "127.0.0.1";
-  const server = createServer((request, response) => {
-    void routeRequest(cwd, request, response);
-  });
-  await new Promise<void>((resolve) => server.listen(options.port ?? 18792, host, resolve));
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : options.port ?? 18792;
+  const requestedPort = options.port ?? 18792;
+  const { server, port } = await listenOnAvailablePort(cwd, host, requestedPort);
   return {
     server,
     url: `http://${host}:${port}`,
+    requestedPort,
+    port,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   };
+}
+
+async function listenOnAvailablePort(cwd: string, host: string, requestedPort: number): Promise<{ server: Server; port: number }> {
+  if (requestedPort === 0) return listenOnce(cwd, host, 0);
+  const maxAttempts = 20;
+  let lastError: unknown;
+  for (let offset = 0; offset < maxAttempts; offset += 1) {
+    const port = requestedPort + offset;
+    try {
+      return await listenOnce(cwd, host, port);
+    } catch (error) {
+      lastError = error;
+      if (!isAddressInUse(error)) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`No available port found starting at ${requestedPort}.`);
+}
+
+async function listenOnce(cwd: string, host: string, port: number): Promise<{ server: Server; port: number }> {
+  const server = createServer((request, response) => {
+    void routeRequest(cwd, request, response);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  }).catch((error) => {
+    server.close();
+    throw error;
+  });
+  const address = server.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+  return { server, port: boundPort };
+}
+
+function isAddressInUse(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "EADDRINUSE");
 }
 
 async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
