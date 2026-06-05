@@ -133,6 +133,8 @@ describe("fixture E2E workflow", () => {
     expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
+    const stopReason = state.events.find((event) => event.type === "workflow_stop_reason");
+    expect(stopReason && "reason" in stopReason ? stopReason.reason : "").toBe("repair applied and verification passed");
   }, 15_000);
 
   it("records the full repair loop in trace order and exports expanded artifacts", async () => {

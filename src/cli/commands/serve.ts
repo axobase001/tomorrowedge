@@ -1,8 +1,7 @@
 import { startLocalCockpitServer } from "../../localCockpit/server.js";
 
 export async function serveCommand(cwd: string, options: { port?: string; host?: string; open?: boolean } = {}): Promise<void> {
-  const port = options.port ? Number(options.port) : 18792;
-  if (!Number.isInteger(port) || port <= 0 || port > 65_535) throw new Error(`Invalid port: ${options.port}`);
+  const port = parseServePort(options.port);
   const handle = await startLocalCockpitServer(cwd, { port, host: options.host });
   if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
     process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
@@ -12,6 +11,12 @@ export async function serveCommand(cwd: string, options: { port?: string; host?:
   if (options.open) {
     await openBrowser(handle.url);
   }
+}
+
+export function parseServePort(value?: string): number {
+  const port = value ? Number(value) : 18792;
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error(`Invalid port: ${value}`);
+  return port;
 }
 
 async function openBrowser(url: string): Promise<void> {
