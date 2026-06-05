@@ -42,6 +42,7 @@ npm ci
 npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
+npm run dev -- serve --open
 npm run dev -- tui
 ```
 
@@ -68,8 +69,12 @@ npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
+npm run dev -- serve --open
 npm run dev -- tui
 ```
+
+`serve --open` 会打开本地浏览器 cockpit，界面风格接近 README 截图；`tui`
+是键盘驱动的终端 Ink 面板。
 
 深度演示与排障：
 
@@ -392,6 +397,7 @@ npm ci
 npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
+npm run dev -- serve --open
 npm run dev -- tui
 ```
 
@@ -420,8 +426,12 @@ npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
+npm run dev -- serve --open
 npm run dev -- tui
 ```
+
+`serve --open` opens the local browser cockpit that matches the README
+screenshot style; `tui` starts the keyboard-driven Ink terminal panels.
 
 Deep demo and troubleshooting:
 
