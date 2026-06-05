@@ -50,7 +50,7 @@ orchestration:
 ```
 
 The config schema also reserves adapter slots for `langgraph`, `crewai`, and
-`autogen`, plus MCP tool bridging. These adapters are placeholders in 0.2.x and
+`autogen`, plus MCP tool bridging. These adapters are currently placeholders and
 raise clear unavailable-backend errors if selected before implementation.
 
 See [ORCHESTRATION_BACKENDS.md](ORCHESTRATION_BACKENDS.md).
@@ -235,7 +235,7 @@ time are estimated and reported, but `max_iterations`, `max_cost_usd`, and
 upgrade.
 
 `strong_agents` treats expensive or external agents as scarce decision
-resources. In 0.6.0 it feeds `budget_decision` diagnostics; later releases can
+resources. It currently feeds `budget_decision` diagnostics; later releases can
 turn those decisions into hard routing gates.
 
 Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
