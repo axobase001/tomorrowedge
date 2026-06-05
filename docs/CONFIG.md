@@ -157,10 +157,12 @@ submissions are written to `events.jsonl`.
 `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` pointing at
 `http://127.0.0.1:<proxyPort>`. Values in `env` still take final precedence.
 
-Use `tedge mcp agents --probe` to verify that configured commands start and
-return MCP tools. Use `tedge mcp invoke <agent-id> --session latest --role
-reviewer --prompt "..."` to call a configured external MCP process and record
-the call/result/error in the current session.
+Use `tedge mcp agents --diagnose` first to verify local command paths, working
+directories, role bindings, and capability metadata without spawning external
+agents. Then use `tedge mcp agents --probe` to verify that configured commands
+start and return MCP tools. Use `tedge mcp invoke <agent-id> --session latest
+--role reviewer --prompt "..."` to call a configured external MCP process and
+record the call/result/error in the current session.
 
 For command runner adapters, TomorrowEdge passes a structured JSON request on
 stdin and writes the same payload to a temp file exposed as

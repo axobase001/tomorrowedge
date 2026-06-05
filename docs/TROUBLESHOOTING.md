@@ -87,9 +87,11 @@ shell:
 
 ## MCP Agent Does Not Respond
 
-Use probe mode first:
+Use diagnostics first so command and cwd problems are caught before spawning
+external processes:
 
 ```bash
+tedge mcp agents --diagnose
 tedge mcp agents --probe
 ```
 

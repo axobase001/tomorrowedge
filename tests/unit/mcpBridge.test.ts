@@ -11,6 +11,7 @@ import { mcpTools, TomorrowEdgeMcpBridge } from "../../src/mcp/bridge.js";
 import { serveMcpStdio } from "../../src/mcp/server.js";
 import { loadSession } from "../../src/core/memory/sessionMemory.js";
 import { traceCommand } from "../../src/cli/commands/trace.js";
+import { mcpAgentsCommand } from "../../src/cli/commands/mcp.js";
 import { ModelRouter } from "../../src/core/routing/router.js";
 import { ExternalAgentProcessClient } from "../../src/core/externalAgents/externalAgentProcess.js";
 
@@ -316,6 +317,39 @@ describe("MCP Agent Bridge", () => {
     const tools = await client.listTools();
     await client.stop();
     expect(tools.map((tool) => tool.name)).toContain("agent.run");
+  });
+
+  it("prints external agent diagnostics without spawning processes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-diagnose-"));
+    await writeConfig(cwd, {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-external-mcp-server.mjs")],
+          autoStart: true,
+          roles: ["reviewer"],
+          capabilities: ["review"]
+        },
+        claude_code: {
+          ...defaultConfig.external_agents.claude_code,
+          enabled: true,
+          command: "",
+          roles: ["planner"],
+          capabilities: ["planning"]
+        }
+      }
+    });
+
+    const output = await captureStdout(() => mcpAgentsCommand(cwd, { diagnose: true }));
+
+    expect(output).toContain("codex\tCodex\tready\tmode=stdio_mcp");
+    expect(output).toContain("command found");
+    expect(output).toContain("claude_code\tClaude Code\twarning\tmode=manual_bridge");
+    expect(output).toContain("command not configured");
   });
 });
 

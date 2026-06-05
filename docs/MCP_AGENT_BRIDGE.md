@@ -14,12 +14,13 @@ The MCP Agent Bridge exposes TomorrowEdge as a local MCP server so external codi
 tedge mcp serve
 tedge mcp tools
 tedge mcp agents
+tedge mcp agents --diagnose
 tedge mcp agents --probe
 tedge mcp invoke codex --session latest --role reviewer --prompt "review the current workflow"
 ```
 
 `tedge mcp serve` starts the stdio transport. The first implementation is intentionally transport-light and offline-testable. HTTP/SSE can be added later without changing the bridge state model.
-`tedge mcp agents --probe` starts configured external MCP commands, runs `initialize`, and lists available tools. `tedge mcp invoke` calls a configured external MCP process and writes start/success/failure/result events into the same session ledger.
+`tedge mcp agents --diagnose` checks local command paths, working directories, role bindings, and capability metadata without spawning external agents. `tedge mcp agents --probe` starts configured external MCP commands, runs `initialize`, and lists available tools. `tedge mcp invoke` calls a configured external MCP process and writes start/success/failure/result events into the same session ledger.
 
 ## Bridge Mode vs Command Runner Mode
 
@@ -116,6 +117,7 @@ The ledger records:
 - `external_agent_error` when the process fails after retries
 
 Configured `maxRetries`, `requestTimeoutMs`, and `startupTimeoutMs` bound long-running or failed external agents.
+`startupTimeoutMs` applies to MCP `initialize`, while `requestTimeoutMs` applies to later tool requests. `external_agents.<id>.cwd` is used as the child process working directory when configured.
 
 ## Current Limits
 

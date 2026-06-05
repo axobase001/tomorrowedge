@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
+import { diagnoseExternalAgentProfile, formatExternalAgentDiagnostic, resolveExternalAgentWorkingDirectory } from "./externalAgentDiagnostics.js";
 import type { ExternalAgentProfile } from "./externalAgentTypes.js";
 
 const require = createRequire(import.meta.url);
@@ -48,11 +49,15 @@ export class ExternalAgentProcessClient {
 
   async start(): Promise<void> {
     if (this.child) return;
+    const diagnostic = diagnoseExternalAgentProfile(this.profile, this.cwd);
+    if (diagnostic.status === "error") {
+      throw new Error(`External agent ${this.profile.id} is not invokable: ${formatExternalAgentDiagnostic(diagnostic)}`);
+    }
     if (!this.profile.command) {
       throw new Error(`External agent ${this.profile.id} has no command configured.`);
     }
     this.child = spawn(this.profile.command, this.profile.args ?? [], {
-      cwd: this.cwd,
+      cwd: resolveExternalAgentWorkingDirectory(this.profile, this.cwd),
       env: buildExternalAgentEnv(this.profile),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
@@ -77,7 +82,7 @@ export class ExternalAgentProcessClient {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: { name: "tomorrowedge", version: packageJson.version }
-    });
+    }, this.profile.startupTimeoutMs ?? this.profile.requestTimeoutMs ?? 60_000);
     return response;
   }
 
@@ -99,12 +104,12 @@ export class ExternalAgentProcessClient {
     child.kill();
   }
 
-  private async request(method: string, params: Record<string, unknown>): Promise<ExternalAgentProcessResult> {
+  private async request(method: string, params: Record<string, unknown>, timeoutMs?: number): Promise<ExternalAgentProcessResult> {
     const maxRetries = this.profile.maxRetries ?? 1;
     let lastError = "";
     for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
       try {
-        const response = await this.send({ jsonrpc: "2.0", id: this.nextId++, method, params });
+        const response = await this.send({ jsonrpc: "2.0", id: this.nextId++, method, params }, timeoutMs);
         if (response.error) {
           lastError = response.error.message ?? `JSON-RPC error ${response.error.code ?? ""}`.trim();
         } else {
@@ -117,9 +122,9 @@ export class ExternalAgentProcessClient {
     return { ok: false, error: lastError || `${method} failed`, attempts: maxRetries + 1 };
   }
 
-  private send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+  private send(request: JsonRpcRequest, timeoutMs?: number): Promise<JsonRpcResponse> {
     if (!this.child) throw new Error(`External agent ${this.profile.id} is not running.`);
-    const timeout = this.profile.requestTimeoutMs ?? 60_000;
+    const timeout = timeoutMs ?? this.profile.requestTimeoutMs ?? 60_000;
     const body = JSON.stringify(request);
     const framed = this.framing === "newline" ? `${body}\n` : `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
     return new Promise((resolve, reject) => {
@@ -171,8 +176,9 @@ export function buildExternalAgentEnv(profile: ExternalAgentProfile, baseEnv: No
 }
 
 export async function probeExternalAgent(profile: ExternalAgentProfile, cwd: string): Promise<{ ok: boolean; detail: string; tools?: ExternalAgentTool[] }> {
-  if (!profile.command) {
-    return { ok: false, detail: "no command configured" };
+  const diagnostic = diagnoseExternalAgentProfile(profile, cwd);
+  if (diagnostic.status === "error" || !profile.command) {
+    return { ok: false, detail: formatExternalAgentDiagnostic(diagnostic) };
   }
   const client = new ExternalAgentProcessClient(profile, cwd);
   try {

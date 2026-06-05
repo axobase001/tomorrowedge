@@ -134,7 +134,7 @@ program.command("memory").description("List learned local task memory").option("
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));
 mcp.command("tools").description("List TomorrowEdge MCP tools").action(() => mcpToolsCommand(cwd));
-mcp.command("agents").description("List enabled external MCP agents").option("--probe", "start configured MCP commands and list their tools").action((options: { probe?: boolean }) => mcpAgentsCommand(cwd, options));
+mcp.command("agents").description("List enabled external MCP agents").option("--probe", "start configured MCP commands and list their tools").option("--diagnose", "check local command, cwd, role, and capability configuration without spawning agents").action((options: { probe?: boolean; diagnose?: boolean }) => mcpAgentsCommand(cwd, options));
 mcp.command("invoke").description("Invoke a configured external MCP agent process").argument("<agent-id>", "external agent id").option("--session <id>", "session id or latest", "latest").option("--role <role>", "workflow role", "reviewer").option("--tool <name>", "MCP tool name to call").option("--prompt <text>", "prompt for the external agent").action((agentId: string, options: { session?: string; role?: string; tool?: string; prompt?: string }) => mcpInvokeCommand(cwd, agentId, options));
 
 program

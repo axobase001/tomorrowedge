@@ -10,6 +10,7 @@ import { renderEventMarkdown } from "../core/events/eventRenderer.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import { externalAgentRegistryFromConfig, ExternalAgentRegistry } from "../core/externalAgents/externalAgentRegistry.js";
 import type { ExternalAgentProfile, ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
+import { diagnoseExternalAgentProfile, type ExternalAgentDiagnostic } from "../core/externalAgents/externalAgentDiagnostics.js";
 import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgentRouter.js";
 import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
 import { runCommandExternalAgent } from "../core/externalAgents/runners/commandExternalAgentRunner.js";
@@ -44,6 +45,10 @@ export class TomorrowEdgeMcpBridge {
 
   listAgents(): ExternalAgentProfile[] {
     return this.registry.list();
+  }
+
+  diagnoseAgents(): ExternalAgentDiagnostic[] {
+    return this.registry.list().map((profile) => diagnoseExternalAgentProfile(profile, this.cwd));
   }
 
   async startWorkflow(input: StartWorkflowInput): Promise<{ sessionId: string; state: AgentGraphState }> {
