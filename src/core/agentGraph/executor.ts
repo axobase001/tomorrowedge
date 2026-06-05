@@ -782,7 +782,9 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
 function workflowStopReason(state: AgentGraphState): string {
   if (state.judge?.decision === "abort") return "judge aborted workflow";
   if (state.judge?.decision === "ask_user") return "judge requested user decision";
-  if (state.runResults.some((result) => !result.success)) return "verification failed or repair budget ended";
+  const latestRun = state.runResults.at(-1);
+  if (latestRun && !latestRun.success) return "verification failed or repair budget ended";
+  if (latestRun?.success && state.repairCandidates.length) return "repair applied and verification passed";
   if (state.changedFiles.length) return "selected patch applied and workflow finalized";
   return "no patch applied; workflow finalized after review and judge";
 }

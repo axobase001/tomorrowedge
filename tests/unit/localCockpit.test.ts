@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parseServePort } from "../../src/cli/commands/serve.js";
 import { startLocalCockpitServer } from "../../src/localCockpit/server.js";
 
 describe("local cockpit server", () => {
+  it("accepts port 0 in CLI port parsing for OS-assigned ports", () => {
+    expect(parseServePort("0")).toBe(0);
+    expect(parseServePort(undefined)).toBe(18792);
+    expect(() => parseServePort("-1")).toThrow("Invalid port");
+  });
+
   it("serves the cockpit shell and health endpoint", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
