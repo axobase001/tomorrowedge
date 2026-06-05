@@ -2,6 +2,7 @@ import { loadConfig, writeConfig } from "../../config/configLoader.js";
 import { createProviderRegistry } from "../../providers/registry.js";
 import { testProviderConnections } from "../../providers/connectionTest.js";
 import { fetchOpenRouterCatalog, formatOpenRouterModelLine, recommendFreeOpenRouterModels } from "../../providers/openrouterCatalog.js";
+import { redactText } from "../../safety/secretScanner.js";
 
 export type ModelsOptions = {
   realSmoke?: boolean;
@@ -32,7 +33,7 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
       models = await provider.listModels();
     } catch (error) {
       process.stdout.write(`${provider.id} [${provider.kind}]\n`);
-      process.stdout.write(`  error: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stdout.write(`  error: ${errorMessage(error)}\n`);
       continue;
     }
     process.stdout.write(`${provider.id} [${provider.kind}]\n`);
@@ -54,7 +55,7 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
           const status = isExactOk(content) ? "ok" : content ? "warning: expected exact ok" : "warning: empty response";
           process.stdout.write(`    smoke: ${status} (${response.usage ? `${response.usage.inputTokens}/${response.usage.outputTokens} tokens` : "usage unavailable"})\n`);
         } catch (error) {
-          process.stdout.write(`    smoke: failed (${error instanceof Error ? error.message : String(error)})\n`);
+          process.stdout.write(`    smoke: failed (${errorMessage(error)})\n`);
         }
       }
       if (options.smokeSuite && provider.kind === "cloud") {
@@ -171,7 +172,7 @@ async function smokeText(provider: Parameters<typeof runSmokeSuite>[0], model: s
     if (isExactOk(content)) return { name: "smoke:text", status: "ok", detail: tokenDetail(response.usage) };
     return { name: "smoke:text", status: "warning", detail: content ? "expected exact ok" : "empty response" };
   } catch (error) {
-    return { name: "smoke:text", status: "failed", detail: error instanceof Error ? error.message : String(error) };
+    return { name: "smoke:text", status: "failed", detail: errorMessage(error) };
   }
 }
 
@@ -189,7 +190,7 @@ async function smokeJson(provider: Parameters<typeof runSmokeSuite>[0], model: s
     const parsed = start >= 0 && end >= start ? JSON.parse(text.slice(start, end + 1)) : undefined;
     return parsed?.ok === true ? { name: "smoke:json", status: "ok", detail: tokenDetail(response.usage) } : { name: "smoke:json", status: "warning", detail: "JSON shape mismatch" };
   } catch (error) {
-    return { name: "smoke:json", status: "failed", detail: error instanceof Error ? error.message : String(error) };
+    return { name: "smoke:json", status: "failed", detail: errorMessage(error) };
   }
 }
 
@@ -218,8 +219,12 @@ async function smokeVision(provider: Parameters<typeof runSmokeSuite>[0], model:
     const parsed = start >= 0 && end >= start ? JSON.parse(text.slice(start, end + 1)) : undefined;
     return parsed?.image === true ? { name: "smoke:vision", status: "ok", detail: tokenDetail(response.usage) } : { name: "smoke:vision", status: "warning", detail: "vision JSON shape mismatch" };
   } catch (error) {
-    return { name: "smoke:vision", status: "failed", detail: error instanceof Error ? error.message : String(error) };
+    return { name: "smoke:vision", status: "failed", detail: errorMessage(error) };
   }
+}
+
+function errorMessage(error: unknown): string {
+  return redactText(error instanceof Error ? error.message : String(error));
 }
 
 function tokenDetail(usage?: { inputTokens: number; outputTokens: number }): string {

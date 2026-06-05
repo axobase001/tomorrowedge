@@ -16,6 +16,15 @@ describe("safety", () => {
     expect(redactText(content)).not.toContain("npm_123");
   });
 
+  it("redacts provider account identifiers from raw error metadata", () => {
+    const content = 'openrouter request failed: 429 {"error":{"metadata":{"provider_name":"Crucible"}},"user_id":"user_3EfqcfPXAjQTwahh8KSxAxJJYP9","accountId":"acct_live_123"}';
+    const redacted = redactText(content);
+
+    expect(redacted).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
+    expect(redacted).not.toContain("acct_live_123");
+    expect(redacted).toContain("provider_name");
+  });
+
   it("blocks raw cloud context in privacy mode", () => {
     const decision = canSendToCloud("normal code", "privacy");
     expect(decision.allowed).toBe(false);

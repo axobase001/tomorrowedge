@@ -180,6 +180,50 @@ describe("config loader", () => {
     }
   });
 
+  it("redacts provider identifiers from models smoke errors", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-model-smoke-redact-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const config = loadConfig(cwd);
+      await writeConfig(cwd, {
+        ...config,
+        providers: {
+          ...config.providers,
+          openai_compatible: {
+            ...config.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        }
+      });
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "temporarily rate-limited upstream",
+              metadata: { provider_name: "Crucible" }
+            },
+            user_id: "user_3EfqcfPXAjQTwahh8KSxAxJJYP9",
+            accountId: "acct_live_123"
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        )) as typeof fetch;
+
+      const output = await captureStdout(() => modelsCommand(cwd, { smokeSuite: true, provider: "openai_compatible" }));
+
+      expect(output).toContain("smoke:text: failed");
+      expect(output).toContain("[redacted]");
+      expect(output).not.toContain("user_3EfqcfPXAjQTwahh8KSxAxJJYP9");
+      expect(output).not.toContain("acct_live_123");
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it("warns when full mode is configured in a dirty git workspace", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-full-dirty-"));
     try {
