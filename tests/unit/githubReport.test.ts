@@ -42,6 +42,19 @@ describe("GitHub PR report", () => {
     }
   });
 
+  it("requires repo and PR or SHA when posting check runs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-github-report-"));
+    try {
+      const state = await runOfflineGraph(cwd, "report missing check args", defaultConfig);
+      await saveSession(cwd, state);
+
+      await expect(githubReportCommand(cwd, "latest", { postCheck: true })).rejects.toThrow("--repo");
+      await expect(githubReportCommand(cwd, "latest", { postCheck: true, repo: "owner/repo" })).rejects.toThrow("--sha");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("includes review draft material in report rendering", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-github-report-"));
     try {

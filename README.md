@@ -141,9 +141,14 @@ tedge sessions
 tedge memory
 tedge review-export latest --format github
 tedge github-report latest --repo owner/repo --pr 123 --dry-run
+tedge github-report latest --repo owner/repo --pr 123 --post-comment
+tedge github-report latest --repo owner/repo --pr 123 --post-check
 tedge undo --list
 tedge undo
 ```
+
+`--post-check` 会通过 `gh api` 创建 GitHub Checks API check run；目标仓库的 token
+需要允许创建 check run。
 
 TUI composer 支持直接写入项目偏好和配置：`/mode full` 保存 access mode，
 `/model planner openrouter openai/gpt-5.2` 保存单个角色模型，`/routing quality` 保存 routing mode，
@@ -518,9 +523,14 @@ tedge sessions
 tedge memory
 tedge review-export latest --format github
 tedge github-report latest --repo owner/repo --pr 123 --dry-run
+tedge github-report latest --repo owner/repo --pr 123 --post-comment
+tedge github-report latest --repo owner/repo --pr 123 --post-check
 tedge undo --list
 tedge undo
 ```
+
+`--post-check` creates a GitHub Checks API check run through `gh api`; the token must be
+allowed to create check runs for the target repository.
 
 The TUI composer can persist project settings without leaving the cockpit:
 `/mode full`, `/model planner openrouter openai/gpt-5.2`, `/routing quality`,

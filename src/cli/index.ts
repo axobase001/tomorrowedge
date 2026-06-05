@@ -138,11 +138,14 @@ program
   .command("github-report")
   .description("Render or post a TomorrowEdge session report for a GitHub PR")
   .argument("[session-id]", "session id or latest", "latest")
-  .option("--repo <owner/name>", "GitHub repository for --post-comment")
-  .option("--pr <number>", "pull request number for --post-comment")
+  .option("--repo <owner/name>", "GitHub repository for posting")
+  .option("--pr <number>", "pull request number for posting or check SHA lookup")
+  .option("--sha <commit>", "commit SHA for --post-check")
   .option("--dry-run", "print the report instead of posting")
   .option("--post-comment", "post the report as a GitHub PR comment through gh")
-  .action((sessionId: string, options: { repo?: string; pr?: string; dryRun?: boolean; postComment?: boolean }) => githubReportCommand(cwd, sessionId, options));
+  .option("--post-check", "post the report as a GitHub Checks API check run through gh api")
+  .option("--check-name <name>", "check run name", "TomorrowEdge report")
+  .action((sessionId: string, options: { repo?: string; pr?: string; sha?: string; dryRun?: boolean; postComment?: boolean; postCheck?: boolean; checkName?: string }) => githubReportCommand(cwd, sessionId, options));
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
