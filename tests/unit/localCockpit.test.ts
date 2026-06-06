@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
+import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
+import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { startLocalCockpitServer } from "../../src/localCockpit/server.js";
 
 describe("local cockpit server", () => {
@@ -23,6 +26,8 @@ describe("local cockpit server", () => {
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge / 明日边缘");
       expect(html).toContain("Trace Ledger");
+      expect(html).toContain("metric-line");
+      expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
     } finally {
       await server.close();
@@ -39,6 +44,80 @@ describe("local cockpit server", () => {
 
       expect(denied.status).toBe(403);
       expect(allowed.status).toBe(200);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("serves the shared cockpit view model for a saved session", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-vm-"));
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const vm = await fetch(`${server.url}/api/sessions/latest/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { workflow: Array<{ label: string }>; currentApproval?: { kind: string } };
+
+      expect(vm.workflow.map((step) => step.label)).toEqual(["Plan", "Route", "Edit", "Review", "Test", "Judge", "Approve"]);
+      expect(vm.currentApproval?.kind).toBe("patch");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("executes browser approval actions through the Node cockpit", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-approval-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
+      });
+      const payload = await response.json() as { status: string; intent: { action: string }; viewModel: { currentApproval?: { kind: string }; main: { filesChanged: string[] } } };
+
+      expect(response.status).toBe(200);
+      expect(payload.status).toBe("applied");
+      expect(payload.intent.action).toBe("approve_patch");
+      expect(payload.viewModel.currentApproval?.kind).toBe("shell");
+      expect(payload.viewModel.main.filesChanged).toContain("index.js");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("returns invalid_json for malformed JSON request bodies", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-json-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not-json"
+      });
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("invalid_json");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects multibyte invalid cockpit tokens without throwing", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-token-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const badNonce = encodeURIComponent(`${server.nonce.slice(0, -1)}好`);
+      const response = await fetch(`${server.url}/api/sessions?nonce=${badNonce}`);
+
+      expect(response.status).toBe(403);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

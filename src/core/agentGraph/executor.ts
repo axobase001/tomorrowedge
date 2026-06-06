@@ -46,6 +46,7 @@ import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
 import { isStrongAgentRole } from "../budget/strongAgentBudget.js";
+import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -63,6 +64,8 @@ export type OfflineGraphOptions = {
   testCommand?: string;
   imagePaths?: string[];
   conversationTarget?: string;
+  onEvent?: (event: TomorrowEdgeEvent) => void;
+  sessionId?: string;
 };
 
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
@@ -74,7 +77,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     approveShell: options.approveShell,
     approveRepair: options.approveRepair
   });
-  const ledger = createEventLedger(access.mode);
+  const ledger = createEventLedger(access.mode, options.sessionId, options.onEvent);
   const startedAtMs = Date.now();
   const conversationTarget = resolveConversationTarget(config, options.conversationTarget);
   const state: AgentGraphState = {

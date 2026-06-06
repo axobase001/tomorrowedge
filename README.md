@@ -4,7 +4,7 @@
 
 **中文** | [English](#english)
 
-明日边缘是一个 **TUI-first multi-model agent cockpit for full-access coding workflows**：面向 full-access 代码任务的终端驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
+明日边缘是一个 **GUI + TUI multi-model agent cockpit for full-access coding workflows**：面向 full-access 代码任务的本地驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
 
 ```text
 Full autonomy, full visibility.
@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.0.1`。
+当前版本：`1.1.0`。
 
+- `1.1.0` 引入 **Four-Zone Quiet Cockpit** 浏览器 GUI：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 采用 image2-first 流程收敛到 Codex-like quiet cockpit，而不是后台管理系统。
 - `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode TUI 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
 - `1.0.0` 的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
 
@@ -61,6 +62,36 @@ fixture patch, runs verification, and shows the replayable event ledger.
 
 ![TomorrowEdge full-access trace ledger](docs/assets/screenshots/tui-runtime-trace.png)
 
+## GUI Runtime Screenshots
+
+These screenshots are captured from the local browser cockpit opened by
+`tedge serve --open` against a fixture session. They are runtime screenshots,
+not image2 reference boards.
+
+**Approval-first main workspace**
+
+![TomorrowEdge GUI waiting approval](docs/ui/screenshots/gui-v1.1/waiting-approval.png)
+
+**Details drawer fully open**
+
+![TomorrowEdge GUI details drawer](docs/ui/screenshots/gui-v1.1/drawer-fully-open-1440.png)
+
+**Approval action applied**
+
+![TomorrowEdge GUI approval action applied](docs/ui/screenshots/gui-v1.1/approval-action-applied.png)
+
+**Live running state**
+
+![TomorrowEdge GUI live running state](docs/ui/screenshots/gui-v1.1/running-live.png)
+
+**Telemetry expanded**
+
+![TomorrowEdge GUI telemetry expanded](docs/ui/screenshots/gui-v1.1/telemetry-expanded.png)
+
+**Muted failure diagnosis**
+
+![TomorrowEdge GUI failed state](docs/ui/screenshots/gui-v1.1/failed-state.png)
+
 ## 快速开始
 
 ```bash
@@ -77,8 +108,8 @@ npm run dev -- serve --open
 npm run dev -- tui
 ```
 
-`serve --open` 会打开本地浏览器 cockpit，界面风格接近 README 截图；`tui`
-是键盘驱动的终端 Ink 面板。
+`serve --open` 会打开本地浏览器 Four-Zone Quiet Cockpit；`tui`
+是键盘驱动的终端 Ink 面板。两者共享 workflow / telemetry / approval 的语义。
 
 深度演示与排障：
 
@@ -312,7 +343,7 @@ Image / Screenshot / Diagram
 - 事件 artifact 默认脱敏后再保存和导出
 - 多文件 patch 写入失败时会回滚已写入文件
 - telemetry 默认关闭
-- `.env` 和 `.tomorrowedge/` 本地运行态被 git 忽略
+- `.env` 和 `.tomorrowedge/` 本地运行态被 git 忽略；发布/分享代码包请使用 `npm run package:zip`，它会排除 `.env*` 并执行 secret scan
 - provider fallback 会显式记录，不会伪装成主 provider 成功
 
 ## Provider
@@ -338,7 +369,7 @@ vision roles.
 
 ## UI 风格
 
-明日边缘默认中文 UI，整体风格是简约、克制、偏程序员审美的 terminal cockpit：深色面板、细边框、等宽字体、高信息密度、有限状态色，以及不抢主次的轻科幻工程感。详见 [docs/UI_STYLE.md](docs/UI_STYLE.md)。
+明日边缘默认中文 UI。浏览器 GUI 是蓝白冷感的 Codex-like quiet cockpit：summary-first telemetry、轻量 task queue、中心 workflow 主焦点和短 command composer；TUI 保持更高密度的终端驾驶舱。详见 [docs/UI_STYLE.md](docs/UI_STYLE.md)。
 
 ## Clean Room
 
@@ -348,8 +379,8 @@ vision roles.
 
 ## English
 
-TomorrowEdge is a **TUI-first multi-model agent cockpit** for coding tasks: a terminal cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering workflows.
-TomorrowEdge is a **TUI-first multi-model agent cockpit for full-access coding workflows**.
+TomorrowEdge is a **GUI + TUI multi-model agent cockpit** for coding tasks: a local cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering workflows.
+TomorrowEdge is a **GUI + TUI multi-model agent cockpit for full-access coding workflows**.
 TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks.
 
 ```text
@@ -369,7 +400,13 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.0.1`.
+Current version: `1.1.0`.
+
+`1.1.0` adds the **Four-Zone Quiet Cockpit** browser GUI: simplified top bar,
+reduced-border task queue, center workflow main area, collapsed telemetry
+summary, and a short natural-language command composer. The GUI follows an
+image2-first refinement flow toward a Codex-like quiet cockpit instead of an
+admin dashboard.
 
 `1.0.1` is the first post-1.0 stability release. It fixes live routed agent
 classification, adds a real Ink raw-mode TUI keyboard smoke test, and closes
@@ -408,7 +445,7 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   written to `events.jsonl`
 - the TUI Agents / Router / Trace panes show external agent badges, role
   bindings, and `external_agent_*` events
-- `1.0.1` keeps the hardened release lane: `npm run verify`, zip-safe secret
+- `1.1.0` keeps the hardened release lane: `npm run verify`, zip-safe secret
   scanning, full-access shell policy, command runner skeletons, and the locally
   runnable tiny LM demo remain available.
 
@@ -438,6 +475,36 @@ generated concept art.
 
 ![TomorrowEdge full-access trace ledger](docs/assets/screenshots/tui-runtime-trace.png)
 
+## GUI Runtime Screenshots
+
+These screenshots are captured from the local browser cockpit opened by
+`tedge serve --open` against a fixture session. They are runtime screenshots,
+not image2 reference boards.
+
+**Approval-first main workspace**
+
+![TomorrowEdge GUI waiting approval](docs/ui/screenshots/gui-v1.1/waiting-approval.png)
+
+**Details drawer fully open**
+
+![TomorrowEdge GUI details drawer](docs/ui/screenshots/gui-v1.1/drawer-fully-open-1440.png)
+
+**Approval action applied**
+
+![TomorrowEdge GUI approval action applied](docs/ui/screenshots/gui-v1.1/approval-action-applied.png)
+
+**Live running state**
+
+![TomorrowEdge GUI live running state](docs/ui/screenshots/gui-v1.1/running-live.png)
+
+**Telemetry expanded**
+
+![TomorrowEdge GUI telemetry expanded](docs/ui/screenshots/gui-v1.1/telemetry-expanded.png)
+
+**Muted failure diagnosis**
+
+![TomorrowEdge GUI failed state](docs/ui/screenshots/gui-v1.1/failed-state.png)
+
 ## Quickstart
 
 ```bash
@@ -454,8 +521,9 @@ npm run dev -- serve --open
 npm run dev -- tui
 ```
 
-`serve --open` opens the local browser cockpit that matches the README
-screenshot style; `tui` starts the keyboard-driven Ink terminal panels.
+`serve --open` opens the local browser Four-Zone Quiet Cockpit; `tui` starts
+the keyboard-driven Ink terminal panels. Both surfaces share workflow,
+telemetry, and approval semantics.
 
 Deep demo and troubleshooting:
 
@@ -712,7 +780,7 @@ requests. TomorrowEdge routes capabilities. See
 - Event artifacts are redacted before persistence/export
 - Multi-file patch writes roll back if a later write fails
 - Telemetry is disabled by default
-- `.env` and local `.tomorrowedge/` runtime state are git-ignored
+- `.env` and local `.tomorrowedge/` runtime state are git-ignored; use `npm run package:zip` for shareable archives because it excludes `.env*` and runs the secret scan
 - Provider fallback is explicit; it does not hide the failed primary route
 
 ## Providers
@@ -803,4 +871,7 @@ This is not an official Xiaomi, MiMo, OpenAI, Anthropic, Google, DeepSeek, Moons
 
 ## UI Style
 
-TomorrowEdge defaults to Chinese UI copy and uses a restrained programmer-facing terminal cockpit style: dark panes, thin borders, monospaced text, dense state panels, limited status colors, and subtle sci-fi engineering accents that never outrank the workflow. See [docs/UI_STYLE.md](docs/UI_STYLE.md).
+TomorrowEdge defaults to Chinese UI copy. The browser GUI uses a blue-white
+Codex-like quiet cockpit style with summary-first telemetry and a short command
+composer; the TUI remains denser and terminal-first. See
+[docs/UI_STYLE.md](docs/UI_STYLE.md).

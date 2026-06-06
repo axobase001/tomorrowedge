@@ -1,52 +1,89 @@
 # UI Style
 
-TomorrowEdge should feel like a sober programmer cockpit, closer to `lazygit`, `k9s`, `btop`, and `htop` than a SaaS landing page.
+TomorrowEdge has two first-class cockpit surfaces:
+
+- Browser GUI: Four-Zone Quiet Cockpit for local workflow supervision.
+- Ink TUI: keyboard-driven terminal cockpit for dense terminal use.
 
 Default UI language: Chinese (`zh-CN`).
 
+## GUI v1.1 Direction
+
+The browser GUI should feel like a quiet local coding-agent cockpit, not an
+admin dashboard.
+
 Principles:
 
-- dense but readable
-- dark terminal-first surface
-- thin borders and stable panes
-- restrained color for status, diff, and risk only
-- no decorative gradients, mascots, or marketing hero treatment
-- visible approval state for patch and shell actions
-- panes should privilege state over raw log waterfall
-- subtle sci-fi engineering accents are allowed, but workflow hierarchy must stay dominant
+- Codex-like quiet tool feel
+- blue-white cold palette
+- Japanese wabi-sabi inspired spacing
+- sparse but functional layout
+- summary-first information design
+- center workflow remains the visual focus
+- details appear through drawer / expand / hover only when needed
+- no chat bubble interface
+- no SaaS dashboard or enterprise admin feel
 
-Recommended palette:
-
-```text
-background: #0d1117
-panel:      #111827
-border:     #30363d
-text:       #d1d5db
-muted:      #8b949e
-green:      #3fb950
-yellow:     #d29922
-red:        #f85149
-cyan:       #58a6ff
-```
-
-Image generation prompt for built-in imagegen/image2:
+Default GUI palette:
 
 ```text
-Use case: ui-mockup
-Asset type: product UI concept reference for a terminal/TUI coding agent cockpit
-Primary request: Create a refined TomorrowEdge cockpit UI mockup with a subtle sci-fi engineering aesthetic, but keep the interface practical, programmer-friendly, and information-first. Default language must be Chinese.
-Style/medium: high-fidelity terminal UI mockup, dark theme, sharp monospaced typography, thin borders, restrained sci-fi instrumentation.
-Composition/framing: widescreen cockpit layout with panes for 智能体, 目标, 路由, 辩论, Diff, Shell, 证据, 记忆, 帮助.
-Color palette: dark graphite background, muted gray panels, cyan active state, green success, amber approval warning, red failure, subtle cyan edge highlights, no purple gradients.
-Text (verbatim): "TomorrowEdge / 明日边缘", "安全模式", "智能体", "Diff", "等待补丁授权", "裁决：选择 fixture_candidate_a", "拟运行：npm test"
-Constraints: simple, sober, programmer-friendly, information dense, subtle sci-fi but not cyberpunk, no logo, no mascot, no stock imagery, no neon, no marketing hero.
-Avoid: decorative blobs, glossy 3D, rounded SaaS cards, large illustrations, fake browser chrome, excessive purple gradients.
+background:    #F6FAFC
+surface:       #FFFFFF
+alt-surface:   #EEF5F8
+border:        #D7E4EA
+text:          #17212B
+muted:         #6B7A88
+primary-blue:  #6FAFD2
+deep-blue:     #2F6F92
+success:       #2F9D68
+warning:       #B7791F
+danger:        #C94A4A
 ```
 
-Current image2 baseline:
+## Layout
 
 ```text
-docs/ui/tomorrowedge-cockpit-image2-v4-cn-sci.png
+Top Bar:     44-52px
+Left Panel:  19-22% task queue
+Center:      54-58% workflow main area
+Right Panel: 20-24% telemetry summary
+Composer:    72-86px command composer
 ```
 
-Use it as the visual target for the actual TUI: compact Chinese agent list, explicit routing state, central debate/shell/evidence panels, a large diff approval pane, and a bottom memory/keybinding strip. Treat generated text content as illustrative; runtime copy should come from real agent state.
+## Image2 References
+
+The GUI v1.1 visual decisions come from the image2-first prompt pack and
+selected references:
+
+- `docs/ui/image2-components/outputs/04-telemetry-collapsed-v11.png`
+- `docs/ui/image2-components/outputs/05-workflow-spine-light-v11.png`
+- `docs/ui/image2-components/outputs/06-task-list-reduced-v11.png`
+- `docs/ui/image2-components/outputs/07-command-composer-quiet-v11.png`
+- `docs/ui/image2-components/outputs/08-topbar-simplified-v11.png`
+- `docs/ui/image2-components/outputs/09-approval-main-workspace-v11.png`
+- `docs/ui/image2-components/outputs/10-fullscreen-v11-variants.png`
+
+See:
+
+- `docs/ui/GUI_REFACTOR_V1_1_SCOPE.md`
+- `docs/ui/image2-components/review/component_review.md`
+- `docs/ui/gui-v1.1/component_mapping.md`
+- `docs/ui/gui-v1.1/implementation_deviation.md`
+
+## TUI Direction
+
+The TUI remains terminal-first: compact Chinese panes, explicit routing state,
+diff/shell/evidence views, and keyboard-driven approval controls. It can stay
+darker and denser than the browser GUI, but should preserve the same workflow
+semantics through shared cockpit view models and selectors.
+
+## Avoid
+
+- purple cyberpunk
+- neon or decorative gradients
+- glassmorphism
+- SaaS dashboard card walls
+- cloud-console resource tables as the default view
+- CRM/ticket-system task cards
+- ChatGPT-style chat history as the main interface
+- marketing landing-page composition

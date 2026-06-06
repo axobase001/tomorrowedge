@@ -7,6 +7,54 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-07
+
+1.1.0 refines the browser cockpit from an admin-dashboard-like layout into a
+Codex-like quiet local coding-agent cockpit while keeping the existing TUI,
+agent graph, routing, approval, shell-policy, and event-ledger core intact.
+
+### Added
+
+- Shared cockpit ViewModel contracts under `src/cockpit/` so GUI and future TUI
+  surfaces can consume consistent task, workflow, telemetry, approval, trace,
+  and artifact state.
+- Local cockpit view-model endpoint and live run event stream for browser
+  surfaces.
+- Vite/React cockpit skeleton under `src/cockpit-web/` for the next staged GUI
+  surface.
+- image2-first GUI prompt pack, generated reference boards, component selection
+  notes, implementation mapping docs, and GUI v1.1 runtime screenshots.
+- Unit coverage for cockpit ViewModel projection and local cockpit view-model /
+  approval-intent endpoints.
+
+### Changed
+
+- Browser cockpit now uses the Four-Zone Quiet Cockpit layout: reduced task
+  queue, lighter workflow spine, summary-first approval workspace, collapsed
+  telemetry, and a compact natural-language command composer.
+- Browser approval actions now execute real Node-side workflow actions instead
+  of only recording browser intents: approve/reject patch, approve/reject shell,
+  request re-review, and undo latest patch.
+- Live cockpit SSE snapshots now carry shared ViewModel updates so workflow,
+  task state, telemetry, approval focus, and trace can update during runs.
+- README now presents GUI runtime screenshots captured from `tedge serve --open`
+  instead of only concept/reference images.
+- UI style docs now describe the blue-white, low-noise GUI direction alongside
+  the denser terminal-first TUI.
+
+### Fixed
+
+- Local cockpit auth now compares token byte lengths before
+  `timingSafeEqual`, avoiding multibyte-token crashes.
+- Malformed cockpit JSON requests now return `400 invalid_json` instead of
+  falling through as server errors.
+- Detail drawer positioning is constrained to the viewport and includes full
+  diff, changed files, telemetry, routes, artifacts, and raw event trace.
+- Telemetry displays `not measured` or `-` when cost/token/cache data is absent
+  instead of misleading zero values.
+- `npm run package:zip` creates shareable archives that exclude `.env*` and
+  validates the resulting zip before reporting success.
+
 ## [0.6.0] - 2026-06-05
 
 0.6.0 starts the Architecture Upgrade track. It keeps TomorrowEdge focused on a

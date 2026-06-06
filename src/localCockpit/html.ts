@@ -1,64 +1,102 @@
-export function renderCockpitHtml(): string {
+﻿export function renderCockpitHtml(): string {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TomorrowEdge Cockpit</title>
+  <title>TomorrowEdge / 明日边缘</title>
   <style>${cockpitCss()}</style>
 </head>
 <body>
-  <main class="shell">
+  <main class="cockpit-shell">
     <header class="topbar">
-      <div>
-        <h1>TomorrowEdge / 明日边缘</h1>
-        <p>Local full-access coding workflow cockpit</p>
+      <div class="brand">
+        <div class="mark">T</div>
+        <div>
+          <h1>TomorrowEdge / 明日边缘</h1>
+          <span id="workspace">workspace</span>
+        </div>
       </div>
-      <div class="top-actions">
-        <button id="refresh">Refresh</button>
-        <button id="run-preview">Run Preview</button>
-        <span id="mode" class="badge">LOCAL</span>
+      <div class="top-status">
+        <span id="mode-chip" class="chip chip-blue">partial</span>
+        <span id="session-chip" class="chip">session latest</span>
+        <button id="run-top" class="quiet-run" title="杩愯褰撳墠鎸囦护">Run</button>
+        <button id="refresh" class="icon-button" title="Refresh">Settings</button>
       </div>
     </header>
-    <section class="toolbar">
-      <label>Session <select id="sessions"></select></label>
-      <label>Goal <input id="goal" value="fix failing test" /></label>
-      <span id="status" class="muted">loading</span>
+
+    <section class="cockpit-grid">
+      <aside class="task-panel panel" aria-label="浠诲姟鍒楄〃">
+        <div class="panel-head">
+          <h2>Tasks</h2>
+          <button class="ghost-button" id="new-task" title="New task">+</button>
+        </div>
+        <div class="task-filter">
+          <select id="sessions" aria-label="session selector"></select>
+        </div>
+        <div id="tasks" class="task-list"></div>
+      </aside>
+
+      <section class="workflow-panel panel" aria-label="Workflow main area">
+        <div class="panel-head">
+          <h2>Workflow</h2>
+          <div class="head-actions">
+            <span id="status-text" class="chip chip-blue">绛夊緟浠诲姟</span>
+            <button id="open-drawer" class="ghost-button">Details</button>
+          </div>
+        </div>
+        <div id="workflow-spine" class="workflow-spine"></div>
+        <article id="main-view" class="main-view"></article>
+      </section>
+
+      <aside class="telemetry-panel panel" aria-label="Telemetry">
+        <div class="panel-head">
+          <h2>Telemetry</h2>
+          <span id="fallback-chip" class="chip">fallback 0</span>
+        </div>
+        <div id="telemetry" class="telemetry"></div>
+      </aside>
     </section>
-    <section class="metrics">
-      <article><span>Task</span><strong id="metric-task">-</strong></article>
-      <article><span>Access</span><strong id="metric-access">-</strong></article>
-      <article><span>Route</span><strong id="metric-route">-</strong></article>
-      <article><span>Events</span><strong id="metric-events">-</strong></article>
-      <article><span>Trace</span><strong id="metric-trace">-</strong></article>
+
+    <section id="trace-sheet" class="trace-sheet" aria-label="Trace Ledger">
+      <div class="trace-title">
+        <strong>Trace</strong>
+        <span id="trace-count" class="chip">0 浜嬩欢</span>
+      </div>
+      <div id="trace-strip" class="trace-strip"></div>
     </section>
-    <section class="grid">
-      <article class="panel">
-        <h2>Agents</h2>
-        <div id="agents" class="list"></div>
-      </article>
-      <article class="panel">
-        <h2>Capability / Role Route</h2>
-        <div id="route" class="list"></div>
-      </article>
-      <article class="panel large">
-        <h2>Patch Candidate</h2>
-        <pre id="diff">No diff selected.</pre>
-      </article>
-      <article class="panel">
-        <h2>Review / Judge / Shell</h2>
-        <div id="decision" class="list"></div>
-      </article>
-      <article class="panel">
-        <h2>Diagnostics</h2>
-        <div id="diagnostics" class="list"></div>
-      </article>
-      <article class="panel large">
-        <h2>Trace Ledger</h2>
-        <div id="events" class="events"></div>
-      </article>
+
+    <section class="composer panel" aria-label="鑷劧璇█鎸囦护">
+      <div class="composer-label">Command</div>
+      <textarea id="goal" rows="1" placeholder="Describe a task, constraint, or approval feedback..."></textarea>
+      <div class="composer-controls">
+        <select id="access-mode" title="Access mode">
+          <option value="partial">partial</option>
+          <option value="restricted">restricted</option>
+          <option value="full">full</option>
+        </select>
+        <select id="target" title="Target role">
+          <option value="core">target: core</option>
+          <option value="planner">target: planner</option>
+          <option value="reviewer">target: reviewer</option>
+          <option value="judge">target: judge</option>
+          <option value="debate">target: debate</option>
+        </select>
+        <label class="check"><input id="fixture-mode" type="checkbox" checked /> fixture</label>
+        <label class="check quiet-optional"><input id="approve-patch" type="checkbox" /> patch</label>
+        <label class="check quiet-optional"><input id="approve-shell" type="checkbox" /> shell</label>
+        <button id="run" class="primary-button">Send</button>
+      </div>
     </section>
   </main>
+
+  <aside id="drawer" class="drawer" aria-label="Details drawer">
+    <div class="drawer-head">
+      <strong>Details</strong>
+      <button id="close-drawer" class="ghost-button">Close</button>
+    </div>
+    <div id="drawer-content"></div>
+  </aside>
   <script>${cockpitJs()}</script>
 </body>
 </html>`;
@@ -67,194 +105,629 @@ export function renderCockpitHtml(): string {
 function cockpitCss(): string {
   return `
 :root {
-  color-scheme: dark;
-  --bg: #070b0f;
-  --panel: #0c1218;
-  --panel-2: #101821;
-  --line: #283746;
-  --line-strong: #4d6578;
-  --text: #d8e2ea;
-  --muted: #81919d;
-  --accent: #67e8f9;
-  --good: #8bdc9b;
-  --warn: #e4c76f;
-  --bad: #ef8f8f;
+  color-scheme: light;
+  --bg: #f6fafc;
+  --surface: #ffffff;
+  --alt: #eef5f8;
+  --border: #d7e4ea;
+  --border-strong: #b8cbd5;
+  --text: #17212b;
+  --muted: #6b7a88;
+  --blue: #6fafd2;
+  --deep-blue: #2f6f92;
+  --success: #2f9d68;
+  --warning: #b7791f;
+  --danger: #c94a4a;
+  --mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --sans: Inter, "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 65% -10%, rgba(103, 232, 249, 0.10), transparent 32rem), var(--bg);
+  background: var(--bg);
   color: var(--text);
-  font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  font-family: var(--sans);
   letter-spacing: 0;
 }
-.shell {
-  margin: 22px auto;
-  width: min(1480px, calc(100vw - 32px));
-  min-height: calc(100vh - 44px);
-  border: 1px solid var(--line-strong);
-  background: linear-gradient(180deg, #091017, #070b0f);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+button, select, textarea {
+  font: inherit;
 }
-.topbar, .toolbar {
+.cockpit-shell {
+  height: 100vh;
+  min-width: 1080px;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr) 36px 82px;
+  overflow: hidden;
+}
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
+  gap: 18px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
 }
-h1 { margin: 0; font-size: 22px; }
-p { margin: 4px 0 0; color: var(--muted); }
-button, select, input {
-  background: #09131b;
-  color: var(--text);
-  border: 1px solid var(--line-strong);
-  padding: 8px 10px;
-  font: inherit;
-}
-button { cursor: pointer; }
-button:hover { border-color: var(--accent); color: var(--accent); }
-input { min-width: 340px; }
-.top-actions { display: flex; gap: 10px; align-items: center; }
-.badge {
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 8px 10px;
-  background: rgba(103, 232, 249, 0.06);
-}
-.muted { color: var(--muted); }
-.metrics {
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mark {
+  width: 24px;
+  height: 24px;
   display: grid;
-  grid-template-columns: 1.2fr 0.7fr 1.5fr 0.5fr 0.5fr;
-  gap: 0;
-  margin: 18px;
-  border: 1px solid var(--line);
+  place-items: center;
+  border-radius: 6px;
+  background: var(--deep-blue);
+  color: white;
+  font-family: var(--mono);
+  font-weight: 700;
 }
-.metrics article {
-  min-width: 0;
-  padding: 12px 14px;
-  border-right: 1px solid var(--line);
-}
-.metrics article:last-child { border-right: 0; }
-.metrics span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; margin-bottom: 5px; }
-.metrics strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
-.grid {
+h1, h2, p { margin: 0; }
+h1 { font-size: 15px; line-height: 1.1; }
+.brand span { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.top-status { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cockpit-grid {
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  padding: 0 18px 18px;
+  grid-template-columns: minmax(220px, 19.5%) minmax(560px, 1fr) minmax(230px, 20.5%);
+  gap: 10px;
+  padding: 10px;
 }
 .panel {
-  min-height: 225px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  min-width: 0;
   overflow: hidden;
 }
-.panel.large { min-height: 285px; }
-.panel h2 {
-  margin: 0;
-  padding: 10px 12px;
-  font-size: 14px;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--line);
-}
-.list { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+.panel-head {
+  height: 44px;
+  display: flex;
   align-items: center;
-  min-height: 25px;
-  font-size: 13px;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff, #f8fbfd);
 }
-.tag {
-  min-width: 88px;
-  text-align: center;
-  border: 1px solid rgba(103, 232, 249, 0.38);
-  color: var(--accent);
-  padding: 3px 6px;
+.panel-head h2 { font-size: 15px; }
+.head-actions { display: flex; align-items: center; gap: 8px; }
+.ghost-button, .icon-button {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--deep-blue);
+  border-radius: 5px;
+  min-height: 28px;
+  padding: 5px 9px;
+  cursor: pointer;
 }
-.text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ok { color: var(--good); }
-.warn { color: var(--warn); }
-.bad { color: var(--bad); }
-pre {
-  margin: 12px;
-  max-height: 235px;
-  overflow: auto;
-  white-space: pre-wrap;
-  background: rgba(0, 0, 0, 0.24);
-  border-left: 2px solid rgba(103, 232, 249, 0.45);
-  padding: 10px 12px;
-  color: #c8d5dc;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.42;
+.ghost-button:hover, .icon-button:hover { border-color: var(--blue); }
+.quiet-run {
+  border: 1px solid #c7d9e2;
+  background: #f8fcfe;
+  color: var(--deep-blue);
+  border-radius: 5px;
+  min-height: 26px;
+  padding: 4px 11px;
+  cursor: pointer;
 }
-.events {
-  padding: 10px 12px;
+.primary-button {
+  border: 1px solid #bdd5e1;
+  background: #f7fbfd;
+  color: var(--deep-blue);
+  border-radius: 5px;
+  min-height: 34px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  background: #fff;
+  font: 11px var(--mono);
+  white-space: nowrap;
+}
+.chip-blue { border-color: #b9d7e8; color: var(--deep-blue); background: #eaf5fb; }
+.chip-green { border-color: #bfe2cf; color: var(--success); background: #f0faf4; }
+.chip-amber { border-color: #ead6a8; color: var(--warning); background: #fff9eb; }
+.chip-red { border-color: #efc2c2; color: var(--danger); background: #fff4f4; }
+.task-panel, .telemetry-panel, .workflow-panel { min-height: 0; }
+.task-filter { padding: 8px 12px; border-bottom: 1px solid rgba(215, 228, 234, 0.55); }
+select, textarea {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+}
+select { min-height: 30px; padding: 4px 8px; }
+#sessions { width: 100%; }
+.task-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 245px;
+  gap: 2px;
+  padding: 8px 10px;
   overflow: auto;
-  font-size: 12px;
+  height: calc(100% - 92px);
 }
-.event { display: grid; grid-template-columns: 82px 150px minmax(0, 1fr); gap: 10px; }
-.event span { color: var(--muted); }
-@media (max-width: 980px) {
-  .grid, .metrics { grid-template-columns: 1fr; }
-  .metrics article { border-right: 0; border-bottom: 1px solid var(--line); }
-  .toolbar { align-items: stretch; flex-direction: column; }
-  input { min-width: 0; width: 100%; }
+.task-item {
+  border: 1px solid transparent;
+  border-bottom-color: rgba(215, 228, 234, 0.62);
+  border-radius: 4px;
+  padding: 8px 7px;
+  display: grid;
+  gap: 4px;
+  background: transparent;
+}
+.task-item.selected { border-color: rgba(111, 175, 210, 0.36); background: rgba(238, 245, 248, 0.52); }
+.task-title { display: flex; justify-content: space-between; gap: 8px; font-weight: 620; font-size: 12.5px; }
+.task-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-meta { display: flex; justify-content: space-between; color: var(--muted); font: 10.5px var(--mono); }
+.workflow-panel {
+  display: grid;
+  grid-template-rows: 44px 72px minmax(0, 1fr) auto;
+}
+.workflow-spine {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfdfe;
+}
+.step {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  color: var(--muted);
+  font: 11px var(--mono);
+  position: relative;
+}
+.step strong { font-weight: 620; color: #334657; }
+.step span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.72; }
+.step::before {
+  content: "";
+  width: 100%;
+  height: 1px;
+  background: var(--border-strong);
+  position: absolute;
+  top: 10px;
+  left: -50%;
+  z-index: 0;
+}
+.step:first-child::before { display: none; }
+.dot {
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+}
+.step.done .dot { border-color: #8bc9a7; background: #f0faf4; color: var(--success); }
+.step.running .dot, .step.waiting .dot { border-color: var(--deep-blue); background: var(--deep-blue); color: #fff; }
+.step.failed .dot { border-color: var(--danger); background: #fff4f4; color: var(--danger); }
+.main-view {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+.main-grid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+}
+.summary-box, .diff-box, .review-box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+.summary-box { padding: 12px; }
+.summary-box h3 { margin: 0 0 10px; font-size: 15px; }
+.summary-box dl { margin: 0; display: grid; gap: 10px; font-size: 12px; }
+.summary-box dt { color: var(--muted); }
+.summary-box dd { margin: 2px 0 0; font-family: var(--mono); }
+.diff-box pre, .body-pre {
+  margin: 0;
+  padding: 12px;
+  min-height: 260px;
+  max-height: calc(100vh - 360px);
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 12px/1.5 var(--mono);
+  color: #203040;
+}
+.diff-add { color: var(--success); }
+.diff-del { color: var(--danger); }
+.approval-focus {
+  max-width: 720px;
+  margin: 8px auto 0;
+  padding: 26px 28px;
+  border: 1px solid rgba(111, 175, 210, 0.38);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #ffffff, #f9fcfe);
+}
+.approval-kicker { color: var(--muted); font: 11px var(--mono); margin-bottom: 10px; }
+.approval-focus h3 { margin: 0 0 8px; font-size: 19px; }
+.approval-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.approval-summary { color: #394b5b; line-height: 1.55; font-size: 13px; }
+.approval-actions {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.danger-button {
+  border: 1px solid #e4a6a6;
+  background: #fff;
+  color: var(--danger);
+  border-radius: 5px;
+  min-height: 32px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+.telemetry {
+  padding: 12px;
+  display: grid;
+  gap: 9px;
+  overflow: auto;
+  height: calc(100% - 44px);
+}
+.metric-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid rgba(215, 228, 234, 0.55);
+}
+.metric-line span { color: var(--muted); font-size: 12px; }
+.metric-line strong { font: 13px var(--mono); font-weight: 620; text-align: right; }
+.telemetry-details {
+  margin-top: 4px;
+  color: var(--deep-blue);
+  font: 11px var(--mono);
+  text-align: right;
+}
+.trace-sheet {
+  margin: 0 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  padding: 5px 10px;
+  min-height: 0;
+}
+.trace-title { display: flex; align-items: center; gap: 8px; }
+.trace-strip {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+  font: 11px var(--mono);
+  color: var(--muted);
+}
+.trace-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trace-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  flex: 0 0 auto;
+}
+.composer {
+  margin: 0 10px 10px;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+}
+.composer-label { font-weight: 620; font-size: 13px; }
+textarea {
+  width: 100%;
+  resize: none;
+  padding: 8px 10px;
+  line-height: 1.35;
+  min-height: 36px;
+}
+.composer-controls { display: flex; align-items: center; gap: 6px; }
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font: 11px var(--mono);
+  white-space: nowrap;
+}
+.quiet-optional { opacity: 0.62; }
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(520px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  height: 100vh;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  box-shadow: -20px 0 50px rgba(45, 70, 90, 0.12);
+  transform: translateX(100%);
+  transition: transform 160ms ease;
+  z-index: 50;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+#drawer-content { padding: 14px; overflow: auto; height: calc(100vh - 52px); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+@media (max-width: 1180px) {
+  .cockpit-shell { min-width: 980px; }
+  .cockpit-grid { grid-template-columns: 240px minmax(470px, 1fr) 250px; }
+  .composer { grid-template-columns: 96px minmax(0, 1fr); }
+  .composer-controls { grid-column: 2; justify-content: flex-end; }
+  .drawer { width: min(460px, calc(100vw - 18px)); max-width: calc(100vw - 18px); }
 }`;
 }
 
 function cockpitJs(): string {
   return `
 const el = (id) => document.getElementById(id);
-let selectedSession = "latest";
 const nonce = new URLSearchParams(location.search).get("nonce") || "";
+let selectedSession = "latest";
+let currentVm = null;
+let liveSource = null;
+let liveEventsBuffer = [];
+let liveReloadTimer = null;
 
 el("refresh").addEventListener("click", () => load());
+el("run-top").addEventListener("click", runWorkflow);
+el("new-task").addEventListener("click", () => {
+  selectedSession = "latest";
+  renderEmpty("Ready for a new task.");
+  el("goal").focus();
+});
 el("sessions").addEventListener("change", (event) => {
   selectedSession = event.target.value || "latest";
-  loadSession(selectedSession);
+  loadViewModel(selectedSession);
 });
-el("run-preview").addEventListener("click", async () => {
-  el("status").textContent = "running preview workflow";
-  const response = await fetch(withToken("/api/runs"), {
-    method: "POST",
-    headers: apiHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({ goal: el("goal").value || "fix failing test", fixtureMode: true })
-  });
-  const payload = await response.json();
-  selectedSession = payload.sessionId || "latest";
-  await load();
-});
+el("run").addEventListener("click", runWorkflow);
+el("open-drawer").addEventListener("click", () => renderDrawer(true));
+el("close-drawer").addEventListener("click", () => el("drawer").classList.remove("open"));
 
 load();
 
 async function load() {
-  el("status").textContent = "loading sessions";
-  const sessions = await fetchJson("/api/sessions");
-  el("sessions").innerHTML = sessions.map((session) => '<option value="' + esc(session.sessionId) + '">' + esc(session.sessionId) + '</option>').join("");
+  const sessions = await fetchJson("/api/sessions").catch(() => []);
+  el("sessions").innerHTML = sessions.length
+    ? sessions.map((session) => '<option value="' + esc(session.sessionId) + '">' + esc(session.sessionId) + '</option>').join("")
+    : '<option value="latest">latest</option>';
   if (sessions.length && !sessions.some((session) => session.sessionId === selectedSession)) selectedSession = sessions[0].sessionId;
-  if (!sessions.length) {
-    clearDashboard("No sessions yet. Click Run Preview to create a non-mutating fixture session.");
-    return;
-  }
   el("sessions").value = selectedSession;
-  await loadSession(selectedSession);
+  if (sessions.length) await loadViewModel(selectedSession);
+  else renderEmpty("No sessions yet. Describe a task and click Send.");
 }
 
-async function loadSession(id) {
-  el("status").textContent = "loading " + id;
-  const record = await fetchJson("/api/sessions/" + encodeURIComponent(id));
-  render(record.state || record);
-  el("status").textContent = "ready";
+async function loadViewModel(id) {
+  const vm = await fetchJson("/api/sessions/" + encodeURIComponent(id) + "/view-model");
+  currentVm = vm;
+  render(vm);
+}
+
+async function runWorkflow() {
+  const goal = el("goal").value.trim() || "fix failing test";
+  el("run").disabled = true;
+  renderEmpty("Task submitted. Waiting for live events...");
+  const response = await fetch(withToken("/api/runs"), {
+    method: "POST",
+    headers: apiHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({
+      goal,
+      accessMode: el("access-mode").value,
+      fixtureMode: el("fixture-mode").checked,
+      approvePatch: el("approve-patch").checked,
+      approveShell: el("approve-shell").checked,
+      to: el("target").value
+    })
+  });
+  const payload = await response.json();
+  selectedSession = payload.sessionId || "latest";
+  connectLive(selectedSession);
+}
+
+function connectLive(sessionId) {
+  if (liveSource) liveSource.close();
+  liveEventsBuffer = [];
+  liveSource = new EventSource(withToken("/api/runs/" + encodeURIComponent(sessionId) + "/events/live"));
+  liveSource.addEventListener("event", (message) => {
+    const payload = JSON.parse(message.data);
+    if (payload.event) liveEventsBuffer.push(payload.event);
+    renderLiveEvents(sessionId, liveEventsBuffer);
+    scheduleLiveViewModelRefresh(sessionId);
+  });
+  liveSource.addEventListener("snapshot", (message) => {
+    const payload = JSON.parse(message.data);
+    if (payload.viewModel) {
+      render(payload.viewModel);
+    } else if (payload.snapshot?.state) {
+      loadViewModel(payload.snapshot.sessionId || sessionId).catch(() => load());
+    }
+    if (payload.snapshot?.done) {
+      liveSource.close();
+      el("run").disabled = false;
+    }
+  });
+  liveSource.onerror = () => {
+    el("run").disabled = false;
+  };
+}
+
+function scheduleLiveViewModelRefresh(sessionId) {
+  clearTimeout(liveReloadTimer);
+  liveReloadTimer = setTimeout(async () => {
+    try {
+      await loadViewModel(sessionId);
+    } catch {
+      // The session is persisted at workflow checkpoints; keep the trace strip live meanwhile.
+    }
+  }, 250);
+}
+
+function render(vm) {
+  el("workspace").textContent = vm.workspace || "workspace";
+  el("mode-chip").textContent = modeLabel(vm.accessMode);
+  el("mode-chip").className = "chip " + (vm.accessMode === "full" ? "chip-blue" : vm.accessMode === "restricted" ? "chip-amber" : "chip-blue");
+  el("session-chip").textContent = vm.sessionId ? "session " + vm.sessionId.slice(0, 12) : "session -";
+  el("status-text").textContent = vm.statusText;
+  el("fallback-chip").textContent = "fallback " + vm.telemetry.fallbackCount;
+
+  el("tasks").innerHTML = vm.tasks.map(renderTask).join("");
+  el("workflow-spine").innerHTML = vm.workflow.map(renderStep).join("");
+  el("main-view").innerHTML = renderMain(vm);
+  el("telemetry").innerHTML = renderTelemetry(vm.telemetry);
+  el("trace-count").textContent = vm.trace.length + " events";
+  el("trace-strip").innerHTML = vm.trace.slice(0, 18).map(renderTrace).join("");
+  renderDrawer(el("drawer").classList.contains("open"));
+  bindApprovalButtons(vm.currentApproval);
+  bindDrawerButtons();
+}
+
+function renderEmpty(message) {
+  currentVm = null;
+  el("workspace").textContent = "TomorrowEdge";
+  el("status-text").textContent = message;
+  el("tasks").innerHTML = '<div class="task-item selected"><div class="task-title"><span>鏂颁换鍔?/span><span class="chip chip-blue">idle</span></div><div class="task-meta"><span>杈撳叆鎸囦护</span><span>now</span></div></div>';
+  el("workflow-spine").innerHTML = ["Plan","Route","Edit","Review","Test","Judge","Approve"].map((label) => '<div class="step"><span class="dot"></span><strong>' + label + '</strong></div>').join("");
+  el("main-view").innerHTML = '<div class="summary-box"><h3>' + esc(message) + '</h3><pre class="body-pre">鑷劧璇█鍖哄煙鏄?command composer锛屼笉鏄亰澶╂祦銆傝緭鍏ヤ换鍔″悗 TomorrowEdge 浼氬垱寤?session銆佽褰曚簨浠惰处鏈苟鎺ㄩ€?live events銆?/pre></div>';
+  el("telemetry").innerHTML = renderTelemetry({ plannerModel:"-", coderModel:"-", reviewerModel:"-", judgeModel:"-", providerSummary:"offline", inputTokens:0, outputTokens:0, totalTokens:0, dispatched:0, running:0, completed:0, waiting:0, failed:0, patchWaiting:false, shellWaiting:false, fallbackCount:0 });
+  el("trace-count").textContent = "0 events";
+  el("trace-strip").innerHTML = "";
+}
+
+function renderLiveEvents(sessionId, events) {
+  el("session-chip").textContent = "session " + sessionId.slice(0, 12);
+  el("status-text").textContent = "Running";
+  el("trace-count").textContent = events.length + " events";
+  el("trace-strip").innerHTML = events.slice(-18).reverse().map(renderTrace).join("");
+  const latest = events.at(-1);
+  if (latest && !currentVm) {
+    el("main-view").innerHTML = '<div class="summary-box"><h3>Live workflow</h3><pre class="body-pre">' + esc(events.slice(-14).map((event) => '[' + event.phase + '] ' + event.type + ' ' + eventSummary(event)).join("\\n")) + '</pre></div>';
+  }
+}
+
+function renderTask(task) {
+  return '<article class="task-item ' + (task.selected ? "selected" : "") + '"><div class="task-title"><span>' + esc(task.title) + '</span>' + chip(task.status) + '</div><div class="task-meta"><span>' + esc(task.reminder) + '</span><span>' + shortTime(task.updatedAt) + '</span></div></article>';
+}
+
+function renderStep(step) {
+  return '<div class="step ' + esc(step.status) + '"><span class="dot">' + dotText(step.status) + '</span><strong>' + esc(step.label) + '</strong><span>' + esc(step.summary).slice(0, 22) + '</span></div>';
+}
+
+function renderMain(vm) {
+  const main = vm.main;
+  if (vm.currentApproval) {
+    const approval = vm.currentApproval;
+    const title = approval.kind === "shell" ? "Waiting for shell approval" : "Waiting for patch approval";
+    return '<section class="approval-focus"><div class="approval-kicker">Approval · summary-first</div><h3>' + title + '</h3><p class="muted mono">' + esc(approval.candidateId || approval.command || "candidate") + '</p><div class="approval-stats">' +
+      chip((approval.filesChanged?.length || 0) + " file") +
+      chip(changeCount(approval.diff)) +
+      chip("risk " + (approval.riskLevel || "low")) +
+      chip("tests " + (approval.testStatus || "not_run")) +
+      '</div><p class="approval-summary">' + esc(approval.summary || main.body || "Waiting for operator authorization.") + '</p><p class="muted mono">Full diff, routes, telemetry, artifacts, and raw trace are in the details drawer.</p>' +
+      renderApprovalActions(approval) + '</section>';
+  }
+  const diff = main.diff ? renderDiff(main.diff) : '<pre class="body-pre">' + esc(main.body || "No details yet.") + '</pre>';
+  return '<div class="main-grid"><aside class="summary-box"><h3>' + esc(main.title) + '</h3><dl><div><dt>Stage</dt><dd>' + esc(vm.statusText) + '</dd></div><div><dt>Target</dt><dd>' + esc(main.subtitle) + '</dd></div><div><dt>Files</dt><dd>' + esc(main.filesChanged.join(", ") || "-") + '</dd></div><div><dt>Risk</dt><dd>' + chip(main.riskLevel || "low") + '</dd></div><div><dt>Tests</dt><dd>' + chip(main.testStatus || "not_run") + '</dd></div></dl></aside><section class="diff-box">' + diff + '</section></div>';
+}
+function renderDiff(diff) {
+  return '<pre>' + esc(diff).split("\\n").map((line) => {
+    const cls = line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-del" : "";
+    return '<span class="' + cls + '">' + line + '</span>';
+  }).join("\\n") + '</pre>';
+}
+
+function renderApprovalActions(approval) {
+  if (!approval || approval.status !== "waiting") return '<div class="approval-actions"><button class="ghost-button" data-action="request_re_review">Request re-review</button><button class="ghost-button" data-drawer-action="open">View details</button></div>';
+  if (approval.kind === "shell") {
+    return '<div class="approval-actions"><button class="primary-button" data-action="approve_shell">Approve shell</button><button class="danger-button" data-action="reject_shell">Reject</button><button class="ghost-button" data-action="request_re_review">Re-review</button><button class="ghost-button" data-action="undo_latest_patch">Undo latest patch</button><button class="ghost-button" data-drawer-action="open">View diff</button></div>';
+  }
+  return '<div class="approval-actions"><button class="primary-button" data-action="approve_patch">Approve</button><button class="danger-button" data-action="reject_patch">Reject</button><button class="ghost-button" data-action="request_re_review">Re-review</button><button class="ghost-button" data-drawer-action="open">View diff</button></div>';
+}
+
+function bindApprovalButtons(approval) {
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!currentVm?.sessionId) return;
+      button.disabled = true;
+      const response = await fetch(withToken("/api/approvals"), {
+        method: "POST",
+        headers: apiHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ action: button.dataset.action, sessionId: currentVm.sessionId, approvalId: approval?.id, feedback: el("goal").value })
+      });
+      const payload = await response.json();
+      if (payload.viewModel) render(payload.viewModel);
+      else await loadViewModel(currentVm.sessionId);
+    });
+  });
+}
+
+function bindDrawerButtons() {
+  document.querySelectorAll("[data-drawer-action]").forEach((button) => {
+    button.addEventListener("click", () => renderDrawer(true));
+  });
+}
+
+function renderTelemetry(t) {
+  return metric("Cost", money(t.currentCostUsd) + " / " + money(t.budgetUsd)) +
+    metric("Tokens", measuredNumber(t.totalTokens)) +
+    metric("Cache", typeof t.cacheHitPercent === "number" ? t.cacheHitPercent + "%" : "-") +
+    metric("Agents", t.completed + " done 路 " + t.waiting + " waiting") +
+    metric("Latency", t.latencyMs ? formatDuration(t.latencyMs) : "-") +
+    metric("Risk", t.latestRiskLevel || "-") +
+    '<div class="telemetry-details">details &gt;</div>';
+}
+
+function renderTrace(event) {
+  return '<span class="trace-event" title="' + esc(event.summary || "") + '"><span class="trace-dot"></span><span>' + esc(event.phase || "") + ':' + esc(event.type || "") + '</span></span>';
+}
+
+function renderDrawer(open) {
+  const drawer = el("drawer");
+  if (open) drawer.classList.add("open");
+  if (!currentVm) {
+    el("drawer-content").innerHTML = '<p class="muted">No details yet.</p>';
+    return;
+  }
+  el("drawer-content").innerHTML =
+    '<h3>Full diff</h3><pre class="body-pre">' + esc(currentVm.main.diff || currentVm.currentApproval?.diff || "No diff in the current main view.") + '</pre>' +
+    '<h3>Changed files</h3><pre class="body-pre">' + esc(currentVm.main.filesChanged.join("\\n") || "-") + '</pre>' +
+    '<h3>Telemetry details</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.telemetry, null, 2)) + '</pre>' +
+    '<h3>Routes</h3><pre class="body-pre">' + esc(currentVm.routes.map((route) => route.role + " -> " + route.provider + "/" + route.model + " because " + route.reason).join("\\n")) + '</pre>' +
+    '<h3>Artifacts</h3><pre class="body-pre">' + esc(currentVm.artifacts.slice(0, 40).map((item) => item.ref).join("\\n") || "-") + '</pre>' +
+    '<h3>Raw event trace</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.rawEvents || currentVm.trace, null, 2)) + '</pre>';
 }
 
 async function fetchJson(url) {
@@ -262,96 +735,50 @@ async function fetchJson(url) {
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
-
 function withToken(url) {
   if (!nonce || !url.startsWith("/api/")) return url;
-  const joiner = url.includes("?") ? "&" : "?";
-  return url + joiner + "nonce=" + encodeURIComponent(nonce);
+  return url + (url.includes("?") ? "&" : "?") + "nonce=" + encodeURIComponent(nonce);
 }
-
 function apiHeaders(extra = {}) {
   return nonce ? { ...extra, "x-tomorrowedge-token": nonce } : extra;
 }
-
-function render(state) {
-  const events = state.events || [];
-  const agents = state.agents || [];
-  const routing = state.routing || {};
-  const route = routing.assignments || [];
-  const selected = selectedCandidate(state);
-  const latestRun = (state.runResults || []).at(-1);
-
-  el("mode").textContent = "MODE " + upper(state.access?.mode || "local");
-  el("metric-task").textContent = state.goal || "-";
-  el("metric-access").textContent = state.access?.mode || "-";
-  el("metric-route").textContent = route.slice(0, 5).map((item) => item.provider).join(" / ") || "-";
-  el("metric-events").textContent = String(events.length);
-  el("metric-trace").textContent = String(state.traceCompleteness?.score ?? traceScore(events));
-
-  el("agents").innerHTML = agents.map((agent) => row(agent.role, (agent.provider || "-") + " / " + (agent.model || "-"), agent.status || "ready")).join("") || empty("No agents recorded.");
-  el("route").innerHTML = route.map((item) => row(item.role, (item.provider || "-") + " / " + (item.model || "-"), item.reason || "routed")).join("") || empty("No routing plan recorded.");
-  el("diff").textContent = selected?.unifiedDiff || "No patch candidate captured.";
-  el("decision").innerHTML = [
-    row("review", state.review?.overallRecommendation || "not recorded", state.review ? "recorded" : "waiting"),
-    row("judge", state.judge?.reason || state.judge?.decision || "not recorded", state.judge?.decision || "waiting"),
-    row("shell", latestRun?.command || "not run", latestRun ? (latestRun.success ? "passed" : "failed") : "waiting")
-  ].join("");
-  el("diagnostics").innerHTML = [
-    row("fallbacks", String(events.filter((event) => event.type === "fallback_to_native" || event.type === "provider_fallback").length), "count"),
-    row("projection", String(events.filter((event) => event.type === "artifact_projection").length), "artifact views"),
-    row("evidence", String(events.filter((event) => event.type === "evidence_packet").length), "packets"),
-    row("budget", String(events.filter((event) => event.type === "budget_decision" || event.type === "cost_usage").length), "events"),
-    row("stop", [...events].reverse().find((event) => event.type === "workflow_stop_reason")?.reason || "not recorded", "reason")
-  ].join("");
-  el("events").innerHTML = events.slice(-80).reverse().map(renderEvent).join("") || empty("No events recorded.");
+function metric(a, b) { return '<div class="metric-line"><span>' + esc(a) + '</span><strong>' + esc(b) + '</strong></div>'; }
+function changeCount(diff) {
+  if (!diff) return "0 / 0";
+  const lines = diff.split("\\n");
+  const add = lines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
+  const del = lines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length;
+  return "+" + add + " / -" + del;
 }
-
-function selectedCandidate(state) {
-  const candidates = [...(state.candidates || []), ...(state.repairCandidates || [])];
-  return candidates.find((candidate) => candidate.candidateId === state.judge?.selectedCandidateId) || candidates[0];
+function compactNumber(value) {
+  const n = Number(value || 0);
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "m";
+  if (n >= 1000) return Math.round(n / 1000) + "k";
+  return String(n);
 }
-
-function traceScore(events) {
-  const required = ["context_select", "patch_candidate", "review_decision", "judge_decision", "summary"];
-  const present = new Set(events.map((event) => event.type));
-  return Math.round(required.filter((type) => present.has(type)).length / required.length * 100);
+function measuredNumber(value) {
+  const n = Number(value || 0);
+  return n > 0 ? compactNumber(n) : "not measured";
 }
-
-function renderEvent(event) {
-  return '<div class="event"><span>' + esc(timeOf(event)) + '</span><strong>' + esc(event.type || "event") + '</strong><div class="text">' + esc(eventSummary(event)) + '</div></div>';
+function formatDuration(ms) {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return seconds + "s";
+  return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s";
 }
-
-function eventSummary(event) {
-  return event.reason || event.summary || event.error || event.recommendation || event.decision || event.command || event.status || event.role || event.phase || "";
+function chip(value) {
+  const text = String(value ?? "-");
+  const cls = /fail|reject|failed/.test(text) ? "chip-red" : /wait|approval|not_run|pending/.test(text) ? "chip-amber" : /done|pass|success|approved|low/.test(text) ? "chip-green" : "chip-blue";
+  return '<span class="chip ' + cls + '">' + esc(text) + '</span>';
 }
-
-function row(label, text, status) {
-  return '<div class="row"><span class="tag">' + esc(label) + '</span><span class="text">' + esc(text) + '</span><span class="' + statusClass(status) + '">' + esc(status) + '</span></div>';
-}
-
-function empty(message) {
-  return '<div class="muted">' + esc(message) + '</div>';
-}
-
-function clearDashboard(message) {
-  ["agents", "route", "decision", "diagnostics", "events"].forEach((id) => el(id).innerHTML = empty(message));
-  el("diff").textContent = message;
-  el("status").textContent = "ready";
-}
-
-function statusClass(value) {
-  if (/fail|block|reject|abort|warn/i.test(String(value))) return "warn";
-  return "ok";
-}
-
-function timeOf(event) {
-  const value = event.timestamp || event.at || event.time;
-  if (!value) return "now";
+function dotText(status) { return status === "done" ? "ok" : status === "failed" ? "!" : status === "running" || status === "waiting" ? ">" : ""; }
+function eventSummary(event) { return event.summary || event.reason || event.command || event.recommendation || event.decision || event.status || event.role || ""; }
+function modeLabel(mode) { return mode === "full" ? "FULL AUTONOMY" : mode === "restricted" ? "restricted" : "partial"; }
+function money(value) { return typeof value === "number" && value > 0 ? "$" + value.toFixed(4) : "not measured"; }
+function number(value) { return Number(value || 0).toLocaleString(); }
+function shortTime(value) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString().slice(11, 19);
+  return Number.isNaN(date.getTime()) ? String(value || "-") : date.toISOString().slice(11, 16);
 }
-
-function upper(value) { return String(value).toUpperCase(); }
 function esc(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }`;

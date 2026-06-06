@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/configLoader.js";
@@ -7,10 +7,20 @@ import { runOfflineGraph, type OfflineGraphOptions } from "../core/agentGraph/ex
 import { loadLatestSession, loadSession, listSessions, saveSession } from "../core/memory/sessionMemory.js";
 import { TomorrowEdgeMcpBridge } from "../mcp/bridge.js";
 import { renderCockpitHtml } from "./html.js";
-import type { AccessMode } from "../config/schema.js";
+import type { AccessMode, TomorrowEdgeConfig } from "../config/schema.js";
 import type { ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { agentRoles, type AgentRole } from "../schemas/agentTask.js";
 import { redactText } from "../safety/secretScanner.js";
+import { buildCockpitViewModel } from "../cockpit/viewModel.js";
+import { cockpitEventBus } from "../cockpit/eventBus.js";
+import { isAllowedBrowserOrigin, isAuthorizedCockpitRequest } from "../cockpit/auth.js";
+import { recordApprovalIntent } from "../cockpit/approvals.js";
+import type { CockpitApprovalIntent } from "../cockpit/contracts.js";
+import { safeArtifactPath } from "../cockpit/artifacts.js";
+import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
+import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
+import type { AgentGraphState } from "../core/agentGraph/state.js";
+import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -94,7 +104,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { ok: true, service: "tomorrowedge-local-cockpit" });
     }
-    if (url.pathname.startsWith("/api/") && !isAuthorized(request, url, nonce)) {
+    if (url.pathname.startsWith("/api/") && !isAuthorizedCockpitRequest(request, url, nonce)) {
       return sendJson(response, 403, { error: "forbidden", message: "Missing or invalid local cockpit access token." });
     }
     if (url.pathname.startsWith("/api/") && isMutatingMethod(request.method) && !isAllowedBrowserOrigin(request)) {
@@ -116,10 +126,19 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const session = sessionMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(sessionMatch[1]));
       return sendJson(response, 200, session);
     }
+    const viewModelMatch = /^\/api\/sessions\/([^/]+)\/view-model$/.exec(url.pathname);
+    if (request.method === "GET" && viewModelMatch) {
+      const session = viewModelMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(viewModelMatch[1]));
+      return sendJson(response, 200, buildCockpitViewModel(cwd, session.state));
+    }
     const eventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (request.method === "GET" && eventsMatch) {
       const session = eventsMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(eventsMatch[1]));
       return sendJson(response, 200, session.state.events ?? []);
+    }
+    const liveEventsMatch = /^\/api\/runs\/([^/]+)\/events\/live$/.exec(url.pathname);
+    if (request.method === "GET" && liveEventsMatch) {
+      return sendLiveEvents(cwd, response, decodeURIComponent(liveEventsMatch[1]));
     }
     const artifactMatch = /^\/api\/sessions\/([^/]+)\/artifacts\/(.+)$/.exec(url.pathname);
     if (request.method === "GET" && artifactMatch) {
@@ -128,6 +147,9 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "POST" && url.pathname === "/api/runs") {
       const body = await readJsonBody(request);
       const config = loadConfig(cwd);
+      const sessionId = `session_${randomBytes(8).toString("hex")}`;
+      const goal = typeof body.goal === "string" && body.goal.trim() ? body.goal : "fix failing test";
+      const liveState = createLiveState(sessionId, goal, config, parseAccessMode(body.accessMode));
       const options: OfflineGraphOptions = {
         fixtureMode: body.fixtureMode !== false,
         accessMode: parseAccessMode(body.accessMode),
@@ -135,11 +157,61 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         approveShell: Boolean(body.approveShell),
         repairOnFail: Boolean(body.repairOnFail),
         approveRepair: Boolean(body.approveRepair),
-        conversationTarget: typeof body.to === "string" ? body.to : "core"
+        conversationTarget: typeof body.to === "string" ? body.to : "core",
+        sessionId,
+        onEvent: (event) => {
+          applyLiveEvent(liveState, event);
+          cockpitEventBus.emitEvent(sessionId, event);
+          cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
+        }
       };
-      const state = await runOfflineGraph(cwd, typeof body.goal === "string" && body.goal.trim() ? body.goal : "fix failing test", config, options);
-      await saveSession(cwd, state);
-      return sendJson(response, 200, { sessionId: state.sessionId, state });
+      void runOfflineGraph(cwd, goal, config, options)
+        .then(async (state) => {
+          await saveSession(cwd, state);
+          cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
+        })
+        .catch((error) => {
+          cockpitEventBus.setSnapshot({
+            sessionId,
+            state: {
+              sessionId,
+              goal,
+              routing: { mode: config.routing.mode, privacyLocked: false, assignments: [], fallbacks: [] },
+              access: { mode: options.accessMode ?? "partial", cloudAllowed: true, patchAllowed: false, shellAllowed: false, repairAllowed: false, patchApproved: false, shellApproved: false, repairApproved: false },
+              events: [],
+              eventArtifacts: [],
+              providerViews: [],
+              evidencePackets: [],
+              agents: [],
+              candidates: [],
+              repairCandidates: [],
+              debateRounds: [],
+              modelNotes: [],
+              usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+              budgetStatuses: [],
+              changedFiles: [],
+              runResults: [],
+              approvals: { patchApproved: false, shellApproved: false, repairApproved: false }
+            },
+            done: true,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        });
+      return sendJson(response, 202, { sessionId, status: "started" });
+    }
+    if (request.method === "POST" && url.pathname === "/api/approvals") {
+      const body = await readJsonBody(request);
+      const intent = recordApprovalIntent(parseApprovalIntent(body));
+      const session = intent.sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, intent.sessionId);
+      const result = await executeCockpitApprovalAction(cwd, session.state, intent);
+      await saveSession(cwd, result.state);
+      cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
+      return sendJson(response, 200, {
+        status: "applied",
+        intent,
+        message: result.message,
+        viewModel: buildCockpitViewModel(cwd, result.state)
+      });
     }
     if (request.method === "POST" && url.pathname === "/api/mcp/register") {
       const body = await readJsonBody(request);
@@ -160,11 +232,121 @@ class HttpError extends Error {
   }
 }
 
-function isAuthorized(request: IncomingMessage, url: URL, nonce: string): boolean {
-  const provided = request.headers["x-tomorrowedge-token"] ?? request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? url.searchParams.get("nonce") ?? "";
-  const presented = Array.isArray(provided) ? provided[0] : provided;
-  if (!presented || presented.length !== nonce.length) return false;
-  return timingSafeEqual(Buffer.from(presented), Buffer.from(nonce));
+function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeConfig, mode?: AccessMode): AgentGraphState {
+  const access = buildAccessPolicy(config, { mode });
+  return {
+    sessionId,
+    goal,
+    conversationTarget: undefined,
+    routing: { mode: config.routing.mode, privacyLocked: false, assignments: [], fallbacks: [] },
+    access,
+    events: [],
+    eventArtifacts: [],
+    providerViews: [],
+    evidencePackets: [],
+    agents: [],
+    candidates: [],
+    repairCandidates: [],
+    debateRounds: [],
+    modelNotes: [],
+    usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetStatuses: [],
+    changedFiles: [],
+    runResults: [],
+    approvals: {
+      patchApproved: access.patchApproved,
+      shellApproved: access.shellApproved,
+      repairApproved: access.repairApproved
+    }
+  };
+}
+
+function applyLiveEvent(state: AgentGraphState, event: TomorrowEdgeEvent): void {
+  state.events.push(event);
+  if (event.type === "access_mode") {
+    state.access = {
+      ...state.access,
+      mode: event.accessMode,
+      cloudAllowed: event.cloudAllowed,
+      patchApproved: event.patchApproved,
+      shellApproved: event.shellApproved,
+      repairApproved: event.repairApproved
+    };
+    state.approvals = {
+      patchApproved: event.patchApproved,
+      shellApproved: event.shellApproved,
+      repairApproved: event.repairApproved
+    };
+  }
+  if (event.type === "routing_decision") {
+    state.routing.assignments.push({
+      role: event.assignedRole,
+      provider: event.assignedProvider,
+      model: event.assignedModel,
+      reason: event.reason
+    });
+  }
+  if (event.type === "patch_candidate") {
+    state.candidates.push({
+      candidateId: event.candidateId,
+      agentId: event.role ?? "coder_a",
+      approach: isPatchApproach(event.approach) ? event.approach : "minimal_patch",
+      summary: event.summary,
+      filesChanged: event.filesChanged,
+      unifiedDiff: "",
+      testPlan: [],
+      knownTradeoffs: [],
+      estimatedRisk: event.estimatedRisk
+    });
+  }
+  if (event.type === "judge_decision") {
+    state.judge = {
+      decision: event.decision === "select" ? "select" : event.decision === "ask_user" ? "ask_user" : event.decision === "abort" ? "abort" : "request_revision",
+      selectedCandidateId: event.selectedCandidateId,
+      reason: event.reason,
+      confidence: event.confidence
+    };
+  }
+  if (event.type === "patch_apply") {
+    if (event.applied) {
+      state.changedFiles = [...new Set([...state.changedFiles, ...event.filesChanged])];
+      state.approvals.patchApproved = true;
+    } else if (event.error) {
+      state.agents.push({
+        id: "live_approval_patch",
+        role: "runner",
+        provider: "local_tool",
+        model: "approval_gate",
+        status: "waiting_for_user",
+        summary: event.error
+      });
+    }
+  }
+  if (event.type === "shell_run" && typeof event.success === "boolean") {
+    state.runResults.push({
+      command: event.command,
+      exitCode: event.exitCode ?? (event.success ? 0 : 1),
+      stdout: "",
+      stderr: event.error ?? "",
+      durationMs: event.durationMs ?? 0,
+      success: event.success
+    });
+  }
+  if (event.type === "summary") {
+    state.finalSummary = {
+      task: state.goal,
+      result: event.result as "completed" | "partially_completed" | "failed" | "aborted",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: [event.summaryRef],
+      risksRemaining: [],
+      suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
+    };
+  }
+}
+
+function isPatchApproach(value: string): value is "minimal_patch" | "refactor" | "test_first" | "alternative" | "repair" {
+  return value === "minimal_patch" || value === "refactor" || value === "test_first" || value === "alternative" || value === "repair";
 }
 
 function parseAccessMode(value: unknown): AccessMode | undefined {
@@ -173,19 +355,6 @@ function parseAccessMode(value: unknown): AccessMode | undefined {
 
 function isMutatingMethod(method?: string): boolean {
   return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
-}
-
-function isAllowedBrowserOrigin(request: IncomingMessage): boolean {
-  const origin = request.headers.origin;
-  if (!origin || Array.isArray(origin)) return !Array.isArray(origin);
-  const host = request.headers.host;
-  if (!host) return false;
-  try {
-    const parsed = new URL(origin);
-    return parsed.host === host && (parsed.protocol === "http:" || parsed.protocol === "https:");
-  } catch {
-    return false;
-  }
 }
 
 function parseExternalAgentRegistration(value: Record<string, unknown>): ExternalAgentRegistrationInput {
@@ -202,6 +371,20 @@ function parseExternalAgentRegistration(value: Record<string, unknown>): Externa
   };
 }
 
+function parseApprovalIntent(value: Record<string, unknown>): CockpitApprovalIntent {
+  const action = value.action;
+  if (!["approve_patch", "reject_patch", "approve_shell", "reject_shell", "request_re_review", "undo_latest_patch"].includes(String(action))) {
+    throw new Error("approval intent requires a valid action");
+  }
+  if (typeof value.sessionId !== "string" || !value.sessionId.trim()) throw new Error("approval intent requires sessionId");
+  return {
+    action: action as CockpitApprovalIntent["action"],
+    sessionId: value.sessionId,
+    approvalId: typeof value.approvalId === "string" ? value.approvalId : undefined,
+    feedback: typeof value.feedback === "string" ? value.feedback : undefined
+  };
+}
+
 function isAgentRole(value: unknown): value is AgentRole {
   return typeof value === "string" && (agentRoles as readonly string[]).includes(value);
 }
@@ -213,8 +396,8 @@ async function sendArtifact(cwd: string, response: ServerResponse, sessionId: st
   const effectiveSessionId = sessionId === "latest" ? (await loadLatestSession(cwd)).sessionId : sessionId;
   if (!isSafeSessionId(effectiveSessionId)) return sendJson(response, 400, { error: "invalid session id" });
   const sessionDir = path.resolve(cwd, ".tomorrowedge", "sessions", effectiveSessionId);
-  const artifactPath = path.resolve(sessionDir, ref);
-  if (!isPathInside(sessionDir, artifactPath)) return sendJson(response, 400, { error: "invalid artifact ref" });
+  const artifactPath = safeArtifactPath(sessionDir, ref);
+  if (!artifactPath) return sendJson(response, 400, { error: "invalid artifact ref" });
   const content = redactText(await readFile(artifactPath, "utf8"));
   return send(response, 200, content, "text/plain; charset=utf-8");
 }
@@ -230,20 +413,48 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   }
   if (!chunks.length) return {};
   const text = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(text) as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new HttpError(400, "invalid_json", "JSON request body must be an object.");
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, "invalid_json", "Request body is not valid JSON.");
+  }
 }
 
 function isSafeSessionId(value: string): boolean {
   return value === "latest" || /^[A-Za-z0-9_-]+$/.test(value);
 }
 
-function isPathInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
-}
-
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   send(response, status, JSON.stringify(body, null, 2), "application/json; charset=utf-8");
+}
+
+function sendLiveEvents(cwd: string, response: ServerResponse, sessionId: string): void {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store",
+    connection: "keep-alive",
+    "x-content-type-options": "nosniff"
+  });
+  const write = (event: string, data: unknown) => {
+    response.write(`event: ${event}\n`);
+    response.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+  write("ready", { sessionId });
+  const snapshot = cockpitEventBus.getSnapshot(sessionId);
+  if (snapshot) write("snapshot", { snapshot, viewModel: buildCockpitViewModel(cwd, snapshot.state) });
+  const unsubscribe = cockpitEventBus.subscribe(sessionId, (message) => {
+    if (typeof message === "object" && message && "kind" in message) {
+      const kind = String((message as { kind: string }).kind);
+      const snapshotMessage = kind === "snapshot" ? message as unknown as { snapshot: { state: AgentGraphState } } : undefined;
+      write(kind, snapshotMessage ? { ...message, viewModel: buildCockpitViewModel(cwd, snapshotMessage.snapshot.state) } : message);
+    }
+  });
+  response.on("close", unsubscribe);
 }
 
 function send(response: ServerResponse, status: number, body: string, contentType: string): void {

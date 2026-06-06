@@ -1,7 +1,7 @@
 {
   "name": "tomorrowedge",
-  "version": "1.0.1",
-  "description": "A TUI cockpit for multi-model coding agents.",
+  "version": "1.1.0",
+  "description": "A local cockpit for full-access multi-model coding agents.",
   "type": "module",
   "bin": {
     "tedge": "./dist/cli/index.js"
@@ -11,6 +11,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "web:dev": "vite --config src/cockpit-web/vite.config.ts",
+    "web:build": "vite build --config src/cockpit-web/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run",
@@ -25,6 +27,7 @@
     "prepack": "npm test && npm run build",
     "pack:dry": "tsx scripts/pack-dry.ts",
     "pack:dry:strict": "tsx scripts/pack-dry.ts --strict",
+    "package:zip": "tsx scripts/package-zip.ts",
     "doctor": "node scripts/tsx-dev.mjs doctor",
     "tui": "node scripts/tsx-dev.mjs tui",
     "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke",
@@ -40,6 +43,7 @@
     "scripts/audit-check.ts",
     "scripts/docs-status-check.ts",
     "scripts/pack-dry.ts",
+    "scripts/package-zip.ts",
     "scripts/secret-scan.ts",
     "examples/tiny-local-lm/ARCHITECTURE.md",
     "examples/tiny-local-lm/README.md",
@@ -76,6 +80,7 @@
     "ignore": "^7.0.3",
     "ink": "^5.1.0",
     "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "simple-git": "^3.27.0",
     "yaml": "^2.7.0",
     "zod": "^3.24.2"
@@ -84,9 +89,11 @@
     "@types/diff": "^7.0.2",
     "@types/node": "^22.13.1",
     "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.7",
     "playwright": "^1.60.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
+    "vite": "^7.3.5",
     "vitest": "^4.1.8"
   }
 }

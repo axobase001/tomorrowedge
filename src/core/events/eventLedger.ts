@@ -14,7 +14,8 @@ export class EventLedger {
 
   constructor(
     readonly sessionId: string,
-    private readonly mode: AccessMode
+    private readonly mode: AccessMode,
+    private readonly onEvent?: (event: TomorrowEdgeEvent) => void
   ) {}
 
   append(event: EventInput): TomorrowEdgeEvent {
@@ -26,6 +27,7 @@ export class EventLedger {
       mode: this.mode
     } as TomorrowEdgeEvent;
     this.events.push(fullEvent);
+    this.onEvent?.(fullEvent);
     return fullEvent;
   }
 
@@ -36,6 +38,6 @@ export class EventLedger {
   }
 }
 
-export function createEventLedger(mode: AccessMode, sessionId = makeId("session")): EventLedger {
-  return new EventLedger(sessionId, mode);
+export function createEventLedger(mode: AccessMode, sessionId = makeId("session"), onEvent?: (event: TomorrowEdgeEvent) => void): EventLedger {
+  return new EventLedger(sessionId, mode, onEvent);
 }
