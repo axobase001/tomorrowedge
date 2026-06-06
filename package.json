@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A local GUI client for full-access multi-model coding agents.",
   "type": "module",
   "bin": {
@@ -30,6 +30,7 @@
     "package:zip": "tsx scripts/package-zip.ts",
     "doctor": "node scripts/tsx-dev.mjs doctor",
     "client": "node scripts/tsx-dev.mjs client",
+    "desktop": "node scripts/tsx-dev.mjs desktop",
     "tui": "node scripts/tsx-dev.mjs tui",
     "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke",
     "screenshots:tui": "node scripts/capture-tui-screenshots.mjs"
@@ -40,6 +41,7 @@
     "README.product.md",
     "CHANGELOG.md",
     "LICENSE",
+    "desktop/*.cjs",
     "docs/*.md",
     "scripts/audit-check.ts",
     "scripts/docs-status-check.ts",

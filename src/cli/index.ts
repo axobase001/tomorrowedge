@@ -19,6 +19,7 @@ import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
 import { serveCommand } from "./commands/serve.js";
+import { desktopCommand } from "./commands/desktop.js";
 import { exportCommand } from "./commands/export.js";
 import { githubReportCommand } from "./commands/githubReport.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
@@ -78,6 +79,14 @@ program
   .option("--host <host>", "bind host", "127.0.0.1")
   .option("--no-open", "print the client URL without opening a browser")
   .action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
+
+program
+  .command("desktop")
+  .description("Start the optional TomorrowEdge desktop app window")
+  .option("--port <port>", "local port", "18792")
+  .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--runtime <runtime>", "auto, app-mode, or electron", "auto")
+  .action((options: { port?: string; host?: string; runtime?: string }) => desktopCommand(cwd, options));
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
 

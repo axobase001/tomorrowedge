@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.1`。
+当前版本：`1.1.2`。
 
+- `1.1.2` 新增可选本地桌面 app 启动方式：`tedge desktop` / `npm run desktop` 会复用同一套 nonce-protected local cockpit，在独立桌面窗口中打开 TomorrowEdge。默认不强制安装 Electron；需要 Electron 壳时可使用 `--runtime electron`。
 - `1.1.1` 把主入口收口为 **TomorrowEdge GUI Client**：新增 `tedge client` / `npm run client`，README 隐藏 TUI 截图介绍和 UI style 说明，让用户第一次启动时只看到一个清晰客户端入口。
 - `1.1.0` 引入 **TomorrowEdge GUI Client**：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 是默认操作者入口，而不是后台管理系统。
 - `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
@@ -49,6 +50,8 @@ npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
 npm run client
+# optional standalone desktop window
+npm run desktop
 ```
 
 No API key required. This runs the offline fixture workflow, applies a safe
@@ -101,6 +104,18 @@ npm run client
 
 `npm run client` 会打开 TomorrowEdge GUI Client。安装后的 CLI 可使用 `tedge client`；只想打印本地地址时使用 `tedge client --no-open`。
 
+可选桌面窗口：
+
+```bash
+npm run desktop
+tedge desktop
+tedge desktop --runtime app-mode
+tedge desktop --runtime electron
+```
+
+`desktop` 仍然只绑定本机 `127.0.0.1`，并复用同一套事件账本、审批动作和 GUI view model。默认 `auto` 会优先使用可选 Electron；未安装 Electron 时使用系统 Chromium/Edge 的 app-window 模式；再不行才退回普通本地浏览器窗口。
+只有需要 Electron 壳时才安装：`npm install --save-dev electron`。
+
 深度演示与排障：
 
 - [端到端工作流案例：fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
@@ -124,6 +139,7 @@ npm run client
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
 - 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
 - GUI client：任务队列、workflow 主焦点、审批动作、telemetry、details drawer、trace strip 和自然语言 command composer
+- 可选桌面 app 窗口：`tedge desktop` 复用本地 GUI client，不复制运行时核心
 - 共享 cockpit ViewModel/API：便于 GUI client 和后续客户端复用同一运行态
 
 ## 常用命令
@@ -132,6 +148,9 @@ npm run client
 tedge init
 tedge client
 tedge client --no-open
+tedge desktop
+tedge desktop --runtime app-mode
+tedge desktop --runtime electron
 tedge targets
 tedge ask --to reviewer "is this patch safe?"
 tedge run "task"
@@ -383,7 +402,12 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.1`.
+Current version: `1.1.2`.
+
+`1.1.2` adds an optional local desktop app entrypoint. `tedge desktop` /
+`npm run desktop` reuse the same nonce-protected local cockpit and open it in a
+standalone desktop window. Electron is optional; `--runtime electron` uses it
+when installed, while `--runtime app-mode` uses a Chromium/Edge app window.
 
 `1.1.1` makes the **TomorrowEdge GUI Client** the clear default entrypoint:
 `tedge client` / `npm run client` now open the client, and the README landing
@@ -446,6 +470,8 @@ npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
 npm run client
+# optional standalone desktop window
+npm run desktop
 ```
 
 No API key required. This runs the offline fixture workflow, applies a safe
@@ -499,6 +525,21 @@ npm run client
 `npm run client` opens the TomorrowEdge GUI Client. For installed builds, use
 `tedge client`; use `tedge client --no-open` when you only want the local URL.
 
+Optional desktop window:
+
+```bash
+npm run desktop
+tedge desktop
+tedge desktop --runtime app-mode
+tedge desktop --runtime electron
+```
+
+`desktop` remains local-only on `127.0.0.1` and reuses the same event ledger,
+approval actions, and GUI view model. The default `auto` runtime prefers
+optional Electron when installed, then Chromium/Edge app-window mode, then a
+normal local browser window.
+Install Electron only if you want that shell: `npm install --save-dev electron`.
+
 Deep demo and troubleshooting:
 
 - [End-to-end workflow case study: fixture repair loop](docs/WORKFLOW_CASE_STUDY.md)
@@ -530,6 +571,8 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - GUI client for task queue, workflow focus, approval execution, telemetry,
   details drawer, trace strip, and natural-language commands
+- Optional desktop app window via `tedge desktop`, reusing the local GUI client
+  without forking the runtime core
 - Shared cockpit ViewModel/API contract for the GUI client and future packaged
   client surfaces
 - Conversation Targets for `core`, role-specific questions, debate-room broadcasts, and external agents
@@ -541,6 +584,9 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 tedge init
 tedge client
 tedge client --no-open
+tedge desktop
+tedge desktop --runtime app-mode
+tedge desktop --runtime electron
 tedge targets
 tedge ask --to reviewer "is this patch safe?"
 tedge run "task"

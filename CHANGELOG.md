@@ -7,6 +7,27 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-06-07
+
+1.1.2 adds an optional local desktop app window while keeping the GUI client
+and local cockpit server as the single source of runtime truth.
+
+### Added
+
+- `tedge desktop` CLI command and `npm run desktop` script for opening
+  TomorrowEdge in a standalone local desktop window.
+- Optional desktop runtimes:
+  - `auto`: Electron when installed, then Chromium/Edge app-window mode, then a
+    normal local browser fallback.
+  - `app-mode`: system Chromium/Edge app-window mode without adding Electron.
+  - `electron`: Electron shell when the optional Electron package is installed.
+- Minimal Electron main-process shell under `desktop/electron-main.cjs`.
+
+### Changed
+
+- README now documents the difference between `client` and optional `desktop`
+  startup modes.
+
 ## [1.1.1] - 2026-06-07
 
 1.1.1 is a GUI client entrypoint and landing-page cleanup release.
