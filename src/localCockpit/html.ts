@@ -515,6 +515,11 @@ el("sessions").addEventListener("change", (event) => {
   loadViewModel(selectedSession);
 });
 el("run").addEventListener("click", runWorkflow);
+el("goal").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  if (!el("run").disabled) void runWorkflow();
+});
 el("open-drawer").addEventListener("click", () => renderDrawer(true));
 el("close-drawer").addEventListener("click", () => el("drawer").classList.remove("open"));
 

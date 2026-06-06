@@ -27,6 +27,9 @@ describe("local cockpit server", () => {
       expect(html).toContain("TomorrowEdge GUI Client");
       expect(html).toContain("Trace Ledger");
       expect(html).toContain("metric-line");
+      expect(html).toContain('event.key !== "Enter"');
+      expect(html).toContain("event.shiftKey");
+      expect(html).toContain("event.isComposing");
       expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
     } finally {

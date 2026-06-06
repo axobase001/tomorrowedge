@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.2`。
+当前版本：`1.1.3`。
 
+- `1.1.3` 修复 GUI command composer 的严重交互问题：Enter 现在发送自然语言指令，Shift+Enter 保留换行，并保护中文/日文/韩文输入法 composition，不会在组词中误发送。
 - `1.1.2` 新增可选本地桌面 app 启动方式：`tedge desktop` / `npm run desktop` 会复用同一套 nonce-protected local cockpit，在独立桌面窗口中打开 TomorrowEdge。默认不强制安装 Electron；需要 Electron 壳时可使用 `--runtime electron`。
 - `1.1.1` 把主入口收口为 **TomorrowEdge GUI Client**：新增 `tedge client` / `npm run client`，README 隐藏 TUI 截图介绍和 UI style 说明，让用户第一次启动时只看到一个清晰客户端入口。
 - `1.1.0` 引入 **TomorrowEdge GUI Client**：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 是默认操作者入口，而不是后台管理系统。
@@ -402,7 +403,12 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.2`.
+Current version: `1.1.3`.
+
+`1.1.3` fixes the GUI command composer interaction: Enter now sends the
+natural-language command, Shift+Enter still inserts a newline, and IME
+composition is protected so Chinese/Japanese/Korean input is not submitted
+mid-composition.
 
 `1.1.2` adds an optional local desktop app entrypoint. `tedge desktop` /
 `npm run desktop` reuse the same nonce-protected local cockpit and open it in a

@@ -7,6 +7,17 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-06-07
+
+1.1.3 is a GUI command-composer hotfix.
+
+### Fixed
+
+- Pressing Enter in the GUI natural-language composer now sends the command
+  instead of inserting a newline.
+- Shift+Enter still inserts a newline, and IME composition is protected so
+  Chinese/Japanese/Korean input is not submitted mid-composition.
+
 ## [1.1.2] - 2026-06-07
 
 1.1.2 adds an optional local desktop app window while keeping the GUI client
