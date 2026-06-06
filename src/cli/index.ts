@@ -47,7 +47,7 @@ program
   .command("run")
   .description("Run a coding task through the offline agent graph by default")
   .argument("<task>", "task goal")
-  .option("--headless", "print JSON instead of launching TUI")
+  .option("--headless", "print JSON instead of launching an interactive cockpit")
   .option("--provider <provider>", "[deprecated] use --fixture-mode instead")
   .option("--fixture-mode", "use fixture provider for deterministic scripted responses")
   .option("--approve-patch", "allow the selected patch to be applied")
@@ -70,6 +70,14 @@ program
   .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task, { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
+
+program
+  .command("client")
+  .description("Start the TomorrowEdge GUI client")
+  .option("--port <port>", "local port", "18792")
+  .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--no-open", "print the client URL without opening a browser")
+  .action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
 

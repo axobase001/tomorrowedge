@@ -4,7 +4,7 @@
 
 **中文** | [English](#english)
 
-明日边缘是一个 **GUI + TUI multi-model agent cockpit for full-access coding workflows**：面向 full-access 代码任务的本地驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
+明日边缘是一个 **local GUI client for full-access multi-model coding workflows**：面向 full-access 代码任务的本地驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
 
 ```text
 Full autonomy, full visibility.
@@ -15,7 +15,7 @@ Full autonomy, full visibility.
 
 Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会自动应用 patch、运行 shell、执行 repair loop，并继续迭代，不会每一步都打断用户确认。
 
-它与黑盒 full-access agent 的区别不是限制权限，而是可见性：每次模型调用、上下文选择、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 TUI 中，并写入可回放事件账本。
+它与黑盒 full-access agent 的区别不是限制权限，而是可见性：每次模型调用、上下文选择、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 GUI client 中，并写入可回放事件账本。
 
 ## 为什么存在
 
@@ -24,10 +24,11 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.0`。
+当前版本：`1.1.1`。
 
-- `1.1.0` 引入 **Four-Zone Quiet Cockpit** 浏览器 GUI：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 采用 image2-first 流程收敛到 Codex-like quiet cockpit，而不是后台管理系统。
-- `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode TUI 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
+- `1.1.1` 把主入口收口为 **TomorrowEdge GUI Client**：新增 `tedge client` / `npm run client`，README 隐藏 TUI 截图介绍和 UI style 说明，让用户第一次启动时只看到一个清晰客户端入口。
+- `1.1.0` 引入 **TomorrowEdge GUI Client**：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 是默认操作者入口，而不是后台管理系统。
+- `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
 - `1.0.0` 的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
 
 - TomorrowEdge preserves full artifacts for replay, but projects compact evidence packets to models.
@@ -47,25 +48,16 @@ npm ci
 npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
-npm run dev -- serve --open
-npm run dev -- tui
+npm run client
 ```
 
 No API key required. This runs the offline fixture workflow, applies a safe
 fixture patch, runs verification, and shows the replayable event ledger.
 
-## TUI 实际运行截图
-
-以下截图来自当前配置下的 TomorrowEdge fixture 工作流运行态，不是官网页、生成图或概念图。
-
-![TomorrowEdge TUI runtime cockpit](docs/assets/screenshots/tui-runtime-cockpit.png)
-
-![TomorrowEdge full-access trace ledger](docs/assets/screenshots/tui-runtime-trace.png)
-
-## GUI Runtime Screenshots
+## GUI Client Runtime Screenshots
 
 These screenshots are captured from the local browser cockpit opened by
-`tedge serve --open` against a fixture session. They are runtime screenshots,
+`tedge client` against a fixture session. They are runtime screenshots,
 not image2 reference boards.
 
 **Approval-first main workspace**
@@ -104,12 +96,10 @@ npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
-npm run dev -- serve --open
-npm run dev -- tui
+npm run client
 ```
 
-`serve --open` 会打开本地浏览器 Four-Zone Quiet Cockpit；`tui`
-是键盘驱动的终端 Ink 面板。两者共享 workflow / telemetry / approval 的语义。
+`npm run client` 会打开 TomorrowEdge GUI Client。安装后的 CLI 可使用 `tedge client`；只想打印本地地址时使用 `tedge client --no-open`。
 
 深度演示与排障：
 
@@ -133,15 +123,15 @@ npm run dev -- tui
 - MCP Agent Bridge：把 Claude Code / Codex 等外部 coding agents 绑定为 core/planner/reviewer/judge/coder/repairer
 - patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
 - 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
-- TUI 驾驶舱：agent 状态、路由、辩论、diff、shell、证据、记忆、帮助面板
-- TUI 内持久化偏好：`/mode`、`/model`、`/routing`、`/test-command`、`/save-route`
+- GUI client：任务队列、workflow 主焦点、审批动作、telemetry、details drawer、trace strip 和自然语言 command composer
+- 共享 cockpit ViewModel/API：便于 GUI client 和后续客户端复用同一运行态
 
 ## 常用命令
 
 ```bash
 tedge init
-tedge tui
-tedge tui --to reviewer
+tedge client
+tedge client --no-open
 tedge targets
 tedge ask --to reviewer "is this patch safe?"
 tedge run "task"
@@ -185,10 +175,7 @@ tedge undo
 `--post-check` 会通过 `gh api` 创建 GitHub Checks API check run；目标仓库的 token
 需要允许创建 check run。
 
-TUI composer 支持直接写入项目偏好和配置：`/mode full` 保存 access mode，
-`/model planner openrouter openai/gpt-5.2` 保存单个角色模型，`/routing quality` 保存 routing mode，
-`/test-command npm test` 保存默认验证命令，`/save-route` 会把当前模型路由预览写入
-`agents.<role>.provider/model`。
+GUI command composer 是自然语言任务和审批反馈的主入口。CLI 命令仍可用于脚本化运行、配置和自动化。
 
 ## 权限模式
 
@@ -254,7 +241,7 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 TomorrowEdge 不替代 Claude Code / Codex，而是把它们纳入 full-access multi-model cockpit。Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
 TomorrowEdge 不替代你已经订阅的 Claude Code / Codex，而是把它们变成可编排、可观测的角色节点。
 
-MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等角色。TomorrowEdge 继续负责 orchestration、routing、trace、event ledger、session export 和 TUI 可视化监督。详见 [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) 和 [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md)。
+MCP bridge 允许外部 coding agents 承担 `core`、`planner`、`reviewer`、`judge`、`coder_a`、`repairer` 等角色。TomorrowEdge 继续负责 orchestration、routing、trace、event ledger、session export 和 cockpit 可视化监督。详见 [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) 和 [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md)。
 
 基本用法：
 
@@ -280,7 +267,7 @@ npm start
 npm run verify
 ```
 
-这个 demo 是本地中英双语 hashed neural n-gram toy language model，默认约 54 万参数，不调用 OpenAI/OpenRouter API。它提供 `/health`、`/model-info`、`/generate`，前端支持 prompt、temperature 和 max tokens，用于验证 TomorrowEdge 的多 agent 分工、review、judge、repair 和 export 流程。
+这个 demo 是本地中英双语 hashed neural n-gram toy language model，默认约 50M 参数，不调用 OpenAI/OpenRouter API。它提供 `/health`、`/model-info`、`/generate`，前端支持 prompt、temperature 和 max tokens，用于验证 TomorrowEdge 的多 agent 分工、review、judge、repair 和 export 流程。
 
 角色绑定示例：
 
@@ -367,10 +354,6 @@ vision roles.
 
 本项目不是 Xiaomi、MiMo、OpenAI、Anthropic、Google、DeepSeek、Moonshot/Kimi 或 OpenRouter 的官方项目。
 
-## UI 风格
-
-明日边缘默认中文 UI。浏览器 GUI 是蓝白冷感的 Codex-like quiet cockpit：summary-first telemetry、轻量 task queue、中心 workflow 主焦点和短 command composer；TUI 保持更高密度的终端驾驶舱。详见 [docs/UI_STYLE.md](docs/UI_STYLE.md)。
-
 ## Clean Room
 
 见 [docs/CLEAN_ROOM_NOTE.md](docs/CLEAN_ROOM_NOTE.md)。
@@ -379,8 +362,8 @@ vision roles.
 
 ## English
 
-TomorrowEdge is a **GUI + TUI multi-model agent cockpit** for coding tasks: a local cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering workflows.
-TomorrowEdge is a **GUI + TUI multi-model agent cockpit for full-access coding workflows**.
+TomorrowEdge is a **local GUI client for full-access multi-model coding workflows**: a cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering tasks.
+TomorrowEdge is a **multi-model coding-agent cockpit with a local GUI client**.
 TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks.
 
 ```text
@@ -391,7 +374,7 @@ It is not a chatbot CLI and not a single-provider wrapper. Codex / Claude Code g
 
 Full mode is autonomous execution with complete workspace tool access. TomorrowEdge will apply patches, run shell commands, execute repair loops, and continue iterating without per-step confirmation.
 
-The difference from black-box full-access agents is visibility: every model call, context selection, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the TUI and saved to a replayable event ledger.
+The difference from black-box full-access agents is visibility: every model call, context selection, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the local GUI client and saved to a replayable event ledger.
 
 ## Why It Exists
 
@@ -400,20 +383,25 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.0`.
+Current version: `1.1.1`.
 
-`1.1.0` adds the **Four-Zone Quiet Cockpit** browser GUI: simplified top bar,
+`1.1.1` makes the **TomorrowEdge GUI Client** the clear default entrypoint:
+`tedge client` / `npm run client` now open the client, and the README landing
+flow hides TUI screenshots and UI style exposition so first-time users see one
+obvious way into the cockpit.
+
+`1.1.0` adds the **TomorrowEdge GUI Client**: simplified top bar,
 reduced-border task queue, center workflow main area, collapsed telemetry
 summary, and a short natural-language command composer. The GUI follows an
 image2-first refinement flow toward a Codex-like quiet cockpit instead of an
 admin dashboard.
 
 `1.0.1` is the first post-1.0 stability release. It fixes live routed agent
-classification, adds a real Ink raw-mode TUI keyboard smoke test, and closes
+classification, adds a real Ink raw-mode keyboard smoke test, and closes
 the current public issue/PR queue after the 1.0 hardening pass.
 
 `1.0.0` promoted TomorrowEdge to a stable major baseline: the project now has a
-usable TUI-first cockpit surface, a full-access workflow ledger, role-routed
+usable cockpit surface, a full-access workflow ledger, role-routed
 multi-model execution, provider onboarding, MCP/external-agent contracts, and
 the first architecture upgrade layers needed for auditable engineering runs.
 
@@ -425,9 +413,8 @@ the first architecture upgrade layers needed for auditable engineering runs.
   routing, fallback, projection, budget, repair, and trace completeness signals.
 - External agent handoff now has typed task/result envelopes for real
   Codex/Claude Code role binding.
-- The default TUI is aligned with the README runtime cockpit: status strip,
-  Agents, Capability Route, Patch Candidate, Judge/Review, and a fixed
-  Command/Talk input console for natural-language workflow control.
+- The GUI client is the default operator surface for task queue, workflow
+  focus, approval actions, telemetry, details, and natural-language commands.
 
 The previous **MCP Agent Bridge** remains available: Claude Code / Codex and
 other external coding agents can connect through MCP and be bound to workflow
@@ -443,7 +430,7 @@ roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and
   agent
 - external patch, review, judgment, result, and cost usage submissions are
   written to `events.jsonl`
-- the TUI Agents / Router / Trace panes show external agent badges, role
+- the GUI client and trace exports show external agent badges, role
   bindings, and `external_agent_*` events
 - `1.1.0` keeps the hardened release lane: `npm run verify`, zip-safe secret
   scanning, full-access shell policy, command runner skeletons, and the locally
@@ -458,27 +445,16 @@ npm ci
 npm run verify
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
-npm run dev -- serve --open
-npm run dev -- tui
+npm run client
 ```
 
 No API key required. This runs the offline fixture workflow, applies a safe
 fixture patch, runs verification, and shows the replayable event ledger.
 
-## TUI Runtime Screenshots
-
-These screenshots are captured from the current TomorrowEdge fixture runtime
-with the current provider configuration. They are not docs-site screenshots or
-generated concept art.
-
-![TomorrowEdge TUI runtime cockpit](docs/assets/screenshots/tui-runtime-cockpit.png)
-
-![TomorrowEdge full-access trace ledger](docs/assets/screenshots/tui-runtime-trace.png)
-
-## GUI Runtime Screenshots
+## GUI Client Runtime Screenshots
 
 These screenshots are captured from the local browser cockpit opened by
-`tedge serve --open` against a fixture session. They are runtime screenshots,
+`tedge client` against a fixture session. They are runtime screenshots,
 not image2 reference boards.
 
 **Approval-first main workspace**
@@ -517,13 +493,11 @@ npm run dev -- init
 npm run dev -- init --force
 npm run dev -- run "fix failing test" --headless
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
-npm run dev -- serve --open
-npm run dev -- tui
+npm run client
 ```
 
-`serve --open` opens the local browser Four-Zone Quiet Cockpit; `tui` starts
-the keyboard-driven Ink terminal panels. Both surfaces share workflow,
-telemetry, and approval semantics.
+`npm run client` opens the TomorrowEdge GUI Client. For installed builds, use
+`tedge client`; use `tedge client --no-open` when you only want the local URL.
 
 Deep demo and troubleshooting:
 
@@ -554,8 +528,10 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - MCP Agent Bridge for binding Claude Code / Codex or other external coding agents to core/planner/reviewer/judge/coder/repairer roles
 - Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
-- TUI cockpit panes for agents, routing, debate, diffs, shell, evidence, memory, and help
-- TUI-persisted preferences for access mode, role model overrides, routing mode, preferred test command, and route overrides
+- GUI client for task queue, workflow focus, approval execution, telemetry,
+  details drawer, trace strip, and natural-language commands
+- Shared cockpit ViewModel/API contract for the GUI client and future packaged
+  client surfaces
 - Conversation Targets for `core`, role-specific questions, debate-room broadcasts, and external agents
 - Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
@@ -563,8 +539,8 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 
 ```bash
 tedge init
-tedge tui
-tedge tui --to reviewer
+tedge client
+tedge client --no-open
 tedge targets
 tedge ask --to reviewer "is this patch safe?"
 tedge run "task"
@@ -608,9 +584,9 @@ tedge undo
 `--post-check` creates a GitHub Checks API check run through `gh api`; the token must be
 allowed to create check runs for the target repository.
 
-The TUI composer can persist project settings without leaving the cockpit:
-`/mode full`, `/model planner openrouter openai/gpt-5.2`, `/routing quality`,
-`/test-command npm test`, and `/save-route`.
+The GUI command composer is the primary client entrypoint for natural-language
+tasks and approval feedback. CLI commands remain available for scripted runs and
+automation.
 
 ## Conversation Targets
 
@@ -629,7 +605,7 @@ tedge run --to debate "implement this feature after multi-agent debate"
 
 Every directed message records `conversation_target` and
 `conversation_message` events. Markdown and JSON exports include the chosen
-target, and the TUI Goal pane shows `Talk to: <target>`.
+target, and the cockpit view shows the selected conversation target.
 
 ## Access Modes
 
@@ -662,7 +638,7 @@ tedge workflow "design and land a real multi-model orchestration workflow" --pro
 
 TomorrowEdge is not replacing Claude Code / Codex. It turns them into role-bound agents inside a visible multi-model cockpit. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
 
-The MCP bridge lets external coding agents take roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and TUI supervision. See [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) and [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md).
+The MCP bridge lets external coding agents take roles such as `core`, `planner`, `reviewer`, `judge`, `coder_a`, and `repairer`. TomorrowEdge keeps orchestration, routing, trace, event ledger, session export, and cockpit visibility. See [docs/MCP_AGENT_BRIDGE.md](docs/MCP_AGENT_BRIDGE.md) and [docs/EXTERNAL_AGENT_ROLES.md](docs/EXTERNAL_AGENT_ROLES.md).
 TomorrowEdge does not replace the Claude Code / Codex subscriptions you already have. It turns them into orchestratable and observable role nodes.
 
 Basic usage:
@@ -744,7 +720,7 @@ orchestration:
 `langgraph`, `crewai`, and `autogen` are registered placeholders with schema,
 docs, and clear unavailable-backend errors. External frameworks are adapters;
 they do not own full-access authorization, the event ledger, replay, export, or
-TUI visibility.
+cockpit visibility.
 
 See [docs/ORCHESTRATION_BACKENDS.md](docs/ORCHESTRATION_BACKENDS.md).
 
@@ -868,10 +844,3 @@ compare GPT, Claude/Opus, DeepSeek, MiMo, Kimi, Ollama, or any compatible model.
 `openai_chat` and `legacy_chat`.
 
 This is not an official Xiaomi, MiMo, OpenAI, Anthropic, Google, DeepSeek, Moonshot/Kimi, or OpenRouter project.
-
-## UI Style
-
-TomorrowEdge defaults to Chinese UI copy. The browser GUI uses a blue-white
-Codex-like quiet cockpit style with summary-first telemetry and a short command
-composer; the TUI remains denser and terminal-first. See
-[docs/UI_STYLE.md](docs/UI_STYLE.md).

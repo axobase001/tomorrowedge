@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TomorrowEdge / 明日边缘</title>
+  <title>TomorrowEdge GUI Client</title>
   <style>${cockpitCss()}</style>
 </head>
 <body>
@@ -13,23 +13,23 @@
       <div class="brand">
         <div class="mark">T</div>
         <div>
-          <h1>TomorrowEdge / 明日边缘</h1>
+          <h1>TomorrowEdge GUI Client</h1>
           <span id="workspace">workspace</span>
         </div>
       </div>
       <div class="top-status">
         <span id="mode-chip" class="chip chip-blue">partial</span>
         <span id="session-chip" class="chip">session latest</span>
-        <button id="run-top" class="quiet-run" title="杩愯褰撳墠鎸囦护">Run</button>
-        <button id="refresh" class="icon-button" title="Refresh">Settings</button>
+        <button id="run-top" class="quiet-run" title="Run current command">Run</button>
+        <button id="refresh" class="icon-button" title="Refresh client state">Refresh</button>
       </div>
     </header>
 
     <section class="cockpit-grid">
-      <aside class="task-panel panel" aria-label="浠诲姟鍒楄〃">
+      <aside class="task-panel panel" aria-label="Task queue">
         <div class="panel-head">
           <h2>Tasks</h2>
-          <button class="ghost-button" id="new-task" title="New task">+</button>
+          <button class="ghost-button" id="new-task" title="New task">New</button>
         </div>
         <div class="task-filter">
           <select id="sessions" aria-label="session selector"></select>
@@ -41,7 +41,7 @@
         <div class="panel-head">
           <h2>Workflow</h2>
           <div class="head-actions">
-            <span id="status-text" class="chip chip-blue">绛夊緟浠诲姟</span>
+            <span id="status-text" class="chip chip-blue">ready</span>
             <button id="open-drawer" class="ghost-button">Details</button>
           </div>
         </div>
@@ -61,12 +61,12 @@
     <section id="trace-sheet" class="trace-sheet" aria-label="Trace Ledger">
       <div class="trace-title">
         <strong>Trace</strong>
-        <span id="trace-count" class="chip">0 浜嬩欢</span>
+        <span id="trace-count" class="chip">0 events</span>
       </div>
       <div id="trace-strip" class="trace-strip"></div>
     </section>
 
-    <section class="composer panel" aria-label="鑷劧璇█鎸囦护">
+    <section class="composer panel" aria-label="Natural language command">
       <div class="composer-label">Command</div>
       <textarea id="goal" rows="1" placeholder="Describe a task, constraint, or approval feedback..."></textarea>
       <div class="composer-controls">
@@ -617,11 +617,11 @@ function render(vm) {
 
 function renderEmpty(message) {
   currentVm = null;
-  el("workspace").textContent = "TomorrowEdge";
+  el("workspace").textContent = "GUI Client";
   el("status-text").textContent = message;
-  el("tasks").innerHTML = '<div class="task-item selected"><div class="task-title"><span>鏂颁换鍔?/span><span class="chip chip-blue">idle</span></div><div class="task-meta"><span>杈撳叆鎸囦护</span><span>now</span></div></div>';
+  el("tasks").innerHTML = '<div class="task-item selected"><div class="task-title"><span>New task</span><span class="chip chip-blue">idle</span></div><div class="task-meta"><span>enter a command</span><span>now</span></div></div>';
   el("workflow-spine").innerHTML = ["Plan","Route","Edit","Review","Test","Judge","Approve"].map((label) => '<div class="step"><span class="dot"></span><strong>' + label + '</strong></div>').join("");
-  el("main-view").innerHTML = '<div class="summary-box"><h3>' + esc(message) + '</h3><pre class="body-pre">鑷劧璇█鍖哄煙鏄?command composer锛屼笉鏄亰澶╂祦銆傝緭鍏ヤ换鍔″悗 TomorrowEdge 浼氬垱寤?session銆佽褰曚簨浠惰处鏈苟鎺ㄩ€?live events銆?/pre></div>';
+  el("main-view").innerHTML = '<div class="summary-box"><h3>' + esc(message) + '</h3><pre class="body-pre">Use the command composer for tasks, constraints, and approval feedback. TomorrowEdge creates a session, records the event ledger, and streams live workflow state into this client.</pre></div>';
   el("telemetry").innerHTML = renderTelemetry({ plannerModel:"-", coderModel:"-", reviewerModel:"-", judgeModel:"-", providerSummary:"offline", inputTokens:0, outputTokens:0, totalTokens:0, dispatched:0, running:0, completed:0, waiting:0, failed:0, patchWaiting:false, shellWaiting:false, fallbackCount:0 });
   el("trace-count").textContent = "0 events";
   el("trace-strip").innerHTML = "";
@@ -704,7 +704,7 @@ function renderTelemetry(t) {
   return metric("Cost", money(t.currentCostUsd) + " / " + money(t.budgetUsd)) +
     metric("Tokens", measuredNumber(t.totalTokens)) +
     metric("Cache", typeof t.cacheHitPercent === "number" ? t.cacheHitPercent + "%" : "-") +
-    metric("Agents", t.completed + " done 路 " + t.waiting + " waiting") +
+    metric("Agents", t.completed + " done · " + t.waiting + " waiting") +
     metric("Latency", t.latencyMs ? formatDuration(t.latencyMs) : "-") +
     metric("Risk", t.latestRiskLevel || "-") +
     '<div class="telemetry-details">details &gt;</div>';

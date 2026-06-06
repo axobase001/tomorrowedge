@@ -7,11 +7,27 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-07
+
+1.1.1 is a GUI client entrypoint and landing-page cleanup release.
+
+### Added
+
+- `tedge client` CLI command and `npm run client` script for opening the
+  TomorrowEdge GUI Client directly.
+
+### Changed
+
+- README now presents one clear GUI client path and hides the TUI screenshot /
+  intro and UI style explainer from the landing flow.
+- Local cockpit title, empty-state copy, and server output now say
+  "TomorrowEdge GUI Client" instead of the older local-cockpit wording.
+
 ## [1.1.0] - 2026-06-07
 
-1.1.0 refines the browser cockpit from an admin-dashboard-like layout into a
-Codex-like quiet local coding-agent cockpit while keeping the existing TUI,
-agent graph, routing, approval, shell-policy, and event-ledger core intact.
+1.1.0 refines the browser cockpit into the TomorrowEdge GUI Client: a quiet
+local coding-agent cockpit while keeping the agent graph, routing, approval,
+shell-policy, event-ledger, and terminal runtime core intact.
 
 ### Added
 
@@ -26,6 +42,7 @@ agent graph, routing, approval, shell-policy, and event-ledger core intact.
   notes, implementation mapping docs, and GUI v1.1 runtime screenshots.
 - Unit coverage for cockpit ViewModel projection and local cockpit view-model /
   approval-intent endpoints.
+- `tedge client` and `npm run client` as the recommended GUI client entrypoint.
 
 ### Changed
 
@@ -37,10 +54,10 @@ agent graph, routing, approval, shell-policy, and event-ledger core intact.
   request re-review, and undo latest patch.
 - Live cockpit SSE snapshots now carry shared ViewModel updates so workflow,
   task state, telemetry, approval focus, and trace can update during runs.
-- README now presents GUI runtime screenshots captured from `tedge serve --open`
-  instead of only concept/reference images.
-- UI style docs now describe the blue-white, low-noise GUI direction alongside
-  the denser terminal-first TUI.
+- README now presents the GUI client as the primary operator surface with
+  runtime screenshots captured from `tedge client`.
+- README hides the TUI screenshot/intro and UI style explainer from the landing
+  flow so first-time users see one clear client path.
 
 ### Fixed
 

@@ -24,7 +24,7 @@ describe("local cockpit server", () => {
       const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
 
       expect(health.ok).toBe(true);
-      expect(html).toContain("TomorrowEdge / 明日边缘");
+      expect(html).toContain("TomorrowEdge GUI Client");
       expect(html).toContain("Trace Ledger");
       expect(html).toContain("metric-line");
       expect(html).not.toContain("telemetry-table");
