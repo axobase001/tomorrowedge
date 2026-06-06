@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.1.3. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.1.4. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -14,7 +14,7 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Capability stitching for image inputs | experimental | Vision handoff and structured visual specs exist; provider-specific vision quality depends on configured model support. |
 | MCP Agent Bridge | experimental | MCP server, tool surface, role binding, external agent registry, and command runner skeleton exist. Real Claude Code/Codex process integration still needs adapter hardening. |
 | Local browser cockpit API | experimental | Local-first dashboard with nonce-protected API routes. Keep it bound to loopback unless you deliberately accept local-network exposure. |
-| TomorrowEdge GUI Client | experimental | Browser GUI v1.1 uses the shared cockpit view model, live-event API, runtime screenshots, collapsed telemetry summary, task queue, workflow main area, command composer, and the `tedge client` / `npm run client` entrypoint. |
+| TomorrowEdge GUI Client | experimental | Browser GUI v1.1 uses the shared cockpit view model, live-event API, runtime screenshots, collapsed telemetry summary, task queue, workflow main area, command composer, branded favicon/manifest mark, and the `tedge client` / `npm run client` entrypoint. |
 | Optional desktop app window | experimental | `tedge desktop` / `npm run desktop` starts the same nonce-protected local cockpit in an app-window or optional Electron shell. The runtime core remains the local GUI client and event ledger. |
 | Orchestration backend abstraction | placeholder | Native backend is real. LangGraph, CrewAI, AutoGen, and MCP tool backend entries are adapter placeholders. |
 | Real Ink raw-mode TUI keyboard CI | stable | The Ink cockpit boots in a TTY-like raw-mode smoke test, accepts operator input, changes focus, and exits through Ctrl+Q in CI. |

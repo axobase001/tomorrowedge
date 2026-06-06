@@ -24,7 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.3`。
+当前版本：`1.1.4`。
+
+- `1.1.4` 修正 GUI/desktop 品牌标识：客户端顶部栏、favicon 和 web manifest 现在使用 TomorrowEdge 几何 mark，不再退回浏览器默认图标。
 
 - `1.1.3` 修复 GUI command composer 的严重交互问题：Enter 现在发送自然语言指令，Shift+Enter 保留换行，并保护中文/日文/韩文输入法 composition，不会在组词中误发送。
 - `1.1.2` 新增可选本地桌面 app 启动方式：`tedge desktop` / `npm run desktop` 会复用同一套 nonce-protected local cockpit，在独立桌面窗口中打开 TomorrowEdge。默认不强制安装 Electron；需要 Electron 壳时可使用 `--runtime electron`。
@@ -403,7 +405,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.3`.
+Current version: `1.1.4`.
+
+`1.1.4` fixes the GUI/desktop branding mark. The client top bar, favicon, and
+web manifest now use the TomorrowEdge geometric mark instead of falling back to
+the default browser/app icon.
 
 `1.1.3` fixes the GUI command composer interaction: Enter now sends the
 natural-language command, Shift+Enter still inserts a newline, and IME

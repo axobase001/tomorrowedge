@@ -21,10 +21,19 @@ describe("local cockpit server", () => {
     try {
       const health = await fetch(`${server.url}/health`).then((response) => response.json()) as { ok: boolean };
       const html = await fetch(server.url).then((response) => response.text());
+      const icon = await fetch(`${server.url}/icon.svg`).then((response) => response.text());
+      const manifest = await fetch(`${server.url}/manifest.webmanifest`).then((response) => response.json()) as { name: string; icons: Array<{ src: string }> };
       const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
 
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).toContain('href="/icon.svg"');
+      expect(html).toContain('href="/manifest.webmanifest"');
+      expect(html).toContain("mark-top");
+      expect(icon).toContain("TomorrowEdge");
+      expect(icon).toContain("#d81f0d");
+      expect(manifest.name).toBe("TomorrowEdge GUI Client");
+      expect(manifest.icons[0]?.src).toBe("/icon.svg");
       expect(html).toContain("Trace Ledger");
       expect(html).toContain("metric-line");
       expect(html).toContain('event.key !== "Enter"');

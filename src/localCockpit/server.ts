@@ -6,6 +6,7 @@ import { loadConfig } from "../config/configLoader.js";
 import { runOfflineGraph, type OfflineGraphOptions } from "../core/agentGraph/executor.js";
 import { loadLatestSession, loadSession, listSessions, saveSession } from "../core/memory/sessionMemory.js";
 import { TomorrowEdgeMcpBridge } from "../mcp/bridge.js";
+import { cockpitIconSvg, cockpitManifest } from "./brand.js";
 import { renderCockpitHtml } from "./html.js";
 import type { AccessMode, TomorrowEdgeConfig } from "../config/schema.js";
 import type { ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
@@ -100,6 +101,12 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/cockpit")) {
       return send(response, 200, renderCockpitHtml(), "text/html; charset=utf-8");
+    }
+    if (request.method === "GET" && (url.pathname === "/icon.svg" || url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico")) {
+      return send(response, 200, cockpitIconSvg, "image/svg+xml; charset=utf-8");
+    }
+    if (request.method === "GET" && url.pathname === "/manifest.webmanifest") {
+      return sendJson(response, 200, cockpitManifest());
     }
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { ok: true, service: "tomorrowedge-local-cockpit" });

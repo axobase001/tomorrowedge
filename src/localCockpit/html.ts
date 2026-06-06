@@ -4,6 +4,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f7f7f3" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>TomorrowEdge GUI Client</title>
   <style>${cockpitCss()}</style>
 </head>
@@ -11,7 +14,11 @@
   <main class="cockpit-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="mark">T</div>
+        <div class="mark" aria-hidden="true">
+          <span class="mark-top"></span>
+          <span class="mark-stem"></span>
+          <span class="mark-trace"></span>
+        </div>
         <div>
           <h1>TomorrowEdge GUI Client</h1>
           <span id="workspace">workspace</span>
@@ -151,15 +158,36 @@ button, select, textarea {
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mark {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: var(--deep-blue);
-  color: white;
-  font-family: var(--mono);
-  font-weight: 700;
+  position: relative;
+  width: 34px;
+  height: 26px;
+  flex: 0 0 auto;
+}
+.mark-top {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 34px;
+  height: 8px;
+  background: #d81f0d;
+  clip-path: polygon(8px 0, 34px 0, 26px 8px, 0 8px);
+}
+.mark-stem {
+  position: absolute;
+  left: 15px;
+  top: 11px;
+  width: 11px;
+  height: 15px;
+  background: #050505;
+  clip-path: polygon(0 0, 11px 5px, 11px 12px, 0 15px);
+}
+.mark-trace {
+  position: absolute;
+  left: 4px;
+  bottom: 0;
+  width: 14px;
+  height: 2px;
+  background: var(--blue);
 }
 h1, h2, p { margin: 0; }
 h1 { font-size: 15px; line-height: 1.1; }

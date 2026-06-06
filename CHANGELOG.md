@@ -7,6 +7,18 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-06-07
+
+1.1.4 is a GUI/desktop branding hotfix.
+
+### Fixed
+
+- The GUI client top bar now uses the TomorrowEdge geometric mark instead of a
+  generic letter tile.
+- The local cockpit serves `/icon.svg` and `/manifest.webmanifest`, so browser
+  tabs and desktop app-window launches no longer fall back to the default
+  browser icon.
+
 ## [1.1.3] - 2026-06-07
 
 1.1.3 is a GUI command-composer hotfix.
