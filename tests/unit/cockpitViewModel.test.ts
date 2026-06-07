@@ -34,4 +34,24 @@ describe("cockpit view model", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("keeps partially completed sessions in waiting approval when an approval remains", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-vm-partial-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+      const persistedPartial = {
+        ...state,
+        agents: state.agents.filter((agent) => agent.status !== "waiting_for_user")
+      };
+      const vm = buildCockpitViewModel(cwd, persistedPartial);
+
+      expect(vm.currentApproval?.status).toBe("waiting");
+      expect(vm.status).toBe("waiting_approval");
+      expect(vm.statusText).toBe("Waiting approval");
+      expect(vm.tasks[0]?.status).toBe("waiting");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

@@ -5,9 +5,9 @@ import type { CockpitApproval, CockpitRouteSummary, CockpitTelemetry, CockpitVie
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
 export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): CockpitViewModel {
-  const status = inferWorkflowStage(state);
   const approvals = buildApprovals(state);
   const currentApproval = approvals.find((approval) => approval.status === "waiting");
+  const status = currentApproval ? "waiting_approval" : inferWorkflowStage(state);
   const routes = buildRoutes(state);
   const main = buildMainView(state, currentApproval);
   return {

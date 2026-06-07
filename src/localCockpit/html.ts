@@ -518,6 +518,99 @@ textarea {
   .composer { grid-template-columns: 96px minmax(0, 1fr); }
   .composer-controls { grid-column: 2; justify-content: flex-end; }
   .drawer { width: min(460px, calc(100vw - 18px)); max-width: calc(100vw - 18px); }
+}
+@media (max-width: 860px) {
+  body { overflow-x: hidden; }
+  .cockpit-shell {
+    min-width: 0;
+    height: auto;
+    min-height: 100vh;
+    grid-template-rows: auto auto auto auto;
+    overflow: visible;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 8px 10px;
+  }
+  .top-status {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .cockpit-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+  .task-list {
+    height: auto;
+    max-height: 220px;
+  }
+  .workflow-panel {
+    grid-template-rows: auto auto minmax(360px, auto);
+  }
+  .workflow-spine {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .main-grid {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+  .main-view {
+    overflow: visible;
+  }
+  .approval-focus {
+    max-width: none;
+    margin: 0;
+    padding: 18px;
+  }
+  .diff-box pre, .body-pre {
+    max-height: none;
+    min-height: 180px;
+  }
+  .telemetry {
+    height: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trace-sheet {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    align-items: stretch;
+    margin: 0 8px 8px;
+  }
+  .trace-strip {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .composer {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    margin: 0 8px 8px;
+  }
+  .composer-controls {
+    grid-column: 1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .drawer {
+    width: min(100vw, 460px);
+    max-width: 100vw;
+  }
+}
+@media (max-width: 520px) {
+  .workflow-spine {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .telemetry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .top-status > * {
+    flex: 0 1 auto;
+  }
+  .composer-controls select,
+  .composer-controls button {
+    flex: 1 1 132px;
+  }
 }`;
 }
 
