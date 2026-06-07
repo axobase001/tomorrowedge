@@ -19,6 +19,24 @@ describe("cockpit view model", () => {
     expect(vm.telemetry.dispatched).toBeGreaterThan(0);
     expect(vm.telemetry.providerSummary).toBeTruthy();
     expect(vm.trace.length).toBeGreaterThan(0);
+    expect(vm.sessionMeta.source).toBe("saved");
+    expect(vm.sessionMeta.stale).toBe(true);
+  });
+
+  it("marks live snapshots as connected and non-stale", async () => {
+    const state = await runOfflineGraph(process.cwd(), "fix failing test", defaultConfig, { fixtureMode: true });
+    const vm = buildCockpitViewModel(process.cwd(), state, { source: "live", connectionState: "connected", stale: false });
+
+    expect(vm.sessionMeta.source).toBe("live");
+    expect(vm.sessionMeta.connectionState).toBe("connected");
+    expect(vm.sessionMeta.stale).toBe(false);
+  });
+
+  it("marks explicit fixture sessions separately from production sessions", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState());
+
+    expect(vm.sessionMeta.source).toBe("saved");
+    expect(vm.sessionMeta.fixtureMode).toBe(true);
   });
 
   it("switches the main view to approval when a candidate waits for authorization", async () => {

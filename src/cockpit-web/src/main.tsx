@@ -9,8 +9,17 @@ const emptyViewModel: CockpitViewModel = {
   goal: "",
   workspace: "workspace",
   accessMode: "local",
+  sessionMeta: {
+    source: "empty",
+    sourceLabel: "New task",
+    connectionState: "idle",
+    connectionLabel: "Not connected",
+    fixtureMode: false,
+    stale: false,
+    reconnectAttempts: 0
+  },
   status: "idle",
-  statusText: "等待任务",
+  statusText: "Awaiting task",
   tasks: [],
   workflow: [],
   agents: [],
@@ -30,14 +39,11 @@ const emptyViewModel: CockpitViewModel = {
     fallbackCount: 0
   },
   approvals: [],
-  main: { title: "准备新任务", subtitle: "等待指令", body: "", filesChanged: [] },
+  main: { title: "Ready for a new task", subtitle: "Waiting for command", body: "", filesChanged: [] },
   trace: [],
   rawEvents: [],
   artifacts: []
 };
-
-emptyViewModel.statusText = "Awaiting task";
-emptyViewModel.main = { title: "Ready for a new task", subtitle: "Waiting for command", body: "", filesChanged: [] };
 
 function CockpitWebRoot() {
   const apiOptions = useMemo(readApiOptions, []);
@@ -80,7 +86,9 @@ function CockpitWebRoot() {
         setStatusMessage("No saved sessions yet.");
       }
     } catch (error) {
-      setStatusMessage(`Cockpit API unavailable: ${errorMessage(error)}`);
+      const message = errorMessage(error);
+      setViewModel(apiUnavailableViewModel(message));
+      setStatusMessage(`Cockpit API unavailable: ${message}`);
     }
   }, [apiOptions, loadSession, updateSelectedSession]);
 
@@ -109,7 +117,15 @@ function CockpitWebRoot() {
         ...current,
         sessionId,
         status: current.status === "idle" ? "planning" : current.status,
-        statusText: current.statusText === "等待任务" ? "Running" : current.statusText,
+        statusText: current.statusText === "Awaiting task" ? "Running" : current.statusText,
+        sessionMeta: {
+          ...current.sessionMeta,
+          source: "live",
+          sourceLabel: "Live session",
+          connectionState: "connected",
+          connectionLabel: "Connected",
+          stale: false
+        },
         trace: [{
           id: payload.event?.id ?? `${Date.now()}`,
           timestamp: payload.event?.timestamp ?? new Date().toISOString(),
@@ -121,6 +137,15 @@ function CockpitWebRoot() {
     });
     source.onerror = () => {
       setBusy(false);
+      setViewModel((current) => ({
+        ...current,
+        sessionMeta: {
+          ...current.sessionMeta,
+          connectionState: "disconnected",
+          connectionLabel: "Disconnected",
+          message: "Live event stream disconnected."
+        }
+      }));
       setStatusMessage("Live event stream disconnected.");
     };
   }, [apiOptions, closeLiveSource, loadSession]);
@@ -197,6 +222,30 @@ function CockpitWebRoot() {
       onCloseDrawer={() => setDrawerOpen(false)}
     />
   );
+}
+
+function apiUnavailableViewModel(message: string): CockpitViewModel {
+  return {
+    ...emptyViewModel,
+    status: "failed",
+    statusText: "API unavailable",
+    sessionMeta: {
+      source: "api_unavailable",
+      sourceLabel: "API unavailable",
+      connectionState: "unavailable",
+      connectionLabel: "Unavailable",
+      fixtureMode: false,
+      stale: true,
+      reconnectAttempts: 0,
+      message
+    },
+    main: {
+      title: "Cockpit API unavailable",
+      subtitle: "Local server is not reachable",
+      body: message,
+      filesChanged: []
+    }
+  };
 }
 
 function readApiOptions(): CockpitApiOptions {

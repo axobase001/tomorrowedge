@@ -7,6 +7,29 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-06-07
+
+1.1.7 clears the GUI session-source issue cluster so the cockpit no longer
+leaves operators guessing whether they are viewing a live run, saved snapshot,
+fixture demo, or unavailable API state.
+
+### Added
+
+- Shared `sessionMeta` view-model fields for session source, connection state,
+  fixture mode, stale snapshot status, reconnect attempts, and operator-facing
+  messages.
+- React top-bar badges for saved/live/API-unavailable source, connection state,
+  fixture runs, and stale snapshots.
+- View-model and React tests covering saved snapshots, live connected snapshots,
+  fixture markings, and rendered source badges.
+
+### Fixed
+
+- React cockpit startup state now uses clean English text directly instead of
+  correcting mojibake literals after initialization.
+- Live SSE disconnects and API-unavailable refresh failures now update the main
+  shared view model, not only the transient status line.
+
 ## [1.1.6] - 2026-06-07
 
 1.1.6 adds the first real GUI cockpit end-to-end smoke gate.

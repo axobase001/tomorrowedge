@@ -1,21 +1,31 @@
 ﻿import path from "node:path";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import type { CockpitApproval, CockpitRouteSummary, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import type { CockpitApproval, CockpitConnectionState, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
-export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): CockpitViewModel {
+export type CockpitViewModelOptions = {
+  source?: CockpitSessionSource;
+  connectionState?: CockpitConnectionState;
+  reconnectAttempts?: number;
+  stale?: boolean;
+  message?: string;
+};
+
+export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, options: CockpitViewModelOptions = {}): CockpitViewModel {
   const approvals = buildApprovals(state);
   const currentApproval = approvals.find((approval) => approval.status === "waiting");
   const status = currentApproval ? "waiting_approval" : inferWorkflowStage(state);
   const routes = buildRoutes(state);
   const main = buildMainView(state, currentApproval);
+  const sessionMeta = buildSessionMeta(state, options);
   return {
     version: "1",
     sessionId: state?.sessionId,
     goal: state?.goal ?? "",
     workspace: workspaceLabel(cwd),
     accessMode: state?.access?.mode ?? "local",
+    sessionMeta,
     status,
     statusText: statusText(status),
     tasks: [
@@ -59,6 +69,41 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): Coc
   };
 }
 
+function buildSessionMeta(state: AgentGraphState | undefined, options: CockpitViewModelOptions): CockpitViewModel["sessionMeta"] {
+  const source = options.source ?? (state ? "saved" : "empty");
+  const fixtureMode = isFixtureSession(state);
+  const connectionState = options.connectionState ?? (source === "live" ? "connected" : source === "api_unavailable" ? "unavailable" : "idle");
+  return {
+    source,
+    sourceLabel: sourceLabel(source),
+    connectionState,
+    connectionLabel: connectionLabel(connectionState),
+    fixtureMode,
+    stale: options.stale ?? source === "saved",
+    reconnectAttempts: options.reconnectAttempts ?? 0,
+    message: options.message
+  };
+}
+
+function sourceLabel(source: CockpitSessionSource): string {
+  return {
+    empty: "New task",
+    saved: "Saved session",
+    live: "Live session",
+    api_unavailable: "API unavailable"
+  }[source];
+}
+
+function connectionLabel(state: CockpitConnectionState): string {
+  return {
+    idle: "Not connected",
+    connected: "Connected",
+    disconnected: "Disconnected",
+    reconnecting: "Reconnecting",
+    unavailable: "Unavailable"
+  }[state];
+}
+
 function buildWorkflow(state?: AgentGraphState, approval?: CockpitApproval): CockpitWorkflowStep[] {
   const events = new Set((state?.events ?? []).map((event) => event.type));
   const patchApplied = Boolean(state?.changedFiles.length);
@@ -85,6 +130,16 @@ function buildRoutes(state?: AgentGraphState): CockpitRouteSummary[] {
     model: assignment.model,
     reason: assignment.reason
   }));
+}
+
+function isFixtureSession(state?: AgentGraphState): boolean {
+  if (!state) return false;
+  return state.routing.assignments.some((assignment) => assignment.provider === "fixture")
+    || state.agents.some((agent) => agent.provider === "fixture" || agent.model.includes("fixture"))
+    || state.candidates.some((candidate) => candidate.candidateId.includes("fixture") || candidate.summary.toLowerCase().includes("fixture"))
+    || state.repairCandidates.some((candidate) => candidate.candidateId.includes("fixture") || candidate.summary.toLowerCase().includes("fixture"))
+    || state.finalSummary?.evidence.some((item) => item.toLowerCase().includes("fixture")) === true
+    || state.events.some((event) => event.type.includes("fixture"));
 }
 
 function buildApprovals(state?: AgentGraphState): CockpitApproval[] {

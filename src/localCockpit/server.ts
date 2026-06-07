@@ -143,7 +143,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     const viewModelMatch = /^\/api\/sessions\/([^/]+)\/view-model$/.exec(url.pathname);
     if (request.method === "GET" && viewModelMatch) {
       const session = viewModelMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(viewModelMatch[1]));
-      return sendJson(response, 200, buildCockpitViewModel(cwd, session.state));
+      return sendJson(response, 200, buildCockpitViewModel(cwd, session.state, { source: "saved" }));
     }
     const eventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (request.method === "GET" && eventsMatch) {
@@ -215,7 +215,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         status: "applied",
         intent,
         message: result.message,
-        viewModel: buildCockpitViewModel(cwd, result.state)
+        viewModel: buildCockpitViewModel(cwd, result.state, { source: "saved" })
       });
     }
     if (request.method === "POST" && url.pathname === "/api/mcp/register") {
@@ -234,7 +234,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
 }
 
 function validateApprovalIntent(cwd: string, state: AgentGraphState, intent: CockpitApprovalIntent): void {
-  const viewModel = buildCockpitViewModel(cwd, state);
+  const viewModel = buildCockpitViewModel(cwd, state, { source: "saved" });
   const active = viewModel.currentApproval;
   const approvalActions = new Set<CockpitApprovalIntent["action"]>(["approve_patch", "reject_patch", "approve_shell", "reject_shell"]);
   if (!approvalActions.has(intent.action)) {
@@ -581,12 +581,12 @@ function sendLiveEvents(cwd: string, response: ServerResponse, sessionId: string
   };
   write("ready", { sessionId });
   const snapshot = cockpitEventBus.getSnapshot(sessionId);
-  if (snapshot) write("snapshot", { snapshot, viewModel: buildCockpitViewModel(cwd, snapshot.state) });
+  if (snapshot) write("snapshot", { snapshot, viewModel: buildCockpitViewModel(cwd, snapshot.state, { source: "live", connectionState: "connected", stale: false }) });
   const unsubscribe = cockpitEventBus.subscribe(sessionId, (message) => {
     if (typeof message === "object" && message && "kind" in message) {
       const kind = String((message as { kind: string }).kind);
       const snapshotMessage = kind === "snapshot" ? message as unknown as { snapshot: { state: AgentGraphState } } : undefined;
-      write(kind, snapshotMessage ? { ...message, viewModel: buildCockpitViewModel(cwd, snapshotMessage.snapshot.state) } : message);
+      write(kind, snapshotMessage ? { ...message, viewModel: buildCockpitViewModel(cwd, snapshotMessage.snapshot.state, { source: "live", connectionState: "connected", stale: false }) } : message);
     }
   });
   response.on("close", unsubscribe);

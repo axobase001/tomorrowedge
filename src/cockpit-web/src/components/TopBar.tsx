@@ -15,6 +15,14 @@ export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: Cockp
         </div>
       </div>
       <div className="te-topbar-status">
+        <span className="te-chip" title={viewModel.sessionMeta.message ?? viewModel.sessionMeta.connectionLabel}>
+          {viewModel.sessionMeta.sourceLabel}
+        </span>
+        <span className={viewModel.sessionMeta.connectionState === "connected" ? "te-chip te-chip-green" : viewModel.sessionMeta.connectionState === "unavailable" || viewModel.sessionMeta.connectionState === "disconnected" ? "te-chip te-chip-red" : "te-chip"}>
+          {viewModel.sessionMeta.connectionLabel}
+        </span>
+        {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">Fixture</span> : null}
+        {viewModel.sessionMeta.stale ? <span className="te-chip">Snapshot</span> : null}
         <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? "FULL AUTONOMY" : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
         <button type="button" disabled={busy} onClick={onRun}>Run</button>

@@ -71,6 +71,20 @@ export type CockpitTelemetry = {
   fallbackCount: number;
 };
 
+export type CockpitSessionSource = "empty" | "saved" | "live" | "api_unavailable";
+export type CockpitConnectionState = "idle" | "connected" | "disconnected" | "reconnecting" | "unavailable";
+
+export type CockpitSessionMeta = {
+  source: CockpitSessionSource;
+  sourceLabel: string;
+  connectionState: CockpitConnectionState;
+  connectionLabel: string;
+  fixtureMode: boolean;
+  stale: boolean;
+  reconnectAttempts: number;
+  message?: string;
+};
+
 export type CockpitApproval = {
   id: string;
   kind: "patch" | "shell" | "repair" | "review";
@@ -100,6 +114,7 @@ export type CockpitViewModel = {
   goal: string;
   workspace: string;
   accessMode: AccessMode | "fixture" | "local";
+  sessionMeta: CockpitSessionMeta;
   status: CockpitWorkflowStage;
   statusText: string;
   tasks: CockpitTaskSummary[];

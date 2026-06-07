@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.6`。
+当前版本：`1.1.7`。
 
+- `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
 - `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开 nonce URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
 
 - `1.1.5` 是 GitHub issue 队列加固版：合并 local cockpit API 安全校验、React GUI client 接入、desktop launcher 生命周期测试、package zip/pack smoke、README promise map，并补上 CLI contract 测试与 benchmark demo 警告。
@@ -412,7 +413,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.6`.
+Current version: `1.1.7`.
+
+`1.1.7` clears the GUI session-source issue cluster. The shared ViewModel now
+distinguishes live sessions, saved snapshots, fixture demos, and API-unavailable
+states, and the GUI top bar shows connection, fixture, and stale snapshot badges.
 
 `1.1.6` adds the first real GUI cockpit E2E smoke. CI starts the compiled
 `tedge client --no-open --port 0` entrypoint, opens the nonce URL with

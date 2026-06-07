@@ -46,6 +46,15 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("target: core");
     expect(html).toContain("data-testid=\"composer-input\"");
   });
+
+  it("renders shared session source and fixture metadata", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("Saved session");
+    expect(html).toContain("Not connected");
+    expect(html).toContain("Fixture");
+    expect(html).toContain("Snapshot");
+  });
 });
 
 function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string }> = {}): string {
@@ -77,6 +86,15 @@ function sampleViewModel(): CockpitViewModel {
     goal: "test goal",
     workspace: "tomorrowedge",
     accessMode: "partial",
+    sessionMeta: {
+      source: "saved",
+      sourceLabel: "Saved session",
+      connectionState: "idle",
+      connectionLabel: "Not connected",
+      fixtureMode: true,
+      stale: true,
+      reconnectAttempts: 0
+    },
     status: "waiting_approval",
     statusText: "Waiting approval",
     tasks: [{ id: "session_test", title: "test goal", status: "waiting", updatedAt: "2026-06-07T00:00:00.000Z", reminder: "approval", selected: true }],
