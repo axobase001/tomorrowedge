@@ -24,7 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.4`。
+当前版本：`1.1.5`。
+
+- `1.1.5` 是 GitHub issue 队列加固版：合并 local cockpit API 安全校验、React GUI client 接入、desktop launcher 生命周期测试、package zip/pack smoke、README promise map，并补上 CLI contract 测试与 benchmark demo 警告。
 
 - `1.1.4` 修正 GUI/desktop 品牌标识：客户端顶部栏、favicon 和 web manifest 现在使用 TomorrowEdge 几何 mark，不再退回浏览器默认图标。
 
@@ -408,7 +410,12 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.4`.
+Current version: `1.1.5`.
+
+`1.1.5` is a GitHub issue-queue hardening release: local cockpit API safety
+checks, React GUI client wiring, desktop launcher lifecycle tests, package
+zip/pack smoke coverage, README promise mapping, CLI contract tests, and a
+clear benchmark demo warning.
 
 `1.1.4` fixes the GUI/desktop branding mark. The client top bar, favicon, and
 web manifest now use the TomorrowEdge geometric mark instead of falling back to

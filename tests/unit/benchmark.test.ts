@@ -14,6 +14,8 @@ describe("quality-cost-trace benchmark", () => {
       expect(result.winner).toBe("tomorrowedge");
       expect(result.strategies).toHaveLength(3);
       expect(report).toContain("Quality-Cost-Trace Benchmark");
+      expect(report).toContain("WARNING: This is a deterministic product demo");
+      expect(report).toContain("no real provider calls are made");
       expect(report).toContain("not a live provider leaderboard claim");
       expect(report).toContain("TomorrowEdge heterogeneous cockpit");
     } finally {

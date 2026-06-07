@@ -7,6 +7,34 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-06-07
+
+1.1.5 is a GitHub issue-queue hardening release for the GUI client, local
+cockpit API, packaging, desktop launcher, and CLI contract surface.
+
+### Added
+
+- React cockpit client wiring for sessions, ViewModel loading, run submission,
+  live SSE updates, approval actions, and drawer state.
+- Local cockpit serving for built `dist/cockpit-web` assets, with embedded HTML
+  fallback when the build is unavailable.
+- CLI contract coverage for `tedge mcp`, `tedge doctor --json`, invalid access
+  mode errors, and common command help.
+- README promise map documentation and docs-status checks.
+- Desktop launcher lifecycle tests for fallback, cleanup, port fallback, and
+  Electron child shutdown behavior.
+
+### Fixed
+
+- Browser approval API now rejects stale or mismatched approval IDs before
+  applying patches or running shell commands.
+- Artifact routes are restricted to recorded `artifacts/` refs.
+- Live cockpit failure snapshots preserve accumulated events instead of
+  replacing them with an empty state.
+- Package zip generation no longer depends on a system `zip` binary and checks
+  portable cockpit-web asset paths.
+- `tedge benchmark` output now starts with a clear deterministic-demo warning.
+
 ## [1.1.4] - 2026-06-07
 
 1.1.4 is a GUI/desktop branding hotfix.

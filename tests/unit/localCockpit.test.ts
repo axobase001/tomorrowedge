@@ -6,7 +6,7 @@ import { parseServePort } from "../../src/cli/commands/serve.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
-import { startLocalCockpitServer } from "../../src/localCockpit/server.js";
+import { markLiveRunFailed, startLocalCockpitServer } from "../../src/localCockpit/server.js";
 
 describe("local cockpit server", () => {
   it("accepts port 0 in CLI port parsing for OS-assigned ports", () => {
@@ -98,6 +98,23 @@ describe("local cockpit server", () => {
       expect(vm.currentApproval?.kind).toBe("patch");
     } finally {
       await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves accumulated live events when a run fails", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-failed-live-"));
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+      const failed = markLiveRunFailed({ ...state, finalSummary: undefined }, "provider exploded");
+
+      expect(failed.events.length).toBe(state.events.length);
+      expect(failed.candidates.length).toBe(state.candidates.length);
+      expect(failed.runResults.length).toBe(state.runResults.length);
+      expect(failed.finalSummary?.result).toBe("failed");
+      expect(failed.finalSummary?.risksRemaining).toContain("provider exploded");
+      expect(failed.finalSummary?.evidence[0]).toContain("event(s) recorded");
+    } finally {
       await rm(cwd, { recursive: true, force: true });
     }
   });

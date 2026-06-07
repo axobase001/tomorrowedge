@@ -185,31 +185,19 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           await saveSession(cwd, state);
           cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
         })
-        .catch((error) => {
+        .catch(async (error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          const failedState = markLiveRunFailed(liveState, message);
+          try {
+            await saveSession(cwd, failedState);
+          } catch {
+            // The live cockpit should still expose the in-memory failure snapshot.
+          }
           cockpitEventBus.setSnapshot({
             sessionId,
-            state: {
-              sessionId,
-              goal,
-              routing: { mode: config.routing.mode, privacyLocked: false, assignments: [], fallbacks: [] },
-              access: { mode: options.accessMode ?? "partial", cloudAllowed: true, patchAllowed: false, shellAllowed: false, repairAllowed: false, patchApproved: false, shellApproved: false, repairApproved: false },
-              events: [],
-              eventArtifacts: [],
-              providerViews: [],
-              evidencePackets: [],
-              agents: [],
-              candidates: [],
-              repairCandidates: [],
-              debateRounds: [],
-              modelNotes: [],
-              usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-              budgetStatuses: [],
-              changedFiles: [],
-              runResults: [],
-              approvals: { patchApproved: false, shellApproved: false, repairApproved: false }
-            },
+            state: failedState,
             done: true,
-            error: error instanceof Error ? error.message : String(error)
+            error: message
           });
         });
       return sendJson(response, 202, { sessionId, status: "started" });
@@ -297,6 +285,21 @@ function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeCo
       patchApproved: access.patchApproved,
       shellApproved: access.shellApproved,
       repairApproved: access.repairApproved
+    }
+  };
+}
+
+export function markLiveRunFailed(state: AgentGraphState, error: string): AgentGraphState {
+  return {
+    ...state,
+    finalSummary: {
+      task: state.goal,
+      result: "failed",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: state.events.length ? [`${state.events.length} event(s) recorded before workflow failure`] : [],
+      risksRemaining: [error],
+      suggestedCommitMessage: `chore: investigate ${state.changedFiles[0] ?? "workflow"} failure`
     }
   };
 }

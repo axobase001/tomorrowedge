@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.1.4 README product promises. Use this
+Authoritative map for TomorrowEdge 1.1.5 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -22,17 +22,17 @@ an implementation owner plus either a validation command or a tracking issue.
 
 | Promise id | README promise | Implementation owner | Current validation | Tracking |
 | --- | --- | --- | --- | --- |
-| desktop-entrypoint | `tedge desktop` opens the same local cockpit in an app window or browser fallback. | `src/cli/commands/desktop.ts`, `desktop/electron-main.cjs`, `src/localCockpit/server.ts` | CLI smoke covers command discovery; launcher behavior needs focused unit tests. | #155, #156 |
-| desktop-lifecycle | Closing an Electron desktop window stops the local cockpit server. | `src/cli/commands/desktop.ts`, `desktop/electron-main.cjs` | No focused automated coverage yet. | #157 |
-| desktop-port-fallback | Desktop mode falls forward when the requested port is occupied. | `src/cli/commands/desktop.ts`, `src/localCockpit/server.ts` | `tests/unit/localCockpit.test.ts` covers the server; desktop command output/launch URL need coverage. | #158 |
+| desktop-entrypoint | `tedge desktop` opens the same local cockpit in an app window or browser fallback. | `src/cli/commands/desktop.ts`, `desktop/electron-main.cjs`, `src/localCockpit/server.ts` | `tests/unit/desktopCommand.test.ts`, `npm run smoke:cli` | #155, #156 |
+| desktop-lifecycle | Closing an Electron desktop window stops the local cockpit server. | `src/cli/commands/desktop.ts`, `desktop/electron-main.cjs` | `tests/unit/desktopCommand.test.ts` | #157 |
+| desktop-port-fallback | Desktop mode falls forward when the requested port is occupied. | `src/cli/commands/desktop.ts`, `src/localCockpit/server.ts` | `tests/unit/localCockpit.test.ts`, `tests/unit/desktopCommand.test.ts` | #158 |
 
 ## Package And Release
 
 | Promise id | README promise | Implementation owner | Current validation | Tracking |
 | --- | --- | --- | --- | --- |
-| react-primary-client | Packaged `tedge client` should serve the React cockpit build when available and fallback only when missing. | `src/localCockpit/server.ts`, `src/cockpit-web`, `package.json` | `npm run web:build`; package install smoke still pending. | #140, #141, #159 |
-| package-assets | The npm package should include `dist/cockpit-web/index.html` and built assets. | `package.json`, `src/cockpit-web/vite.config.ts`, release scripts | `npm pack --dry-run` is currently manual output unless a smoke script parses it. | #160 |
-| zip-assets | The zip package should include the same cockpit build with portable archive paths. | `scripts/package-zip.ts`, `package.json` | `tests/unit/releaseScripts.test.ts` covers zip mechanics; cockpit asset assertions still pending. | #161 |
+| react-primary-client | Packaged `tedge client` should serve the React cockpit build when available and fallback only when missing. | `src/localCockpit/server.ts`, `src/cockpit-web`, `package.json` | `tests/unit/cockpitWeb.test.ts`, `tests/unit/localCockpit.test.ts`, `npm run web:build` | #140, #141, #159 |
+| package-assets | The npm package should include `dist/cockpit-web/index.html` and built assets. | `package.json`, `src/cockpit-web/vite.config.ts`, release scripts | `scripts/package-smoke.ts`, `tests/unit/releaseScripts.test.ts` | #160 |
+| zip-assets | The zip package should include the same cockpit build with portable archive paths. | `scripts/package-zip.ts`, `package.json` | `tests/unit/releaseScripts.test.ts` | #161 |
 
 ## Editing Rule
 

@@ -25,6 +25,8 @@ export type QualityCostTraceBenchmark = {
   reportPath: string;
 };
 
+export const benchmarkDemoWarning = "WARNING: This is a deterministic product demo; no real provider calls are made.";
+
 export async function runQualityCostTraceBenchmark(cwd: string, options: { format?: "json" | "markdown" } = {}): Promise<QualityCostTraceBenchmark> {
   const id = makeId("benchmark");
   const createdAt = new Date().toISOString();
@@ -70,7 +72,7 @@ export async function runQualityCostTraceBenchmark(cwd: string, options: { forma
     id,
     createdAt,
     fixture: "offline quality-cost-trace demo",
-    caveat: "Deterministic no-key product demo. It is not a live provider leaderboard claim.",
+    caveat: `${benchmarkDemoWarning} It is not a live provider leaderboard claim.`,
     strategies,
     winner: "tomorrowedge",
     reportPath: ""
@@ -86,11 +88,11 @@ export async function runQualityCostTraceBenchmark(cwd: string, options: { forma
 export function renderBenchmarkMarkdown(result: QualityCostTraceBenchmark): string {
   return `# Quality-Cost-Trace Benchmark ${result.id}
 
+> ${result.caveat}
+
 Created: ${result.createdAt}
 
 Fixture: ${result.fixture}
-
-${result.caveat}
 
 | Strategy | Tests | Hidden | Cost | Time | Repairs | Strong Calls | Trace |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
