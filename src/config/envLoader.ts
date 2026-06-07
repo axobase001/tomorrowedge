@@ -2,9 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export function loadLocalEnv(cwd: string): void {
-  const envPath = path.join(cwd, ".env");
-  if (!existsSync(envPath)) return;
+  for (const envPath of [path.join(cwd, ".env"), path.join(cwd, ".tomorrowedge", "local.env")]) {
+    loadEnvFile(envPath);
+  }
+}
 
+function loadEnvFile(envPath: string): void {
+  if (!existsSync(envPath)) return;
   const content = readFileSync(envPath, "utf8");
   for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();

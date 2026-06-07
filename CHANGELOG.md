@@ -7,6 +7,30 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-08
+
+1.2.0 turns the GUI client into a friendlier first-run cockpit instead of a
+configuration maze.
+
+### Added
+
+- First-run GUI setup wizard for selecting a provider, entering at least one
+  model id, and configuring either an API-key environment variable or a local
+  `.tomorrowedge/local.env` key.
+- Local setup API endpoints for setup status, provider configuration, and
+  provider connection checks.
+- Access-mode dropdown beside the natural-language composer so operators can
+  switch `restricted`, `partial`, and `full` before sending a task.
+- Setup tests, React rendering coverage, and cockpit E2E handling for the
+  first-run fixture-demo path.
+
+### Changed
+
+- OpenRouter is recommended as the easiest onboarding provider, but cheap-first
+  and strong-review routing remain optional rather than forced.
+- GUI runs now use the composer-selected access mode instead of always starting
+  in partial mode.
+
 ## [1.1.10] - 2026-06-07
 
 1.1.10 clears the repeated GUI theming and responsiveness issue batch.

@@ -14,10 +14,72 @@ export type CockpitApiOptions = {
   apiBase?: string;
 };
 
+export type CockpitProviderReadiness = {
+  id: string;
+  enabled: boolean;
+  model: string;
+  baseUrl: string;
+  apiKeyEnv?: string;
+  keyConfigured: boolean;
+  keySource: "env" | "local_env" | "not_required" | "missing";
+  authRequired: boolean;
+};
+
+export type CockpitSetupStatus = {
+  needsSetup: boolean;
+  recommendedProvider: string;
+  configPath: string;
+  providers: CockpitProviderReadiness[];
+  selectedProvider?: string;
+  selectedModel?: string;
+};
+
+export type CockpitSetupRequest = {
+  provider: string;
+  model: string;
+  apiKeyEnv?: string;
+  apiKey?: string;
+  bindRoles?: boolean;
+};
+
+export type CockpitProviderConnectionResult = {
+  id: string;
+  status: "ok" | "skipped" | "missing_key" | "failed";
+  httpStatus?: number;
+  url?: string;
+  detail: string;
+};
+
 export async function listCockpitSessions(options: CockpitApiOptions): Promise<CockpitSessionSummary[]> {
   const response = await fetch(apiUrl("/api/sessions", options), { headers: apiHeaders(options) });
   if (!response.ok) throw new Error(await response.text());
   return response.json() as Promise<CockpitSessionSummary[]>;
+}
+
+export async function loadCockpitSetupStatus(options: CockpitApiOptions): Promise<CockpitSetupStatus> {
+  const response = await fetch(apiUrl("/api/setup/status", options), { headers: apiHeaders(options) });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSetupStatus>;
+}
+
+export async function configureCockpitSetup(request: CockpitSetupRequest, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
+  const response = await fetch(apiUrl("/api/setup/configure", options), {
+    method: "POST",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSetupStatus>;
+}
+
+export async function testCockpitSetupProvider(provider: string, options: CockpitApiOptions): Promise<CockpitProviderConnectionResult> {
+  const response = await fetch(apiUrl("/api/setup/test", options), {
+    method: "POST",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify({ provider })
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitProviderConnectionResult>;
 }
 
 export async function loadCockpitViewModel(sessionId: string, options: CockpitApiOptions): Promise<CockpitViewModel> {

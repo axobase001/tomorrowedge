@@ -23,6 +23,7 @@ import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
+import { configureCockpitProvider, getCockpitSetupStatus, testCockpitProvider } from "./setup.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -134,6 +135,20 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         goal: session.state.goal,
         result: session.state.finalSummary?.result
       })));
+    }
+    if (request.method === "GET" && url.pathname === "/api/setup/status") {
+      return sendJson(response, 200, getCockpitSetupStatus(cwd));
+    }
+    if (request.method === "POST" && url.pathname === "/api/setup/configure") {
+      const body = await readJsonBody(request);
+      const status = await toSetupHttpResult(() => configureCockpitProvider(cwd, parseSetupRequest(body)));
+      return sendJson(response, 200, status);
+    }
+    if (request.method === "POST" && url.pathname === "/api/setup/test") {
+      const body = await readJsonBody(request);
+      const provider = typeof body.provider === "string" ? body.provider : "";
+      if (!provider.trim()) throw new HttpError(400, "provider_required", "provider is required.");
+      return sendJson(response, 200, await toSetupHttpResult(() => testCockpitProvider(cwd, provider)));
     }
     const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && sessionMatch) {
@@ -257,6 +272,16 @@ function validateApprovalIntent(cwd: string, state: AgentGraphState, intent: Coc
 class HttpError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
+  }
+}
+
+async function toSetupHttpResult<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new HttpError(400, "setup_error", message);
   }
 }
 
@@ -415,6 +440,20 @@ function parseExternalAgentRegistration(value: Record<string, unknown>): Externa
     trustLevel: value.trustLevel === "low" || value.trustLevel === "medium" || value.trustLevel === "high" || value.trustLevel === "owner" ? value.trustLevel : "medium",
     costProfile: typeof value.costProfile === "object" && value.costProfile !== null ? value.costProfile as Record<string, unknown> : undefined,
     notes: typeof value.notes === "string" ? value.notes : undefined
+  };
+}
+
+function parseSetupRequest(value: Record<string, unknown>) {
+  const provider = typeof value.provider === "string" ? value.provider.trim() : "";
+  const model = typeof value.model === "string" ? value.model.trim() : "";
+  if (!provider) throw new HttpError(400, "provider_required", "provider is required.");
+  if (!model) throw new HttpError(400, "model_required", "At least one model id is required.");
+  return {
+    provider,
+    model,
+    apiKeyEnv: typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined,
+    apiKey: typeof value.apiKey === "string" ? value.apiKey : undefined,
+    bindRoles: Boolean(value.bindRoles)
   };
 }
 

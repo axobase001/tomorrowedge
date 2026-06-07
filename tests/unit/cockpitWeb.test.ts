@@ -48,6 +48,17 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Workflow running...");
     expect(html).toContain("target: core");
     expect(html).toContain("data-testid=\"composer-input\"");
+    expect(html).toContain("data-testid=\"composer-mode\"");
+    expect(html).toContain("partial");
+  });
+
+  it("renders the first-run setup wizard with provider and model controls", () => {
+    const html = renderApp(sampleViewModel(), { setupVisible: true });
+
+    expect(html).toContain("First-run setup");
+    expect(html).toContain("data-testid=\"setup-provider\"");
+    expect(html).toContain("data-testid=\"setup-model\"");
+    expect(html).toContain("moonshotai/kimi-k2:free");
   });
 
   it("renders shared session source and fixture metadata", () => {
@@ -86,17 +97,39 @@ describe("cockpit web React surface", () => {
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean }> = {}): string {
   return renderToStaticMarkup(
     React.createElement(App, {
       viewModel,
       sessions: [{ sessionId: "session_test", createdAt: "2026-06-07T00:00:00.000Z", eventCount: 1, artifactCount: 0, goal: "test" }],
       selectedSession: "session_test",
       goal: overrides.goal ?? "",
+      accessMode: "partial",
       busy: false,
       statusMessage: overrides.statusMessage,
+      setupStatus: {
+        needsSetup: true,
+        recommendedProvider: "openrouter",
+        configPath: ".tomorrowedge/config.yaml",
+        providers: [{
+          id: "openrouter",
+          enabled: false,
+          model: "",
+          baseUrl: "https://openrouter.ai/api/v1",
+          apiKeyEnv: "OPENROUTER_API_KEY",
+          keyConfigured: false,
+          keySource: "missing",
+          authRequired: true
+        }]
+      },
+      setupVisible: overrides.setupVisible ?? false,
+      setupBusy: false,
       drawerOpen: true,
       onGoalChange: () => undefined,
+      onAccessModeChange: () => undefined,
+      onConfigureSetup: () => undefined,
+      onTestSetup: () => undefined,
+      onDismissSetup: () => undefined,
       onRun: () => undefined,
       onRefresh: () => undefined,
       onNewTask: () => undefined,

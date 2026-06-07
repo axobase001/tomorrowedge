@@ -60,6 +60,8 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
   await withTrace(context, page, "cockpit-main", async () => {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("[data-testid='cockpit-shell']", { timeout: 10_000 });
+    const setupDismiss = page.locator("[data-testid='setup-dismiss-demo']");
+    if (await setupDismiss.isVisible().catch(() => false)) await setupDismiss.click();
     await page.fill("[data-testid='composer-input']", "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.");
     await page.press("[data-testid='composer-input']", "Enter");
     await page.waitForSelector("[data-testid='approval-card']", { timeout: 20_000 });

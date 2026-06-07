@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.10`。
+当前版本：`1.2.0`。
 
+- `1.2.0` GUI client adds first-run provider/model setup, local env-key storage, provider connection testing, and a composer-side access-mode dropdown for `restricted` / `partial` / `full`.
 - `1.1.10` GUI CSS now supports OS dark mode in the React and fallback HTML cockpits, and the fallback HTML cockpit no longer hard-locks 1080px/980px minimum widths.
 - `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
 - `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
@@ -416,7 +417,7 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.10`.
+Current version: `1.2.0`.
 
 `1.1.10` adds OS dark-mode CSS support to both the React and fallback HTML
 cockpits, and removes the fallback cockpit's old 1080px/980px hard min-width
@@ -576,6 +577,12 @@ npm run client
 `tedge client`; use `tedge client --no-open` when you only want the local URL.
 `tedge client` serves the built React cockpit by default and falls back to the
 embedded HTML client only when `dist/cockpit-web` is unavailable.
+On first launch, the GUI setup wizard asks for a provider, one model id, and an
+API-key env var or optional local key. OpenRouter is the recommended starting
+point because one key can reach multiple model families, but role-routing
+presets such as cheap-first or strong-review are optional and can be tuned
+later. The natural-language composer includes a mode dropdown beside the input
+so each task can run as `restricted`, `partial`, or `full`.
 
 Optional desktop window:
 

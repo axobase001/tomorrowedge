@@ -2,7 +2,22 @@ import { createRoot } from "react-dom/client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App } from "./App.js";
 import type { CockpitApprovalIntent, CockpitViewModel } from "../../cockpit/contracts.js";
-import { applyCockpitApproval, cockpitLiveEventsUrl, listCockpitSessions, loadCockpitViewModel, startCockpitRun, type CockpitApiOptions, type CockpitSessionSummary } from "./api.js";
+import type { AccessMode } from "../../config/schema.js";
+import {
+  applyCockpitApproval,
+  cockpitLiveEventsUrl,
+  configureCockpitSetup,
+  listCockpitSessions,
+  loadCockpitSetupStatus,
+  loadCockpitViewModel,
+  startCockpitRun,
+  testCockpitSetupProvider,
+  type CockpitApiOptions,
+  type CockpitProviderConnectionResult,
+  type CockpitSessionSummary,
+  type CockpitSetupRequest,
+  type CockpitSetupStatus
+} from "./api.js";
 
 const emptyViewModel: CockpitViewModel = {
   version: "1",
@@ -53,11 +68,18 @@ function CockpitWebRoot() {
   const [sessions, setSessions] = useState<CockpitSessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState("latest");
   const [goal, setGoal] = useState("");
+  const [accessMode, setAccessMode] = useState<AccessMode>("partial");
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
+  const [setupStatus, setSetupStatus] = useState<CockpitSetupStatus | undefined>(undefined);
+  const [setupVisible, setSetupVisible] = useState(false);
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupMessage, setSetupMessage] = useState<string | undefined>(undefined);
+  const [setupConnectionResult, setSetupConnectionResult] = useState<CockpitProviderConnectionResult | undefined>(undefined);
   const liveSource = useRef<EventSource | undefined>(undefined);
   const selectedSessionRef = useRef("latest");
+  const setupDismissedRef = useRef(false);
 
   const updateSelectedSession = useCallback((sessionId: string) => {
     selectedSessionRef.current = sessionId;
@@ -72,14 +94,20 @@ function CockpitWebRoot() {
   const loadSession = useCallback(async (sessionId: string) => {
     const vm = await loadCockpitViewModel(sessionId, apiOptions);
     setViewModel(vm);
+    if (vm.accessMode === "restricted" || vm.accessMode === "partial" || vm.accessMode === "full") setAccessMode(vm.accessMode);
     updateSelectedSession(vm.sessionId ?? sessionId);
     setStatusMessage(undefined);
   }, [apiOptions, updateSelectedSession]);
 
   const refresh = useCallback(async () => {
     try {
-      const nextSessions = await listCockpitSessions(apiOptions);
+      const [nextSessions, nextSetupStatus] = await Promise.all([
+        listCockpitSessions(apiOptions),
+        loadCockpitSetupStatus(apiOptions)
+      ]);
       setSessions(nextSessions);
+      setSetupStatus(nextSetupStatus);
+      if (nextSetupStatus.needsSetup && !setupVisible && !setupDismissedRef.current) setSetupVisible(true);
       const nextSession = nextSessions.find((session) => session.sessionId === selectedSessionRef.current)?.sessionId ?? nextSessions[0]?.sessionId;
       if (nextSession) await loadSession(nextSession);
       else {
@@ -92,7 +120,7 @@ function CockpitWebRoot() {
       setViewModel(apiUnavailableViewModel(message));
       setStatusMessage(`Cockpit API unavailable: ${message}`);
     }
-  }, [apiOptions, loadSession, updateSelectedSession]);
+  }, [apiOptions, loadSession, setupVisible, updateSelectedSession]);
 
   useEffect(() => {
     void refresh();
@@ -159,7 +187,7 @@ function CockpitWebRoot() {
     try {
       const payload = await startCockpitRun({
         goal: goal.trim() || "fix failing test",
-        accessMode: "partial",
+        accessMode,
         fixtureMode: true,
         to: "core"
       }, apiOptions);
@@ -170,7 +198,46 @@ function CockpitWebRoot() {
       setBusy(false);
       setStatusMessage(`Run failed: ${errorMessage(error)}`);
     }
-  }, [apiOptions, busy, connectLive, goal, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, goal, updateSelectedSession]);
+
+  const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupMessage("Saving configuration...");
+    try {
+      const nextStatus = await configureCockpitSetup(request, apiOptions);
+      setSetupStatus(nextStatus);
+      setSetupVisible(nextStatus.needsSetup);
+      if (!nextStatus.needsSetup) setupDismissedRef.current = true;
+      setSetupMessage(nextStatus.needsSetup ? "Configuration saved, but the key is not visible in this process yet. Check the env var or paste the key once." : "Configuration saved. You can now run workflows.");
+      setStatusMessage("Provider configured.");
+    } catch (error) {
+      setSetupMessage(`Setup failed: ${errorMessage(error)}`);
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [apiOptions, setupBusy]);
+
+  const testSetup = useCallback(async (provider: string) => {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupMessage("Testing provider connection...");
+    try {
+      const result = await testCockpitSetupProvider(provider, apiOptions);
+      setSetupConnectionResult(result);
+      setSetupMessage(result.status === "ok" ? "Connection test passed." : "Connection test completed with a warning.");
+    } catch (error) {
+      setSetupMessage(`Connection test failed: ${errorMessage(error)}`);
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [apiOptions, setupBusy]);
+
+  const dismissSetup = useCallback(() => {
+    setupDismissedRef.current = true;
+    setSetupVisible(false);
+    setSetupMessage("Fixture demo mode is available. Configure a provider when you are ready.");
+  }, []);
 
   const approve = useCallback(async (action: CockpitApprovalIntent["action"]) => {
     if (!viewModel.sessionId || busy) return;
@@ -202,6 +269,7 @@ function CockpitWebRoot() {
     updateSelectedSession("latest");
     setViewModel(emptyViewModel);
     setGoal("");
+    setAccessMode("partial");
     setStatusMessage("Ready for a new task.");
   }, [closeLiveSource, updateSelectedSession]);
 
@@ -211,10 +279,20 @@ function CockpitWebRoot() {
       sessions={sessions}
       selectedSession={selectedSession}
       goal={goal}
+      accessMode={accessMode}
       busy={busy}
       statusMessage={statusMessage}
+      setupStatus={setupStatus}
+      setupVisible={setupVisible}
+      setupBusy={setupBusy}
+      setupMessage={setupMessage}
+      setupConnectionResult={setupConnectionResult}
       drawerOpen={drawerOpen}
       onGoalChange={setGoal}
+      onAccessModeChange={setAccessMode}
+      onConfigureSetup={configureSetup}
+      onTestSetup={testSetup}
+      onDismissSetup={dismissSetup}
       onRun={run}
       onRefresh={refresh}
       onNewTask={newTask}

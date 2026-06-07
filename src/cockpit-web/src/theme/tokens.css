@@ -43,7 +43,7 @@ body {
   font-family: var(--te-sans);
   letter-spacing: 0;
 }
-button, select, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button {
   min-height: 30px;
   border: 1px solid var(--te-border);
@@ -53,7 +53,7 @@ button {
   cursor: pointer;
 }
 button:disabled { cursor: wait; opacity: 0.6; }
-textarea, select {
+input, textarea, select {
   border: 1px solid var(--te-border);
   border-radius: 5px;
   background: #fff;
@@ -312,7 +312,7 @@ textarea, select {
 }
 .te-composer {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: 112px minmax(0, 1fr) 150px auto minmax(0, auto) auto;
   gap: 8px;
   align-items: center;
   padding: 8px 10px;
@@ -331,6 +331,20 @@ textarea, select {
   white-space: nowrap;
   color: var(--te-muted);
   font: 11px var(--te-mono);
+}
+.te-mode-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-mode-control select {
+  width: 100%;
+  min-height: 30px;
+  font: 12px var(--te-mono);
 }
 
 .te-chip {
@@ -380,6 +394,82 @@ textarea, select {
   background: #fff;
 }
 
+.te-setup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 18, 24, 0.42);
+}
+.te-setup-card {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--te-border);
+  border-radius: 7px;
+  background: var(--te-surface);
+  box-shadow: 0 24px 70px rgba(21, 34, 44, 0.24);
+  padding: 16px;
+}
+.te-setup-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.te-setup-card h2 {
+  margin: 8px 0 0;
+  font-size: 19px;
+}
+.te-setup-card p {
+  color: var(--te-muted);
+  line-height: 1.45;
+}
+.te-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.te-setup-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--te-muted);
+  font-size: 12px;
+}
+.te-setup-grid input,
+.te-setup-grid select {
+  min-height: 34px;
+  padding: 0 9px;
+  font: 12px var(--te-mono);
+}
+.te-setup-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  color: var(--te-muted);
+  font-size: 12px;
+}
+.te-setup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.te-quiet-button {
+  background: transparent;
+  color: var(--te-muted);
+}
+.te-setup-message {
+  margin: 12px 0 0;
+  font: 12px var(--te-mono);
+}
+
 @media (max-width: 900px) {
   .te-shell {
     grid-template-rows: auto auto auto auto;
@@ -417,7 +507,7 @@ textarea, select {
 }
 
 @media (prefers-color-scheme: dark) {
-  button, textarea, select,
+  button, input, textarea, select,
   .te-panel,
   .te-main,
   .te-approval,
@@ -439,5 +529,11 @@ textarea, select {
   .te-chip-amber,
   .te-chip-red {
     background: transparent;
+  }
+}
+
+@media (max-width: 680px) {
+  .te-setup-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

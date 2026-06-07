@@ -263,6 +263,65 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("exposes first-run setup status and configures a provider through env indirection", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-setup-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const before = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { needsSetup: boolean; recommendedProvider: string; providers: Array<{ id: string; keyConfigured: boolean }> };
+
+      expect(before.needsSetup).toBe(true);
+      expect(before.recommendedProvider).toBe("openrouter");
+      expect(before.providers.some((provider) => provider.id === "openrouter" && provider.keyConfigured === false)).toBe(true);
+
+      const response = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "openrouter",
+          model: "moonshotai/kimi-k2:free",
+          apiKeyEnv: "TEST_OPENROUTER_KEY",
+          apiKey: "test-openrouter-key-value",
+          bindRoles: true
+        })
+      });
+      const after = await response.json() as { needsSetup: boolean; selectedProvider?: string; selectedModel?: string; providers: Array<{ id: string; keyConfigured: boolean }> };
+      const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
+      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+
+      expect(response.status).toBe(200);
+      expect(after.needsSetup).toBe(false);
+      expect(after.selectedProvider).toBe("openrouter");
+      expect(after.selectedModel).toBe("moonshotai/kimi-k2:free");
+      expect(after.providers.find((provider) => provider.id === "openrouter")?.keyConfigured).toBe(true);
+      expect(configText).toContain("api_key_env: TEST_OPENROUTER_KEY");
+      expect(configText).not.toContain("test-openrouter-key-value");
+      expect(localEnv).toContain('TEST_OPENROUTER_KEY="test-openrouter-key-value"');
+    } finally {
+      delete process.env.TEST_OPENROUTER_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("requires a model during first-run provider setup", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-setup-model-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "openrouter", model: "" })
+      });
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("model_required");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects multibyte invalid cockpit tokens without throwing", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-token-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

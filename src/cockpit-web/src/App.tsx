@@ -1,10 +1,12 @@
 import type { CockpitApprovalIntent, CockpitViewModel } from "../../cockpit/contracts.js";
-import type { CockpitSessionSummary } from "./api.js";
+import type { AccessMode } from "../../config/schema.js";
+import type { CockpitProviderConnectionResult, CockpitSessionSummary, CockpitSetupRequest, CockpitSetupStatus } from "./api.js";
 import { TopBar } from "./components/TopBar.js";
 import { TaskListPanel } from "./components/TaskListPanel.js";
 import { WorkflowPanel } from "./components/WorkflowPanel.js";
 import { TelemetryPanel } from "./components/TelemetryPanel.js";
 import { ComposerPanel } from "./components/ComposerPanel.js";
+import { SetupWizard } from "./components/SetupWizard.js";
 import { BottomTraceSheet } from "./components/BottomTraceSheet.js";
 import { DetailDrawer } from "./components/DetailDrawer.js";
 import "./theme/tokens.css";
@@ -14,10 +16,20 @@ export type AppProps = {
   sessions: CockpitSessionSummary[];
   selectedSession: string;
   goal: string;
+  accessMode: AccessMode;
   busy: boolean;
   statusMessage?: string;
+  setupStatus?: CockpitSetupStatus;
+  setupVisible: boolean;
+  setupBusy: boolean;
+  setupMessage?: string;
+  setupConnectionResult?: CockpitProviderConnectionResult;
   drawerOpen: boolean;
   onGoalChange: (goal: string) => void;
+  onAccessModeChange: (mode: AccessMode) => void;
+  onConfigureSetup: (request: CockpitSetupRequest) => void;
+  onTestSetup: (provider: string) => void;
+  onDismissSetup: () => void;
   onRun: () => void;
   onRefresh: () => void;
   onNewTask: () => void;
@@ -32,10 +44,20 @@ export function App({
   sessions,
   selectedSession,
   goal,
+  accessMode,
   busy,
   statusMessage,
+  setupStatus,
+  setupVisible,
+  setupBusy,
+  setupMessage,
+  setupConnectionResult,
   drawerOpen,
   onGoalChange,
+  onAccessModeChange,
+  onConfigureSetup,
+  onTestSetup,
+  onDismissSetup,
   onRun,
   onRefresh,
   onNewTask,
@@ -53,8 +75,19 @@ export function App({
         <TelemetryPanel telemetry={viewModel.telemetry} />
       </section>
       <BottomTraceSheet trace={viewModel.trace} />
-      <ComposerPanel goal={goal} busy={busy} statusMessage={statusMessage} onGoalChange={onGoalChange} onSubmit={onRun} />
+      <ComposerPanel goal={goal} accessMode={accessMode} busy={busy} statusMessage={statusMessage} onGoalChange={onGoalChange} onAccessModeChange={onAccessModeChange} onSubmit={onRun} />
       <DetailDrawer viewModel={viewModel} open={drawerOpen} onClose={onCloseDrawer} />
+      {setupVisible ? (
+        <SetupWizard
+          setupStatus={setupStatus}
+          busy={setupBusy}
+          message={setupMessage}
+          connectionResult={setupConnectionResult}
+          onConfigure={onConfigureSetup}
+          onTest={onTestSetup}
+          onDismissDemo={onDismissSetup}
+        />
+      ) : null}
     </main>
   );
 }
