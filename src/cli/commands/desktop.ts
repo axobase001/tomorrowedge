@@ -13,24 +13,47 @@ type DesktopCommandOptions = {
   runtime?: string;
 };
 
+type DesktopLaunchResult = {
+  runtime: Exclude<DesktopRuntime, "auto"> | "browser";
+  child?: ChildProcess;
+  closeOnExit: boolean;
+};
+
+type DesktopCommandDependencies = {
+  startServer: typeof startLocalCockpitServer;
+  launchWindow: (runtime: DesktopRuntime, handle: LocalCockpitHandle) => Promise<DesktopLaunchResult>;
+  write: (message: string) => void;
+  bindShutdown: (handle: LocalCockpitHandle, child: ChildProcess | undefined, closeOnExit: boolean) => void;
+};
+
+type DesktopLaunchers = {
+  electron: (url: string) => ChildProcess;
+  appMode: (url: string) => ChildProcess;
+  browser: (url: string) => ChildProcess;
+};
+
 export async function desktopCommand(cwd: string, options: DesktopCommandOptions = {}): Promise<void> {
+  return desktopCommandWithDependencies(cwd, options, defaultDesktopCommandDependencies);
+}
+
+export async function desktopCommandWithDependencies(cwd: string, options: DesktopCommandOptions = {}, dependencies: DesktopCommandDependencies): Promise<void> {
   const runtime = parseDesktopRuntime(options.runtime);
   const port = parseServePort(options.port);
   const host = options.host ?? "127.0.0.1";
-  const handle = await startLocalCockpitServer(cwd, { port, host });
+  const handle = await dependencies.startServer(cwd, { port, host });
   if (!isLoopbackHost(host)) {
-    process.stdout.write("Warning: desktop mode is bound to a non-loopback host. Keep the nonce URL private.\n");
+    dependencies.write("Warning: desktop mode is bound to a non-loopback host. Keep the nonce URL private.\n");
   }
   if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
-    process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
+    dependencies.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
   }
 
   try {
-    const launched = await launchDesktopWindow(runtime, handle);
-    process.stdout.write(`TomorrowEdge desktop app: ${handle.openUrl}\n`);
-    process.stdout.write(`Runtime: ${launched.runtime}\n`);
-    process.stdout.write("Close the desktop window or press Ctrl+C to stop.\n");
-    bindShutdown(handle, launched.child, launched.closeOnExit);
+    const launched = await dependencies.launchWindow(runtime, handle);
+    dependencies.write(`TomorrowEdge desktop app: ${handle.openUrl}\n`);
+    dependencies.write(`Runtime: ${launched.runtime}\n`);
+    dependencies.write("Close the desktop window or press Ctrl+C to stop.\n");
+    dependencies.bindShutdown(handle, launched.child, launched.closeOnExit);
   } catch (error) {
     await handle.close();
     throw error;
@@ -43,17 +66,17 @@ function parseDesktopRuntime(value?: string): DesktopRuntime {
   throw new Error(`Invalid desktop runtime: ${value}. Use auto, app-mode, or electron.`);
 }
 
-async function launchDesktopWindow(runtime: DesktopRuntime, handle: LocalCockpitHandle): Promise<{ runtime: Exclude<DesktopRuntime, "auto"> | "browser"; child?: ChildProcess; closeOnExit: boolean }> {
-  if (runtime === "electron") return { runtime: "electron", child: launchElectron(handle.openUrl), closeOnExit: true };
-  if (runtime === "app-mode") return { runtime: "app-mode", child: launchAppMode(handle.openUrl), closeOnExit: false };
+export async function launchDesktopWindow(runtime: DesktopRuntime, handle: LocalCockpitHandle, launchers: DesktopLaunchers = defaultDesktopLaunchers): Promise<DesktopLaunchResult> {
+  if (runtime === "electron") return { runtime: "electron", child: launchers.electron(handle.openUrl), closeOnExit: true };
+  if (runtime === "app-mode") return { runtime: "app-mode", child: launchers.appMode(handle.openUrl), closeOnExit: false };
 
   try {
-    return { runtime: "electron", child: launchElectron(handle.openUrl), closeOnExit: true };
+    return { runtime: "electron", child: launchers.electron(handle.openUrl), closeOnExit: true };
   } catch {
     try {
-      return { runtime: "app-mode", child: launchAppMode(handle.openUrl), closeOnExit: false };
+      return { runtime: "app-mode", child: launchers.appMode(handle.openUrl), closeOnExit: false };
     } catch {
-      return { runtime: "browser", child: openDefaultBrowser(handle.openUrl), closeOnExit: false };
+      return { runtime: "browser", child: launchers.browser(handle.openUrl), closeOnExit: false };
     }
   }
 }
@@ -110,22 +133,50 @@ function findLinuxBrowserCommand(): string | undefined {
 }
 
 function openDefaultBrowser(url: string): ChildProcess {
-  const command = process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  return spawn(command, args, { detached: true, stdio: "ignore", windowsHide: true });
+  const launcher = findDefaultBrowserLauncher();
+  if (!launcher) throw new Error("No desktop browser launcher was found. Install Electron and run `tedge desktop --runtime electron`, install a Chromium-compatible browser for app-mode, or use `tedge client --no-open`.");
+  return spawn(launcher.command, [...launcher.args, url], { detached: true, stdio: "ignore", windowsHide: true });
 }
 
-function bindShutdown(handle: LocalCockpitHandle, child: ChildProcess | undefined, closeOnExit: boolean): void {
+export function bindDesktopShutdown(handle: LocalCockpitHandle, child: ChildProcess | undefined, closeOnExit: boolean, lifecycle = defaultLifecycle): void {
   const shutdown = () => {
-    void handle.close().finally(() => process.exit(0));
+    void handle.close().finally(() => lifecycle.exit(0));
   };
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
+  lifecycle.onceSignal("SIGINT", shutdown);
+  lifecycle.onceSignal("SIGTERM", shutdown);
   if (!closeOnExit) return;
   child?.once("exit", () => {
-    void handle.close().finally(() => process.exit(0));
+    void handle.close().finally(() => lifecycle.exit(0));
   });
 }
+
+function findDefaultBrowserLauncher(): { command: string; args: string[] } | undefined {
+  if (process.platform === "win32") {
+    return spawnSync("cmd", ["/c", "ver"], { stdio: "ignore" }).status === 0 ? { command: "cmd", args: ["/c", "start", ""] } : undefined;
+  }
+  if (process.platform === "darwin") {
+    return spawnSync("open", ["-h"], { stdio: "ignore" }).status === 0 ? { command: "open", args: [] } : undefined;
+  }
+  return spawnSync("xdg-open", ["--version"], { stdio: "ignore" }).status === 0 ? { command: "xdg-open", args: [] } : undefined;
+}
+
+const defaultDesktopLaunchers: DesktopLaunchers = {
+  electron: launchElectron,
+  appMode: launchAppMode,
+  browser: openDefaultBrowser
+};
+
+const defaultLifecycle = {
+  onceSignal: (signal: NodeJS.Signals, listener: () => void) => process.once(signal, listener),
+  exit: (code: number) => process.exit(code)
+};
+
+const defaultDesktopCommandDependencies: DesktopCommandDependencies = {
+  startServer: startLocalCockpitServer,
+  launchWindow: (runtime, handle) => launchDesktopWindow(runtime, handle),
+  write: (message) => process.stdout.write(message),
+  bindShutdown: (handle, child, closeOnExit) => bindDesktopShutdown(handle, child, closeOnExit)
+};
 
 function isLoopbackHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
