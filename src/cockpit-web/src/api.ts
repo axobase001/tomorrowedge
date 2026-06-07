@@ -121,3 +121,37 @@ function apiUrl(path: string, options: CockpitApiOptions): string {
 function apiHeaders(options: CockpitApiOptions, extra: Record<string, string> = {}): Record<string, string> {
   return options.nonce ? { ...extra, "x-tomorrowedge-token": options.nonce } : extra;
 }
+
+// ---------------------------------------------------------------------------
+// Secrets API
+// ---------------------------------------------------------------------------
+
+export type SecretEntry = {
+  provider: string;
+  configured: boolean;
+  maskedKey?: string;
+};
+
+export async function listSecrets(options: CockpitApiOptions): Promise<SecretEntry[]> {
+  const response = await fetch(apiUrl("/api/secrets", options), { headers: apiHeaders(options) });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<SecretEntry[]>;
+}
+
+export async function saveSecret(provider: string, apiKey: string, options: CockpitApiOptions): Promise<SecretEntry> {
+  const response = await fetch(apiUrl(`/api/secrets/${encodeURIComponent(provider)}`, options), {
+    method: "PUT",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify({ apiKey })
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<SecretEntry>;
+}
+
+export async function deleteSecret(provider: string, options: CockpitApiOptions): Promise<void> {
+  const response = await fetch(apiUrl(`/api/secrets/${encodeURIComponent(provider)}`, options), {
+    method: "DELETE",
+    headers: apiHeaders(options)
+  });
+  if (!response.ok) throw new Error(await response.text());
+}

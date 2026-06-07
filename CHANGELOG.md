@@ -7,6 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Added
+
+- **SecretManager** (`src/core/secretManager.ts`): AES-256-CBC encrypted API key
+  storage with scrypt key derivation. Supports keytar (OS keychain) as primary
+  backend with automatic fallback to encrypted file storage at
+  `~/.tomorrowedge/secrets.enc`.
+- **SecretPanel** GUI component: a 🔑 Keys button in the cockpit topbar opens
+  a management panel for adding, editing, deleting, and viewing masked API keys
+  across all supported providers (deepseek, openai, anthropic, openrouter,
+  gemini, kimi, mimo).
+- **Secrets API** (`GET/PUT/DELETE /api/secrets/*`): nonce-protected endpoints
+  for listing, saving, and deleting encrypted credentials from the GUI.
+- **Startup secret loading**: `envLoader.ts` now decrypts `secrets.enc` at
+  startup and injects API keys into `process.env`, enabling providers to use
+  encrypted credentials without code changes.
+
+### Fixed
+
+- `resolveCockpitWebRoot` now prioritises `dist/cockpit-web` over
+  `src/cockpit-web`, fixing a blank-page bug when `npm run client` is used
+  after `npm run web:build`.
+
 ## [1.2.0] - 2026-06-08
 
 1.2.0 turns the GUI client into a friendlier first-run cockpit instead of a

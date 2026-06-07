@@ -1,6 +1,12 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 
-export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: CockpitViewModel; busy: boolean; onRun: () => void; onRefresh: () => void }) {
+export function TopBar({ viewModel, busy, onRun, onRefresh, onOpenKeys }: {
+  viewModel: CockpitViewModel;
+  busy: boolean;
+  onRun: () => void;
+  onRefresh: () => void;
+  onOpenKeys: () => void;
+}) {
   return (
     <header className="te-topbar" data-testid="topbar">
       <div className="te-brand">
@@ -25,6 +31,7 @@ export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: Cockp
         {viewModel.sessionMeta.stale ? <span className="te-chip">Snapshot</span> : null}
         <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? "FULL AUTONOMY" : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
+        <button type="button" className="te-button-ghost" disabled={busy} onClick={onOpenKeys}>🔑 Keys</button>
         <button type="button" disabled={busy} onClick={onRun}>Run</button>
         <button type="button" disabled={busy} onClick={onRefresh}>Refresh</button>
       </div>

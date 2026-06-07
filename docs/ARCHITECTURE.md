@@ -11,9 +11,14 @@ TomorrowEdge is split into stable contracts:
 - `core/agents`: Vision, Planner, Explorer, Coder, Reviewer, Judge, Repairer, Summarizer
 - `core/capabilities`: capability stitching and structured handoffs
 - `core/patch`: diff preview, validation, apply, undo
+- `core/secretManager`: AES-256 encrypted API key storage with keytar/fallback, credential loading at startup, and secure retrieval for provider authentication
 - `safety`: ignore rules, file risk, secret scanning, privacy guard
 - `tui`: Ink panes for cockpit visibility
 - `cli`: `tedge` commands
+
+`config/envLoader` loads environment variables from `.env`, `.tomorrowedge/local.env`,
+and (since the secret manager integration) decrypts `~/.tomorrowedge/secrets.enc`
+at startup, injecting credentials into `process.env` for the provider layer.
 
 The default graph is offline and deterministic. Real model providers are optional and must be enabled explicitly.
 

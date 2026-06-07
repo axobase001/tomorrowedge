@@ -24,6 +24,7 @@ import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import { configureCockpitProvider, getCockpitSetupStatus, testCockpitProvider } from "./setup.js";
+import { deleteSecret, getSecret, listSecrets, saveSecret } from "../core/secretManager.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -150,6 +151,27 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       if (!provider.trim()) throw new HttpError(400, "provider_required", "provider is required.");
       return sendJson(response, 200, await toSetupHttpResult(() => testCockpitProvider(cwd, provider)));
     }
+    // ---------- Secrets API ----------
+    if (request.method === "GET" && url.pathname === "/api/secrets") {
+      const entries = await listSecrets();
+      return sendJson(response, 200, entries);
+    }
+    const secretMatch = /^\/api\/secrets\/([^/]+)$/.exec(url.pathname);
+    if (request.method === "PUT" && secretMatch) {
+      const provider = secretMatch[1];
+      const body = await readJsonBody(request);
+      const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+      if (!apiKey) throw new HttpError(400, "api_key_required", "apiKey is required.");
+      await saveSecret(provider as any, apiKey);
+      const masked = apiKey.length > 8 ? `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}` : `${apiKey.slice(0, 4)}****`;
+      return sendJson(response, 200, { provider, configured: true, maskedKey: masked });
+    }
+    if (request.method === "DELETE" && secretMatch) {
+      const provider = secretMatch[1];
+      await deleteSecret(provider as any);
+      return sendJson(response, 204, {});
+    }
+    // --------------------------------
     const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && sessionMatch) {
       const session = sessionMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(sessionMatch[1]));

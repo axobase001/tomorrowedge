@@ -1,12 +1,13 @@
 import type { CockpitApprovalIntent, CockpitViewModel } from "../../cockpit/contracts.js";
 import type { AccessMode } from "../../config/schema.js";
-import type { CockpitProviderConnectionResult, CockpitSessionSummary, CockpitSetupRequest, CockpitSetupStatus } from "./api.js";
+import type { CockpitProviderConnectionResult, CockpitSessionSummary, CockpitSetupRequest, CockpitSetupStatus, CockpitApiOptions } from "./api.js";
 import { TopBar } from "./components/TopBar.js";
 import { TaskListPanel } from "./components/TaskListPanel.js";
 import { WorkflowPanel } from "./components/WorkflowPanel.js";
 import { TelemetryPanel } from "./components/TelemetryPanel.js";
 import { ComposerPanel } from "./components/ComposerPanel.js";
 import { SetupWizard } from "./components/SetupWizard.js";
+import { SecretPanel } from "./components/SecretPanel.js";
 import { BottomTraceSheet } from "./components/BottomTraceSheet.js";
 import { DetailDrawer } from "./components/DetailDrawer.js";
 import "./theme/tokens.css";
@@ -18,6 +19,7 @@ export type AppProps = {
   goal: string;
   accessMode: AccessMode;
   busy: boolean;
+  apiOptions: CockpitApiOptions;
   statusMessage?: string;
   setupStatus?: CockpitSetupStatus;
   setupVisible: boolean;
@@ -25,6 +27,7 @@ export type AppProps = {
   setupMessage?: string;
   setupConnectionResult?: CockpitProviderConnectionResult;
   drawerOpen: boolean;
+  secretPanelOpen: boolean;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onConfigureSetup: (request: CockpitSetupRequest) => void;
@@ -37,6 +40,8 @@ export type AppProps = {
   onApproval: (action: CockpitApprovalIntent["action"]) => void;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
+  onOpenSecretPanel: () => void;
+  onCloseSecretPanel: () => void;
 };
 
 export function App({
@@ -46,6 +51,7 @@ export function App({
   goal,
   accessMode,
   busy,
+  apiOptions,
   statusMessage,
   setupStatus,
   setupVisible,
@@ -53,6 +59,7 @@ export function App({
   setupMessage,
   setupConnectionResult,
   drawerOpen,
+  secretPanelOpen,
   onGoalChange,
   onAccessModeChange,
   onConfigureSetup,
@@ -64,11 +71,13 @@ export function App({
   onSelectSession,
   onApproval,
   onOpenDrawer,
-  onCloseDrawer
+  onCloseDrawer,
+  onOpenSecretPanel,
+  onCloseSecretPanel
 }: AppProps) {
   return (
     <main className="te-shell" data-testid="cockpit-shell">
-      <TopBar viewModel={viewModel} busy={busy} onRun={onRun} onRefresh={onRefresh} />
+      <TopBar viewModel={viewModel} busy={busy} onRun={onRun} onRefresh={onRefresh} onOpenKeys={onOpenSecretPanel} />
       <section className="te-grid" data-testid="cockpit-grid">
         <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} onSelectSession={onSelectSession} onNewTask={onNewTask} />
         <WorkflowPanel viewModel={viewModel} busy={busy} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
@@ -87,6 +96,9 @@ export function App({
           onTest={onTestSetup}
           onDismissDemo={onDismissSetup}
         />
+      ) : null}
+      {secretPanelOpen ? (
+        <SecretPanel apiOptions={apiOptions} onClose={onCloseSecretPanel} />
       ) : null}
     </main>
   );

@@ -71,6 +71,7 @@ function CockpitWebRoot() {
   const [accessMode, setAccessMode] = useState<AccessMode>("partial");
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [secretPanelOpen, setSecretPanelOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
   const [setupStatus, setSetupStatus] = useState<CockpitSetupStatus | undefined>(undefined);
   const [setupVisible, setSetupVisible] = useState(false);
@@ -281,6 +282,7 @@ function CockpitWebRoot() {
       goal={goal}
       accessMode={accessMode}
       busy={busy}
+      apiOptions={apiOptions}
       statusMessage={statusMessage}
       setupStatus={setupStatus}
       setupVisible={setupVisible}
@@ -288,6 +290,7 @@ function CockpitWebRoot() {
       setupMessage={setupMessage}
       setupConnectionResult={setupConnectionResult}
       drawerOpen={drawerOpen}
+      secretPanelOpen={secretPanelOpen}
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
       onConfigureSetup={configureSetup}
@@ -300,6 +303,8 @@ function CockpitWebRoot() {
       onApproval={approve}
       onOpenDrawer={() => setDrawerOpen(true)}
       onCloseDrawer={() => setDrawerOpen(false)}
+      onOpenSecretPanel={() => setSecretPanelOpen(true)}
+      onCloseSecretPanel={() => setSecretPanelOpen(false)}
     />
   );
 }

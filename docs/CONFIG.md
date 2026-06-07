@@ -108,6 +108,44 @@ Recommended experiment pattern:
   rate-limit isolation, and debugging.
 - In `privacy` or `local` routing mode, cloud role overrides are ignored and routed to local-safe providers.
 
+## Encrypted key storage
+
+TomorrowEdge provides an encrypted API key manager accessible from the GUI
+cockpit. Click the 🔑 Keys button in the topbar to open the management panel.
+
+### How it works
+
+Keys are encrypted with AES-256-CBC using a key derived via scrypt (N=16384,
+r=8, p=1). The encrypted file is stored at:
+
+```text
+~/.tomorrowedge/secrets.enc
+```
+
+Format: `iv:encryptedData` (both hex-encoded).
+
+### Priority
+
+When TomorrowEdge starts, keys are loaded in this order:
+
+1. Shell environment variables (highest priority — never overwritten)
+2. `.env` and `.tomorrowedge/local.env` files
+3. Encrypted `secrets.enc` (lowest — only used when no other source is set)
+
+This means you can override encrypted keys with shell env vars for one-off
+sessions, while keeping the default keys securely encrypted on disk.
+
+### Supported providers
+
+The GUI panel supports all API-key-based providers: DeepSeek, OpenAI, Anthropic,
+OpenRouter, Gemini, Kimi, and Mimo. Ollama (local) does not require an API key.
+
+### Fallback
+
+If the OS keychain (keytar) is available, keys are stored there first with
+encrypted file as fallback. If keytar is unavailable (e.g. Windows without the
+native module installed), the encrypted file is used directly.
+
 ## External MCP agents
 
 TomorrowEdge can bind external coding agents such as Claude Code or Codex to
