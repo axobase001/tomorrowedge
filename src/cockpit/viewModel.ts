@@ -5,9 +5,9 @@ import type { CockpitApproval, CockpitRouteSummary, CockpitTelemetry, CockpitVie
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
 export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): CockpitViewModel {
-  const status = inferWorkflowStage(state);
   const approvals = buildApprovals(state);
   const currentApproval = approvals.find((approval) => approval.status === "waiting");
+  const status = currentApproval ? "waiting_approval" : inferWorkflowStage(state);
   const routes = buildRoutes(state);
   const main = buildMainView(state, currentApproval);
   return {
@@ -61,14 +61,15 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): Coc
 
 function buildWorkflow(state?: AgentGraphState, approval?: CockpitApproval): CockpitWorkflowStep[] {
   const events = new Set((state?.events ?? []).map((event) => event.type));
-  const failedShell = state?.runResults.some((result) => !result.success) ?? false;
+  const patchApplied = Boolean(state?.changedFiles.length);
+  const failedShell = patchApplied && (state?.runResults.some((result) => !result.success) ?? false);
   const finalDone = Boolean(state?.finalSummary);
   return [
     step("plan", "Plan", Boolean(state?.plan), !state?.plan && Boolean(state), false, state?.plan?.steps[0]?.title ?? "Waiting for plan"),
     step("route", "Route", Boolean(state?.routing?.assignments.length), false, false, `${state?.routing?.mode ?? "balanced"} routing`),
     step("edit", "Edit", Boolean(state?.candidates.length || state?.repairCandidates.length), false, false, `${state?.candidates.length ?? 0} candidate(s)`),
     step("review", "Review", Boolean(state?.review), false, false, state?.review?.overallRecommendation ?? "Waiting for review"),
-    step("test", "Test", Boolean(state?.runResults.length), false, failedShell, state?.runResults.at(-1)?.command ?? "Waiting for tests"),
+    step("test", "Test", patchApplied && Boolean(state?.runResults.length), false, failedShell, patchApplied ? state?.runResults.at(-1)?.command ?? "Waiting for tests" : "Waiting for tests"),
     step("judge", "Judge", Boolean(state?.judge), false, false, state?.judge?.reason ?? "Waiting for judgment"),
     step("approve", "Approve", events.has("patch_apply") || finalDone, Boolean(approval), false, approval?.title ?? state?.finalSummary?.result ?? "Waiting for approval")
   ];
@@ -88,11 +89,11 @@ function buildRoutes(state?: AgentGraphState): CockpitRouteSummary[] {
 
 function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   if (!state) return [];
-  if (state.finalSummary && state.finalSummary.result !== "partially_completed") return [];
+  const waiting = state.agents.some((agent) => agent.status === "waiting_for_user");
+  if (state.finalSummary && state.finalSummary.result !== "partially_completed" && !waiting) return [];
   const approvals: CockpitApproval[] = [];
   const selected = selectedCandidate(state);
   const latestRun = state.runResults.at(-1);
-  const waiting = state.agents.some((agent) => agent.status === "waiting_for_user");
   if (selected && (!state.changedFiles.length || waiting)) {
     approvals.push({
       id: `patch:${selected.candidateId}`,
@@ -102,7 +103,7 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
       candidateId: selected.candidateId,
       filesChanged: selected.filesChanged,
       riskLevel: selected.estimatedRisk,
-      testStatus: latestRun ? latestRun.success ? "passed" : "failed" : "not_run",
+      testStatus: state.changedFiles.length && latestRun ? latestRun.success ? "passed" : "failed" : "not_run",
       summary: selected.summary,
       diff: selected.unifiedDiff
     });

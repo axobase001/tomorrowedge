@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { inflateRawSync } from "node:zlib";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
+import { assertCockpitWebZipEntries, createZipArchive } from "../../scripts/package-zip.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -62,4 +64,58 @@ describe("release verification scripts", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("creates zip archives without requiring the system zip command", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-package-zip-"));
+    try {
+      const readme = path.join(cwd, "README.md");
+      const docsDir = path.join(cwd, "docs");
+      const output = path.join(cwd, "tomorrowedge.zip");
+      await mkdir(docsDir);
+      await writeFile(readme, "hello from tomorrowedge\n", "utf8");
+      await writeFile(path.join(docsDir, "guide.md"), "guide body\n", "utf8");
+
+      await createZipArchive(output, [
+        { entryName: "tomorrowedge/README.md", sourcePath: readme },
+        { entryName: "tomorrowedge/docs/guide.md", sourcePath: path.join(docsDir, "guide.md") }
+      ]);
+
+      const entries = readLocalZipEntries(await readFile(output));
+      expect(entries.get("tomorrowedge/README.md")?.toString("utf8")).toBe("hello from tomorrowedge\n");
+      expect(entries.get("tomorrowedge/docs/guide.md")?.toString("utf8")).toBe("guide body\n");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("requires portable cockpit-web asset paths in zip archives", () => {
+    expect(() => assertCockpitWebZipEntries([
+      "tomorrowedge/dist/cockpit-web/index.html",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.js",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.css"
+    ])).not.toThrow();
+    expect(() => assertCockpitWebZipEntries([
+      "tomorrowedge/dist/cockpit-web/index.html",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.js"
+    ])).toThrow("dist/cockpit-web/assets/*.css");
+  });
 });
+
+function readLocalZipEntries(buffer: Buffer): Map<string, Buffer> {
+  const entries = new Map<string, Buffer>();
+  let offset = 0;
+  while (offset + 4 <= buffer.byteLength && buffer.readUInt32LE(offset) === 0x04034b50) {
+    const method = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const nameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    const name = buffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    const payload = buffer.subarray(dataStart, dataEnd);
+    entries.set(name, method === 8 ? inflateRawSync(payload) : payload);
+    offset = dataEnd;
+  }
+  return entries;
+}

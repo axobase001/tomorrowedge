@@ -36,6 +36,9 @@ describe("local cockpit server", () => {
       expect(manifest.icons[0]?.src).toBe("/icon.svg");
       expect(html).toContain("Trace Ledger");
       expect(html).toContain("metric-line");
+      expect(html).toContain("@media (max-width: 860px)");
+      expect(html).toContain(".cockpit-shell {\n    min-width: 0;");
+      expect(html).toContain("grid-template-columns: minmax(0, 1fr);");
       expect(html).toContain('event.key !== "Enter"');
       expect(html).toContain("event.shiftKey");
       expect(html).toContain("event.isComposing");
