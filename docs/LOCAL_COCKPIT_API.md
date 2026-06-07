@@ -45,8 +45,14 @@ trace diagnostics.
 - `POST /api/approvals`
 - `POST /api/mcp/register`
 
+`GET /api/sessions/:id/artifacts/:ref` serves only recorded artifact refs under
+the `artifacts/` prefix. Traversal, absolute paths, and non-artifact session
+files are rejected.
+
 `POST /api/runs` defaults to fixture mode and does not approve patch or shell
-actions unless the request explicitly sets approval flags.
+actions unless the request explicitly sets approval flags. If `accessMode` is
+provided, it must be one of `restricted`, `partial`, or `full`; invalid values
+are rejected instead of silently falling back to project defaults.
 
 `GET /api/sessions/:id/view-model` returns the shared cockpit ViewModel used by
 browser GUI surfaces. It includes task summaries, workflow spine state,
@@ -71,6 +77,10 @@ cockpit runtime. Supported actions are:
 Patch and shell approval actions require the active `approvalId` returned by the
 ViewModel. Stale or mismatched approval IDs are rejected before any patch is
 applied or shell command is run.
+
+`POST /api/mcp/register` requires an active `sessionId` so external-agent
+registration is recorded in a specific session ledger. The endpoint validates
+the session before registering the profile.
 
 ## Why This Exists
 
