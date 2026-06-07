@@ -13,9 +13,10 @@ export function isAuthorizedCockpitRequest(request: IncomingMessage, url: URL, n
 
 export function isAllowedBrowserOrigin(request: IncomingMessage): boolean {
   const origin = request.headers.origin;
-  if (!origin || Array.isArray(origin)) return !Array.isArray(origin);
+  if (Array.isArray(origin)) return false;
+  if (!origin) return true;
   const host = request.headers.host;
-  if (!host) return false;
+  if (!host || Array.isArray(host)) return false;
   try {
     const parsed = new URL(origin);
     return parsed.host === host && (parsed.protocol === "http:" || parsed.protocol === "https:");

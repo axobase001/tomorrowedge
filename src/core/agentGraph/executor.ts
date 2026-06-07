@@ -1031,7 +1031,7 @@ function setBudgetStatus(state: AgentGraphState, status: NonNullable<AgentGraphS
 function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, startedAtMs: number, phase: "shell" | "repair" | "summary" | "coding"): boolean {
   const elapsedSec = (Date.now() - startedAtMs) / 1000;
   if (elapsedSec > config.autonomy.max_wall_time_sec) {
-    ledger.append({ type: "autonomy_limit_reached", phase, status: "blocked_by_iteration_limit", reason: `max_wall_time_sec=${config.autonomy.max_wall_time_sec} reached` });
+    ledger.append({ type: "autonomy_limit_reached", phase, status: "blocked_by_time_limit", reason: `max_wall_time_sec=${config.autonomy.max_wall_time_sec} reached` });
     return false;
   }
   const cost = state.usageSummary.estimatedCostUsd;
