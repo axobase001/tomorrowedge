@@ -527,8 +527,8 @@ async function sendCockpitAsset(response: ServerResponse, pathname: string, webR
 async function resolveCockpitWebRoot(configured?: string | false): Promise<string | undefined> {
   if (configured === false) return undefined;
   const candidates = configured ? [configured] : [
-    path.resolve(moduleDir, "..", "cockpit-web"),
-    path.resolve(moduleDir, "..", "..", "dist", "cockpit-web")
+    path.resolve(moduleDir, "..", "..", "dist", "cockpit-web"),
+    path.resolve(moduleDir, "..", "cockpit-web")
   ];
   for (const candidate of candidates) {
     if (await isExistingDirectory(candidate)) return candidate;
