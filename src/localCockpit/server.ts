@@ -156,10 +156,11 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const config = loadConfig(cwd);
       const sessionId = `session_${randomBytes(8).toString("hex")}`;
       const goal = typeof body.goal === "string" && body.goal.trim() ? body.goal : "fix failing test";
-      const liveState = createLiveState(sessionId, goal, config, parseAccessMode(body.accessMode));
+      const accessMode = parseAccessMode(body.accessMode);
+      const liveState = createLiveState(sessionId, goal, config, accessMode);
       const options: OfflineGraphOptions = {
         fixtureMode: body.fixtureMode !== false,
-        accessMode: parseAccessMode(body.accessMode),
+        accessMode,
         approvePatch: Boolean(body.approvePatch),
         approveShell: Boolean(body.approveShell),
         repairOnFail: Boolean(body.repairOnFail),
@@ -208,8 +209,10 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
       const body = await readJsonBody(request);
-      const intent = recordApprovalIntent(parseApprovalIntent(body));
-      const session = intent.sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, intent.sessionId);
+      const parsedIntent = parseApprovalIntent(body);
+      const session = await loadRequiredSession(cwd, parsedIntent.sessionId);
+      validateApprovalIntent(cwd, session.state, parsedIntent);
+      const intent = recordApprovalIntent(parsedIntent);
       const result = await executeCockpitApprovalAction(cwd, session.state, intent);
       await saveSession(cwd, result.state);
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
@@ -222,8 +225,10 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     }
     if (request.method === "POST" && url.pathname === "/api/mcp/register") {
       const body = await readJsonBody(request);
+      const registration = parseExternalAgentRegistration(body);
+      await loadRequiredSession(cwd, registration.sessionId);
       const bridge = new TomorrowEdgeMcpBridge(cwd);
-      const result = await bridge.registerExternalAgent(parseExternalAgentRegistration(body));
+      const result = await bridge.registerExternalAgent(registration);
       return sendJson(response, 200, result);
     }
     return sendJson(response, 404, { error: "not_found" });
@@ -231,6 +236,27 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (error instanceof HttpError) return sendJson(response, error.status, { error: error.code, message: error.message });
     return sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+function validateApprovalIntent(cwd: string, state: AgentGraphState, intent: CockpitApprovalIntent): void {
+  const viewModel = buildCockpitViewModel(cwd, state);
+  const active = viewModel.currentApproval;
+  const approvalActions = new Set<CockpitApprovalIntent["action"]>(["approve_patch", "reject_patch", "approve_shell", "reject_shell"]);
+  if (!approvalActions.has(intent.action)) {
+    if (intent.approvalId && active && intent.approvalId !== active.id) {
+      throw new HttpError(409, "approval_mismatch", `Approval ${intent.approvalId} is no longer active. Current approval is ${active.id}.`);
+    }
+    return;
+  }
+  if (!active) throw new HttpError(409, "no_active_approval", "No approval is currently waiting for this session.");
+  if (!intent.approvalId) throw new HttpError(400, "approval_id_required", "Approval actions require the active approvalId.");
+  if (intent.approvalId !== active.id) {
+    throw new HttpError(409, "approval_mismatch", `Approval ${intent.approvalId} is no longer active. Current approval is ${active.id}.`);
+  }
+  const patchAction = intent.action === "approve_patch" || intent.action === "reject_patch";
+  const shellAction = intent.action === "approve_shell" || intent.action === "reject_shell";
+  if (patchAction && active.kind === "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is a shell approval.`);
+  if (shellAction && active.kind !== "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is not a shell approval.`);
 }
 
 class HttpError extends Error {
@@ -357,17 +383,21 @@ function isPatchApproach(value: string): value is "minimal_patch" | "refactor" |
 }
 
 function parseAccessMode(value: unknown): AccessMode | undefined {
-  return value === "restricted" || value === "partial" || value === "full" ? value : undefined;
+  if (value === undefined) return undefined;
+  if (value === "restricted" || value === "partial" || value === "full") return value;
+  throw new HttpError(400, "invalid_access_mode", "accessMode must be restricted, partial, or full.");
 }
 
 function isMutatingMethod(method?: string): boolean {
   return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
 }
 
-function parseExternalAgentRegistration(value: Record<string, unknown>): ExternalAgentRegistrationInput {
-  if (typeof value.id !== "string" || !value.id.trim()) throw new Error("external agent registration requires id");
+function parseExternalAgentRegistration(value: Record<string, unknown>): ExternalAgentRegistrationInput & { sessionId: string } {
+  if (typeof value.id !== "string" || !value.id.trim()) throw new HttpError(400, "external_agent_id_required", "external agent registration requires id");
+  const sessionId = parseRequiredSessionId(value.sessionId, "external agent registration requires sessionId");
   return {
     id: value.id,
+    sessionId,
     name: typeof value.name === "string" ? value.name : value.id,
     transport: "mcp",
     capabilities: Array.isArray(value.capabilities) ? value.capabilities.filter((item): item is string => typeof item === "string") : [],
@@ -381,12 +411,12 @@ function parseExternalAgentRegistration(value: Record<string, unknown>): Externa
 function parseApprovalIntent(value: Record<string, unknown>): CockpitApprovalIntent {
   const action = value.action;
   if (!["approve_patch", "reject_patch", "approve_shell", "reject_shell", "request_re_review", "undo_latest_patch"].includes(String(action))) {
-    throw new Error("approval intent requires a valid action");
+    throw new HttpError(400, "invalid_approval_action", "approval intent requires a valid action");
   }
-  if (typeof value.sessionId !== "string" || !value.sessionId.trim()) throw new Error("approval intent requires sessionId");
+  const sessionId = parseRequiredSessionId(value.sessionId, "approval intent requires sessionId");
   return {
     action: action as CockpitApprovalIntent["action"],
-    sessionId: value.sessionId,
+    sessionId,
     approvalId: typeof value.approvalId === "string" ? value.approvalId : undefined,
     feedback: typeof value.feedback === "string" ? value.feedback : undefined
   };
@@ -396,8 +426,24 @@ function isAgentRole(value: unknown): value is AgentRole {
   return typeof value === "string" && (agentRoles as readonly string[]).includes(value);
 }
 
+function parseRequiredSessionId(value: unknown, missingMessage: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new HttpError(400, "session_id_required", missingMessage);
+  const sessionId = value.trim();
+  if (!isSafeSessionId(sessionId)) throw new HttpError(400, "invalid_session_id", "Session id must contain only letters, numbers, underscores, or hyphens.");
+  return sessionId;
+}
+
+async function loadRequiredSession(cwd: string, sessionId: string) {
+  if (!isSafeSessionId(sessionId)) throw new HttpError(400, "invalid_session_id", "Session id must contain only letters, numbers, underscores, or hyphens.");
+  try {
+    return sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, sessionId);
+  } catch {
+    throw new HttpError(404, "session_not_found", `Session ${sessionId} was not found.`);
+  }
+}
+
 async function sendArtifact(cwd: string, response: ServerResponse, sessionId: string, ref: string): Promise<void> {
-  if (!isSafeSessionId(sessionId) || ref.includes("..") || path.isAbsolute(ref)) {
+  if (!isSafeSessionId(sessionId) || !ref.startsWith("artifacts/") || ref.includes("..") || path.isAbsolute(ref)) {
     return sendJson(response, 400, { error: "invalid artifact ref" });
   }
   const effectiveSessionId = sessionId === "latest" ? (await loadLatestSession(cwd)).sessionId : sessionId;

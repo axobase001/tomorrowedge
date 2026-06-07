@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
@@ -103,6 +103,87 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("rejects stale patch approval ids before applying a patch", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-patch-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const before = await readFile(path.join(cwd, "index.js"), "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:not-current" })
+      });
+      const payload = await response.json() as { error: string };
+      const after = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(response.status).toBe(409);
+      expect(payload.error).toBe("approval_mismatch");
+      expect(after).toBe(before);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects stale shell approval ids before running verification", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-shell-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const vm = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { currentApproval?: { id: string } };
+      await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
+      });
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:not-current" })
+      });
+      const payload = await response.json() as { error: string };
+      const after = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as { main: { testStatus?: string }; rawEvents: Array<{ type: string }> };
+
+      expect(response.status).toBe(409);
+      expect(payload.error).toBe("approval_mismatch");
+      expect(after.main.testStatus).toBe("not_run");
+      expect(after.rawEvents.some((event) => event.type === "shell_run")).toBe(false);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("requires the active approval id before executing patch approvals", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-approval-id-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const before = await readFile(path.join(cwd, "index.js"), "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch" })
+      });
+      const payload = await response.json() as { error: string };
+      const after = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("approval_id_required");
+      expect(after).toBe(before);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("returns invalid_json for malformed JSON request bodies", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-json-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -116,6 +197,25 @@ describe("local cockpit server", () => {
 
       expect(response.status).toBe(400);
       expect(payload.error).toBe("invalid_json");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid access modes before starting browser runs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-access-mode-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", accessMode: "totally-open" })
+      });
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("invalid_access_mode");
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
@@ -185,6 +285,23 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("rejects non-artifact refs through the artifact endpoint", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-artifact-prefix-"));
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/sessions/${state.sessionId}/artifacts/events.jsonl?nonce=${server.nonce}`);
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("invalid artifact ref");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("redacts artifact content returned through the local API", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-redact-"));
     const sessionDir = path.join(cwd, ".tomorrowedge", "sessions", "session_api_redact", "artifacts", "stdout");
@@ -196,6 +313,57 @@ describe("local cockpit server", () => {
 
       expect(text).toContain("[redacted]");
       expect(text).not.toContain("sk-");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("requires an active session for MCP registrations", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-mcp-session-required-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/mcp/register?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: "codex", name: "Codex", allowedRoles: ["reviewer"] })
+      });
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("session_id_required");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records MCP registrations in the requested active session", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-mcp-session-"));
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/mcp/register?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          id: "codex",
+          name: "Codex",
+          capabilities: ["code_review"],
+          allowedRoles: ["reviewer"],
+          trustLevel: "low"
+        })
+      });
+      const payload = await response.json() as { sessionId?: string; profile?: { id?: string; allowedRoles?: string[] } };
+      const events = await fetch(`${server.url}/api/sessions/${state.sessionId}/events?nonce=${server.nonce}`).then((item) => item.json()) as Array<{ type: string; externalAgentId?: string }>;
+
+      expect(response.status).toBe(200);
+      expect(payload.sessionId).toBe(state.sessionId);
+      expect(payload.profile?.id).toBe("codex");
+      expect(payload.profile?.allowedRoles).toEqual(["reviewer"]);
+      expect(events.some((event) => event.type === "external_agent_registered" && event.externalAgentId === "codex")).toBe(true);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

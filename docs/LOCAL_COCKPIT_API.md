@@ -37,13 +37,50 @@ trace diagnostics.
 - `GET /api/sessions`
 - `GET /api/sessions/latest`
 - `GET /api/sessions/:id`
+- `GET /api/sessions/:id/view-model`
 - `GET /api/sessions/:id/events`
 - `GET /api/sessions/:id/artifacts/:ref`
+- `GET /api/runs/:id/events/live`
 - `POST /api/runs`
+- `POST /api/approvals`
 - `POST /api/mcp/register`
 
+`GET /api/sessions/:id/artifacts/:ref` serves only recorded artifact refs under
+the `artifacts/` prefix. Traversal, absolute paths, and non-artifact session
+files are rejected.
+
 `POST /api/runs` defaults to fixture mode and does not approve patch or shell
-actions unless the request explicitly sets approval flags.
+actions unless the request explicitly sets approval flags. If `accessMode` is
+provided, it must be one of `restricted`, `partial`, or `full`; invalid values
+are rejected instead of silently falling back to project defaults.
+
+`GET /api/sessions/:id/view-model` returns the shared cockpit ViewModel used by
+browser GUI surfaces. It includes task summaries, workflow spine state,
+telemetry, current approval, drawer details, route summaries, and trace items.
+
+`GET /api/runs/:id/events/live` streams server-sent events for an in-progress
+run. The stream emits a `ready` event first, then `event` messages for live
+ledger updates and `snapshot` messages with the current state plus ViewModel.
+When a snapshot is marked done, clients should close the stream and refresh the
+persisted session ViewModel.
+
+`POST /api/approvals` executes browser approval actions through the Node
+cockpit runtime. Supported actions are:
+
+- `approve_patch`
+- `reject_patch`
+- `approve_shell`
+- `reject_shell`
+- `request_re_review`
+- `undo_latest_patch`
+
+Patch and shell approval actions require the active `approvalId` returned by the
+ViewModel. Stale or mismatched approval IDs are rejected before any patch is
+applied or shell command is run.
+
+`POST /api/mcp/register` requires an active `sessionId` so external-agent
+registration is recorded in a specific session ledger. The endpoint validates
+the session before registering the profile.
 
 ## Why This Exists
 
