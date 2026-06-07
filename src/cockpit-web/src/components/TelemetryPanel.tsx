@@ -6,7 +6,7 @@ export function TelemetryPanel({ telemetry }: { telemetry: CockpitTelemetry }) {
       <header><h2>遥测</h2><span className="te-chip">fallback {telemetry.fallbackCount}</span></header>
       <Metric label="Cost" value={`${money(telemetry.currentCostUsd)} / ${money(telemetry.budgetUsd)}`} />
       <Metric label="Tokens" value={compact(telemetry.totalTokens)} />
-      <Metric label="Cache" value={telemetry.cacheHitPercent ? `${telemetry.cacheHitPercent}%` : "-"} />
+      <Metric label="Cache" value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
       <Metric label="Agents" value={`${telemetry.completed} done · ${telemetry.waiting} waiting`} />
       <Metric label="Latency" value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
       <Metric label="Risk" value={telemetry.latestRiskLevel ?? "-"} />
