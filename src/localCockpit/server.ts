@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "../config/configLoader.js";
 import { runOfflineGraph, type OfflineGraphOptions } from "../core/agentGraph/executor.js";
 import { loadLatestSession, loadSession, listSessions, saveSession } from "../core/memory/sessionMemory.js";
@@ -26,6 +27,7 @@ import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 export type LocalCockpitServerOptions = {
   port?: number;
   host?: string;
+  webRoot?: string | false;
 };
 
 export type LocalCockpitHandle = {
@@ -39,12 +41,13 @@ export type LocalCockpitHandle = {
 };
 
 const maxJsonBodyBytes = 1_000_000;
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 export async function startLocalCockpitServer(cwd: string, options: LocalCockpitServerOptions = {}): Promise<LocalCockpitHandle> {
   const host = options.host ?? "127.0.0.1";
   const requestedPort = options.port ?? 18792;
   const nonce = randomBytes(24).toString("base64url");
-  const { server, port } = await listenOnAvailablePort(cwd, host, requestedPort, nonce);
+  const { server, port } = await listenOnAvailablePort(cwd, host, requestedPort, nonce, options.webRoot);
   const url = `http://${host}:${port}`;
   return {
     server,
@@ -57,14 +60,14 @@ export async function startLocalCockpitServer(cwd: string, options: LocalCockpit
   };
 }
 
-async function listenOnAvailablePort(cwd: string, host: string, requestedPort: number, nonce: string): Promise<{ server: Server; port: number }> {
-  if (requestedPort === 0) return listenOnce(cwd, host, 0, nonce);
+async function listenOnAvailablePort(cwd: string, host: string, requestedPort: number, nonce: string, webRoot: string | false | undefined): Promise<{ server: Server; port: number }> {
+  if (requestedPort === 0) return listenOnce(cwd, host, 0, nonce, webRoot);
   const maxAttempts = 20;
   let lastError: unknown;
   for (let offset = 0; offset < maxAttempts; offset += 1) {
     const port = requestedPort + offset;
     try {
-      return await listenOnce(cwd, host, port, nonce);
+      return await listenOnce(cwd, host, port, nonce, webRoot);
     } catch (error) {
       lastError = error;
       if (!isAddressInUse(error)) throw error;
@@ -73,9 +76,9 @@ async function listenOnAvailablePort(cwd: string, host: string, requestedPort: n
   throw lastError instanceof Error ? lastError : new Error(`No available port found starting at ${requestedPort}.`);
 }
 
-async function listenOnce(cwd: string, host: string, port: number, nonce: string): Promise<{ server: Server; port: number }> {
+async function listenOnce(cwd: string, host: string, port: number, nonce: string, webRoot: string | false | undefined): Promise<{ server: Server; port: number }> {
   const server = createServer((request, response) => {
-    void routeRequest(cwd, request, response, nonce);
+    void routeRequest(cwd, request, response, nonce, webRoot);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -96,11 +99,15 @@ function isAddressInUse(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "EADDRINUSE");
 }
 
-async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string): Promise<void> {
+async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string, webRoot?: string | false): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/cockpit")) {
-      return send(response, 200, renderCockpitHtml(), "text/html; charset=utf-8");
+      return sendCockpitShell(response, webRoot);
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/assets/")) {
+      const sent = await sendCockpitAsset(response, url.pathname, webRoot);
+      if (sent) return;
     }
     if (request.method === "GET" && (url.pathname === "/icon.svg" || url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico")) {
       return send(response, 200, cockpitIconSvg, "image/svg+xml; charset=utf-8");
@@ -396,6 +403,78 @@ function isAgentRole(value: unknown): value is AgentRole {
   return typeof value === "string" && (agentRoles as readonly string[]).includes(value);
 }
 
+async function sendCockpitShell(response: ServerResponse, webRoot?: string | false): Promise<void> {
+  const root = await resolveCockpitWebRoot(webRoot);
+  if (root) {
+    const indexPath = safeStaticFilePath(root, "index.html");
+    if (indexPath) {
+      try {
+        return send(response, 200, await readFile(indexPath, "utf8"), "text/html; charset=utf-8");
+      } catch {
+        // Fall back to the embedded client when a stale build directory is missing index.html.
+      }
+    }
+  }
+  return send(response, 200, renderCockpitHtml(), "text/html; charset=utf-8");
+}
+
+async function sendCockpitAsset(response: ServerResponse, pathname: string, webRoot?: string | false): Promise<boolean> {
+  const root = await resolveCockpitWebRoot(webRoot);
+  if (!root) return false;
+  const relativePath = pathname.replace(/^\/+/, "");
+  const assetPath = safeStaticFilePath(root, relativePath);
+  if (!assetPath) {
+    sendJson(response, 400, { error: "invalid_static_asset" });
+    return true;
+  }
+  try {
+    const content = await readFile(assetPath);
+    send(response, 200, content, contentTypeForStaticAsset(assetPath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCockpitWebRoot(configured?: string | false): Promise<string | undefined> {
+  if (configured === false) return undefined;
+  const candidates = configured ? [configured] : [
+    path.resolve(moduleDir, "..", "cockpit-web"),
+    path.resolve(moduleDir, "..", "..", "dist", "cockpit-web")
+  ];
+  for (const candidate of candidates) {
+    if (await isExistingDirectory(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+async function isExistingDirectory(value: string): Promise<boolean> {
+  try {
+    return (await stat(value)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function safeStaticFilePath(root: string, ref: string): string | undefined {
+  if (!ref || ref.includes("..") || path.isAbsolute(ref)) return undefined;
+  const resolved = path.resolve(root, ref);
+  const relative = path.relative(root, resolved);
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? resolved : undefined;
+}
+
+function contentTypeForStaticAsset(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".js" || ext === ".mjs") return "text/javascript; charset=utf-8";
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml; charset=utf-8";
+  if (ext === ".json" || ext === ".webmanifest" || ext === ".map") return "application/json; charset=utf-8";
+  if (ext === ".png") return "image/png";
+  if (ext === ".ico") return "image/x-icon";
+  return "application/octet-stream";
+}
+
 async function sendArtifact(cwd: string, response: ServerResponse, sessionId: string, ref: string): Promise<void> {
   if (!isSafeSessionId(sessionId) || ref.includes("..") || path.isAbsolute(ref)) {
     return sendJson(response, 400, { error: "invalid artifact ref" });
@@ -464,7 +543,7 @@ function sendLiveEvents(cwd: string, response: ServerResponse, sessionId: string
   response.on("close", unsubscribe);
 }
 
-function send(response: ServerResponse, status: number, body: string, contentType: string): void {
+function send(response: ServerResponse, status: number, body: string | Buffer, contentType: string): void {
   response.writeHead(status, {
     "content-type": contentType,
     "cache-control": "no-store",

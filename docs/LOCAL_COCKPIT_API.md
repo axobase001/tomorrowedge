@@ -1,7 +1,10 @@
 # Local Cockpit API
 
 `tedge serve` starts a local-first browser cockpit for inspecting TomorrowEdge
-sessions.
+sessions. When the React cockpit bundle exists at `dist/cockpit-web`, the
+server uses it as the primary GUI client. The embedded HTML string in
+`src/localCockpit/html.ts` is a fallback for source checkouts or installs that
+do not have the web bundle available.
 
 ```bash
 npm run dev -- serve --open
@@ -34,6 +37,9 @@ trace diagnostics.
 ## Endpoints
 
 - `GET /health`
+- `GET /` / `GET /cockpit` serves the React cockpit build when available, or
+  the embedded fallback client otherwise.
+- `GET /assets/*` serves static files from the built React cockpit only.
 - `GET /api/sessions`
 - `GET /api/sessions/latest`
 - `GET /api/sessions/:id`
