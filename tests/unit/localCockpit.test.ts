@@ -17,7 +17,7 @@ describe("local cockpit server", () => {
 
   it("serves the cockpit shell and health endpoint", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-"));
-    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    const server = await startLocalCockpitServer(cwd, { port: 0, webRoot: false });
     try {
       const health = await fetch(`${server.url}/health`).then((response) => response.json()) as { ok: boolean };
       const html = await fetch(server.url).then((response) => response.text());
@@ -44,6 +44,27 @@ describe("local cockpit server", () => {
       expect(html).toContain("event.isComposing");
       expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("serves the React cockpit build when web assets are available", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-react-"));
+    const webRoot = path.join(cwd, "dist", "cockpit-web");
+    await mkdir(path.join(webRoot, "assets"), { recursive: true });
+    await writeFile(path.join(webRoot, "index.html"), '<!doctype html><div id="root" data-react-cockpit="true"></div><script type="module" src="/assets/app.js"></script>', "utf8");
+    await writeFile(path.join(webRoot, "assets", "app.js"), "window.__tomorrowedgeCockpit = true;", "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0, webRoot });
+    try {
+      const html = await fetch(server.url).then((response) => response.text());
+      const asset = await fetch(`${server.url}/assets/app.js`);
+
+      expect(html).toContain('data-react-cockpit="true"');
+      expect(html).toContain('/assets/app.js');
+      expect(await asset.text()).toContain("__tomorrowedgeCockpit");
+      expect(asset.headers.get("content-type")).toContain("text/javascript");
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

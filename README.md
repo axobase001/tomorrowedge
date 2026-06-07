@@ -106,6 +106,7 @@ npm run client
 ```
 
 `npm run client` 会打开 TomorrowEdge GUI Client。安装后的 CLI 可使用 `tedge client`；只想打印本地地址时使用 `tedge client --no-open`。
+`tedge client` 默认服务构建后的 React cockpit；仅在缺少 `dist/cockpit-web` 时回退到内置 HTML fallback。
 
 可选桌面窗口：
 
@@ -536,6 +537,8 @@ npm run client
 
 `npm run client` opens the TomorrowEdge GUI Client. For installed builds, use
 `tedge client`; use `tedge client --no-open` when you only want the local URL.
+`tedge client` serves the built React cockpit by default and falls back to the
+embedded HTML client only when `dist/cockpit-web` is unavailable.
 
 Optional desktop window:
 

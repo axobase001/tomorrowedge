@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
 import { assertCockpitWebZipEntries, createZipArchive } from "../../scripts/package-zip.js";
+import { assertCockpitAssetPaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -98,6 +99,35 @@ describe("release verification scripts", () => {
       "tomorrowedge/dist/cockpit-web/index.html",
       "tomorrowedge/dist/cockpit-web/assets/index-abc.js"
     ])).toThrow("dist/cockpit-web/assets/*.css");
+  });
+
+  it("parses npm pack output and requires cockpit web assets", () => {
+    const files = parseNpmPackFiles(JSON.stringify([{
+      files: [
+        { path: "package.json" },
+        { path: "dist/cockpit-web/index.html" },
+        { path: "dist/cockpit-web/assets/index-abc.js" },
+        { path: "dist/cockpit-web/assets/index-abc.css" }
+      ]
+    }]));
+
+    expect(files).toContain("dist/cockpit-web/index.html");
+    expect(() => assertCockpitAssetPaths(files)).not.toThrow();
+  });
+
+  it("accepts package and zip archive prefixes when checking cockpit assets", () => {
+    expect(() => assertCockpitAssetPaths([
+      "package/dist/cockpit-web/index.html",
+      "tomorrowedge\\dist\\cockpit-web\\assets\\index.js",
+      "tomorrowedge/dist/cockpit-web/assets/index.css"
+    ])).not.toThrow();
+  });
+
+  it("fails package asset checks when the cockpit build is missing", () => {
+    expect(() => assertCockpitAssetPaths([
+      "dist/cli/index.js",
+      "dist/cockpit-web/index.html"
+    ])).toThrow("dist/cockpit-web/assets/*.js");
   });
 });
 
