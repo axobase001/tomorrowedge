@@ -10,6 +10,8 @@ const cwd = process.cwd();
 const packageJson = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")) as PackageJson;
 const statusPath = path.join(cwd, "docs", "CAPABILITY_STATUS.md");
 const statusText = readFileSync(statusPath, "utf8");
+const promiseMapPath = path.join(cwd, "docs", "README_PROMISE_MAP.md");
+const promiseMapText = readFileSync(promiseMapPath, "utf8");
 const requiredCapabilities = [
   "Offline fixture/mock workflow",
   "Access modes and full-access trace",
@@ -34,6 +36,38 @@ for (const relativePath of staleDocs) {
   const text = readFileSync(path.join(cwd, relativePath), "utf8");
   const stale = text.match(/TomorrowEdge\s+0\.[0-9]+\.[0-9]+/g);
   if (stale?.length) failures.push(`${relativePath} contains stale version wording: ${[...new Set(stale)].join(", ")}`);
+}
+
+if (!promiseMapText.includes(`TomorrowEdge ${packageJson.version}`)) {
+  failures.push(`docs/README_PROMISE_MAP.md must mention TomorrowEdge ${packageJson.version}.`);
+}
+
+const requiredPromiseIds = [
+  "gui-entrypoint",
+  "task-queue",
+  "workflow-main",
+  "approval-actions",
+  "telemetry-summary",
+  "detail-drawer",
+  "trace-strip",
+  "command-composer",
+  "runtime-screenshots",
+  "desktop-entrypoint",
+  "desktop-lifecycle",
+  "desktop-port-fallback",
+  "react-primary-client",
+  "package-assets",
+  "zip-assets"
+];
+
+for (const promiseId of requiredPromiseIds) {
+  if (!promiseMapText.includes(`| ${promiseId} |`)) {
+    failures.push(`docs/README_PROMISE_MAP.md is missing README promise id: ${promiseId}`);
+  }
+}
+
+if (!readFileSync(path.join(cwd, "README.md"), "utf8").includes("docs/README_PROMISE_MAP.md")) {
+  failures.push("README.md must link to docs/README_PROMISE_MAP.md.");
 }
 
 if (failures.length) {

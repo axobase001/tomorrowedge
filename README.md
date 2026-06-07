@@ -42,6 +42,8 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 Capability maturity: see [Capability Status](docs/CAPABILITY_STATUS.md) for the
 authoritative stable / experimental / placeholder / planned table.
+README GUI, desktop, and release-package promises are tracked in
+[README Promise Map](docs/README_PROMISE_MAP.md).
 
 ## 3-minute tryout
 
