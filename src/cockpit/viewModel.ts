@@ -1,7 +1,7 @@
 ﻿import path from "node:path";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import type { CockpitApproval, CockpitConnectionState, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
 export type CockpitViewModelOptions = {
@@ -19,6 +19,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
   const routes = buildRoutes(state);
   const main = buildMainView(state, currentApproval);
   const sessionMeta = buildSessionMeta(state, options);
+  const approvalHistory = buildApprovalHistory(state, currentApproval);
   return {
     version: "1",
     sessionId: state?.sessionId,
@@ -51,6 +52,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     routes,
     telemetry: buildTelemetry(state, routes, currentApproval),
     approvals,
+    approvalHistory,
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -177,6 +179,105 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   }
   return approvals;
 }
+
+function buildApprovalHistory(state: AgentGraphState | undefined, currentApproval?: CockpitApproval): CockpitApprovalHistoryItem[] {
+  const items: CockpitApprovalHistoryItem[] = [];
+  for (const event of state?.events ?? []) {
+    if (event.type === "patch_apply") {
+      const undone = event.candidateId === "undo_latest_patch" || event.error === "undo_latest_patch";
+      const rejected = !event.applied && !undone;
+      items.push({
+        id: event.id,
+        approvalId: event.candidateId === "undo_latest_patch" ? "undo:latest_patch" : `patch:${event.candidateId}`,
+        kind: undone ? "patch" : "patch",
+        status: event.applied ? "approved" : "rejected",
+        action: undone ? "undone" : event.applied ? "approved" : "rejected",
+        actor: event.provider === "local_cockpit" ? "operator" : "cockpit",
+        source: event.provider ?? "event-ledger",
+        timestamp: event.timestamp,
+        title: undone ? "Undo latest patch" : event.applied ? "Patch approved" : "Patch rejected",
+        summary: event.error ?? `${event.filesChanged.length} file(s) changed`,
+        blocksProgress: rejected,
+        filterTags: compactTags(["patch", event.applied || undone ? "completed" : "rejected", undone ? "undo" : undefined]),
+        candidateId: event.candidateId,
+        filesChanged: event.filesChanged,
+        diffRef: event.diffRef,
+        undoSnapshotIds: event.undoSnapshotIds
+      });
+    }
+    if (event.type === "shell_run") {
+      const rejected = event.provider === "local_cockpit" && event.success === false;
+      items.push({
+        id: event.id,
+        approvalId: "shell:test",
+        kind: "shell",
+        status: rejected ? "rejected" : "approved",
+        action: rejected ? "rejected" : "approved",
+        actor: event.provider === "local_cockpit" ? "operator" : "cockpit",
+        source: event.provider ?? "event-ledger",
+        timestamp: event.timestamp,
+        title: rejected ? "Shell rejected" : `Shell ${event.success ? "passed" : "failed"}`,
+        summary: event.error ?? `exit=${event.exitCode ?? "not recorded"}`,
+        blocksProgress: rejected || event.success === false,
+        filterTags: compactTags(["shell", rejected ? "rejected" : "completed"]),
+        command: event.command,
+        filesChanged: [],
+        stdoutRef: event.stdoutRef,
+        stderrRef: event.stderrRef,
+        durationMs: event.durationMs
+      });
+    }
+    if (event.type === "review_decision" && event.recommendation === "re_review_requested") {
+      items.push({
+        id: event.id,
+        approvalId: "review:re_review_requested",
+        kind: "review",
+        status: "revision_requested",
+        action: "revision_requested",
+        actor: event.provider === "local_cockpit" ? "operator" : "reviewer",
+        source: event.provider ?? "event-ledger",
+        timestamp: event.timestamp,
+        title: "Re-review requested",
+        summary: event.recommendation,
+        blocksProgress: true,
+        filterTags: ["review", "pending"],
+        filesChanged: []
+      });
+    }
+  }
+  if (currentApproval?.status === "waiting") {
+    items.push({
+      id: `waiting:${currentApproval.id}`,
+      approvalId: currentApproval.id,
+      kind: currentApproval.kind,
+      status: "waiting",
+      action: "waiting",
+      actor: "operator",
+      source: "browser_cockpit",
+      timestamp: latestTimestamp(state?.events),
+      title: currentApproval.title,
+      summary: blockingSummary(currentApproval),
+      blocksProgress: true,
+      filterTags: compactTags([currentApproval.kind === "repair" ? "patch" : currentApproval.kind, "pending"]),
+      candidateId: currentApproval.candidateId,
+      command: currentApproval.command,
+      filesChanged: currentApproval.filesChanged,
+      diffRef: currentApproval.diff ? "inline:current-approval-diff" : undefined
+    });
+  }
+  return items.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function blockingSummary(approval: CockpitApproval): string {
+  if (approval.kind === "shell") return `Workflow is waiting for shell authorization: ${approval.command ?? "verification command"}.`;
+  if (approval.kind === "review") return "Workflow is waiting for another review pass.";
+  return `Workflow is waiting for patch authorization for ${approval.filesChanged.join(", ") || approval.candidateId || "candidate"}.`;
+}
+
+function compactTags(tags: Array<CockpitApprovalHistoryItem["filterTags"][number] | undefined>): CockpitApprovalHistoryItem["filterTags"] {
+  return tags.filter((tag): tag is CockpitApprovalHistoryItem["filterTags"][number] => Boolean(tag));
+}
+
 function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRouteSummary[], approval?: CockpitApproval): CockpitTelemetry {
   const agents = state?.agents ?? [];
   const usageFromEvents = deriveUsageFromEvents(state);

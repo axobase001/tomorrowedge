@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.1.7 README product promises. Use this
+Authoritative map for TomorrowEdge 1.1.8 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -13,6 +13,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | session-source | The GUI labels live sessions, saved snapshots, fixture demos, API-unavailable states, and connection status. | `src/cockpit/contracts.ts`, `src/cockpit/viewModel.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/main.tsx`, `src/cockpit-web/src/components/TopBar.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts`, `tests/unit/localCockpit.test.ts` | #165, #166, #167, #168, #169, #170 |
 | workflow-main | The center workspace shows Plan, Route, Edit, Review, Test, Judge, Approve state. | `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/WorkflowPanel.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #145, #146 |
 | approval-actions | Browser approval buttons send intents; Node applies patch/shell actions. | `src/cockpit/approvalExecutor.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/ApprovalPanel.tsx` | `tests/unit/localCockpit.test.ts`, `tests/integration/tuiApprovalActions.test.ts` | #137, #147, #150 |
+| approval-history | Detail drawer shows a chronological approval timeline with approvalId, actor/source, blocking reason, diff/output refs, undo snapshot metadata, and filter tags. | `src/cockpit/contracts.ts`, `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #171, #172, #173, #174, #175, #176, #177, #178 |
 | telemetry-summary | The GUI exposes provider, cost, token, agent, risk, and fallback summaries. | `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/TelemetryPanel.tsx`, `src/localCockpit/html.ts` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #152 |
 | detail-drawer | Details drawer surfaces route, artifact, and workflow details without duplicating the main view. | `src/cockpit-web/src/components/DetailDrawer.tsx`, `src/localCockpit/html.ts` | `tests/unit/cockpitWeb.test.ts` | #134 |
 | trace-strip | The GUI shows recent event ledger state and live updates. | `src/cockpit/viewModel.ts`, `src/cockpit/eventBus.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/BottomTraceSheet.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/localCockpit.test.ts` | #138 |

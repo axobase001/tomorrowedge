@@ -55,6 +55,14 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Fixture");
     expect(html).toContain("Snapshot");
   });
+
+  it("renders approval history in the detail drawer", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("Approval history");
+    expect(html).toContain("patch:fixture_candidate_a");
+    expect(html).toContain("filters=patch, pending");
+  });
 });
 
 function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string }> = {}): string {
@@ -125,6 +133,23 @@ function sampleViewModel(): CockpitViewModel {
       fallbackCount: 0
     },
     approvals: [],
+    approvalHistory: [{
+      id: "waiting:patch:fixture_candidate_a",
+      approvalId: "patch:fixture_candidate_a",
+      kind: "patch",
+      status: "waiting",
+      action: "waiting",
+      actor: "operator",
+      source: "browser_cockpit",
+      timestamp: "2026-06-07T00:00:00.000Z",
+      title: "Waiting for patch approval",
+      summary: "Workflow is waiting for patch authorization.",
+      blocksProgress: true,
+      filterTags: ["patch", "pending"],
+      candidateId: "fixture_candidate_a",
+      filesChanged: ["index.js"],
+      diffRef: "inline:current-approval-diff"
+    }],
     main: { title: "Main", subtitle: "subtitle", body: "body", filesChanged: ["index.js"], testStatus: "not_run" },
     trace: [{ id: "event_1", timestamp: "2026-06-07T00:00:00.000Z", type: "plan", phase: "plan", summary: "planned" }],
     rawEvents: [],

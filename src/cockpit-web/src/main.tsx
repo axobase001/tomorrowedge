@@ -39,6 +39,7 @@ const emptyViewModel: CockpitViewModel = {
     fallbackCount: 0
   },
   approvals: [],
+  approvalHistory: [],
   main: { title: "Ready for a new task", subtitle: "Waiting for command", body: "", filesChanged: [] },
   trace: [],
   rawEvents: [],

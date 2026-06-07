@@ -99,6 +99,29 @@ export type CockpitApproval = {
   diff?: string;
 };
 
+export type CockpitApprovalHistoryItem = {
+  id: string;
+  approvalId: string;
+  kind: CockpitApproval["kind"];
+  status: CockpitApproval["status"];
+  action: "waiting" | "approved" | "rejected" | "revision_requested" | "undone";
+  actor: string;
+  source: string;
+  timestamp: string;
+  title: string;
+  summary: string;
+  blocksProgress: boolean;
+  filterTags: Array<"patch" | "shell" | "pending" | "completed" | "rejected" | "undo" | "review">;
+  candidateId?: string;
+  command?: string;
+  filesChanged: string[];
+  diffRef?: string;
+  stdoutRef?: string;
+  stderrRef?: string;
+  durationMs?: number;
+  undoSnapshotIds?: string[];
+};
+
 export type CockpitTraceItem = {
   id: string;
   timestamp: string;
@@ -123,6 +146,7 @@ export type CockpitViewModel = {
   routes: CockpitRouteSummary[];
   telemetry: CockpitTelemetry;
   approvals: CockpitApproval[];
+  approvalHistory: CockpitApprovalHistoryItem[];
   currentApproval?: CockpitApproval;
   main: {
     title: string;

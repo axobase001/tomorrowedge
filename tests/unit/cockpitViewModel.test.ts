@@ -50,6 +50,9 @@ describe("cockpit view model", () => {
       expect(vm.currentApproval?.kind).toBe("patch");
       expect(vm.main.title).toContain("approval");
       expect(vm.main.diff).toContain("return a + b");
+      expect(vm.approvalHistory.at(-1)?.approvalId).toBe(vm.currentApproval?.id);
+      expect(vm.approvalHistory.at(-1)?.blocksProgress).toBe(true);
+      expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["patch", "pending"]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -131,6 +134,9 @@ describe("cockpit view model", () => {
     expect(vm.status).toBe("waiting_approval");
     expect(vm.workflow.find((step) => step.id === "test")?.status).toBe("pending");
     expect(vm.main.filesChanged).toEqual(["index.js"]);
+    expect(vm.approvalHistory.at(-1)?.approvalId).toBe("shell:test");
+    expect(vm.approvalHistory.at(-1)?.command).toBe("npm test");
+    expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["shell", "pending"]);
   });
 
   it("keeps a completed workflow done when no approval is pending", () => {

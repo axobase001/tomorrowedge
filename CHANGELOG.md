@@ -7,6 +7,21 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-06-07
+
+1.1.8 clears the approval-history GUI issue cluster by projecting approval
+events into a readable drawer timeline.
+
+### Added
+
+- Shared `approvalHistory` view-model items with approvalId, kind, status,
+  action, actor/source, blocking state, filter tags, changed files, diff refs,
+  shell output refs, duration, and undo snapshot ids.
+- Detail drawer approval timeline that connects waiting approvals, approved or
+  rejected patch actions, shell approvals, re-review requests, and undo events.
+- Tests for waiting patch approval history, shell approval history, fixture
+  markers, and rendered drawer history.
+
 ## [1.1.7] - 2026-06-07
 
 1.1.7 clears the GUI session-source issue cluster so the cockpit no longer
