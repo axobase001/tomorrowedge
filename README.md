@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.9`。
+当前版本：`1.1.10`。
 
+- `1.1.10` GUI CSS now supports OS dark mode in the React and fallback HTML cockpits, and the fallback HTML cockpit no longer hard-locks 1080px/980px minimum widths.
 - `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
 - `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
 - `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
@@ -415,7 +416,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.9`.
+Current version: `1.1.10`.
+
+`1.1.10` adds OS dark-mode CSS support to both the React and fallback HTML
+cockpits, and removes the fallback cockpit's old 1080px/980px hard min-width
+locks.
 
 `1.1.9` adds a capability dashboard to the GUI detail drawer, backed by a
 product registry for workflow ledger, provider routing, evidence/budget/cost

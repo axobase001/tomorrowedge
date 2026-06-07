@@ -16,6 +16,24 @@
   --te-sans: Inter, "Segoe UI", system-ui, sans-serif;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --te-bg: #10161c;
+    --te-surface: #151d24;
+    --te-alt: #1c2730;
+    --te-border: #2d3b46;
+    --te-border-strong: #42515c;
+    --te-text: #e7eef4;
+    --te-muted: #93a4b3;
+    --te-blue: #79b8dc;
+    --te-deep-blue: #9fcfe9;
+    --te-success: #66c98f;
+    --te-warning: #e0b15a;
+    --te-danger: #ef7f7f;
+  }
+}
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -395,5 +413,31 @@ textarea, select {
   }
   .te-trace div {
     overflow-x: auto;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  button, textarea, select,
+  .te-panel,
+  .te-main,
+  .te-approval,
+  .te-trace,
+  .te-chip,
+  .te-drawer,
+  .te-drawer header {
+    background: var(--te-surface);
+    color: var(--te-text);
+  }
+  .te-topbar {
+    background: rgba(21, 29, 36, 0.96);
+  }
+  .te-panel > header, .te-workflow > header, .te-telemetry > header, .te-spine {
+    background: var(--te-alt);
+  }
+  .te-chip-blue,
+  .te-chip-green,
+  .te-chip-amber,
+  .te-chip-red {
+    background: transparent;
   }
 }

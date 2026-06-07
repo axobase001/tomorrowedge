@@ -128,6 +128,23 @@ function cockpitCss(): string {
   --mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --sans: Inter, "Segoe UI", system-ui, sans-serif;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #10161c;
+    --surface: #151d24;
+    --alt: #1c2730;
+    --border: #2d3b46;
+    --border-strong: #42515c;
+    --text: #e7eef4;
+    --muted: #93a4b3;
+    --blue: #79b8dc;
+    --deep-blue: #9fcfe9;
+    --success: #66c98f;
+    --warning: #e0b15a;
+    --danger: #ef7f7f;
+  }
+}
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -142,7 +159,7 @@ button, select, textarea {
 }
 .cockpit-shell {
   height: 100vh;
-  min-width: 1080px;
+  min-width: 0;
   display: grid;
   grid-template-rows: 46px minmax(0, 1fr) 36px 82px;
   overflow: hidden;
@@ -512,9 +529,40 @@ textarea {
 #drawer-content { padding: 14px; overflow: auto; height: calc(100vh - 52px); }
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); }
+@media (prefers-color-scheme: dark) {
+  .topbar,
+  .panel,
+  .task-card,
+  .main-view,
+  .approval-focus,
+  .telemetry-card,
+  .trace-sheet,
+  .composer,
+  .drawer,
+  .drawer header,
+  button,
+  select,
+  textarea,
+  input {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .panel > header,
+  .workflow-spine,
+  .route-summary,
+  .diff-box,
+  .body-pre {
+    background: var(--alt);
+  }
+  .chip-blue,
+  .chip-green,
+  .chip-amber,
+  .chip-red {
+    background: transparent;
+  }
+}
 @media (max-width: 1180px) {
-  .cockpit-shell { min-width: 980px; }
-  .cockpit-grid { grid-template-columns: 240px minmax(470px, 1fr) 250px; }
+  .cockpit-grid { grid-template-columns: minmax(220px, 24%) minmax(0, 1fr) minmax(220px, 24%); }
   .composer { grid-template-columns: 96px minmax(0, 1fr); }
   .composer-controls { grid-column: 2; justify-content: flex-end; }
   .drawer { width: min(460px, calc(100vw - 18px)); max-width: calc(100vw - 18px); }

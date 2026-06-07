@@ -7,6 +7,23 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-06-07
+
+1.1.10 clears the repeated GUI theming and responsiveness issue batch.
+
+### Added
+
+- React cockpit and fallback HTML cockpit now both define dark-mode CSS variable
+  overrides through `prefers-color-scheme: dark`.
+- CSS regression coverage verifies dark-mode support and prevents the fallback
+  HTML cockpit from reintroducing `1080px` / `980px` hard min-width locks.
+
+### Fixed
+
+- The fallback HTML cockpit no longer hard-locks `.cockpit-shell` to 1080px or
+  the 1180px breakpoint to 980px; it now degrades into flexible columns before
+  the single-column mobile layout.
+
 ## [1.1.9] - 2026-06-07
 
 1.1.9 clears the capability-dashboard GUI issue cluster.

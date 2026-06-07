@@ -1,8 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
+import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 
 describe("cockpit web React surface", () => {
   it("renders the geometric brand mark instead of the legacy text tile", () => {
@@ -70,6 +73,16 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Capability dashboard");
     expect(html).toContain("Provider routing and model availability");
     expect(html).toContain("[available]");
+  });
+
+  it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
+    const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
+    const fallback = renderCockpitHtml();
+
+    expect(tokens).toContain("prefers-color-scheme: dark");
+    expect(fallback).toContain("prefers-color-scheme: dark");
+    expect(fallback).not.toContain("min-width: 1080px");
+    expect(fallback).not.toContain("min-width: 980px");
   });
 });
 
