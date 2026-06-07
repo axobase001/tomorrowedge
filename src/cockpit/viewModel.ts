@@ -24,7 +24,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState): Coc
         title: sessionTitle(state),
         status: taskStatus(status),
         updatedAt: latestTimestamp(state?.events),
-        reminder: currentApproval ? currentApproval.title : state?.finalSummary?.result ?? "绛夊緟浠诲姟",
+        reminder: currentApproval ? currentApproval.title : state?.finalSummary?.result ?? "Awaiting task",
         selected: true
       },
       ...recentSyntheticTasks()

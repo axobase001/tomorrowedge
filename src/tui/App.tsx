@@ -66,7 +66,6 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       setTargetIndex((index) => (index + 1) % Math.max(1, targets.length));
       return;
     }
-    if (busy) return;
     if (key.ctrl && input.toLowerCase() === "p") {
       setPalette(palette === "access" ? null : "access");
       return;
@@ -75,6 +74,7 @@ export function App({ graph, safeMode = true, cwd = process.cwd() }: { graph: Ag
       setPalette(palette === "models" ? null : "models");
       return;
     }
+    if (busy) return;
     if (key.ctrl && input.toLowerCase() === "a") {
       runTuiAction("patch", cwd, viewGraph, setBusy, setMessage, setViewGraph);
       return;
