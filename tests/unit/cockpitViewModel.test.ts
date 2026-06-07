@@ -21,6 +21,8 @@ describe("cockpit view model", () => {
     expect(vm.trace.length).toBeGreaterThan(0);
     expect(vm.sessionMeta.source).toBe("saved");
     expect(vm.sessionMeta.stale).toBe(true);
+    expect(vm.capabilities.find((item) => item.id === "provider-routing")?.status).toBe("available");
+    expect(vm.capabilities.find((item) => item.id === "workflow-ledger")?.readiness).toContain("event");
   });
 
   it("marks live snapshots as connected and non-stale", async () => {

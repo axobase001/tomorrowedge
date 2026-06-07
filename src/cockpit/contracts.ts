@@ -122,6 +122,18 @@ export type CockpitApprovalHistoryItem = {
   undoSnapshotIds?: string[];
 };
 
+export type CockpitCapabilityStatus = "available" | "experimental" | "scaffold" | "unavailable";
+
+export type CockpitCapabilitySummary = {
+  id: string;
+  label: string;
+  status: CockpitCapabilityStatus;
+  category: "workflow" | "provider" | "evidence" | "budget" | "external" | "gui";
+  summary: string;
+  readiness: string;
+  refs: string[];
+};
+
 export type CockpitTraceItem = {
   id: string;
   timestamp: string;
@@ -147,6 +159,7 @@ export type CockpitViewModel = {
   telemetry: CockpitTelemetry;
   approvals: CockpitApproval[];
   approvalHistory: CockpitApprovalHistoryItem[];
+  capabilities: CockpitCapabilitySummary[];
   currentApproval?: CockpitApproval;
   main: {
     title: string;

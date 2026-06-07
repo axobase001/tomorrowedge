@@ -63,6 +63,14 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("patch:fixture_candidate_a");
     expect(html).toContain("filters=patch, pending");
   });
+
+  it("renders capability dashboard readiness in the detail drawer", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("Capability dashboard");
+    expect(html).toContain("Provider routing and model availability");
+    expect(html).toContain("[available]");
+  });
 });
 
 function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string }> = {}): string {
@@ -149,6 +157,15 @@ function sampleViewModel(): CockpitViewModel {
       candidateId: "fixture_candidate_a",
       filesChanged: ["index.js"],
       diffRef: "inline:current-approval-diff"
+    }],
+    capabilities: [{
+      id: "provider-routing",
+      label: "Provider routing and model availability",
+      status: "available",
+      category: "provider",
+      summary: "Role assignments expose provider/model choices.",
+      readiness: "1 provider(s): fixture.",
+      refs: ["src/core/routing/policies.ts"]
     }],
     main: { title: "Main", subtitle: "subtitle", body: "body", filesChanged: ["index.js"], testStatus: "not_run" },
     trace: [{ id: "event_1", timestamp: "2026-06-07T00:00:00.000Z", type: "plan", phase: "plan", summary: "planned" }],

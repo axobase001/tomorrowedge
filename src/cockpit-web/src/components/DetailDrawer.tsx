@@ -21,6 +21,13 @@ export function DetailDrawer({ viewModel, open, onClose }: { viewModel: CockpitV
         item.undoSnapshotIds?.length ? `undo=${item.undoSnapshotIds.join(", ")}` : undefined,
         `filters=${item.filterTags.join(", ")}`
       ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
+      <h3>Capability dashboard</h3>
+      <pre>{viewModel.capabilities.map((capability) => [
+        `${capability.label} [${capability.status}]`,
+        `category=${capability.category}`,
+        `readiness=${capability.readiness}`,
+        `refs=${capability.refs.join(", ")}`
+      ].join("\n")).join("\n\n") || "-"}</pre>
       <h3>Diff</h3>
       <pre>{viewModel.main.diff || "No diff in the current main view."}</pre>
       <h3>Routes</h3>

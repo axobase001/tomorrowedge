@@ -2,6 +2,7 @@
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import { buildCapabilityDashboard } from "./capabilityRegistry.js";
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
 export type CockpitViewModelOptions = {
@@ -53,6 +54,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     telemetry: buildTelemetry(state, routes, currentApproval),
     approvals,
     approvalHistory,
+    capabilities: buildCapabilityDashboard(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({

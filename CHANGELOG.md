@@ -7,6 +7,21 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-06-07
+
+1.1.9 clears the capability-dashboard GUI issue cluster.
+
+### Added
+
+- Productized cockpit capability registry for workflow ledger, provider
+  routing/model availability, evidence/budget/cost telemetry, MCP external
+  agents, orchestration adapters, and the GUI client.
+- Shared ViewModel capability summaries with status, category, readiness notes,
+  and implementation/documentation refs.
+- Detail drawer capability dashboard that distinguishes available,
+  experimental, scaffold, and unavailable-style readiness instead of relying on
+  README prose alone.
+
 ## [1.1.8] - 2026-06-07
 
 1.1.8 clears the approval-history GUI issue cluster by projecting approval

@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.1.8`。
+当前版本：`1.1.9`。
 
+- `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
 - `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
 - `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
 - `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开 nonce URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
@@ -414,7 +415,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.1.8`.
+Current version: `1.1.9`.
+
+`1.1.9` adds a capability dashboard to the GUI detail drawer, backed by a
+product registry for workflow ledger, provider routing, evidence/budget/cost
+telemetry, MCP external agents, orchestration adapters, and GUI readiness.
 
 `1.1.8` adds an approval-history timeline to the GUI detail drawer. It exposes
 approvalId, actor/source, blocked-progress reasons, diff/output refs, undo

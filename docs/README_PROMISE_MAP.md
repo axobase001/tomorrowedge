@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.1.8 README product promises. Use this
+Authoritative map for TomorrowEdge 1.1.9 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -11,6 +11,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | gui-entrypoint | `tedge client` / `npm run client` opens the local GUI client. | `src/cli/index.ts`, `src/cli/commands/serve.ts`, `src/localCockpit/server.ts` | `tests/unit/localCockpit.test.ts`, `npm run smoke:cli` | #140, #142 |
 | task-queue | The GUI shows task queue / current task / recent sessions. | `src/cockpit/viewModel.ts`, `src/localCockpit/html.ts`, `src/cockpit-web/src/components/TaskListPanel.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #134, #145 |
 | session-source | The GUI labels live sessions, saved snapshots, fixture demos, API-unavailable states, and connection status. | `src/cockpit/contracts.ts`, `src/cockpit/viewModel.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/main.tsx`, `src/cockpit-web/src/components/TopBar.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts`, `tests/unit/localCockpit.test.ts` | #165, #166, #167, #168, #169, #170 |
+| capability-dashboard | Detail drawer shows product capability readiness for workflow ledger, provider routing/model availability, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI client status. | `src/cockpit/capabilityRegistry.ts`, `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #186, #187, #188, #189, #190, #191 |
 | workflow-main | The center workspace shows Plan, Route, Edit, Review, Test, Judge, Approve state. | `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/WorkflowPanel.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #145, #146 |
 | approval-actions | Browser approval buttons send intents; Node applies patch/shell actions. | `src/cockpit/approvalExecutor.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/ApprovalPanel.tsx` | `tests/unit/localCockpit.test.ts`, `tests/integration/tuiApprovalActions.test.ts` | #137, #147, #150 |
 | approval-history | Detail drawer shows a chronological approval timeline with approvalId, actor/source, blocking reason, diff/output refs, undo snapshot metadata, and filter tags. | `src/cockpit/contracts.ts`, `src/cockpit/viewModel.ts`, `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | #171, #172, #173, #174, #175, #176, #177, #178 |
