@@ -30,6 +30,12 @@ const ignore = [
   "*.tar.gz"
 ];
 
+const cockpitWebAssetPatterns = [
+  "dist/cockpit-web/index.html",
+  "dist/cockpit-web/assets/*.js",
+  "dist/cockpit-web/assets/*.css"
+];
+
 export async function runPackageZip(outputArg?: string): Promise<string> {
   const version = process.env.npm_package_version ?? "dev";
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
@@ -37,18 +43,26 @@ export async function runPackageZip(outputArg?: string): Promise<string> {
 
   await execa("npm", ["run", "secrets:scan"], { cwd, stdio: "inherit" });
 
-  const files = await fg(["**/*"], {
+  const sourceFiles = await fg(["**/*"], {
     cwd,
     dot: true,
     onlyFiles: true,
     followSymbolicLinks: false,
     ignore
   });
+  const cockpitWebFiles = await fg(cockpitWebAssetPatterns, {
+    cwd,
+    onlyFiles: true,
+    followSymbolicLinks: false
+  });
+  assertCockpitWebAssetPaths(cockpitWebFiles);
+  const files = [...new Set([...sourceFiles, ...cockpitWebFiles])];
   const entries = files.map((file) => ({
     entryName: toZipPath(path.posix.join("tomorrowedge", toZipPath(file))),
     sourcePath: path.join(cwd, file)
   }));
   assertNoEnvEntries(entries);
+  assertCockpitWebZipEntries(entries.map((entry) => entry.entryName));
 
   await mkdir(path.dirname(output), { recursive: true });
   await rm(output, { force: true });
@@ -176,6 +190,23 @@ function normalizeZipEntryName(value: string): string {
 function assertNoEnvEntries(entries: ZipSourceEntry[]): void {
   const hits = entries.filter((entry) => /(^|\/)\.env(\.|$)/.test(normalizeZipEntryName(entry.entryName)));
   if (hits.length) throw new Error(`Refusing to package .env files: ${hits.map((entry) => entry.entryName).join(", ")}`);
+}
+
+export function assertCockpitWebZipEntries(entryNames: string[]): void {
+  assertCockpitWebAssetPaths(entryNames.map((entry) => normalizeZipEntryName(entry).replace(/^tomorrowedge\//, "")));
+}
+
+function assertCockpitWebAssetPaths(paths: string[]): void {
+  const normalized = paths.map(toZipPath);
+  const hasIndex = normalized.includes("dist/cockpit-web/index.html");
+  const hasScript = normalized.some((entry) => /^dist\/cockpit-web\/assets\/.+\.js$/.test(entry));
+  const hasStyle = normalized.some((entry) => /^dist\/cockpit-web\/assets\/.+\.css$/.test(entry));
+  const missing = [
+    hasIndex ? undefined : "dist/cockpit-web/index.html",
+    hasScript ? undefined : "dist/cockpit-web/assets/*.js",
+    hasStyle ? undefined : "dist/cockpit-web/assets/*.css"
+  ].filter((entry): entry is string => Boolean(entry));
+  if (missing.length) throw new Error(`Refusing to package zip without cockpit-web assets: ${missing.join(", ")}`);
 }
 
 function assertZip32(value: number, label: string): void {

@@ -6,7 +6,7 @@ import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
-import { createZipArchive } from "../../scripts/package-zip.js";
+import { assertCockpitWebZipEntries, createZipArchive } from "../../scripts/package-zip.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -86,6 +86,18 @@ describe("release verification scripts", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("requires portable cockpit-web asset paths in zip archives", () => {
+    expect(() => assertCockpitWebZipEntries([
+      "tomorrowedge/dist/cockpit-web/index.html",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.js",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.css"
+    ])).not.toThrow();
+    expect(() => assertCockpitWebZipEntries([
+      "tomorrowedge/dist/cockpit-web/index.html",
+      "tomorrowedge/dist/cockpit-web/assets/index-abc.js"
+    ])).toThrow("dist/cockpit-web/assets/*.css");
   });
 });
 
