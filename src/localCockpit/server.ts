@@ -208,8 +208,10 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
       const body = await readJsonBody(request);
-      const intent = recordApprovalIntent(parseApprovalIntent(body));
-      const session = intent.sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, intent.sessionId);
+      const parsedIntent = parseApprovalIntent(body);
+      const session = parsedIntent.sessionId === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, parsedIntent.sessionId);
+      validateApprovalIntent(cwd, session.state, parsedIntent);
+      const intent = recordApprovalIntent(parsedIntent);
       const result = await executeCockpitApprovalAction(cwd, session.state, intent);
       await saveSession(cwd, result.state);
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
@@ -231,6 +233,27 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (error instanceof HttpError) return sendJson(response, error.status, { error: error.code, message: error.message });
     return sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+function validateApprovalIntent(cwd: string, state: AgentGraphState, intent: CockpitApprovalIntent): void {
+  const viewModel = buildCockpitViewModel(cwd, state);
+  const active = viewModel.currentApproval;
+  const approvalActions = new Set<CockpitApprovalIntent["action"]>(["approve_patch", "reject_patch", "approve_shell", "reject_shell"]);
+  if (!approvalActions.has(intent.action)) {
+    if (intent.approvalId && active && intent.approvalId !== active.id) {
+      throw new HttpError(409, "approval_mismatch", `Approval ${intent.approvalId} is no longer active. Current approval is ${active.id}.`);
+    }
+    return;
+  }
+  if (!active) throw new HttpError(409, "no_active_approval", "No approval is currently waiting for this session.");
+  if (!intent.approvalId) throw new HttpError(400, "approval_id_required", "Approval actions require the active approvalId.");
+  if (intent.approvalId !== active.id) {
+    throw new HttpError(409, "approval_mismatch", `Approval ${intent.approvalId} is no longer active. Current approval is ${active.id}.`);
+  }
+  const patchAction = intent.action === "approve_patch" || intent.action === "reject_patch";
+  const shellAction = intent.action === "approve_shell" || intent.action === "reject_shell";
+  if (patchAction && active.kind === "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is a shell approval.`);
+  if (shellAction && active.kind !== "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is not a shell approval.`);
 }
 
 class HttpError extends Error {

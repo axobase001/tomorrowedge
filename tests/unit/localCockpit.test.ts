@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
@@ -97,6 +97,62 @@ describe("local cockpit server", () => {
       expect(payload.intent.action).toBe("approve_patch");
       expect(payload.viewModel.currentApproval?.kind).toBe("shell");
       expect(payload.viewModel.main.filesChanged).toContain("index.js");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects stale patch approval ids before applying a patch", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-patch-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const before = await readFile(path.join(cwd, "index.js"), "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:not-current" })
+      });
+      const payload = await response.json() as { error: string };
+      const after = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(response.status).toBe(409);
+      expect(payload.error).toBe("approval_mismatch");
+      expect(after).toBe(before);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects stale shell approval ids before running verification", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-shell-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const vm = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { currentApproval?: { id: string } };
+      await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
+      });
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:not-current" })
+      });
+      const payload = await response.json() as { error: string };
+      const after = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as { main: { testStatus?: string }; rawEvents: Array<{ type: string }> };
+
+      expect(response.status).toBe(409);
+      expect(payload.error).toBe("approval_mismatch");
+      expect(after.main.testStatus).toBe("not_run");
+      expect(after.rawEvents.some((event) => event.type === "shell_run")).toBe(false);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

@@ -37,13 +37,40 @@ trace diagnostics.
 - `GET /api/sessions`
 - `GET /api/sessions/latest`
 - `GET /api/sessions/:id`
+- `GET /api/sessions/:id/view-model`
 - `GET /api/sessions/:id/events`
 - `GET /api/sessions/:id/artifacts/:ref`
+- `GET /api/runs/:id/events/live`
 - `POST /api/runs`
+- `POST /api/approvals`
 - `POST /api/mcp/register`
 
 `POST /api/runs` defaults to fixture mode and does not approve patch or shell
 actions unless the request explicitly sets approval flags.
+
+`GET /api/sessions/:id/view-model` returns the shared cockpit ViewModel used by
+browser GUI surfaces. It includes task summaries, workflow spine state,
+telemetry, current approval, drawer details, route summaries, and trace items.
+
+`GET /api/runs/:id/events/live` streams server-sent events for an in-progress
+run. The stream emits a `ready` event first, then `event` messages for live
+ledger updates and `snapshot` messages with the current state plus ViewModel.
+When a snapshot is marked done, clients should close the stream and refresh the
+persisted session ViewModel.
+
+`POST /api/approvals` executes browser approval actions through the Node
+cockpit runtime. Supported actions are:
+
+- `approve_patch`
+- `reject_patch`
+- `approve_shell`
+- `reject_shell`
+- `request_re_review`
+- `undo_latest_patch`
+
+Patch and shell approval actions require the active `approvalId` returned by the
+ViewModel. Stale or mismatched approval IDs are rejected before any patch is
+applied or shell command is run.
 
 ## Why This Exists
 
