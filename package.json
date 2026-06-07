@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "A local GUI client for full-access multi-model coding agents.",
   "type": "module",
   "bin": {
@@ -17,6 +17,7 @@
     "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e:cockpit": "npm run build && npm run web:build && tsx scripts/cockpit-e2e-smoke.ts",
     "verify": "npm test && npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run pack:dry",
     "release:verify": "npm run verify && npm run package:smoke && npm run pack:dry:strict",
     "site:serve": "node scripts/serve-site.mjs",
@@ -45,6 +46,7 @@
     "desktop/*.cjs",
     "docs/*.md",
     "scripts/audit-check.ts",
+    "scripts/cockpit-e2e-smoke.ts",
     "scripts/docs-status-check.ts",
     "scripts/pack-dry.ts",
     "scripts/package-smoke.ts",

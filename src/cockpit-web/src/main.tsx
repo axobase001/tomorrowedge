@@ -36,6 +36,9 @@ const emptyViewModel: CockpitViewModel = {
   artifacts: []
 };
 
+emptyViewModel.statusText = "Awaiting task";
+emptyViewModel.main = { title: "Ready for a new task", subtitle: "Waiting for command", body: "", filesChanged: [] };
+
 function CockpitWebRoot() {
   const apiOptions = useMemo(readApiOptions, []);
   const [viewModel, setViewModel] = useState<CockpitViewModel>(emptyViewModel);

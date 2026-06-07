@@ -32,9 +32,9 @@ describe("cockpit web React surface", () => {
     });
 
     expect(html).toContain("Waiting for patch approval");
-    expect(html).toContain("批准");
-    expect(html).toContain("拒绝");
-    expect(html).toContain("详情");
+    expect(html).toContain("data-testid=\"approval-approve\"");
+    expect(html).toContain("data-testid=\"approval-reject\"");
+    expect(html).toContain("data-testid=\"approval-open-drawer\"");
     expect(html).toContain("te-drawer open");
   });
 
@@ -44,6 +44,7 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("run a smoke task");
     expect(html).toContain("Workflow running...");
     expect(html).toContain("target: core");
+    expect(html).toContain("data-testid=\"composer-input\"");
   });
 });
 

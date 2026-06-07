@@ -5,19 +5,19 @@ export function ApprovalPanel({ approval, busy, onApproval, onOpenDrawer }: { ap
   const approveAction = approval.kind === "shell" ? "approve_shell" : "approve_patch";
   const rejectAction = approval.kind === "shell" ? "reject_shell" : "reject_patch";
   return (
-    <article className="te-approval">
+    <article className="te-approval" data-testid="approval-card">
       <header>
         <h3>{approval.title}</h3>
         <StatusChip status={approval.riskLevel ?? "low"} />
         <StatusChip status={approval.testStatus ?? "not_run"} />
       </header>
       <p>{approval.summary}</p>
-      <small>{approval.filesChanged.length} file · full diff in drawer</small>
+      <small>{approval.filesChanged.length} file(s) changed; full diff in drawer</small>
       <footer>
-        <button type="button" disabled={busy} onClick={() => onApproval(approveAction)}>批准</button>
-        <button type="button" disabled={busy} onClick={() => onApproval(rejectAction)}>拒绝</button>
-        <button type="button" disabled={busy} onClick={() => onApproval("request_re_review")}>再看</button>
-        <button type="button" onClick={onOpenDrawer}>详情</button>
+        <button type="button" disabled={busy} onClick={() => onApproval(approveAction)} data-testid="approval-approve">Approve</button>
+        <button type="button" disabled={busy} onClick={() => onApproval(rejectAction)} data-testid="approval-reject">Reject</button>
+        <button type="button" disabled={busy} onClick={() => onApproval("request_re_review")} data-testid="approval-rereview">Re-review</button>
+        <button type="button" onClick={onOpenDrawer} data-testid="approval-open-drawer">Details</button>
       </footer>
     </article>
   );

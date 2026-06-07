@@ -20,13 +20,13 @@ export function ComposerPanel({
   };
 
   return (
-    <form className="te-panel te-composer" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
-      <strong>自然语言指令</strong>
-      <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder="输入任务、约束或审批反馈…" />
+    <form className="te-panel te-composer" onSubmit={(event) => { event.preventDefault(); onSubmit(); }} data-testid="composer">
+      <strong>Command</strong>
+      <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder="Describe a task, constraint, or approval feedback..." data-testid="composer-input" />
       <span className="te-chip">mode: partial</span>
       <span className="te-chip">target: core</span>
-      {statusMessage ? <span className="te-composer-status">{statusMessage}</span> : null}
-      <button type="submit" disabled={busy}>Send</button>
+      {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
+      <button type="submit" disabled={busy} data-testid="composer-submit">Send</button>
     </form>
   );
 }

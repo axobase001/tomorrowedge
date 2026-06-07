@@ -7,6 +7,31 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-06-07
+
+1.1.6 adds the first real GUI cockpit end-to-end smoke gate.
+
+### Added
+
+- `npm run e2e:cockpit`, which starts the compiled `tedge client --no-open
+  --port 0` entrypoint, parses the nonce URL, opens Chromium through
+  Playwright, submits a fixture task, waits for approval state, opens the
+  detail drawer, and checks responsive layouts at 1440, 1180, 768, and 390px.
+- CI coverage for the cockpit e2e smoke on the Node 20 lane, including Chromium
+  installation and failure artifact upload from `.tomorrowedge/e2e-artifacts`.
+- Browser failure collection for console errors, page errors, failed requests,
+  failing same-origin responses, screenshots, trace zips, and redacted server
+  logs.
+
+### Fixed
+
+- React cockpit task titles now have stable truncation and tooltip behavior so
+  long natural-language task names do not break the task list layout.
+- React cockpit drawer, approval, composer, workflow, telemetry, and trace
+  surfaces now expose stable `data-testid` selectors for E2E coverage.
+- Several React cockpit labels were cleaned up from mojibake into plain English
+  runtime text.
+
 ## [1.1.5] - 2026-06-07
 
 1.1.5 is a GitHub issue-queue hardening release for the GUI client, local

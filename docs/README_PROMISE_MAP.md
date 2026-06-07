@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.1.5 README product promises. Use this
+Authoritative map for TomorrowEdge 1.1.6 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -16,7 +16,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | detail-drawer | Details drawer surfaces route, artifact, and workflow details without duplicating the main view. | `src/cockpit-web/src/components/DetailDrawer.tsx`, `src/localCockpit/html.ts` | `tests/unit/cockpitWeb.test.ts` | #134 |
 | trace-strip | The GUI shows recent event ledger state and live updates. | `src/cockpit/viewModel.ts`, `src/cockpit/eventBus.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/BottomTraceSheet.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/localCockpit.test.ts` | #138 |
 | command-composer | Natural-language command composer starts runs and preserves IME-safe Enter behavior. | `src/localCockpit/html.ts`, `src/cockpit-web/src/components/ComposerPanel.tsx` | `tests/unit/localCockpit.test.ts`, `tests/unit/cockpitWeb.test.ts` | #134 |
-| runtime-screenshots | README GUI screenshots are runtime states rather than static reference boards. | `docs/ui/screenshots/gui-v1.1`, `src/localCockpit/html.ts`, `src/cockpit-web` | Local Playwright screenshot smoke from PR validation; screenshot automation still needs a stable CI hook. | #154 |
+| runtime-screenshots | README GUI screenshots are runtime states rather than static reference boards. | `docs/ui/screenshots/gui-v1.1`, `src/localCockpit/html.ts`, `src/cockpit-web` | `npm run e2e:cockpit` captures failure screenshots/traces and validates the runtime GUI path in CI. | #154, #179, #185 |
 
 ## Desktop Entrypoint
 

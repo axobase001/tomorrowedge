@@ -45,9 +45,9 @@ export function App({
   onCloseDrawer
 }: AppProps) {
   return (
-    <main className="te-shell">
+    <main className="te-shell" data-testid="cockpit-shell">
       <TopBar viewModel={viewModel} busy={busy} onRun={onRun} onRefresh={onRefresh} />
-      <section className="te-grid">
+      <section className="te-grid" data-testid="cockpit-grid">
         <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} onSelectSession={onSelectSession} onNewTask={onNewTask} />
         <WorkflowPanel viewModel={viewModel} busy={busy} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
         <TelemetryPanel telemetry={viewModel.telemetry} />

@@ -157,22 +157,29 @@ textarea, select {
   background: rgba(238, 245, 248, 0.52);
 }
 .te-task-list article div {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 .te-task-list strong {
+  display: block;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12.5px;
 }
+.te-task-list .te-chip {
+  flex: 0 0 auto;
+}
 .te-task-list p {
   margin: 4px 0;
   color: var(--te-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .te-task-list small {
   color: var(--te-muted);
@@ -209,6 +216,7 @@ textarea, select {
 .te-spine .running, .te-spine .waiting { color: var(--te-deep-blue); font-weight: 700; }
 .te-spine .failed { color: var(--te-danger); }
 .te-main, .te-approval {
+  min-width: 0;
   margin: 14px;
   padding: 16px;
   border: 1px solid var(--te-border);
@@ -218,6 +226,7 @@ textarea, select {
 .te-main p, .te-approval p {
   color: var(--te-muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .te-main pre, .te-drawer pre {
   overflow: auto;

@@ -16,8 +16,8 @@ export function TaskListPanel({
   onNewTask: () => void;
 }) {
   return (
-    <aside className="te-panel te-task-panel">
-      <header><h2>任务</h2><button type="button" aria-label="New task" onClick={onNewTask}>+</button></header>
+    <aside className="te-panel te-task-panel" data-testid="task-panel">
+      <header><h2>Tasks</h2><button type="button" aria-label="New task" onClick={onNewTask}>+</button></header>
       <select value={selectedSession} onChange={(event) => onSelectSession(event.target.value)} aria-label="session selector">
         {sessions.length ? sessions.map((session) => (
           <option key={session.sessionId} value={session.sessionId}>{session.sessionId}</option>
@@ -25,8 +25,8 @@ export function TaskListPanel({
       </select>
       <div className="te-task-list">
         {tasks.map((task) => (
-          <article key={task.id} className={task.selected ? "selected" : ""}>
-            <div><strong>{task.title}</strong><StatusChip status={task.status} /></div>
+          <article key={task.id} className={task.selected ? "selected" : ""} data-testid="task-card">
+            <div><strong title={task.title}>{task.title}</strong><StatusChip status={task.status} /></div>
             <p>{task.reminder}</p>
             <small>{task.updatedAt}</small>
           </article>

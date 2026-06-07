@@ -2,7 +2,7 @@ import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 
 export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: CockpitViewModel; busy: boolean; onRun: () => void; onRefresh: () => void }) {
   return (
-    <header className="te-topbar">
+    <header className="te-topbar" data-testid="topbar">
       <div className="te-brand">
         <span className="te-mark" aria-label="TomorrowEdge">
           <span className="te-mark-top" />
@@ -10,7 +10,7 @@ export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: Cockp
           <span className="te-mark-trace" />
         </span>
         <div>
-          <strong>TomorrowEdge / 明日边缘</strong>
+          <strong>TomorrowEdge GUI</strong>
           <span>{viewModel.workspace}</span>
         </div>
       </div>
