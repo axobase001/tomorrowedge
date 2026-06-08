@@ -1,11 +1,13 @@
 import type { KeyboardEvent } from "react";
 import type { AccessMode } from "../../../config/schema.js";
+import type { Translator } from "../i18n.js";
 
 export function ComposerPanel({
   goal,
   accessMode,
   busy,
   statusMessage,
+  t,
   onGoalChange,
   onAccessModeChange,
   onSubmit
@@ -14,6 +16,7 @@ export function ComposerPanel({
   accessMode: AccessMode;
   busy: boolean;
   statusMessage?: string;
+  t: Translator;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onSubmit: () => void;
@@ -29,25 +32,25 @@ export function ComposerPanel({
 
   return (
     <form className="te-panel te-composer" onSubmit={(event) => { event.preventDefault(); if (!isEmpty) onSubmit(); }} data-testid="composer">
-      <strong>Command</strong>
-      <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder="Describe a task, constraint, or approval feedback..." data-testid="composer-input" />
-      {isEmpty && <span data-testid="composer-validation-hint">Type a task to begin</span>}
+      <strong>{t("composer.title")}</strong>
+      <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder={t("composer.placeholder")} data-testid="composer-input" />
+      {isEmpty && <span data-testid="composer-validation-hint">{t("composer.empty")}</span>}
       <label className="te-mode-control">
-        <span>mode</span>
+        <span>{t("composer.mode")}</span>
         <select
           value={accessMode}
           onChange={(event) => onAccessModeChange(event.target.value as AccessMode)}
-          title="restricted disables file/shell actions, partial asks for approval, full allows autonomous patch/shell/repair with trace."
-          aria-label="Access mode" data-testid="composer-mode"
+          title={t("composer.modeHelp")}
+          aria-label={t("composer.accessMode")} data-testid="composer-mode"
         >
           <option value="restricted">restricted</option>
           <option value="partial">partial</option>
           <option value="full">full</option>
         </select>
       </label>
-      <span className="te-chip">target: core</span>
+      <span className="te-chip">{t("composer.targetCore")}</span>
       {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
-      <button type="submit" disabled={busy || isEmpty} data-testid="composer-submit">Send</button>
+      <button type="submit" disabled={busy || isEmpty} data-testid="composer-submit">{t("composer.send")}</button>
     </form>
   );
 }

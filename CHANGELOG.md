@@ -7,6 +7,24 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-06-09
+
+1.2.7 adds first-class GUI language switching for the local client.
+
+### Added
+
+- Top-bar language selector with English as the default and Chinese as an
+  operator-selectable option.
+- Local browser persistence for the selected GUI language.
+- React and Playwright coverage for default English rendering and Chinese
+  switching.
+
+### Changed
+
+- Core GUI chrome, setup wizard, composer, workflow, telemetry, trace, approval,
+  key/role management, and detail drawer copy now flow through the GUI i18n
+  layer while event ledger payloads and model outputs remain unchanged.
+
 ## [1.2.6] - 2026-06-09
 
 1.2.6 rebuilds the community API key and role management idea on the safer

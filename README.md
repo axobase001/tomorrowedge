@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.2.6`。
+当前版本：`1.2.7`。
 
+- `1.2.7` adds GUI language switching. The local client defaults to English and can switch to Chinese from the top bar, with the preference saved locally.
 - `1.2.6` adds a GUI `Keys` panel for simple provider API-key setup and per-role model assignment while keeping raw keys out of config.
 - `1.2.5` tightens GUI E2E coverage for telemetry routing, drawer open/close, and patch/shell approval completion.
 - `1.2.4` clears the latest community GUI/config issue batch: no-op approvals, stale session selectors, setup defaults, read-only path detection, and MCP-aware provider reference validation.
@@ -423,7 +424,10 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.2.6`.
+Current version: `1.2.7`.
+
+`1.2.7` adds GUI language switching. The local client defaults to English and
+can switch to Chinese from the top bar, with the preference saved locally.
 
 `1.2.6` adds a GUI `Keys` panel for simple provider API-key setup and per-role
 model assignment while keeping raw keys out of config.
@@ -658,6 +662,8 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 - Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
 - GUI client for task queue, workflow focus, approval execution, telemetry,
   details drawer, trace strip, and natural-language commands
+- GUI language switcher with English as the default and Chinese available from
+  the top bar; the preference is stored locally in the browser
 - Optional desktop app window via `tedge desktop`, reusing the local GUI client
   without forking the runtime core
 - Shared cockpit ViewModel/API contract for the GUI client and future packaged

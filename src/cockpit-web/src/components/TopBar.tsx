@@ -1,6 +1,26 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
+import type { GuiLanguage, Translator } from "../i18n.js";
+import { supportedLanguages, translateKnownValue } from "../i18n.js";
 
-export function TopBar({ viewModel, busy, onOpenKeys, onRun, onRefresh }: { viewModel: CockpitViewModel; busy: boolean; onOpenKeys: () => void; onRun: () => void; onRefresh: () => void }) {
+export function TopBar({
+  viewModel,
+  busy,
+  language,
+  t,
+  onLanguageChange,
+  onOpenKeys,
+  onRun,
+  onRefresh
+}: {
+  viewModel: CockpitViewModel;
+  busy: boolean;
+  language: GuiLanguage;
+  t: Translator;
+  onLanguageChange: (language: GuiLanguage) => void;
+  onOpenKeys: () => void;
+  onRun: () => void;
+  onRefresh: () => void;
+}) {
   return (
     <header className="te-topbar" data-testid="topbar">
       <div className="te-brand">
@@ -16,18 +36,24 @@ export function TopBar({ viewModel, busy, onOpenKeys, onRun, onRefresh }: { view
       </div>
       <div className="te-topbar-status">
         <span className="te-chip" title={viewModel.sessionMeta.message ?? viewModel.sessionMeta.connectionLabel}>
-          {viewModel.sessionMeta.sourceLabel}
+          {translateKnownValue(t, viewModel.sessionMeta.sourceLabel)}
         </span>
         <span className={viewModel.sessionMeta.connectionState === "connected" ? "te-chip te-chip-green" : viewModel.sessionMeta.connectionState === "unavailable" || viewModel.sessionMeta.connectionState === "disconnected" ? "te-chip te-chip-red" : "te-chip"}>
-          {viewModel.sessionMeta.connectionLabel}
+          {translateKnownValue(t, viewModel.sessionMeta.connectionLabel)}
         </span>
-        {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">Fixture</span> : null}
-        {viewModel.sessionMeta.stale ? <span className="te-chip">Snapshot</span> : null}
-        <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? "FULL AUTONOMY" : viewModel.accessMode}</span>
+        {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">{t("topbar.fixture")}</span> : null}
+        {viewModel.sessionMeta.stale ? <span className="te-chip">{t("topbar.snapshot")}</span> : null}
+        <label className="te-language-control">
+          <span>{t("topbar.language")}</span>
+          <select value={language} onChange={(event) => onLanguageChange(event.target.value as GuiLanguage)} data-testid="language-selector" aria-label={t("topbar.language")}>
+            {supportedLanguages.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? t("topbar.fullAutonomy") : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
-        <button type="button" disabled={busy} onClick={onOpenKeys} aria-label="Open API key and role manager" data-testid="topbar-keys">Keys</button>
-        <button type="button" disabled={busy} onClick={onRun} aria-label="Run workflow">Run</button>
-        <button type="button" disabled={busy} onClick={onRefresh} aria-label="Refresh sessions">Refresh</button>
+        <button type="button" disabled={busy} onClick={onOpenKeys} aria-label={t("topbar.openKeys")} data-testid="topbar-keys">{t("topbar.keys")}</button>
+        <button type="button" disabled={busy} onClick={onRun} aria-label={t("topbar.runWorkflow")}>{t("topbar.run")}</button>
+        <button type="button" disabled={busy} onClick={onRefresh} aria-label={t("topbar.refreshSessions")}>{t("topbar.refresh")}</button>
       </div>
     </header>
   );

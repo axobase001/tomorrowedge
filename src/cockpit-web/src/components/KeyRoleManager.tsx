@@ -5,12 +5,14 @@ import type {
   CockpitRoleAssignment,
   CockpitSetupStatus
 } from "../api.js";
+import type { Translator } from "../i18n.js";
 
 type KeyRoleManagerProps = {
   setupStatus?: CockpitSetupStatus;
   busy: boolean;
   message?: string;
   connectionResult?: CockpitProviderConnectionResult;
+  t: Translator;
   onClose: () => void;
   onSaveProviderKey: (request: CockpitProviderKeyRequest) => void;
   onDeleteProviderKey: (provider: string) => void;
@@ -23,6 +25,7 @@ export function KeyRoleManager({
   busy,
   message,
   connectionResult,
+  t,
   onClose,
   onSaveProviderKey,
   onDeleteProviderKey,
@@ -62,61 +65,61 @@ export function KeyRoleManager({
       <section className="te-keymgr-card">
         <header>
           <div>
-            <span className="te-chip te-chip-blue">Key and role management</span>
-            <h2>API keys and role routing</h2>
+            <span className="te-chip te-chip-blue">{t("keymgr.badge")}</span>
+            <h2>{t("keymgr.title")}</h2>
           </div>
-          <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">Close</button>
+          <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">{t("keymgr.close")}</button>
         </header>
         <nav className="te-keymgr-tabs" aria-label="Key manager tabs">
-          <button type="button" className={tab === "keys" ? "active" : ""} onClick={() => setTab("keys")} data-testid="keymgr-tab-keys">API Keys</button>
-          <button type="button" className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")} data-testid="keymgr-tab-roles">Role Assign</button>
+          <button type="button" className={tab === "keys" ? "active" : ""} onClick={() => setTab("keys")} data-testid="keymgr-tab-keys">{t("keymgr.tabKeys")}</button>
+          <button type="button" className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")} data-testid="keymgr-tab-roles">{t("keymgr.tabRoles")}</button>
         </nav>
         {tab === "keys" ? (
           <section className="te-keymgr-body">
-            <p>Keys are stored in the local project env file and config only keeps env-var indirection. Use separate provider keys when possible for rate limits and cost tracing.</p>
+            <p>{t("keymgr.keysIntro")}</p>
             <div className="te-keymgr-provider-list">
               {providers.map((item) => (
                 <article key={item.id} className={item.id === provider ? "selected" : ""}>
                   <button type="button" className="te-provider-pick" onClick={() => setProvider(item.id)}>
                     <strong>{labelProvider(item.id)}</strong>
-                    <span>{item.keyConfigured ? item.maskedKey ?? item.keySource : "Not configured"}</span>
+                    <span>{item.keyConfigured ? item.maskedKey ?? item.keySource : t("keymgr.notConfigured")}</span>
                   </button>
-                  <span className={item.keyConfigured ? "te-chip te-chip-green" : "te-chip te-chip-red"}>{item.keyConfigured ? item.keySource : "missing"}</span>
+                  <span className={item.keyConfigured ? "te-chip te-chip-green" : "te-chip te-chip-red"}>{item.keyConfigured ? item.keySource : t("keymgr.missing")}</span>
                 </article>
               ))}
             </div>
             <div className="te-keymgr-form">
               <label>
-                <span>Provider</span>
+                <span>{t("keymgr.provider")}</span>
                 <select value={provider} onChange={(event) => setProvider(event.target.value)} data-testid="keymgr-provider">
                   {providers.map((item) => <option key={item.id} value={item.id}>{labelProvider(item.id)}</option>)}
                 </select>
               </label>
               <label>
-                <span>Model</span>
+                <span>{t("keymgr.model")}</span>
                 <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
               </label>
               <label>
-                <span>API key env</span>
+                <span>{t("keymgr.apiKeyEnv")}</span>
                 <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} data-testid="keymgr-env" />
               </label>
               <label>
-                <span>API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Paste key once; it will not be shown again" data-testid="keymgr-key" />
+                <span>{t("keymgr.apiKey")}</span>
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t("keymgr.apiKeyPlaceholder")} data-testid="keymgr-key" />
               </label>
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={!canSaveKey} onClick={() => {
                 onSaveProviderKey({ provider, model, apiKeyEnv, apiKey });
                 setApiKey("");
-              }} data-testid="keymgr-save-key">Save key</button>
-              <button type="button" className="te-quiet-button" disabled={busy || !provider} onClick={() => onTestProvider(provider)} data-testid="keymgr-test-key">Test</button>
-              <button type="button" className="te-quiet-button" disabled={busy || !selectedProvider?.keyConfigured} onClick={() => onDeleteProviderKey(provider)} data-testid="keymgr-delete-key">Remove local key</button>
+              }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
+              <button type="button" className="te-quiet-button" disabled={busy || !provider} onClick={() => onTestProvider(provider)} data-testid="keymgr-test-key">{t("keymgr.test")}</button>
+              <button type="button" className="te-quiet-button" disabled={busy || !selectedProvider?.keyConfigured} onClick={() => onDeleteProviderKey(provider)} data-testid="keymgr-delete-key">{t("keymgr.removeKey")}</button>
             </div>
           </section>
         ) : (
           <section className="te-keymgr-body">
-            <p>Assign stronger or cheaper models per workflow role. Use `auto` when TomorrowEdge should choose from the routing policy.</p>
+            <p>{t("keymgr.rolesIntro")}</p>
             <div className="te-role-list" data-testid="keymgr-role-list">
               {assignments.map((assignment) => (
                 <div key={assignment.role} className="te-role-row">
@@ -131,7 +134,7 @@ export function KeyRoleManager({
               ))}
             </div>
             <div className="te-keymgr-actions">
-              <button type="button" disabled={busy || !assignments.length} onClick={() => onSaveRoleAssignments(assignments)} data-testid="keymgr-save-roles">Save role assignments</button>
+              <button type="button" disabled={busy || !assignments.length} onClick={() => onSaveRoleAssignments(assignments)} data-testid="keymgr-save-roles">{t("keymgr.saveRoles")}</button>
             </div>
           </section>
         )}
