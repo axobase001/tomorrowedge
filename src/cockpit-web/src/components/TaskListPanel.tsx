@@ -18,7 +18,7 @@ export function TaskListPanel({
   return (
     <aside className="te-panel te-task-panel" data-testid="task-panel">
       <header><h2>Tasks</h2><button type="button" aria-label="New task" onClick={onNewTask}>+</button></header>
-      <select value={selectedSession} onChange={(event) => onSelectSession(event.target.value)} aria-label="session selector">
+      <select value={selectedSession} aria-label="Select session" onChange={(event) => onSelectSession(event.target.value)}>
         {sessions.length ? sessions.map((session) => (
           <option key={session.sessionId} value={session.sessionId}>{session.sessionId}</option>
         )) : <option value="latest">latest</option>}

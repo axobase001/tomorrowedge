@@ -25,8 +25,8 @@ export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: Cockp
         {viewModel.sessionMeta.stale ? <span className="te-chip">Snapshot</span> : null}
         <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? "FULL AUTONOMY" : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
-        <button type="button" disabled={busy} onClick={onRun}>Run</button>
-        <button type="button" disabled={busy} onClick={onRefresh}>Refresh</button>
+        <button type="button" disabled={busy} onClick={onRun} aria-label="Run workflow">Run</button>
+        <button type="button" disabled={busy} onClick={onRefresh} aria-label="Refresh sessions">Refresh</button>
       </div>
     </header>
   );
