@@ -7,6 +7,10 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-06-08
+
+1.2.1 is a local-startup patch release for fresh checkouts and dev users.
+
 ### Fixed
 
 - Local dev GUI startup now builds React cockpit assets before `client`,
