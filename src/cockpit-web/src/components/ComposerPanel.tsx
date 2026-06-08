@@ -38,7 +38,7 @@ export function ComposerPanel({
           value={accessMode}
           onChange={(event) => onAccessModeChange(event.target.value as AccessMode)}
           title="restricted disables file/shell actions, partial asks for approval, full allows autonomous patch/shell/repair with trace."
-          data-testid="composer-mode"
+          aria-label="Access mode" data-testid="composer-mode"
         >
           <option value="restricted">restricted</option>
           <option value="partial">partial</option>
