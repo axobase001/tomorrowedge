@@ -120,8 +120,8 @@ Keys are never logged in full. The `maskKey()` function renders `sk-1234567890ab
 │    │  inject into process.env (only if not already set)             │
 │    │                                                                 │
 │    ▼                                                                 │
-│  process.env.DEEPSEEK_API_KEY = "sk-xxx"                            │
-│  process.env.OPENAI_API_KEY    = "sk-yyy"                           │
+│  process.env receives DEEPSEEK_API_KEY / OPENAI_API_KEY entries     │
+│  using values loaded from secure storage                            │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────────────┐

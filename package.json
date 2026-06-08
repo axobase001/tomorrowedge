@@ -45,6 +45,7 @@
     "LICENSE",
     "desktop/*.cjs",
     "docs/*.md",
+    "docs/adr/*.md",
     "scripts/audit-check.ts",
     "scripts/cockpit-e2e-smoke.ts",
     "scripts/docs-status-check.ts",
