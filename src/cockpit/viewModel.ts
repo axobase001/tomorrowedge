@@ -405,8 +405,8 @@ function taskStatus(status: CockpitViewModel["status"]): "running" | "waiting" |
 
 function recentSyntheticTasks() {
   return [
-    { id: "recent-docs", title: "Update README and trace docs", status: "done" as const, updatedAt: "recent", reminder: "Completed" },
-    { id: "recent-mcp", title: "MCP Agent Bridge smoke", status: "done" as const, updatedAt: "recent", reminder: "Replayable" }
+    { id: "recent-docs", title: "[Demo] Update README and trace docs", status: "done" as const, updatedAt: "recent", reminder: "Demo task — add API key to run real workflows" },
+    { id: "recent-mcp", title: "[Demo] MCP Agent Bridge smoke", status: "done" as const, updatedAt: "recent", reminder: "Demo task — add API key to run real workflows" }
   ];
 }
 export function artifactKindFromRef(ref: string): string {
