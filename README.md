@@ -24,8 +24,10 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.2.1`。
+当前版本：`1.2.3`。
 
+- `1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly sent through the patch approval workflow.
+- `1.2.2` hardens GUI/live-model defaults and release packaging after the latest community PR sweep.
 - `1.2.1` fixes local dev startup so `client`, `desktop`, and `serve` build React cockpit assets before launching, avoiding stale embedded fallback UI on fresh checkouts.
 - `1.2.0` GUI client adds first-run provider/model setup, local env-key storage, provider connection testing, and a composer-side access-mode dropdown for `restricted` / `partial` / `full`.
 - `1.1.10` GUI CSS now supports OS dark mode in the React and fallback HTML cockpits, and the fallback HTML cockpit no longer hard-locks 1080px/980px minimum widths.
@@ -418,7 +420,14 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.2.1`.
+Current version: `1.2.3`.
+
+`1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly
+sent through the patch approval workflow. Read-only inspection commands can now
+complete without generating empty patch candidates.
+
+`1.2.2` hardens GUI/live-model defaults and release packaging after the latest
+community PR sweep.
 
 `1.2.1` fixes local dev startup so `client`, `desktop`, and `serve` build
 React cockpit assets before launching. Fresh checkouts now open the current GUI
