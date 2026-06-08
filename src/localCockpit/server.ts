@@ -527,21 +527,39 @@ async function sendCockpitAsset(response: ServerResponse, pathname: string, webR
 async function resolveCockpitWebRoot(configured?: string | false): Promise<string | undefined> {
   if (configured === false) return undefined;
   const candidates = configured ? [configured] : [
-    path.resolve(moduleDir, "..", "cockpit-web"),
-    path.resolve(moduleDir, "..", "..", "dist", "cockpit-web")
+    path.resolve(moduleDir, "..", "..", "dist", "cockpit-web"),
+    path.resolve(moduleDir, "..", "cockpit-web")
   ];
   for (const candidate of candidates) {
-    if (await isExistingDirectory(candidate)) return candidate;
+    if (await isUsableCockpitWebRoot(candidate)) return candidate;
   }
   return undefined;
 }
 
-async function isExistingDirectory(value: string): Promise<boolean> {
+async function isUsableCockpitWebRoot(value: string): Promise<boolean> {
   try {
-    return (await stat(value)).isDirectory();
+    if (!(await stat(value)).isDirectory()) return false;
+    const indexHtml = await readFile(path.join(value, "index.html"), "utf8");
+    if (indexHtml.includes('src="/src/') || indexHtml.includes("src='/src/")) return false;
+    const assetRefs = extractStaticAssetRefs(indexHtml);
+    const scriptRefs = assetRefs.filter((ref) => ref.endsWith(".js") || ref.endsWith(".mjs"));
+    const styleRefs = assetRefs.filter((ref) => ref.endsWith(".css"));
+    if (!scriptRefs.length || !styleRefs.length) return false;
+    for (const ref of assetRefs) {
+      const assetPath = safeStaticFilePath(value, ref.replace(/^\/+/, ""));
+      if (!assetPath || !(await stat(assetPath)).isFile()) return false;
+    }
+    const styleContents = await Promise.all(styleRefs.map((ref) => readFile(path.join(value, ref.replace(/^\/+/, "")), "utf8")));
+    return styleContents.some((content) => content.includes(".te-shell"));
   } catch {
     return false;
   }
+}
+
+function extractStaticAssetRefs(indexHtml: string): string[] {
+  return Array.from(indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g))
+    .map((match) => match[1])
+    .filter((ref) => ref.startsWith("/assets/") || ref.startsWith("assets/"));
 }
 
 function safeStaticFilePath(root: string, ref: string): string | undefined {
