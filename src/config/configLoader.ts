@@ -20,7 +20,9 @@ export function loadConfig(cwd: string): TomorrowEdgeConfig {
     return defaultConfig;
   }
   const parsed = YAML.parse(readFileSync(configPath, "utf8")) as unknown;
-  return configSchema.parse(deepMerge(defaultConfig, parsed));
+  const config = configSchema.parse(deepMerge(defaultConfig, parsed));
+  validateAgentProviders(config);
+  return config;
 }
 
 export type WriteDefaultConfigResult = {
@@ -65,4 +67,20 @@ function deepMerge(base: unknown, override: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateAgentProviders(config: TomorrowEdgeConfig): void {
+  const providerIds = Object.keys(config.providers);
+  for (const [role, agent] of Object.entries(config.agents)) {
+    if (typeof agent.provider !== "string" || !agent.provider.trim()) {
+      throw new Error(
+        `Agent "${role}" has an empty or missing provider. Each agent must reference a valid provider ID.`
+      );
+    }
+    if (!providerIds.includes(agent.provider)) {
+      throw new Error(
+        `Agent "${role}" references unknown provider: "${agent.provider}". Available: ${providerIds.join(", ")}`
+      );
+    }
+  }
 }
