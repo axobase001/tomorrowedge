@@ -7,6 +7,19 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-06-09
+
+1.2.5 tightens GUI E2E coverage for the cockpit paths that operators touch most
+often.
+
+### Changed
+
+- Cockpit E2E smoke now verifies telemetry routing display, drawer open/close,
+  and the end-to-end approval path from patch approval through shell approval to
+  completion.
+- The detail drawer close button now uses the explicit
+  `detail-drawer-close` test selector.
+
 ## [1.2.4] - 2026-06-09
 
 1.2.4 clears the latest community GUI and configuration issue batch while

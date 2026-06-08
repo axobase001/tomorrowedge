@@ -8,7 +8,7 @@ export function DetailDrawer({ viewModel, open, onClose }: { viewModel: CockpitV
       <aside className="te-drawer open" aria-hidden={false} data-testid="detail-drawer">
         <header>
           <h2>Details</h2>
-          <button type="button" onClick={onClose} data-testid="close-drawer">Close</button>
+          <button type="button" onClick={onClose} data-testid="detail-drawer-close">Close</button>
         </header>
       <h3>Approval history</h3>
       <pre>{viewModel.approvalHistory.map((item) => [

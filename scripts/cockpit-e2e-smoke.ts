@@ -65,6 +65,11 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await page.fill("[data-testid='composer-input']", "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.");
     await page.press("[data-testid='composer-input']", "Enter");
     await page.waitForSelector("[data-testid='approval-card']", { timeout: 20_000 });
+    await page.waitForSelector("[data-testid='telemetry-routing']", { timeout: 10_000 });
+    const routingText = await page.locator("[data-testid='telemetry-routing']").innerText();
+    if (!/planner|coder|reviewer|judge/.test(routingText)) {
+      throw new Error(`telemetry routing panel did not expose role routes: ${routingText}`);
+    }
     await assertNoHorizontalOverflow(page, "approval-main");
     await page.click("[data-testid='approval-open-drawer']");
     await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
@@ -78,6 +83,24 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
       await assertNoHorizontalOverflow(page, `${viewport.width}x${viewport.height}`);
       await waitForDrawerInViewport(page);
     }
+    await page.setViewportSize(viewports[0]);
+    await page.click("[data-testid='detail-drawer-close']");
+    await page.waitForSelector("[data-testid='detail-drawer']", { state: "detached", timeout: 5_000 });
+    await page.click("[data-testid='open-drawer']");
+    await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
+    await page.click("[data-testid='detail-drawer-close']");
+    await page.waitForSelector("[data-testid='detail-drawer']", { state: "detached", timeout: 5_000 });
+
+    await page.click("[data-testid='approval-approve']");
+    await page.waitForFunction(() => /shell/i.test(document.querySelector("[data-testid='approval-card']")?.textContent ?? ""), undefined, { timeout: 10_000 });
+    await page.click("[data-testid='approval-approve']");
+    await page.waitForSelector("[data-testid='approval-card']", { state: "detached", timeout: 20_000 });
+    await page.waitForFunction(() => {
+      const workflow = document.querySelector("[data-testid='workflow-panel']")?.textContent?.toLowerCase() ?? "";
+      const taskPanel = document.querySelector("[data-testid='task-panel']")?.textContent?.toLowerCase() ?? "";
+      return workflow.includes("completed") || workflow.includes("done") || taskPanel.includes("done") || taskPanel.includes("completed");
+    }, undefined, { timeout: 20_000 });
+    await page.screenshot({ path: path.join(artifactDir, "approval-flow-completed.png"), fullPage: true });
   });
 
   await context.close();
