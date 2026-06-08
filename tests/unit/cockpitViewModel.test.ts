@@ -126,6 +126,41 @@ describe("cockpit view model", () => {
     expect(vm.workflow.find((step) => step.id === "test")?.status).toBe("pending");
   });
 
+  it("does not create patch approvals for empty no-op candidates", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      candidates: [{
+        candidateId: "candidate_empty",
+        agentId: "coder_a",
+        approach: "analysis_only",
+        summary: "No file writes needed.",
+        filesChanged: [],
+        unifiedDiff: "",
+        testPlan: [],
+        knownTradeoffs: [],
+        estimatedRisk: "low"
+      }],
+      judge: {
+        selectedCandidateId: "candidate_empty",
+        decision: "select",
+        reason: "No-op result is enough.",
+        confidence: 0.9
+      },
+      finalSummary: {
+        task: "inspect repository",
+        result: "completed",
+        changedFiles: [],
+        testsRun: [],
+        evidence: ["Read-only request completed."],
+        risksRemaining: [],
+        suggestedCommitMessage: "docs: inspect repository"
+      }
+    }));
+
+    expect(vm.currentApproval).toBeUndefined();
+    expect(vm.status).toBe("done");
+    expect(vm.approvalHistory.some((item) => item.kind === "patch" && item.status === "waiting")).toBe(false);
+  });
+
   it("shows shell approval only after patch application and before shell execution", () => {
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
       changedFiles: ["index.js"],

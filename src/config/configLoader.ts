@@ -20,7 +20,9 @@ export function loadConfig(cwd: string): TomorrowEdgeConfig {
     return defaultConfig;
   }
   const parsed = YAML.parse(readFileSync(configPath, "utf8")) as unknown;
-  return configSchema.parse(deepMerge(defaultConfig, parsed));
+  const config = configSchema.parse(deepMerge(defaultConfig, parsed));
+  validateAgentProviderReferences(config);
+  return config;
 }
 
 export type WriteDefaultConfigResult = {
@@ -65,4 +67,26 @@ function deepMerge(base: unknown, override: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateAgentProviderReferences(config: TomorrowEdgeConfig): void {
+  const providerIds = new Set(Object.keys(config.providers));
+  const externalAgentIds = new Set(Object.keys(config.external_agents));
+  for (const [role, agent] of Object.entries(config.agents)) {
+    const provider = agent.provider.trim();
+    if (!provider) {
+      throw new Error(`Agent "${role}" has an empty provider reference.`);
+    }
+    if (provider === "auto") continue;
+    if (provider.startsWith("external:")) {
+      const externalId = provider.slice("external:".length);
+      if (!externalAgentIds.has(externalId)) {
+        throw new Error(`Agent "${role}" references unknown external agent "${externalId}".`);
+      }
+      continue;
+    }
+    if (!providerIds.has(provider)) {
+      throw new Error(`Agent "${role}" references unknown provider "${provider}".`);
+    }
+  }
 }

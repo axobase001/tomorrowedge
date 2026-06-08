@@ -138,6 +138,7 @@ describe("local cockpit server", () => {
 
   it("serves the shared cockpit view model for a saved session", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-vm-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
     const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -317,10 +318,12 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-setup-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const before = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { needsSetup: boolean; recommendedProvider: string; providers: Array<{ id: string; keyConfigured: boolean }> };
+      const before = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { needsSetup: boolean; recommendedProvider: string; selectedProvider?: string; selectedModel?: string; providers: Array<{ id: string; keyConfigured: boolean }> };
 
       expect(before.needsSetup).toBe(true);
       expect(before.recommendedProvider).toBe("openrouter");
+      expect(before.selectedProvider).toBeUndefined();
+      expect(before.selectedModel).toBeUndefined();
       expect(before.providers.some((provider) => provider.id === "openrouter" && provider.keyConfigured === false)).toBe(true);
 
       const response = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {

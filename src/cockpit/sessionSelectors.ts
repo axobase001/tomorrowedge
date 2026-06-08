@@ -20,7 +20,7 @@ export function inferWorkflowStage(state?: AgentGraphState): CockpitWorkflowStag
   if (state.agents.some((agent) => agent.status === "waiting_for_user")) return "waiting_approval";
   if (state.finalSummary) return "done";
   if (events.some((event) => event.type === "shell_run")) return latestShellFailed(events) ? "failed" : "testing";
-  if (state.judge) return state.judge.decision === "ask_user" ? "waiting_approval" : "waiting_approval";
+  if (state.judge) return state.judge.decision === "ask_user" ? "waiting_approval" : "reviewing";
   if (state.review) return "reviewing";
   if (state.candidates.length || state.repairCandidates.length) return "editing";
   if (state.contextSelection) return "editing";

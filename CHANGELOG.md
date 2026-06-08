@@ -7,6 +7,39 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-06-09
+
+1.2.4 clears the latest community GUI and configuration issue batch while
+keeping riskier automation/security PRs out of the release path for further
+review.
+
+### Added
+
+- MCP-aware agent provider reference validation at config load time. Agent
+  routes now fail early for unknown providers while still allowing `auto` and
+  `external:<agent-id>` bindings when the external agent profile exists.
+- Regression coverage for read-only natural-language inspection, empty no-op
+  patch candidates, session selector refresh, and first-run setup defaults.
+
+### Changed
+
+- Absorbed the safe parts of the latest community PRs for GUI aria labels,
+  empty composer validation, current running-agent display, telemetry routing,
+  mock/demo labels, and README version hygiene.
+
+### Fixed
+
+- GUI sessions created by a live run remain selectable after completion instead
+  of disappearing until a manual refresh.
+- First-run setup no longer preselects mock/fixture provider values as if a
+  live provider were configured.
+- Dismissing the fixture demo setup prompt is remembered for the browser
+  session.
+- Empty/no-op patch candidates no longer create misleading patch approval
+  cards.
+- Read-only inspect requests no longer treat ordinary words such as `provider`
+  as missing filesystem paths.
+
 ## [1.2.3] - 2026-06-08
 
 1.2.3 fixes GUI tasks that are semantically read-only but were incorrectly sent

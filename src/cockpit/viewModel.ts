@@ -153,7 +153,7 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   const approvals: CockpitApproval[] = [];
   const selected = selectedCandidate(state);
   const latestRun = state.runResults.at(-1);
-  if (selected && (!state.changedFiles.length || waiting)) {
+  if (selected && hasActionablePatchCandidate(selected) && (!state.changedFiles.length || waiting)) {
     approvals.push({
       id: `patch:${selected.candidateId}`,
       kind: selected.approach === "repair" ? "repair" : "patch",
@@ -180,6 +180,11 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
     });
   }
   return approvals;
+}
+
+function hasActionablePatchCandidate(candidate: ReturnType<typeof selectedCandidate>): boolean {
+  if (!candidate) return false;
+  return Boolean(candidate.unifiedDiff.trim() || candidate.filesChanged.length);
 }
 
 function buildApprovalHistory(state: AgentGraphState | undefined, currentApproval?: CockpitApproval): CockpitApprovalHistoryItem[] {

@@ -61,6 +61,7 @@ const emptyViewModel: CockpitViewModel = {
   rawEvents: [],
   artifacts: []
 };
+const setupDismissedStorageKey = "tomorrowedge.fixtureDemoDismissed";
 
 function CockpitWebRoot() {
   const apiOptions = useMemo(readApiOptions, []);
@@ -79,7 +80,7 @@ function CockpitWebRoot() {
   const [setupConnectionResult, setSetupConnectionResult] = useState<CockpitProviderConnectionResult | undefined>(undefined);
   const liveSource = useRef<EventSource | undefined>(undefined);
   const selectedSessionRef = useRef("latest");
-  const setupDismissedRef = useRef(false);
+  const setupDismissedRef = useRef(readSetupDismissed());
 
   const updateSelectedSession = useCallback((sessionId: string) => {
     selectedSessionRef.current = sessionId;
@@ -98,6 +99,14 @@ function CockpitWebRoot() {
     updateSelectedSession(vm.sessionId ?? sessionId);
     setStatusMessage(undefined);
   }, [apiOptions, updateSelectedSession]);
+
+  const loadCompletedRun = useCallback(async (sessionId: string) => {
+    const [nextSessions] = await Promise.all([
+      listCockpitSessions(apiOptions),
+      loadSession(sessionId)
+    ]);
+    setSessions(nextSessions);
+  }, [apiOptions, loadSession]);
 
   const refresh = useCallback(async () => {
     try {
@@ -137,7 +146,7 @@ function CockpitWebRoot() {
       if (payload.snapshot?.done) {
         setBusy(false);
         source.close();
-        void loadSession(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
+        void loadCompletedRun(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
       }
     });
     source.addEventListener("event", (message) => {
@@ -178,7 +187,7 @@ function CockpitWebRoot() {
       }));
       setStatusMessage("Live event stream disconnected.");
     };
-  }, [apiOptions, closeLiveSource, loadSession]);
+  }, [apiOptions, closeLiveSource, loadCompletedRun]);
 
   const run = useCallback(async () => {
     if (busy) {
@@ -242,6 +251,7 @@ function CockpitWebRoot() {
 
   const dismissSetup = useCallback(() => {
     setupDismissedRef.current = true;
+    writeSetupDismissed(true);
     setSetupVisible(false);
     setSetupMessage("Fixture demo mode is available. Configure a provider when you are ready.");
   }, []);
@@ -341,6 +351,22 @@ function readApiOptions(): CockpitApiOptions {
     nonce: params.get("nonce") ?? "",
     apiBase: params.get("api") ?? undefined
   };
+}
+
+function readSetupDismissed(): boolean {
+  try {
+    return window.sessionStorage.getItem(setupDismissedStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeSetupDismissed(value: boolean): void {
+  try {
+    window.sessionStorage.setItem(setupDismissedStorageKey, value ? "true" : "false");
+  } catch {
+    // Session storage may be unavailable in hardened browser contexts.
+  }
 }
 
 function errorMessage(error: unknown): string {

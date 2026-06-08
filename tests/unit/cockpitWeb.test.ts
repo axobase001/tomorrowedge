@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
+import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 
@@ -68,6 +69,21 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Not connected");
     expect(html).toContain("Fixture");
     expect(html).toContain("Snapshot");
+  });
+
+  it("keeps a newly selected session visible before the session list refreshes", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TaskListPanel, {
+        tasks: [],
+        sessions: [],
+        selectedSession: "session_new",
+        onSelectSession: () => undefined,
+        onNewTask: () => undefined
+      })
+    );
+
+    expect(html).toContain('<option value="session_new" selected="">session_new</option>');
+    expect(html).not.toContain('<option value="latest"');
   });
 
   it("renders approval history in the detail drawer", () => {

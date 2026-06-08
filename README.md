@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.2.3`。
+当前版本：`1.2.4`。
 
+- `1.2.4` clears the latest community GUI/config issue batch: no-op approvals, stale session selectors, setup defaults, read-only path detection, and MCP-aware provider reference validation.
 - `1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly sent through the patch approval workflow.
 - `1.2.2` hardens GUI/live-model defaults and release packaging after the latest community PR sweep.
 - `1.2.1` fixes local dev startup so `client`, `desktop`, and `serve` build React cockpit assets before launching, avoiding stale embedded fallback UI on fresh checkouts.
@@ -420,7 +421,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.2.3`.
+Current version: `1.2.4`.
+
+`1.2.4` clears the latest community GUI/config issue batch: no-op approvals,
+stale session selectors, setup defaults, read-only path detection, and
+MCP-aware provider reference validation.
 
 `1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly
 sent through the patch approval workflow. Read-only inspection commands can now

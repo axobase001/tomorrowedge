@@ -167,6 +167,74 @@ describe("config loader", () => {
     }
   });
 
+  it("rejects agent provider references that do not exist", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-provider-ref-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "agents:",
+          "  reviewer:",
+          "    provider: missing_provider",
+          "    model: auto"
+        ].join("\n"),
+        "utf8"
+      );
+
+      expect(() => loadConfig(cwd)).toThrow('Agent "reviewer" references unknown provider "missing_provider".');
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts external agent provider references when the profile exists", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-external-ref-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "external_agents:",
+          "  codex:",
+          "    enabled: true",
+          "    roles: [reviewer]",
+          "agents:",
+          "  reviewer:",
+          "    provider: external:codex",
+          "    model: auto"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const config = loadConfig(cwd);
+      expect(config.agents.reviewer.provider).toBe("external:codex");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects external agent provider references when the profile is missing", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-external-missing-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "agents:",
+          "  reviewer:",
+          "    provider: external:not_registered",
+          "    model: auto"
+        ].join("\n"),
+        "utf8"
+      );
+
+      expect(() => loadConfig(cwd)).toThrow('Agent "reviewer" references unknown external agent "not_registered".');
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("can configure an OpenRouter free onboarding model from the live-catalog command path", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-free-model-"));
     const originalFetch = globalThis.fetch;
