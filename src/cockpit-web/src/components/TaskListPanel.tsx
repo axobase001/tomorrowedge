@@ -15,13 +15,17 @@ export function TaskListPanel({
   onSelectSession: (sessionId: string) => void;
   onNewTask: () => void;
 }) {
+  const selectedInList = sessions.some((session) => session.sessionId === selectedSession);
+
   return (
     <aside className="te-panel te-task-panel" data-testid="task-panel">
       <header><h2>Tasks</h2><button type="button" aria-label="New task" onClick={onNewTask}>+</button></header>
       <select value={selectedSession} onChange={(event) => onSelectSession(event.target.value)} aria-label="session selector">
-        {sessions.length ? sessions.map((session) => (
+        {!sessions.length && selectedSession === "latest" ? <option value="latest">latest</option> : null}
+        {selectedSession !== "latest" && !selectedInList ? <option value={selectedSession}>{selectedSession}</option> : null}
+        {sessions.map((session) => (
           <option key={session.sessionId} value={session.sessionId}>{session.sessionId}</option>
-        )) : <option value="latest">latest</option>}
+        ))}
       </select>
       <div className="te-task-list">
         {tasks.map((task) => (

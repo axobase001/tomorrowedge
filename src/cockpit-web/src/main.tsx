@@ -99,6 +99,14 @@ function CockpitWebRoot() {
     setStatusMessage(undefined);
   }, [apiOptions, updateSelectedSession]);
 
+  const loadCompletedRun = useCallback(async (sessionId: string) => {
+    const [nextSessions] = await Promise.all([
+      listCockpitSessions(apiOptions),
+      loadSession(sessionId)
+    ]);
+    setSessions(nextSessions);
+  }, [apiOptions, loadSession]);
+
   const refresh = useCallback(async () => {
     try {
       const [nextSessions, nextSetupStatus] = await Promise.all([
@@ -137,7 +145,7 @@ function CockpitWebRoot() {
       if (payload.snapshot?.done) {
         setBusy(false);
         source.close();
-        void loadSession(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
+        void loadCompletedRun(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
       }
     });
     source.addEventListener("event", (message) => {
@@ -178,7 +186,7 @@ function CockpitWebRoot() {
       }));
       setStatusMessage("Live event stream disconnected.");
     };
-  }, [apiOptions, closeLiveSource, loadSession]);
+  }, [apiOptions, closeLiveSource, loadCompletedRun]);
 
   const run = useCallback(async () => {
     if (busy) {

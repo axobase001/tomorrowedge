@@ -46,7 +46,8 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const config = loadConfig(cwd);
   const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider));
   const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model);
-  const selected = configuredLive ?? providers.find((provider) => provider.enabled && provider.model);
+  const configuredAuthProvider = providers.find((provider) => provider.enabled && provider.authRequired && provider.model);
+  const selected = configuredLive ?? configuredAuthProvider;
   return {
     needsSetup: !configuredLive,
     recommendedProvider: config.model_discovery.recommended_provider,
