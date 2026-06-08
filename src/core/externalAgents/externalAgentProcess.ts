@@ -158,7 +158,8 @@ export class ExternalAgentProcessClient {
     let message: JsonRpcResponse;
     try {
       message = JSON.parse(raw) as JsonRpcResponse;
-    } catch {
+    } catch (error) {
+      console.error(`[externalAgent] Invalid JSON-RPC response: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     if (typeof message.id !== "number") return;

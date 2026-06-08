@@ -13,7 +13,8 @@ export class OllamaProvider implements ModelProvider {
       if (!response.ok) return [];
       const json = (await response.json()) as { models?: Array<{ name: string }> };
       return (json.models ?? []).map((model) => ({ id: model.name, label: model.name }));
-    } catch {
+    } catch (error) {
+      console.error(`[ollama] Failed to list models: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     }
   }

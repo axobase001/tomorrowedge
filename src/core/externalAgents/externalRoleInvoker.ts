@@ -193,7 +193,8 @@ function parseJsonish(value: unknown): unknown | undefined {
   if (!trimmed) return undefined;
   try {
     return JSON.parse(trimmed);
-  } catch {
+  } catch (error) {
+    console.error(`[externalRole] Failed to parse JSON response: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
 }
