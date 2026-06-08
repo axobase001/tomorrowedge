@@ -1,9 +1,26 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 
 export function TelemetryPanel({ telemetry }: { telemetry: CockpitTelemetry }) {
+  const routes = [
+    telemetry.plannerModel && `planner: ${telemetry.plannerModel}`,
+    telemetry.coderModel && `coder: ${telemetry.coderModel}`,
+    telemetry.reviewerModel && `reviewer: ${telemetry.reviewerModel}`,
+    telemetry.judgeModel && `judge: ${telemetry.judgeModel}`,
+  ].filter(Boolean) as string[];
+
   return (
     <aside className="te-panel te-telemetry" data-testid="telemetry-panel">
       <header><h2>Telemetry</h2><span className="te-chip">fallback {telemetry.fallbackCount}</span></header>
+      {routes.length > 0 && (
+        <div data-testid="telemetry-routing">
+          {routes.map((route) => (
+            <div key={route} className="te-metric">
+              <span>{route.split(": ")[0]}</span>
+              <strong>{route.split(": ")[1]}</strong>
+            </div>
+          ))}
+        </div>
+      )}
       <Metric label="Cost" value={`${money(telemetry.currentCostUsd)} / ${money(telemetry.budgetUsd)}`} />
       <Metric label="Tokens" value={compact(telemetry.totalTokens)} />
       <Metric label="Cache" value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
