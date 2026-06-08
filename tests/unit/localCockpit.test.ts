@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
@@ -54,20 +54,70 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-react-"));
     const webRoot = path.join(cwd, "dist", "cockpit-web");
     await mkdir(path.join(webRoot, "assets"), { recursive: true });
-    await writeFile(path.join(webRoot, "index.html"), '<!doctype html><div id="root" data-react-cockpit="true"></div><script type="module" src="/assets/app.js"></script>', "utf8");
+    await writeFile(path.join(webRoot, "index.html"), '<!doctype html><div id="root" data-react-cockpit="true"></div><script type="module" src="/assets/app.js"></script><link rel="stylesheet" href="/assets/app.css">', "utf8");
     await writeFile(path.join(webRoot, "assets", "app.js"), "window.__tomorrowedgeCockpit = true;", "utf8");
+    await writeFile(path.join(webRoot, "assets", "app.css"), ".te-shell { display: grid; }", "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0, webRoot });
     try {
       const html = await fetch(server.url).then((response) => response.text());
       const asset = await fetch(`${server.url}/assets/app.js`);
+      const style = await fetch(`${server.url}/assets/app.css`);
 
       expect(html).toContain('data-react-cockpit="true"');
       expect(html).toContain('/assets/app.js');
+      expect(html).toContain('/assets/app.css');
       expect(await asset.text()).toContain("__tomorrowedgeCockpit");
       expect(asset.headers.get("content-type")).toContain("text/javascript");
+      expect(await style.text()).toContain(".te-shell");
+      expect(style.headers.get("content-type")).toContain("text/css");
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back when the React cockpit stylesheet is incomplete", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-css-"));
+    const webRoot = path.join(cwd, "dist", "cockpit-web");
+    await mkdir(path.join(webRoot, "assets"), { recursive: true });
+    await writeFile(path.join(webRoot, "index.html"), '<!doctype html><div id="root" data-stale-react-cockpit="true"></div><script type="module" src="/assets/app.js"></script><link rel="stylesheet" href="/assets/app.css">', "utf8");
+    await writeFile(path.join(webRoot, "assets", "app.js"), "window.__tomorrowedgeCockpit = true;", "utf8");
+    await writeFile(path.join(webRoot, "assets", "app.css"), ":root { --te-bg: #f6fafc; }", "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0, webRoot });
+    try {
+      const html = await fetch(server.url).then((response) => response.text());
+
+      expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).not.toContain('data-stale-react-cockpit="true"');
+    } finally {
+      await server.close();
+      await unlink(path.join(webRoot, "index.html"));
+      await unlink(path.join(webRoot, "assets", "app.js"));
+      await unlink(path.join(webRoot, "assets", "app.css"));
+      await rmdir(path.join(webRoot, "assets"));
+      await rmdir(webRoot);
+      await rmdir(path.join(cwd, "dist"));
+      await rmdir(cwd);
+    }
+  });
+
+  it("does not serve the Vite source cockpit index as static browser assets", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-vite-source-"));
+    const webRoot = path.join(cwd, "src", "cockpit-web");
+    await mkdir(webRoot, { recursive: true });
+    await writeFile(path.join(webRoot, "index.html"), '<!doctype html><div id="root"></div><script type="module" src="/src/main.tsx"></script>', "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0, webRoot });
+    try {
+      const html = await fetch(server.url).then((response) => response.text());
+
+      expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).not.toContain("/src/main.tsx");
+    } finally {
+      await server.close();
+      await unlink(path.join(webRoot, "index.html"));
+      await rmdir(webRoot);
+      await rmdir(path.join(cwd, "src"));
+      await rmdir(cwd);
     }
   });
 
