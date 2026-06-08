@@ -7,6 +7,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Fixed
+
+- Local dev GUI startup now builds React cockpit assets before `client`,
+  `desktop`, or `serve`, so a fresh checkout no longer falls back to the older
+  embedded HTML cockpit when `dist/cockpit-web` is missing.
+
 ## [1.2.0] - 2026-06-08
 
 1.2.0 turns the GUI client into a friendlier first-run cockpit instead of a
