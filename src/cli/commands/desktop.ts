@@ -32,6 +32,11 @@ type DesktopLaunchers = {
   browser: (url: string) => ChildProcess;
 };
 
+export type ElectronLaunchConfig = {
+  args: string[];
+  env: NodeJS.ProcessEnv;
+};
+
 export async function desktopCommand(cwd: string, options: DesktopCommandOptions = {}): Promise<void> {
   return desktopCommandWithDependencies(cwd, options, defaultDesktopCommandDependencies);
 }
@@ -89,13 +94,39 @@ function launchElectron(url: string): ChildProcess {
   } catch {
     throw new Error("Electron runtime is not installed. Install it only when needed with `npm install --save-dev electron`, or use `tedge desktop --runtime app-mode`.");
   }
-  const mainPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "desktop", "electron-main.cjs");
-  return spawn(electronPath, [mainPath], {
+  const launchConfig = buildElectronLaunchConfig(url);
+  return spawn(electronPath, launchConfig.args, {
     detached: false,
-    env: { ...process.env, TOMORROWEDGE_DESKTOP_URL: url },
+    env: launchConfig.env,
     stdio: "ignore",
     windowsHide: true
   });
+}
+
+export function buildElectronLaunchConfig(url: string, env: NodeJS.ProcessEnv = process.env): ElectronLaunchConfig {
+  const mainPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "desktop", "electron-main.cjs");
+  const launchEnv: NodeJS.ProcessEnv = { ...env, TOMORROWEDGE_DESKTOP_URL: url };
+  if (!isWslgEnvironment(env)) return { args: [mainPath], env: launchEnv };
+
+  launchEnv.TOMORROWEDGE_DESKTOP_WSLG = "1";
+  launchEnv.LIBGL_ALWAYS_SOFTWARE = launchEnv.LIBGL_ALWAYS_SOFTWARE ?? "1";
+  return {
+    args: [
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-dev-shm-usage",
+      "--no-sandbox",
+      mainPath
+    ],
+    env: launchEnv
+  };
+}
+
+export function isWslgEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(
+    env.WSL_DISTRO_NAME &&
+    (env.WSL2_GUI_APPS_ENABLED === "1" || env.WAYLAND_DISPLAY || env.DISPLAY)
+  );
 }
 
 function launchAppMode(url: string): ChildProcess {
