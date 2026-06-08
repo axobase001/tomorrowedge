@@ -73,7 +73,7 @@ function reviewCandidate(candidate: PatchCandidate, redTeam: boolean, evidencePa
     redTeamFindings,
     recommendation,
     notes: [
-      "Offline reviewer used deterministic scoring.",
+      "[MOCK] Offline reviewer used deterministic scoring.",
       `Evidence packets visible to reviewer: ${evidencePackets.length}.`,
       "Blocking concerns prevent automatic judge selection.",
       ...(redTeam ? ["Red-team pass checked missing diff, broad blast radius, and missing verification."] : [])
@@ -135,7 +135,7 @@ function buildRedTeamFindings(candidate: PatchCandidate): RedTeamFinding[] {
       id: "bounded_fixture_change",
       severity: "low",
       title: "Bounded change",
-      detail: "Red-team pass found no high-severity issue in this deterministic offline candidate.",
+      detail: "[MOCK] Red-team pass found no high-severity issue in this deterministic offline candidate.",
       requiresHumanAttention: false
     });
   }
