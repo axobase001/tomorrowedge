@@ -181,14 +181,19 @@ function CockpitWebRoot() {
   }, [apiOptions, closeLiveSource, loadSession]);
 
   const run = useCallback(async () => {
-    if (busy) return;
+    if (busy) {
+      setStatusMessage("A workflow is already in progress. Wait for it to finish or refresh the page.");
+      return;
+    }
     setBusy(true);
-    setStatusMessage("Starting workflow...");
+    setStatusMessage("Starting workflow with live models...");
     try {
       const payload = await startCockpitRun({
         goal: goal.trim() || "fix failing test",
         accessMode,
-        fixtureMode: true,
+        fixtureMode: false,
+        livePatch: true,
+        liveAdvisory: true,
         to: "core"
       }, apiOptions);
       updateSelectedSession(payload.sessionId);

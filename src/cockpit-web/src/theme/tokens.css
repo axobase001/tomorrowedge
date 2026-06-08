@@ -364,6 +364,15 @@ input, textarea, select {
 .te-chip-amber { border-color: #ead6a8; color: var(--te-warning); background: #fff9eb; }
 .te-chip-red { border-color: #efc2c2; color: var(--te-danger); background: #fff4f4; }
 
+.te-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 49;
+  animation: te-fade-in 120ms ease;
+}
+@keyframes te-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
 .te-drawer {
   position: fixed;
   top: 0;
@@ -376,11 +385,10 @@ input, textarea, select {
   background: #fff;
   border-left: 1px solid var(--te-border);
   box-shadow: -20px 0 50px rgba(45, 70, 90, 0.12);
-  transform: translateX(100%);
-  transition: transform 160ms ease;
-  z-index: 50;
+  z-index: 60;
+  animation: te-slide-in 160ms ease;
 }
-.te-drawer.open { transform: translateX(0); }
+@keyframes te-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .te-drawer header {
   position: sticky;
   top: 0;
