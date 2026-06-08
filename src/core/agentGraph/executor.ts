@@ -35,6 +35,8 @@ import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
+import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
+import { applyWorkflowIntentToPlan, classifyWorkflowIntent } from "../goal/workflowIntent.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
 import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
 import { buildPatchEvidence } from "../evidence/patchEvidence.js";
@@ -264,6 +266,20 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     return plan ?? planner.run({ goal: plannerGoal });
   }, externalPlanner ? "external" : undefined);
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
+  const workflowIntent = await classifyWorkflowIntent({ goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
+  ledger.append({
+    type: "workflow_intent",
+    phase: "routing",
+    role: "planner",
+    provider: workflowIntent.provider,
+    model: workflowIntent.model,
+    intent: workflowIntent.intent,
+    requiresPatchWorkflow: workflowIntent.requiresPatchWorkflow,
+    confidence: workflowIntent.confidence,
+    reason: workflowIntent.reason,
+    fallbackUsed: workflowIntent.fallbackUsed
+  });
+  state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();
@@ -278,6 +294,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   });
   for (const file of state.contextSelection.selectedFiles) {
     ledger.append({ type: "file_read", phase: "exploration", role: "explorer", path: file.path, reason: file.reason, risk: file.risk });
+  }
+  if (isReadOnlyPlan(state.plan)) {
+    return finalizeReadOnlyState(cwd, state, ledger, router);
   }
 
   const coder = new CoderAgent();
@@ -769,6 +788,37 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
       suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
     };
   }
+  appendFinalSummaryEvents(state, ledger);
+  return state;
+}
+
+async function finalizeReadOnlyState(cwd: string, state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {
+  const result = await runAgentState(state, ledger, router, "summarizer", () =>
+    buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
+  );
+  const evidenceRef = ledger.writeArtifact("summaries", result.artifactText);
+  ledger.append({
+    type: "evidence_update",
+    phase: "summary",
+    role: "summarizer",
+    evidence: result.evidence.slice(0, 3),
+    evidenceRef
+  });
+  state.finalSummary = {
+    task: state.goal,
+    result: "completed",
+    changedFiles: [],
+    testsRun: [],
+    evidence: result.evidence,
+    risksRemaining: [],
+    suggestedCommitMessage: "chore: no code changes"
+  };
+  appendFinalSummaryEvents(state, ledger);
+  return state;
+}
+
+function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger): void {
+  if (!state.finalSummary) throw new Error("Cannot finalize workflow without a final summary.");
   ledger.append({
     type: "summary",
     phase: "summary",
@@ -791,11 +841,10 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
     score: state.traceCompleteness.score,
     missing: state.traceCompleteness.missing
   });
-
-  return state;
 }
 
 function workflowStopReason(state: AgentGraphState): string {
+  if (state.plan && isReadOnlyPlan(state.plan) && !state.candidates.length && !state.changedFiles.length) return "read-only request completed without patch workflow";
   if (state.judge?.decision === "abort") return "judge aborted workflow";
   if (state.judge?.decision === "ask_user") return "judge requested user decision";
   const latestRun = state.runResults.at(-1);

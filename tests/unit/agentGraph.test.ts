@@ -42,6 +42,40 @@ describe("offline agent graph", () => {
     ]));
   });
 
+  it("keeps read-only directory inspection out of patch approval", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-readonly-"));
+    await mkdir(path.join(cwd, "quantum", "src"), { recursive: true });
+    await writeFile(path.join(cwd, "quantum", "README.md"), "# Quantum\n", "utf8");
+    await writeFile(path.join(cwd, "quantum", "src", "index.ts"), "export const value = 1;\n", "utf8");
+    try {
+      const state = await runOfflineGraph(cwd, "读取 quantum 文件夹内容，输出文件结构", defaultConfig, { fixtureMode: true });
+      const eventTypes = state.events.map((event) => event.type);
+
+      expect(state.plan?.taskType).toBe("analysis");
+      expect(state.finalSummary?.result).toBe("completed");
+      expect(state.finalSummary?.evidence.join("\n")).toContain("quantum/");
+      expect(state.finalSummary?.evidence.join("\n")).toContain("src/");
+      expect(state.events.find((event) => event.type === "workflow_intent")).toMatchObject({
+        intent: "inspect",
+        requiresPatchWorkflow: false
+      });
+      expect(state.candidates).toEqual([]);
+      expect(state.review).toBeUndefined();
+      expect(state.judge).toBeUndefined();
+      expect(state.agents.some((agent) => agent.status === "waiting_for_user")).toBe(false);
+      expect(eventTypes).toContain("context_select");
+      expect(eventTypes).not.toContain("patch_candidate");
+      expect(eventTypes).not.toContain("review_decision");
+      expect(eventTypes).not.toContain("judge_decision");
+      expect(eventTypes).not.toContain("patch_apply");
+      expect(state.events.find((event) => event.type === "workflow_stop_reason")).toMatchObject({
+        reason: "read-only request completed without patch workflow"
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("marks configured cloud/local model providers as live agent runs", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {

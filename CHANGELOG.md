@@ -7,6 +7,30 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-06-08
+
+1.2.3 fixes GUI tasks that are semantically read-only but were incorrectly sent
+through the patch approval workflow.
+
+### Added
+
+- Model-driven workflow intent routing before patch generation. TomorrowEdge now
+  asks the planner-routed model whether a command is `inspect`, `patch`, or
+  `ask_user`, records the decision as a `workflow_intent` event, and uses that
+  decision to choose the workflow path.
+- Read-only local inspection finalization for commands such as listing a folder
+  or outputting a file structure, so the cockpit can complete without generating
+  empty patch candidates.
+
+### Fixed
+
+- Read-only GUI commands no longer stop at `Waiting for patch approval` with
+  `0 file(s) changed`.
+- Restricted/no-key runs use the local mock intent model instead of calling a
+  cloud provider for intent classification.
+- Release verification now gives IO-heavy fixture tests enough timeout budget on
+  Windows instead of relying on Vitest's 5s default.
+
 ## [1.2.2] - 2026-06-08
 
 1.2.2 is a small GUI and release-packaging hardening release after the latest

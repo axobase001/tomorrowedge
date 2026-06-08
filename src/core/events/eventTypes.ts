@@ -155,6 +155,15 @@ export type ConversationMessageEvent = BaseEvent & {
   summary: string;
 };
 
+export type WorkflowIntentEvent = BaseEvent & {
+  type: "workflow_intent";
+  intent: "inspect" | "patch" | "ask_user";
+  requiresPatchWorkflow: boolean;
+  confidence: number;
+  reason: string;
+  fallbackUsed?: boolean;
+};
+
 export type ExternalAgentRegisteredEvent = BaseEvent & {
   type: "external_agent_registered";
   externalAgentId: string;
@@ -334,6 +343,7 @@ export type TomorrowEdgeEvent =
   | CostUsageEvent
   | ConversationTargetEvent
   | ConversationMessageEvent
+  | WorkflowIntentEvent
   | ExternalAgentRegisteredEvent
   | ExternalAgentCallEvent
   | ExternalAgentResultEvent

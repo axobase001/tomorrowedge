@@ -40,6 +40,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `target=${event.target} ${event.label}`;
     case "conversation_message":
       return `message to ${event.target}: ${event.summary}`;
+    case "workflow_intent":
+      return `${event.intent} patch=${event.requiresPatchWorkflow ? "yes" : "no"} confidence=${event.confidence.toFixed(2)}${event.fallbackUsed ? " fallback" : ""}: ${event.reason}`;
     case "external_agent_registered":
       return `registered ${event.externalAgentId} roles=${event.allowedRoles.join(",")}`;
     case "external_agent_call":
