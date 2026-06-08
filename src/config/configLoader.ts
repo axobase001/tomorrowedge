@@ -77,7 +77,7 @@ function validateAgentProviders(config: TomorrowEdgeConfig): void {
         `Agent "${role}" has an empty or missing provider. Each agent must reference a valid provider ID.`
       );
     }
-    if (!providerIds.includes(agent.provider)) {
+    if (agent.provider !== "auto" && !providerIds.includes(agent.provider)) {
       throw new Error(
         `Agent "${role}" references unknown provider: "${agent.provider}". Available: ${providerIds.join(", ")}`
       );
