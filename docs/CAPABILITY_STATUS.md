@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.2.5. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.2.6. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |

@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
+import { loadConfig } from "../../src/config/configLoader.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -351,6 +352,88 @@ describe("local cockpit server", () => {
       expect(localEnv).toContain('TEST_OPENROUTER_KEY="test-openrouter-key-value"');
     } finally {
       delete process.env.TEST_OPENROUTER_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("manages provider keys through local env indirection without writing secrets to config", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-keys-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "moonshotai/kimi-k2:free",
+          apiKeyEnv: "TEST_KEY_PANEL_OPENROUTER",
+          apiKey: "test-panel-openrouter-key"
+        })
+      });
+      const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; keyConfigured: boolean; keySource: string; maskedKey?: string }> };
+      const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
+      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+
+      expect(response.status).toBe(200);
+      expect(afterSave.selectedProvider).toBe("openrouter");
+      expect(afterSave.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
+        keyConfigured: true,
+        keySource: "local_env",
+        maskedKey: "test****-key"
+      });
+      expect(configText).toContain("api_key_env: TEST_KEY_PANEL_OPENROUTER");
+      expect(configText).not.toContain("test-panel-openrouter-key");
+      expect(localEnv).toContain('TEST_KEY_PANEL_OPENROUTER="test-panel-openrouter-key"');
+
+      const deleteResponse = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, { method: "DELETE" });
+      const afterDelete = await deleteResponse.json() as { providers: Array<{ id: string; enabled: boolean; keyConfigured: boolean }> };
+      const localEnvAfterDelete = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+
+      expect(deleteResponse.status).toBe(200);
+      expect(afterDelete.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
+        enabled: false,
+        keyConfigured: false
+      });
+      expect(localEnvAfterDelete).not.toContain("TEST_KEY_PANEL_OPENROUTER");
+    } finally {
+      delete process.env.TEST_KEY_PANEL_OPENROUTER;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("saves GUI role assignments into provider/model agent routing", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-roles-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "moonshotai/kimi-k2:free",
+          apiKeyEnv: "TEST_ROLE_PANEL_OPENROUTER",
+          apiKey: "test-role-panel-key"
+        })
+      });
+      const response = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assignments: [
+            { role: "planner", provider: "openrouter", model: "openai/gpt-5.2" },
+            { role: "coder_a", provider: "deepseek", model: "deepseek-chat" }
+          ]
+        })
+      });
+      const payload = await response.json() as { roleAssignments: Array<{ role: string; provider: string; model: string }> };
+      const config = loadConfig(cwd);
+
+      expect(response.status).toBe(200);
+      expect(payload.roleAssignments.find((assignment) => assignment.role === "planner")).toMatchObject({ provider: "openrouter", model: "openai/gpt-5.2" });
+      expect(config.agents.planner).toMatchObject({ provider: "openrouter", model: "openai/gpt-5.2" });
+      expect(config.agents.coder_a).toMatchObject({ provider: "deepseek", model: "deepseek-chat" });
+    } finally {
+      delete process.env.TEST_ROLE_PANEL_OPENROUTER;
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }

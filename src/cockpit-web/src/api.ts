@@ -22,7 +22,15 @@ export type CockpitProviderReadiness = {
   apiKeyEnv?: string;
   keyConfigured: boolean;
   keySource: "env" | "local_env" | "not_required" | "missing";
+  maskedKey?: string;
   authRequired: boolean;
+};
+
+export type CockpitRoleAssignment = {
+  role: string;
+  provider: string;
+  model: string;
+  reason?: string;
 };
 
 export type CockpitSetupStatus = {
@@ -30,6 +38,7 @@ export type CockpitSetupStatus = {
   recommendedProvider: string;
   configPath: string;
   providers: CockpitProviderReadiness[];
+  roleAssignments: CockpitRoleAssignment[];
   selectedProvider?: string;
   selectedModel?: string;
 };
@@ -40,6 +49,17 @@ export type CockpitSetupRequest = {
   apiKeyEnv?: string;
   apiKey?: string;
   bindRoles?: boolean;
+};
+
+export type CockpitProviderKeyRequest = {
+  provider: string;
+  model?: string;
+  apiKeyEnv?: string;
+  apiKey: string;
+};
+
+export type CockpitRoleAssignmentsRequest = {
+  assignments: CockpitRoleAssignment[];
 };
 
 export type CockpitProviderConnectionResult = {
@@ -65,6 +85,35 @@ export async function loadCockpitSetupStatus(options: CockpitApiOptions): Promis
 export async function configureCockpitSetup(request: CockpitSetupRequest, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
   const response = await fetch(apiUrl("/api/setup/configure", options), {
     method: "POST",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSetupStatus>;
+}
+
+export async function saveCockpitProviderKey(request: CockpitProviderKeyRequest, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
+  const response = await fetch(apiUrl(`/api/setup/keys/${encodeURIComponent(request.provider)}`, options), {
+    method: "PUT",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSetupStatus>;
+}
+
+export async function deleteCockpitProviderKey(provider: string, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
+  const response = await fetch(apiUrl(`/api/setup/keys/${encodeURIComponent(provider)}`, options), {
+    method: "DELETE",
+    headers: apiHeaders(options)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSetupStatus>;
+}
+
+export async function saveCockpitRoleAssignments(request: CockpitRoleAssignmentsRequest, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
+  const response = await fetch(apiUrl("/api/setup/roles", options), {
+    method: "PUT",
     headers: apiHeaders(options, { "content-type": "application/json" }),
     body: JSON.stringify(request)
   });

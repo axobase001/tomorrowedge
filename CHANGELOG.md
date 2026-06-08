@@ -7,6 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-06-09
+
+1.2.6 rebuilds the community API key and role management idea on the safer
+existing TomorrowEdge setup path.
+
+### Added
+
+- GUI `Keys` panel for simple provider API-key setup and per-role model
+  assignment.
+- Local cockpit API endpoints for provider key save/delete and role assignment
+  updates.
+- Setup status now reports role assignments and masked key status, without
+  returning raw API keys to the browser.
+- E2E coverage for opening the `Keys` panel and switching to role assignment.
+
+### Changed
+
+- Provider keys entered through the GUI are stored in `.tomorrowedge/local.env`
+  and config continues to keep only env-var references. This supersedes the
+  closed backend secret-storage PR without adding unauthenticated custom crypto
+  or excluding secret-management source from scans.
+
 ## [1.2.5] - 2026-06-09
 
 1.2.5 tightens GUI E2E coverage for the cockpit paths that operators touch most

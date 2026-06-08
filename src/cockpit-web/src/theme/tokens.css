@@ -402,7 +402,8 @@ input, textarea, select {
   background: #fff;
 }
 
-.te-setup-backdrop {
+.te-setup-backdrop,
+.te-keymgr-backdrop {
   position: fixed;
   inset: 0;
   z-index: 80;
@@ -411,7 +412,8 @@ input, textarea, select {
   padding: 20px;
   background: rgba(11, 18, 24, 0.42);
 }
-.te-setup-card {
+.te-setup-card,
+.te-keymgr-card {
   width: min(760px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow: auto;
@@ -421,20 +423,124 @@ input, textarea, select {
   box-shadow: 0 24px 70px rgba(21, 34, 44, 0.24);
   padding: 16px;
 }
-.te-setup-card header {
+.te-setup-card header,
+.te-keymgr-card header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
 }
-.te-setup-card h2 {
+.te-setup-card h2,
+.te-keymgr-card h2 {
   margin: 8px 0 0;
   font-size: 19px;
 }
-.te-setup-card p {
+.te-setup-card p,
+.te-keymgr-card p {
   color: var(--te-muted);
   line-height: 1.45;
+}
+.te-keymgr-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 12px -16px 0;
+  border-top: 1px solid var(--te-border);
+  border-bottom: 1px solid var(--te-border);
+}
+.te-keymgr-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--te-muted);
+}
+.te-keymgr-tabs button.active {
+  color: var(--te-deep-blue);
+  box-shadow: inset 0 -2px 0 var(--te-deep-blue);
+}
+.te-keymgr-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+.te-keymgr-provider-list {
+  display: grid;
+  gap: 8px;
+}
+.te-keymgr-provider-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--te-border);
+  border-radius: 6px;
+  background: var(--te-alt);
+}
+.te-keymgr-provider-list article.selected {
+  border-color: rgba(111, 175, 210, 0.72);
+}
+.te-provider-pick {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--te-text);
+  text-align: left;
+}
+.te-provider-pick span {
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-keymgr-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.te-keymgr-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--te-muted);
+  font-size: 12px;
+}
+.te-keymgr-form input,
+.te-keymgr-form select {
+  min-height: 34px;
+  padding: 0 9px;
+  font: 12px var(--te-mono);
+}
+.te-keymgr-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.te-role-list {
+  display: grid;
+  gap: 6px;
+}
+.te-role-row {
+  display: grid;
+  grid-template-columns: 110px minmax(120px, 0.8fr) minmax(140px, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--te-border);
+  border-radius: 5px;
+}
+.te-role-row strong {
+  font: 12px var(--te-mono);
+}
+.te-role-row input,
+.te-role-row select {
+  min-height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  font: 12px var(--te-mono);
 }
 .te-setup-grid {
   display: grid;
@@ -541,7 +647,11 @@ input, textarea, select {
 }
 
 @media (max-width: 680px) {
-  .te-setup-grid {
+  .te-setup-grid,
+  .te-keymgr-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .te-role-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

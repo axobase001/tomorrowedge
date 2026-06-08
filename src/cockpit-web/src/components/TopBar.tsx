@@ -1,6 +1,6 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 
-export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: CockpitViewModel; busy: boolean; onRun: () => void; onRefresh: () => void }) {
+export function TopBar({ viewModel, busy, onOpenKeys, onRun, onRefresh }: { viewModel: CockpitViewModel; busy: boolean; onOpenKeys: () => void; onRun: () => void; onRefresh: () => void }) {
   return (
     <header className="te-topbar" data-testid="topbar">
       <div className="te-brand">
@@ -25,6 +25,7 @@ export function TopBar({ viewModel, busy, onRun, onRefresh }: { viewModel: Cockp
         {viewModel.sessionMeta.stale ? <span className="te-chip">Snapshot</span> : null}
         <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? "FULL AUTONOMY" : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
+        <button type="button" disabled={busy} onClick={onOpenKeys} aria-label="Open API key and role manager" data-testid="topbar-keys">Keys</button>
         <button type="button" disabled={busy} onClick={onRun} aria-label="Run workflow">Run</button>
         <button type="button" disabled={busy} onClick={onRefresh} aria-label="Refresh sessions">Refresh</button>
       </div>

@@ -62,6 +62,24 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("moonshotai/kimi-k2:free");
   });
 
+  it("renders the API key and role manager from the topbar entry", () => {
+    const closed = renderApp(sampleViewModel());
+    const open = renderApp(sampleViewModel(), { keyManagerOpen: true });
+
+    expect(closed).toContain("data-testid=\"topbar-keys\"");
+    expect(open).toContain("API keys and role routing");
+    expect(open).toContain("data-testid=\"key-role-manager\"");
+    expect(open).toContain("data-testid=\"keymgr-save-key\"");
+    expect(open).toContain("data-testid=\"keymgr-tab-roles\"");
+  });
+
+  it("renders the role assignment tab entry in the key manager", () => {
+    const html = renderApp(sampleViewModel(), { keyManagerOpen: true });
+
+    expect(html).toContain("data-testid=\"keymgr-tab-roles\"");
+    expect(html).toContain("Role Assign");
+  });
+
   it("renders shared session source and fixture metadata", () => {
     const html = renderApp(sampleViewModel());
 
@@ -113,7 +131,7 @@ describe("cockpit web React surface", () => {
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean }> = {}): string {
   return renderToStaticMarkup(
     React.createElement(App, {
       viewModel,
@@ -136,16 +154,35 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           keyConfigured: false,
           keySource: "missing",
           authRequired: true
-        }]
+        }, {
+          id: "deepseek",
+          enabled: false,
+          model: "deepseek-chat",
+          baseUrl: "https://api.deepseek.com/v1",
+          apiKeyEnv: "DEEPSEEK_API_KEY",
+          keyConfigured: false,
+          keySource: "missing",
+          authRequired: true
+        }],
+        roleAssignments: [
+          { role: "planner", provider: "openrouter", model: "moonshotai/kimi-k2:free" },
+          { role: "reviewer", provider: "deepseek", model: "deepseek-chat" }
+        ]
       },
       setupVisible: overrides.setupVisible ?? false,
       setupBusy: false,
+      keyManagerOpen: overrides.keyManagerOpen ?? false,
       drawerOpen: true,
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
       onConfigureSetup: () => undefined,
+      onSaveProviderKey: () => undefined,
+      onDeleteProviderKey: () => undefined,
+      onSaveRoleAssignments: () => undefined,
       onTestSetup: () => undefined,
       onDismissSetup: () => undefined,
+      onOpenKeyManager: () => undefined,
+      onCloseKeyManager: () => undefined,
       onRun: () => undefined,
       onRefresh: () => undefined,
       onNewTask: () => undefined,

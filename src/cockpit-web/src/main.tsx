@@ -7,13 +7,18 @@ import {
   applyCockpitApproval,
   cockpitLiveEventsUrl,
   configureCockpitSetup,
+  deleteCockpitProviderKey,
   listCockpitSessions,
   loadCockpitSetupStatus,
   loadCockpitViewModel,
+  saveCockpitProviderKey,
+  saveCockpitRoleAssignments,
   startCockpitRun,
   testCockpitSetupProvider,
   type CockpitApiOptions,
   type CockpitProviderConnectionResult,
+  type CockpitProviderKeyRequest,
+  type CockpitRoleAssignment,
   type CockpitSessionSummary,
   type CockpitSetupRequest,
   type CockpitSetupStatus
@@ -78,6 +83,7 @@ function CockpitWebRoot() {
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupMessage, setSetupMessage] = useState<string | undefined>(undefined);
   const [setupConnectionResult, setSetupConnectionResult] = useState<CockpitProviderConnectionResult | undefined>(undefined);
+  const [keyManagerOpen, setKeyManagerOpen] = useState(false);
   const liveSource = useRef<EventSource | undefined>(undefined);
   const selectedSessionRef = useRef("latest");
   const setupDismissedRef = useRef(readSetupDismissed());
@@ -234,6 +240,55 @@ function CockpitWebRoot() {
     }
   }, [apiOptions, setupBusy]);
 
+  const saveProviderKey = useCallback(async (request: CockpitProviderKeyRequest) => {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupMessage("Saving provider key...");
+    try {
+      const nextStatus = await saveCockpitProviderKey(request, apiOptions);
+      setSetupStatus(nextStatus);
+      setSetupVisible(nextStatus.needsSetup && !setupDismissedRef.current);
+      setSetupMessage("Provider key saved locally. Config keeps only the env-var reference.");
+      setStatusMessage(`Configured ${request.provider}.`);
+    } catch (error) {
+      setSetupMessage(`Key save failed: ${errorMessage(error)}`);
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [apiOptions, setupBusy]);
+
+  const deleteProviderKey = useCallback(async (provider: string) => {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupMessage("Removing local provider key...");
+    try {
+      const nextStatus = await deleteCockpitProviderKey(provider, apiOptions);
+      setSetupStatus(nextStatus);
+      setSetupMessage("Local provider key removed.");
+      setStatusMessage(`Removed local key for ${provider}.`);
+    } catch (error) {
+      setSetupMessage(`Key removal failed: ${errorMessage(error)}`);
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [apiOptions, setupBusy]);
+
+  const saveRoleAssignments = useCallback(async (assignments: CockpitRoleAssignment[]) => {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupMessage("Saving role assignments...");
+    try {
+      const nextStatus = await saveCockpitRoleAssignments({ assignments }, apiOptions);
+      setSetupStatus(nextStatus);
+      setSetupMessage("Role assignments saved.");
+      setStatusMessage("Role routing updated.");
+    } catch (error) {
+      setSetupMessage(`Role save failed: ${errorMessage(error)}`);
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [apiOptions, setupBusy]);
+
   const testSetup = useCallback(async (provider: string) => {
     if (setupBusy) return;
     setSetupBusy(true);
@@ -304,12 +359,18 @@ function CockpitWebRoot() {
       setupBusy={setupBusy}
       setupMessage={setupMessage}
       setupConnectionResult={setupConnectionResult}
+      keyManagerOpen={keyManagerOpen}
       drawerOpen={drawerOpen}
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
       onConfigureSetup={configureSetup}
+      onSaveProviderKey={saveProviderKey}
+      onDeleteProviderKey={deleteProviderKey}
+      onSaveRoleAssignments={saveRoleAssignments}
       onTestSetup={testSetup}
       onDismissSetup={dismissSetup}
+      onOpenKeyManager={() => setKeyManagerOpen(true)}
+      onCloseKeyManager={() => setKeyManagerOpen(false)}
       onRun={run}
       onRefresh={refresh}
       onNewTask={newTask}

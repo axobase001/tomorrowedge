@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.2.5 README product promises. Use this
+Authoritative map for TomorrowEdge 1.2.6 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 

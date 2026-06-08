@@ -23,7 +23,14 @@ import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import { configureCockpitProvider, getCockpitSetupStatus, testCockpitProvider } from "./setup.js";
+import {
+  configureCockpitProvider,
+  deleteCockpitProviderKey,
+  getCockpitSetupStatus,
+  saveCockpitProviderKey,
+  saveCockpitRoleAssignments,
+  testCockpitProvider
+} from "./setup.js";
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -142,6 +149,21 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "POST" && url.pathname === "/api/setup/configure") {
       const body = await readJsonBody(request);
       const status = await toSetupHttpResult(() => configureCockpitProvider(cwd, parseSetupRequest(body)));
+      return sendJson(response, 200, status);
+    }
+    const setupKeyMatch = /^\/api\/setup\/keys\/([^/]+)$/.exec(url.pathname);
+    if (request.method === "PUT" && setupKeyMatch) {
+      const body = await readJsonBody(request);
+      const status = await toSetupHttpResult(() => saveCockpitProviderKey(cwd, parseProviderKeyRequest(decodeURIComponent(setupKeyMatch[1]), body)));
+      return sendJson(response, 200, status);
+    }
+    if (request.method === "DELETE" && setupKeyMatch) {
+      const status = await toSetupHttpResult(() => deleteCockpitProviderKey(cwd, decodeURIComponent(setupKeyMatch[1])));
+      return sendJson(response, 200, status);
+    }
+    if (request.method === "PUT" && url.pathname === "/api/setup/roles") {
+      const body = await readJsonBody(request);
+      const status = await toSetupHttpResult(() => saveCockpitRoleAssignments(cwd, parseRoleAssignmentsRequest(body)));
       return sendJson(response, 200, status);
     }
     if (request.method === "POST" && url.pathname === "/api/setup/test") {
@@ -457,6 +479,29 @@ function parseSetupRequest(value: Record<string, unknown>) {
     apiKeyEnv: typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined,
     apiKey: typeof value.apiKey === "string" ? value.apiKey : undefined,
     bindRoles: Boolean(value.bindRoles)
+  };
+}
+
+function parseProviderKeyRequest(provider: string, value: Record<string, unknown>) {
+  const apiKey = typeof value.apiKey === "string" ? value.apiKey : "";
+  const model = typeof value.model === "string" ? value.model.trim() : undefined;
+  const apiKeyEnv = typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined;
+  if (!apiKey.trim()) throw new HttpError(400, "api_key_required", "API key is required.");
+  return { provider, model, apiKeyEnv, apiKey };
+}
+
+function parseRoleAssignmentsRequest(value: Record<string, unknown>) {
+  if (!Array.isArray(value.assignments)) throw new HttpError(400, "assignments_required", "Role assignments array is required.");
+  return {
+    assignments: value.assignments.map((item) => {
+      if (!item || typeof item !== "object") throw new HttpError(400, "invalid_assignment", "Each role assignment must be an object.");
+      const record = item as Record<string, unknown>;
+      const role = typeof record.role === "string" ? record.role.trim() : "";
+      const provider = typeof record.provider === "string" ? record.provider.trim() : "";
+      const model = typeof record.model === "string" ? record.model.trim() : "";
+      if (!role || !provider || !model) throw new HttpError(400, "invalid_assignment", "Each role assignment requires role, provider, and model.");
+      return { role, provider, model };
+    })
   };
 }
 
