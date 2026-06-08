@@ -66,8 +66,19 @@ for (const promiseId of requiredPromiseIds) {
   }
 }
 
-if (!readFileSync(path.join(cwd, "README.md"), "utf8").includes("docs/README_PROMISE_MAP.md")) {
+const readmeText = readFileSync(path.join(cwd, "README.md"), "utf8");
+
+if (!readmeText.includes("docs/README_PROMISE_MAP.md")) {
   failures.push("README.md must link to docs/README_PROMISE_MAP.md.");
+}
+
+const requiredReadmeVersionMarkers = [
+  `Current version: \`${packageJson.version}\`.`,
+  packageJson.version
+];
+
+for (const marker of requiredReadmeVersionMarkers) {
+  if (!readmeText.includes(marker)) failures.push(`README.md must include current version marker: ${marker}`);
 }
 
 if (failures.length) {
