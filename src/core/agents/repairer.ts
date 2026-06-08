@@ -34,7 +34,7 @@ export class RepairerAgent extends BaseAgent<{ plan: Plan; failedRun: RunResult;
       candidateId: "repair_candidate_pending",
       agentId: "repairer",
       approach: "repair",
-      summary: "Repair analysis captured the failed command, but no deterministic repair patch is available.",
+      summary: "[MOCK] Repair analysis captured the failed command, but no deterministic repair patch is available.",
       filesChanged: [],
       unifiedDiff: "",
       testPlan: input.plan.verificationCommands ?? [],

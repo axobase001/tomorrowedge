@@ -26,7 +26,7 @@ export class CoderAgent extends BaseAgent<CoderInput, PatchCandidate> {
       candidateId: makeId(`candidate_${input.variant}`),
       agentId: `coder_${input.variant}`,
       approach: input.variant === "a" ? "minimal_patch" : "alternative",
-      summary: `Offline candidate ${input.variant.toUpperCase()} prepared for review. No file writes performed.${visualSummary}`,
+      summary: `[MOCK] Offline candidate ${input.variant.toUpperCase()} prepared for review. No file writes performed.${visualSummary}`,
       filesChanged: [],
       unifiedDiff: "",
       testPlan: input.plan.verificationCommands ?? [],
