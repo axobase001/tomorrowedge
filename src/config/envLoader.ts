@@ -1,10 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
+import { loadSecretsFile } from "../core/secrets/secretManager.js";
 import path from "node:path";
 
 export function loadLocalEnv(cwd: string): void {
   for (const envPath of [path.join(cwd, ".env"), path.join(cwd, ".tomorrowedge", "local.env")]) {
     loadEnvFile(envPath);
   }
+  // 从加密存储加载 API Key，注入 process.env 供 provider 层使用
+  loadSecretsIntoEnv();
 }
 
 function loadEnvFile(envPath: string): void {
@@ -34,4 +37,18 @@ function unquoteEnvValue(value: string): string {
     return value.slice(1, -1);
   }
   return value;
+}
+
+// ---------------------------------------------------------------------------
+// 从 SecretManager 同步加载 API Key 到 process.env
+// ---------------------------------------------------------------------------
+
+function loadSecretsIntoEnv(): void {
+  const payload = loadSecretsFile(); // 复用 secretManager 的解密逻辑
+  for (const [provider, value] of Object.entries(payload)) {
+    if (!value) continue;
+    const envName = `${provider.toUpperCase()}_API_KEY`;
+    if (process.env[envName] !== undefined) continue; // shell/env 优先
+    process.env[envName] = value;
+  }
 }

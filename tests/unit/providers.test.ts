@@ -43,7 +43,8 @@ describe("provider registry", () => {
 
   it("reads OLLAMA_BASE_URL after local env loading instead of defaultConfig module import", () => {
     vi.stubEnv("OLLAMA_BASE_URL", "http://localhost:18080");
-    const registry = createProviderRegistry(defaultConfig);
+    const config = { ...defaultConfig, providers: { ...defaultConfig.providers, ollama: { ...defaultConfig.providers.ollama, enabled: true } } };
+    const registry = createProviderRegistry(config);
     expect(registry.get("ollama")).toBeTruthy();
   });
 
