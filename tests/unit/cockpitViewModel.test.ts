@@ -80,6 +80,23 @@ describe("cockpit view model", () => {
     }
   });
 
+  it("does not create patch approvals for empty no-op candidates", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      candidates: [{
+        ...sampleCockpitState().candidates[0]!,
+        filesChanged: [],
+        unifiedDiff: "",
+        summary: "No file writes performed."
+      }]
+    }));
+
+    expect(vm.currentApproval).toBeUndefined();
+    expect(vm.approvals).toEqual([]);
+    expect(vm.approvalHistory.some((item) => item.status === "waiting")).toBe(false);
+    expect(vm.status).not.toBe("waiting_approval");
+    expect(vm.workflow.find((step) => step.id === "approve")?.status).not.toBe("waiting");
+  });
+
   it("pins pending approval above a contradictory completed final summary", () => {
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
       agents: [{
