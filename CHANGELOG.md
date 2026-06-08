@@ -7,11 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-06-08
+
+1.2.2 is a small GUI and release-packaging hardening release after the latest
+community PR sweep.
+
+### Added
+
+- Encrypted API key storage ADR is now included in package/release artifacts so
+  the planned secure-key path is visible to downstream users and reviewers.
+
+### Changed
+
+- GUI live-model runs remain opt-in through explicit live flags: configured
+  providers can run live, while no-key onboarding and restricted mode continue
+  to use the fixture workflow.
+
 ### Fixed
 
-- GUI live-model runs now stay opt-in through explicit live flags and fall back
-  to fixture mode when no provider is configured, preserving no-key onboarding
-  while still enabling live calls for configured providers.
+- Sanitized the encrypted-key ADR wording so `secrets:scan` does not flag
+  documentation examples as real API keys.
+- Package metadata now includes `docs/adr/*.md`, keeping architecture decisions
+  in the published package.
 
 ## [1.2.1] - 2026-06-08
 

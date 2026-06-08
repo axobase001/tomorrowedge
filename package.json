@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "A local GUI client for full-access multi-model coding agents.",
   "type": "module",
   "bin": {
@@ -15,7 +15,7 @@
     "web:build": "vite build --config src/cockpit-web/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "node scripts/tsx-dev.mjs",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "test:watch": "vitest",
     "e2e:cockpit": "npm run build && npm run web:build && tsx scripts/cockpit-e2e-smoke.ts",
     "verify": "npm test && npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run pack:dry",
