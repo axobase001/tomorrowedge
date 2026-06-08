@@ -74,7 +74,7 @@ describe("desktop command", () => {
     });
 
     expect(config.args).toHaveLength(1);
-    expect(config.args[0]).toContain("desktop/electron-main.cjs");
+    expect(toPosixPath(config.args[0])).toContain("desktop/electron-main.cjs");
     expect(config.args).not.toContain("--disable-gpu");
     expect(config.env.TOMORROWEDGE_DESKTOP_URL).toBe("http://127.0.0.1:18792/?nonce=test");
     expect(config.env.TOMORROWEDGE_DESKTOP_WSLG).toBeUndefined();
@@ -97,11 +97,15 @@ describe("desktop command", () => {
       "--disable-dev-shm-usage",
       "--no-sandbox"
     ]));
-    expect(config.args.at(-1)).toContain("desktop/electron-main.cjs");
+    expect(toPosixPath(config.args.at(-1) ?? "")).toContain("desktop/electron-main.cjs");
     expect(config.env.TOMORROWEDGE_DESKTOP_WSLG).toBe("1");
     expect(config.env.LIBGL_ALWAYS_SOFTWARE).toBe("1");
   });
 });
+
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
 
 function fakeHandle(overrides: Partial<LocalCockpitHandle> = {}): LocalCockpitHandle {
   return {
