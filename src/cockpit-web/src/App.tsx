@@ -10,6 +10,7 @@ import { SetupWizard } from "./components/SetupWizard.js";
 import { KeyRoleManager } from "./components/KeyRoleManager.js";
 import { BottomTraceSheet } from "./components/BottomTraceSheet.js";
 import { DetailDrawer } from "./components/DetailDrawer.js";
+import type { GuiLanguage, Translator } from "./i18n.js";
 import "./theme/tokens.css";
 
 export type AppProps = {
@@ -27,8 +28,11 @@ export type AppProps = {
   setupConnectionResult?: CockpitProviderConnectionResult;
   keyManagerOpen: boolean;
   drawerOpen: boolean;
+  language: GuiLanguage;
+  t: Translator;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
+  onLanguageChange: (language: GuiLanguage) => void;
   onConfigureSetup: (request: CockpitSetupRequest) => void;
   onSaveProviderKey: (request: CockpitProviderKeyRequest) => void;
   onDeleteProviderKey: (provider: string) => void;
@@ -61,8 +65,11 @@ export function App({
   setupConnectionResult,
   keyManagerOpen,
   drawerOpen,
+  language,
+  t,
   onGoalChange,
   onAccessModeChange,
+  onLanguageChange,
   onConfigureSetup,
   onSaveProviderKey,
   onDeleteProviderKey,
@@ -81,21 +88,22 @@ export function App({
 }: AppProps) {
   return (
     <main className="te-shell" data-testid="cockpit-shell">
-      <TopBar viewModel={viewModel} busy={busy} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
+      <TopBar viewModel={viewModel} busy={busy} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
       <section className="te-grid" data-testid="cockpit-grid">
-        <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} onSelectSession={onSelectSession} onNewTask={onNewTask} />
-        <WorkflowPanel viewModel={viewModel} busy={busy} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
-        <TelemetryPanel telemetry={viewModel.telemetry} />
+        <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} t={t} onSelectSession={onSelectSession} onNewTask={onNewTask} />
+        <WorkflowPanel viewModel={viewModel} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
+        <TelemetryPanel telemetry={viewModel.telemetry} t={t} />
       </section>
-      <BottomTraceSheet trace={viewModel.trace} />
-      <ComposerPanel goal={goal} accessMode={accessMode} busy={busy} statusMessage={statusMessage} onGoalChange={onGoalChange} onAccessModeChange={onAccessModeChange} onSubmit={onRun} />
-      <DetailDrawer viewModel={viewModel} open={drawerOpen} onClose={onCloseDrawer} />
+      <BottomTraceSheet trace={viewModel.trace} t={t} />
+      <ComposerPanel goal={goal} accessMode={accessMode} busy={busy} statusMessage={statusMessage} t={t} onGoalChange={onGoalChange} onAccessModeChange={onAccessModeChange} onSubmit={onRun} />
+      <DetailDrawer viewModel={viewModel} open={drawerOpen} t={t} onClose={onCloseDrawer} />
       {keyManagerOpen ? (
         <KeyRoleManager
           setupStatus={setupStatus}
           busy={setupBusy}
           message={setupMessage}
           connectionResult={setupConnectionResult}
+          t={t}
           onClose={onCloseKeyManager}
           onSaveProviderKey={onSaveProviderKey}
           onDeleteProviderKey={onDeleteProviderKey}
@@ -109,6 +117,7 @@ export function App({
           busy={setupBusy}
           message={setupMessage}
           connectionResult={setupConnectionResult}
+          t={t}
           onConfigure={onConfigureSetup}
           onTest={onTestSetup}
           onDismissDemo={onDismissSetup}

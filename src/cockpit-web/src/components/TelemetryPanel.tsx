@@ -1,6 +1,7 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
+import type { Translator } from "../i18n.js";
 
-export function TelemetryPanel({ telemetry }: { telemetry: CockpitTelemetry }) {
+export function TelemetryPanel({ telemetry, t }: { telemetry: CockpitTelemetry; t: Translator }) {
   const routes = [
     telemetry.plannerModel && `planner: ${telemetry.plannerModel}`,
     telemetry.coderModel && `coder: ${telemetry.coderModel}`,
@@ -10,7 +11,7 @@ export function TelemetryPanel({ telemetry }: { telemetry: CockpitTelemetry }) {
 
   return (
     <aside className="te-panel te-telemetry" data-testid="telemetry-panel">
-      <header><h2>Telemetry</h2><span className="te-chip">fallback {telemetry.fallbackCount}</span></header>
+      <header><h2>{t("telemetry.title")}</h2><span className="te-chip">{t("telemetry.fallback", { count: telemetry.fallbackCount })}</span></header>
       {routes.length > 0 && (
         <div data-testid="telemetry-routing">
           {routes.map((route) => (
@@ -21,13 +22,13 @@ export function TelemetryPanel({ telemetry }: { telemetry: CockpitTelemetry }) {
           ))}
         </div>
       )}
-      <Metric label="Cost" value={`${money(telemetry.currentCostUsd)} / ${money(telemetry.budgetUsd)}`} />
-      <Metric label="Tokens" value={compact(telemetry.totalTokens)} />
-      <Metric label="Cache" value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
-      <Metric label="Agents" value={`${telemetry.completed} done / ${telemetry.waiting} waiting`} />
-      <Metric label="Latency" value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
-      <Metric label="Risk" value={telemetry.latestRiskLevel ?? "-"} />
-      <a>details &gt;</a>
+      <Metric label={t("telemetry.cost")} value={`${money(telemetry.currentCostUsd)} / ${money(telemetry.budgetUsd)}`} />
+      <Metric label={t("telemetry.tokens")} value={compact(telemetry.totalTokens)} />
+      <Metric label={t("telemetry.cache")} value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
+      <Metric label={t("telemetry.agents")} value={t("telemetry.agentsValue", { done: telemetry.completed, waiting: telemetry.waiting })} />
+      <Metric label={t("telemetry.latency")} value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
+      <Metric label={t("telemetry.risk")} value={telemetry.latestRiskLevel ?? "-"} />
+      <a>{t("telemetry.details")}</a>
     </aside>
   );
 }

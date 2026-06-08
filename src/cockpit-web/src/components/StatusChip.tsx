@@ -1,4 +1,7 @@
-export function StatusChip({ status }: { status: string }) {
+import type { Translator } from "../i18n.js";
+import { translateKnownValue } from "../i18n.js";
+
+export function StatusChip({ status, t }: { status: string; t?: Translator }) {
   const lowered = status.toLowerCase();
   const tone = lowered.includes("fail") || lowered.includes("reject")
     ? "red"
@@ -7,5 +10,5 @@ export function StatusChip({ status }: { status: string }) {
       : lowered.includes("done") || lowered.includes("pass") || lowered.includes("low")
         ? "green"
         : "blue";
-  return <span className={`te-chip te-chip-${tone}`}>{status}</span>;
+  return <span className={`te-chip te-chip-${tone}`}>{t ? translateKnownValue(t, status) : status}</span>;
 }

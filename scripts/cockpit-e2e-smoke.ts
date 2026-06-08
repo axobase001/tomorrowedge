@@ -60,6 +60,14 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
   await withTrace(context, page, "cockpit-main", async () => {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("[data-testid='cockpit-shell']", { timeout: 10_000 });
+    await page.waitForSelector("[data-testid='language-selector']", { timeout: 5_000 });
+    const defaultLanguage = await page.locator("[data-testid='language-selector']").inputValue();
+    if (defaultLanguage !== "en") throw new Error(`expected default GUI language to be en, got ${defaultLanguage}`);
+    await page.selectOption("[data-testid='language-selector']", "zh");
+    await page.waitForFunction(() => window.localStorage.getItem("tomorrowedge.guiLanguage") === "zh", undefined, { timeout: 5_000 });
+    await page.waitForSelector("text=命令", { timeout: 5_000 });
+    await page.selectOption("[data-testid='language-selector']", "en");
+    await page.waitForSelector("text=Command", { timeout: 5_000 });
     const setupDismiss = page.locator("[data-testid='setup-dismiss-demo']");
     if (await setupDismiss.isVisible().catch(() => false)) await setupDismiss.click();
     await page.click("[data-testid='topbar-keys']");

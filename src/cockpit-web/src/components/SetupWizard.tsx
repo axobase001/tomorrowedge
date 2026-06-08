@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CockpitProviderConnectionResult, CockpitSetupRequest, CockpitSetupStatus } from "../api.js";
+import type { Translator } from "../i18n.js";
 
 type SetupWizardProps = {
   setupStatus?: CockpitSetupStatus;
   busy: boolean;
   message?: string;
   connectionResult?: CockpitProviderConnectionResult;
+  t: Translator;
   onConfigure: (request: CockpitSetupRequest) => void;
   onTest: (provider: string) => void;
   onDismissDemo: () => void;
@@ -16,6 +18,7 @@ export function SetupWizard({
   busy,
   message,
   connectionResult,
+  t,
   onConfigure,
   onTest,
   onDismissDemo
@@ -48,48 +51,48 @@ export function SetupWizard({
       <section className="te-setup-card">
         <header>
           <div>
-            <span className="te-chip te-chip-blue">First-run setup</span>
-            <h2>Connect at least one model</h2>
+            <span className="te-chip te-chip-blue">{t("setup.badge")}</span>
+            <h2>{t("setup.title")}</h2>
           </div>
-          <button type="button" className="te-quiet-button" onClick={onDismissDemo} data-testid="setup-dismiss-demo">Use fixture demo</button>
+          <button type="button" className="te-quiet-button" onClick={onDismissDemo} data-testid="setup-dismiss-demo">{t("setup.useFixture")}</button>
         </header>
         <p>
-          Start with OpenRouter if you are not sure. One key can reach several model families; later you can split keys per provider for rate-limit isolation and cost tracing.
+          {t("setup.intro")}
         </p>
         <div className="te-setup-grid">
           <label>
-            <span>Provider</span>
+            <span>{t("setup.provider")}</span>
             <select value={provider} onChange={(event) => setProvider(event.target.value)} data-testid="setup-provider">
               {providers.map((item) => (
-                <option key={item.id} value={item.id}>{item.id === recommended ? `${item.id} (recommended)` : item.id}</option>
+                <option key={item.id} value={item.id}>{item.id === recommended ? `${item.id} (${t("setup.recommended")})` : item.id}</option>
               ))}
             </select>
           </label>
           <label>
-            <span>Model</span>
-            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="openrouter model id" data-testid="setup-model" />
+            <span>{t("setup.model")}</span>
+            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder={t("setup.modelPlaceholder")} data-testid="setup-model" />
           </label>
           <label>
-            <span>API key env</span>
+            <span>{t("setup.apiKeyEnv")}</span>
             <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} placeholder="OPENROUTER_API_KEY" data-testid="setup-env" />
           </label>
           <label>
-            <span>API key optional</span>
-            <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Leave blank if the env var already exists" data-testid="setup-key" />
+            <span>{t("setup.apiKeyOptional")}</span>
+            <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t("setup.apiKeyPlaceholder")} data-testid="setup-key" />
           </label>
         </div>
         <label className="te-setup-check">
           <input type="checkbox" checked={bindRoles} onChange={(event) => setBindRoles(event.target.checked)} />
-          <span>Use this model for all roles for now. Routing presets such as cheap-first and strong-review remain optional.</span>
+          <span>{t("setup.bindRoles")}</span>
         </label>
         <div className="te-setup-actions">
           <button type="button" onClick={() => onConfigure({ provider, model, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
-            Save configuration
+            {t("setup.save")}
           </button>
           <button type="button" className="te-quiet-button" onClick={() => onTest(provider)} disabled={busy || !provider} data-testid="setup-test">
-            Test connection
+            {t("setup.test")}
           </button>
-          <span className="te-chip">manual or LLM-assisted routing after setup</span>
+          <span className="te-chip">{t("setup.routingAfter")}</span>
         </div>
         {message ? <p className="te-setup-message" data-testid="setup-message">{message}</p> : null}
         {connectionResult ? (

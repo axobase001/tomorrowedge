@@ -23,6 +23,7 @@ import {
   type CockpitSetupRequest,
   type CockpitSetupStatus
 } from "./api.js";
+import { createTranslator, normalizeLanguage, type GuiLanguage } from "./i18n.js";
 
 const emptyViewModel: CockpitViewModel = {
   version: "1",
@@ -67,9 +68,12 @@ const emptyViewModel: CockpitViewModel = {
   artifacts: []
 };
 const setupDismissedStorageKey = "tomorrowedge.fixtureDemoDismissed";
+const languageStorageKey = "tomorrowedge.guiLanguage";
 
 function CockpitWebRoot() {
   const apiOptions = useMemo(readApiOptions, []);
+  const [language, setLanguage] = useState<GuiLanguage>(readLanguage);
+  const t = useMemo(() => createTranslator(language), [language]);
   const [viewModel, setViewModel] = useState<CockpitViewModel>(emptyViewModel);
   const [sessions, setSessions] = useState<CockpitSessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState("latest");
@@ -87,6 +91,11 @@ function CockpitWebRoot() {
   const liveSource = useRef<EventSource | undefined>(undefined);
   const selectedSessionRef = useRef("latest");
   const setupDismissedRef = useRef(readSetupDismissed());
+
+  const updateLanguage = useCallback((nextLanguage: GuiLanguage) => {
+    setLanguage(nextLanguage);
+    writeLanguage(nextLanguage);
+  }, []);
 
   const updateSelectedSession = useCallback((sessionId: string) => {
     selectedSessionRef.current = sessionId;
@@ -128,14 +137,14 @@ function CockpitWebRoot() {
       else {
         setViewModel(emptyViewModel);
         updateSelectedSession("latest");
-        setStatusMessage("No saved sessions yet.");
+        setStatusMessage(t("status.noSavedSessions"));
       }
     } catch (error) {
       const message = errorMessage(error);
-      setViewModel(apiUnavailableViewModel(message));
-      setStatusMessage(`Cockpit API unavailable: ${message}`);
+      setViewModel(apiUnavailableViewModel(message, t));
+      setStatusMessage(t("status.apiUnavailable", { message }));
     }
-  }, [apiOptions, loadSession, setupVisible, updateSelectedSession]);
+  }, [apiOptions, loadSession, setupVisible, t, updateSelectedSession]);
 
   useEffect(() => {
     void refresh();
@@ -191,18 +200,18 @@ function CockpitWebRoot() {
           message: "Live event stream disconnected."
         }
       }));
-      setStatusMessage("Live event stream disconnected.");
+      setStatusMessage(t("view.disconnected"));
     };
-  }, [apiOptions, closeLiveSource, loadCompletedRun]);
+  }, [apiOptions, closeLiveSource, loadCompletedRun, t]);
 
   const run = useCallback(async () => {
     if (busy) {
-      setStatusMessage("A workflow is already in progress. Wait for it to finish or refresh the page.");
+      setStatusMessage(t("status.workflowBusy"));
       return;
     }
     setBusy(true);
     const useLiveModels = Boolean(setupStatus && !setupStatus.needsSetup && accessMode !== "restricted");
-    setStatusMessage(useLiveModels ? "Starting workflow with live models..." : "Starting fixture workflow...");
+    setStatusMessage(useLiveModels ? t("status.startingLive") : t("status.startingFixture"));
     try {
       const payload = await startCockpitRun({
         goal: goal.trim() || "fix failing test",
@@ -214,102 +223,102 @@ function CockpitWebRoot() {
         to: "core"
       }, apiOptions);
       updateSelectedSession(payload.sessionId);
-      setStatusMessage("Workflow running...");
+      setStatusMessage(t("status.workflowRunning"));
       connectLive(payload.sessionId);
     } catch (error) {
       setBusy(false);
-      setStatusMessage(`Run failed: ${errorMessage(error)}`);
+      setStatusMessage(t("status.runFailed", { message: errorMessage(error) }));
     }
-  }, [accessMode, apiOptions, busy, connectLive, goal, setupStatus, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, goal, setupStatus, t, updateSelectedSession]);
 
   const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
     if (setupBusy) return;
     setSetupBusy(true);
-    setSetupMessage("Saving configuration...");
+    setSetupMessage(t("status.savingConfig"));
     try {
       const nextStatus = await configureCockpitSetup(request, apiOptions);
       setSetupStatus(nextStatus);
       setSetupVisible(nextStatus.needsSetup);
       if (!nextStatus.needsSetup) setupDismissedRef.current = true;
-      setSetupMessage(nextStatus.needsSetup ? "Configuration saved, but the key is not visible in this process yet. Check the env var or paste the key once." : "Configuration saved. You can now run workflows.");
-      setStatusMessage("Provider configured.");
+      setSetupMessage(nextStatus.needsSetup ? t("status.configNeedsKey") : t("status.configSaved"));
+      setStatusMessage(t("status.providerConfigured"));
     } catch (error) {
-      setSetupMessage(`Setup failed: ${errorMessage(error)}`);
+      setSetupMessage(t("status.setupFailed", { message: errorMessage(error) }));
     } finally {
       setSetupBusy(false);
     }
-  }, [apiOptions, setupBusy]);
+  }, [apiOptions, setupBusy, t]);
 
   const saveProviderKey = useCallback(async (request: CockpitProviderKeyRequest) => {
     if (setupBusy) return;
     setSetupBusy(true);
-    setSetupMessage("Saving provider key...");
+    setSetupMessage(t("status.savingKey"));
     try {
       const nextStatus = await saveCockpitProviderKey(request, apiOptions);
       setSetupStatus(nextStatus);
       setSetupVisible(nextStatus.needsSetup && !setupDismissedRef.current);
-      setSetupMessage("Provider key saved locally. Config keeps only the env-var reference.");
-      setStatusMessage(`Configured ${request.provider}.`);
+      setSetupMessage(t("status.keySaved"));
+      setStatusMessage(t("status.configuredProvider", { provider: request.provider }));
     } catch (error) {
-      setSetupMessage(`Key save failed: ${errorMessage(error)}`);
+      setSetupMessage(t("status.keySaveFailed", { message: errorMessage(error) }));
     } finally {
       setSetupBusy(false);
     }
-  }, [apiOptions, setupBusy]);
+  }, [apiOptions, setupBusy, t]);
 
   const deleteProviderKey = useCallback(async (provider: string) => {
     if (setupBusy) return;
     setSetupBusy(true);
-    setSetupMessage("Removing local provider key...");
+    setSetupMessage(t("status.removingKey"));
     try {
       const nextStatus = await deleteCockpitProviderKey(provider, apiOptions);
       setSetupStatus(nextStatus);
-      setSetupMessage("Local provider key removed.");
-      setStatusMessage(`Removed local key for ${provider}.`);
+      setSetupMessage(t("status.keyRemoved"));
+      setStatusMessage(t("status.removedProvider", { provider }));
     } catch (error) {
-      setSetupMessage(`Key removal failed: ${errorMessage(error)}`);
+      setSetupMessage(t("status.keyRemovalFailed", { message: errorMessage(error) }));
     } finally {
       setSetupBusy(false);
     }
-  }, [apiOptions, setupBusy]);
+  }, [apiOptions, setupBusy, t]);
 
   const saveRoleAssignments = useCallback(async (assignments: CockpitRoleAssignment[]) => {
     if (setupBusy) return;
     setSetupBusy(true);
-    setSetupMessage("Saving role assignments...");
+    setSetupMessage(t("status.savingRoles"));
     try {
       const nextStatus = await saveCockpitRoleAssignments({ assignments }, apiOptions);
       setSetupStatus(nextStatus);
-      setSetupMessage("Role assignments saved.");
-      setStatusMessage("Role routing updated.");
+      setSetupMessage(t("status.rolesSaved"));
+      setStatusMessage(t("status.routingUpdated"));
     } catch (error) {
-      setSetupMessage(`Role save failed: ${errorMessage(error)}`);
+      setSetupMessage(t("status.roleSaveFailed", { message: errorMessage(error) }));
     } finally {
       setSetupBusy(false);
     }
-  }, [apiOptions, setupBusy]);
+  }, [apiOptions, setupBusy, t]);
 
   const testSetup = useCallback(async (provider: string) => {
     if (setupBusy) return;
     setSetupBusy(true);
-    setSetupMessage("Testing provider connection...");
+    setSetupMessage(t("status.testingProvider"));
     try {
       const result = await testCockpitSetupProvider(provider, apiOptions);
       setSetupConnectionResult(result);
-      setSetupMessage(result.status === "ok" ? "Connection test passed." : "Connection test completed with a warning.");
+      setSetupMessage(result.status === "ok" ? t("status.connectionPassed") : t("status.connectionWarning"));
     } catch (error) {
-      setSetupMessage(`Connection test failed: ${errorMessage(error)}`);
+      setSetupMessage(t("status.connectionFailed", { message: errorMessage(error) }));
     } finally {
       setSetupBusy(false);
     }
-  }, [apiOptions, setupBusy]);
+  }, [apiOptions, setupBusy, t]);
 
   const dismissSetup = useCallback(() => {
     setupDismissedRef.current = true;
     writeSetupDismissed(true);
     setSetupVisible(false);
-    setSetupMessage("Fixture demo mode is available. Configure a provider when you are ready.");
-  }, []);
+    setSetupMessage(t("status.fixtureAvailable"));
+  }, [t]);
 
   const approve = useCallback(async (action: CockpitApprovalIntent["action"]) => {
     if (!viewModel.sessionId || busy) return;
@@ -324,11 +333,11 @@ function CockpitWebRoot() {
       if (payload.viewModel) setViewModel(payload.viewModel);
       setStatusMessage(payload.message);
     } catch (error) {
-      setStatusMessage(`Approval failed: ${errorMessage(error)}`);
+      setStatusMessage(t("status.approvalFailed", { message: errorMessage(error) }));
     } finally {
       setBusy(false);
     }
-  }, [apiOptions, busy, goal, viewModel.currentApproval?.id, viewModel.sessionId]);
+  }, [apiOptions, busy, goal, t, viewModel.currentApproval?.id, viewModel.sessionId]);
 
   const selectSession = useCallback((sessionId: string) => {
     closeLiveSource();
@@ -342,8 +351,8 @@ function CockpitWebRoot() {
     setViewModel(emptyViewModel);
     setGoal("");
     setAccessMode("partial");
-    setStatusMessage("Ready for a new task.");
-  }, [closeLiveSource, updateSelectedSession]);
+    setStatusMessage(t("status.readyNewTask"));
+  }, [closeLiveSource, t, updateSelectedSession]);
 
   return (
     <App
@@ -361,8 +370,11 @@ function CockpitWebRoot() {
       setupConnectionResult={setupConnectionResult}
       keyManagerOpen={keyManagerOpen}
       drawerOpen={drawerOpen}
+      language={language}
+      t={t}
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
+      onLanguageChange={updateLanguage}
       onConfigureSetup={configureSetup}
       onSaveProviderKey={saveProviderKey}
       onDeleteProviderKey={deleteProviderKey}
@@ -382,7 +394,7 @@ function CockpitWebRoot() {
   );
 }
 
-function apiUnavailableViewModel(message: string): CockpitViewModel {
+function apiUnavailableViewModel(message: string, t = createTranslator("en")): CockpitViewModel {
   return {
     ...emptyViewModel,
     status: "failed",
@@ -398,12 +410,28 @@ function apiUnavailableViewModel(message: string): CockpitViewModel {
       message
     },
     main: {
-      title: "Cockpit API unavailable",
-      subtitle: "Local server is not reachable",
+      title: t("status.apiUnavailableTitle"),
+      subtitle: t("status.apiUnavailableSubtitle"),
       body: message,
       filesChanged: []
     }
   };
+}
+
+function readLanguage(): GuiLanguage {
+  try {
+    return normalizeLanguage(window.localStorage.getItem(languageStorageKey));
+  } catch {
+    return "en";
+  }
+}
+
+function writeLanguage(language: GuiLanguage): void {
+  try {
+    window.localStorage.setItem(languageStorageKey, language);
+  } catch {
+    // Local storage may be unavailable in hardened browser contexts.
+  }
 }
 
 function readApiOptions(): CockpitApiOptions {

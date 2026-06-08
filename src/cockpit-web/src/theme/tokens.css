@@ -83,6 +83,10 @@ input, textarea, select {
   gap: 10px;
   min-width: 0;
 }
+.te-topbar-status {
+  justify-content: flex-end;
+  overflow: hidden;
+}
 .te-brand strong {
   display: block;
   font-size: 15px;
@@ -346,6 +350,22 @@ input, textarea, select {
   min-height: 30px;
   font: 12px var(--te-mono);
 }
+.te-language-control {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr);
+  align-items: center;
+  gap: 5px;
+  flex: 0 1 136px;
+  min-width: 0;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-language-control select {
+  min-height: 30px;
+  max-width: 112px;
+  padding: 0 6px;
+  font: 12px var(--te-mono);
+}
 
 .te-chip {
   display: inline-flex;
@@ -358,6 +378,11 @@ input, textarea, select {
   background: #fff;
   font: 11px var(--te-mono);
   white-space: nowrap;
+}
+.te-topbar-status .te-chip {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .te-chip-blue { border-color: #b9d7e8; color: var(--te-deep-blue); background: #eaf5fb; }
 .te-chip-green { border-color: #bfe2cf; color: var(--te-success); background: #f0faf4; }
@@ -605,6 +630,28 @@ input, textarea, select {
   }
   .te-composer {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1280px) {
+  .te-topbar {
+    gap: 8px;
+  }
+  .te-topbar-status {
+    gap: 6px;
+  }
+  .te-topbar-status .te-chip {
+    max-width: 136px;
+  }
+  .te-language-control {
+    grid-template-columns: minmax(74px, 1fr);
+    flex-basis: 82px;
+  }
+  .te-language-control span {
+    display: none;
+  }
+  .te-language-control select {
+    max-width: 88px;
   }
 }
 

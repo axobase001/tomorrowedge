@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
+import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 
@@ -89,12 +90,32 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Snapshot");
   });
 
+  it("defaults the GUI language surface to English", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("data-testid=\"language-selector\"");
+    expect(html).toContain("Language");
+    expect(html).toContain("Command");
+    expect(html).toContain("Telemetry");
+  });
+
+  it("renders the GUI chrome in Chinese when selected", () => {
+    const html = renderApp(sampleViewModel(), { language: "zh", setupVisible: true, keyManagerOpen: true });
+
+    expect(html).toContain("语言");
+    expect(html).toContain("任务");
+    expect(html).toContain("命令");
+    expect(html).toContain("密钥与角色管理");
+    expect(html).toContain("至少连接一个模型");
+  });
+
   it("keeps a newly selected session visible before the session list refreshes", () => {
     const html = renderToStaticMarkup(
       React.createElement(TaskListPanel, {
         tasks: [],
         sessions: [],
         selectedSession: "session_new",
+        t: createTranslator("en"),
         onSelectSession: () => undefined,
         onNewTask: () => undefined
       })
@@ -131,7 +152,9 @@ describe("cockpit web React surface", () => {
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage }> = {}): string {
+  const language = overrides.language ?? "en";
+  const t = createTranslator(language);
   return renderToStaticMarkup(
     React.createElement(App, {
       viewModel,
@@ -173,8 +196,11 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       setupBusy: false,
       keyManagerOpen: overrides.keyManagerOpen ?? false,
       drawerOpen: true,
+      language,
+      t,
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
+      onLanguageChange: () => undefined,
       onConfigureSetup: () => undefined,
       onSaveProviderKey: () => undefined,
       onDeleteProviderKey: () => undefined,
