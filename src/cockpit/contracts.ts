@@ -179,6 +179,9 @@ export type CockpitRunRequest = {
   goal?: string;
   accessMode?: AccessMode;
   fixtureMode?: boolean;
+  livePatch?: boolean;
+  liveAdvisory?: boolean;
+  liveVision?: boolean;
   approvePatch?: boolean;
   approveShell?: boolean;
   approveRepair?: boolean;

@@ -1,12 +1,15 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 
 export function DetailDrawer({ viewModel, open, onClose }: { viewModel: CockpitViewModel; open: boolean; onClose: () => void }) {
+  if (!open) return null;
   return (
-    <aside className={`te-drawer ${open ? "open" : ""}`} aria-hidden={!open} data-testid="detail-drawer">
-      <header>
-        <h2>Details</h2>
-        <button type="button" onClick={onClose} data-testid="close-drawer">Close</button>
-      </header>
+    <>
+      <div className="te-drawer-backdrop" onClick={onClose} data-testid="drawer-backdrop" />
+      <aside className="te-drawer open" aria-hidden={false} data-testid="detail-drawer">
+        <header>
+          <h2>Details</h2>
+          <button type="button" onClick={onClose} data-testid="close-drawer">Close</button>
+        </header>
       <h3>Approval history</h3>
       <pre>{viewModel.approvalHistory.map((item) => [
         `${item.timestamp} ${item.approvalId} ${item.kind}/${item.status}`,
@@ -37,5 +40,6 @@ export function DetailDrawer({ viewModel, open, onClose }: { viewModel: CockpitV
       <h3>Raw events</h3>
       <pre>{JSON.stringify(viewModel.rawEvents.slice(-40), null, 2)}</pre>
     </aside>
+    </>
   );
 }
