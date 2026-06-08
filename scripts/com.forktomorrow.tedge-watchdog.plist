@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.forktomorrow.tedge-watchdog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/yuzhezhong/Desktop/tomorrowedge/scripts/release-watchdog.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>WATCHDOG_INTERVAL</key>
+        <string>600</string>
+        <key>WATCHDOG_WORKDIR</key>
+        <string>/Users/yuzhezhong/Desktop/tomorrowedge</string>
+        <key>WATCHDOG_AUTO_ISSUE</key>
+        <string>true</string>
+        <key>https_proxy</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/yuzhezhong/.nvm/versions/node/v22.14.0/bin</string>
+        <key>HOME</key>
+        <string>/Users/yuzhezhong</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/yuzhezhong/.tomorrowedge-watchdog/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/yuzhezhong/.tomorrowedge-watchdog/stderr.log</string>
+</dict>
+</plist>
