@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { bindDesktopShutdown, desktopCommandWithDependencies, launchDesktopWindow } from "../../src/cli/commands/desktop.js";
+import { bindDesktopShutdown, buildElectronLaunchConfig, desktopCommandWithDependencies, isWslgEnvironment, launchDesktopWindow } from "../../src/cli/commands/desktop.js";
 import type { LocalCockpitHandle } from "../../src/localCockpit/server.js";
 
 describe("desktop command", () => {
@@ -66,6 +66,40 @@ describe("desktop command", () => {
 
     expect(closed).toBe(1);
     expect(exitCodes).toEqual([0]);
+  });
+
+  it("keeps the default Electron launch config minimal outside WSLg", () => {
+    const config = buildElectronLaunchConfig("http://127.0.0.1:18792/?nonce=test", {
+      PATH: "/usr/bin"
+    });
+
+    expect(config.args).toHaveLength(1);
+    expect(config.args[0]).toContain("desktop/electron-main.cjs");
+    expect(config.args).not.toContain("--disable-gpu");
+    expect(config.env.TOMORROWEDGE_DESKTOP_URL).toBe("http://127.0.0.1:18792/?nonce=test");
+    expect(config.env.TOMORROWEDGE_DESKTOP_WSLG).toBeUndefined();
+  });
+
+  it("adds WSLg-safe Electron rendering flags when launched from WSLg", () => {
+    const env = {
+      PATH: "/usr/bin",
+      WSL_DISTRO_NAME: "Ubuntu-24.04",
+      WSL2_GUI_APPS_ENABLED: "1",
+      WAYLAND_DISPLAY: "wayland-0",
+      DISPLAY: ":0"
+    };
+    const config = buildElectronLaunchConfig("http://127.0.0.1:18792/?nonce=test", env);
+
+    expect(isWslgEnvironment(env)).toBe(true);
+    expect(config.args).toEqual(expect.arrayContaining([
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-dev-shm-usage",
+      "--no-sandbox"
+    ]));
+    expect(config.args.at(-1)).toContain("desktop/electron-main.cjs");
+    expect(config.env.TOMORROWEDGE_DESKTOP_WSLG).toBe("1");
+    expect(config.env.LIBGL_ALWAYS_SOFTWARE).toBe("1");
   });
 });
 
