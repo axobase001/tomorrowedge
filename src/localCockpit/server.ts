@@ -23,7 +23,14 @@ import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import { configureCockpitProvider, getCockpitSetupStatus, testCockpitProvider } from "./setup.js";
+import { configureCockpitProvider, getCockpitSetupStatus, saveRoleAssignments, testCockpitProvider, type CockpitRoleAssignmentsRequest } from "./setup.js";
+import { deleteSecret, getSecret, saveSecret } from "../core/secrets/secretManager.js";
+
+const providerEnvNames: Record<string, string> = {
+  openrouter: "OPENROUTER_API_KEY", deepseek: "DEEPSEEK_API_KEY",
+  kimi: "KIMI_API_KEY", mimo: "MIMO_API_KEY", anthropic: "ANTHROPIC_API_KEY",
+  gemini: "GEMINI_API_KEY", openai_compatible: "OPENAI_API_KEY",
+};
 
 export type LocalCockpitServerOptions = {
   port?: number;
@@ -144,12 +151,41 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const status = await toSetupHttpResult(() => configureCockpitProvider(cwd, parseSetupRequest(body)));
       return sendJson(response, 200, status);
     }
+    if (request.method === "PUT" && url.pathname === "/api/setup/roles") {
+      const body = await readJsonBody(request) as CockpitRoleAssignmentsRequest;
+      if (!body.assignments || !Array.isArray(body.assignments)) throw new HttpError(400, "assignments_required", "assignments array is required.");
+      const status = await toSetupHttpResult(() => saveRoleAssignments(cwd, body));
+      return sendJson(response, 200, status);
+    }
     if (request.method === "POST" && url.pathname === "/api/setup/test") {
       const body = await readJsonBody(request);
       const provider = typeof body.provider === "string" ? body.provider : "";
       if (!provider.trim()) throw new HttpError(400, "provider_required", "provider is required.");
       return sendJson(response, 200, await toSetupHttpResult(() => testCockpitProvider(cwd, provider)));
     }
+    // ---------- Secrets API ----------
+    const secretMatch = /^\/api\/secrets\/([^/]+)$/.exec(url.pathname);
+    if (request.method === "PUT" && secretMatch) {
+      const provider = secretMatch[1];
+      const body = await readJsonBody(request);
+      const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+      if (!apiKey) throw new HttpError(400, "api_key_required", "apiKey is required.");
+      await saveSecret(provider as any, apiKey);
+      // 同步注入 process.env，使新 key 在当前进程中立即可用
+      const envName = providerEnvNames[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+      process.env[envName] = apiKey;
+      const masked = apiKey.length > 8 ? `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}` : `${apiKey.slice(0, 4)}****`;
+      return sendJson(response, 200, { provider, configured: true, maskedKey: masked });
+    }
+    if (request.method === "DELETE" && secretMatch) {
+      const provider = secretMatch[1];
+      await deleteSecret(provider as any);
+      // 清除 process.env 中对应的 key，防止 providerReadiness 误判
+      const envName = providerEnvNames[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+      delete process.env[envName];
+      return sendJson(response, 204, {});
+    }
+    // --------------------------------
     const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && sessionMatch) {
       const session = sessionMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(sessionMatch[1]));

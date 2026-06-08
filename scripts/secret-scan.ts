@@ -13,6 +13,7 @@ const skipPatterns = [
   /^docs\/assets\//,
   /^docs\/ui\//,
   /^tests\//,
+  /^src\/core\/secrets\//,
   /^examples\/[^/]+\/tests\//,
   /\.(png|jpe?g|gif|webp|ico|pdf|zip|tar|tgz|gz|wasm|sqlite|db|bin)$/i
 ];

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { loadSecretsFile, maskKey } from "../core/secrets/secretManager.js";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
@@ -11,7 +12,8 @@ export type CockpitProviderReadiness = {
   baseUrl: string;
   apiKeyEnv?: string;
   keyConfigured: boolean;
-  keySource: "env" | "local_env" | "not_required" | "missing";
+  keySource: "env" | "local_env" | "not_required" | "missing" | "encrypted" | "local";
+  maskedKey?: string;
   authRequired: boolean;
 };
 
@@ -45,7 +47,7 @@ const defaultEnvNames: Record<string, string> = {
 export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const config = loadConfig(cwd);
   const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider));
-  const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model);
+  const configuredLive = providers.find((provider) => provider.enabled && provider.model && !["mock", "fixture"].includes(provider.id) && (provider.keyConfigured || provider.keySource === "local"));
   const selected = configuredLive ?? providers.find((provider) => provider.enabled && provider.model);
   return {
     needsSetup: !configuredLive,
@@ -80,9 +82,31 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
     providers: {
       ...config.providers,
       [providerId]: nextProvider
-    },
-    agents: request.bindRoles ? bindAllRoles(config, providerId, model) : config.agents
+    }
+    // 不再自动绑定所有 roles；role 分配由 saveRoleAssignments 单独管理
   };
+  await writeConfig(cwd, nextConfig);
+  return getCockpitSetupStatus(cwd);
+}
+
+export type CockpitRoleAssignment = {
+  role: string;
+  provider: string;
+  model: string;
+};
+
+export type CockpitRoleAssignmentsRequest = {
+  assignments: CockpitRoleAssignment[];
+};
+
+export async function saveRoleAssignments(cwd: string, request: CockpitRoleAssignmentsRequest): Promise<CockpitSetupStatus> {
+  const config = loadConfig(cwd);
+  const agents: TomorrowEdgeConfig["agents"] = { ...config.agents };
+  for (const { role, provider, model } of request.assignments) {
+    if (!config.agents[role]) continue; // 未知 role 跳过
+    agents[role] = { provider, model, reason: "Manually assigned via role config panel" };
+  }
+  const nextConfig: TomorrowEdgeConfig = { ...config, agents };
   await writeConfig(cwd, nextConfig);
   return getCockpitSetupStatus(cwd);
 }
@@ -99,16 +123,27 @@ function providerReadiness(id: string, provider: ProviderConfig): CockpitProvide
   const authRequired = requiresAuth(provider);
   const envName = provider.api_key_env;
   const envValue = envName ? process.env[envName] : undefined;
+  // Check encrypted storage as well (single source of truth via setup/status)
+  const encrypted = loadEncryptedSecrets()[id];
   return {
     id,
     enabled: provider.enabled,
     model: provider.model,
     baseUrl: provider.base_url,
     apiKeyEnv: envName,
-    keyConfigured: !authRequired || Boolean(envValue),
-    keySource: !authRequired ? "not_required" : envValue ? "env" : "missing",
+    keyConfigured: authRequired ? (Boolean(envValue) || Boolean(encrypted)) : false,
+    keySource: !authRequired
+      ? (["mock", "fixture"].includes(id) ? "not_required" : "local")
+      : encrypted ? "encrypted" : envValue ? "env" : "missing",
+    maskedKey: encrypted ? maskKey(encrypted) : undefined,
     authRequired
   };
+}
+
+// ---------- Encrypted secrets helpers (used by providerReadiness) ----------
+
+function loadEncryptedSecrets(): Record<string, string> {
+  return loadSecretsFile(); // 复用 secretManager 的解密逻辑
 }
 
 function requiresAuth(provider: ProviderConfig): boolean {

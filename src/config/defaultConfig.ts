@@ -54,6 +54,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
   },
   providers: {
     mock: { enabled: true, base_url: "", model: "mock-balanced", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
+    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     fixture: { enabled: true, base_url: "", model: "fixture-scripted", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
     openrouter: {
       enabled: false,
@@ -66,11 +67,10 @@ export const defaultConfig: TomorrowEdgeConfig = {
     },
     mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "", model: "mimo-v2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
     openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "", model: "gpt-4o-mini", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
-    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "https://api.moonshot.ai/v1", model: "kimi-k2.6", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "https://api.anthropic.com/v1", model: "claude-sonnet-4-5", api_format: "legacy_chat", auth_header: "api-key", extra_headers: {} },
     gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
-    ollama: { enabled: true, base_url: "http://localhost:11434", model: "local-auto", api_format: "openai_chat", auth_header: "none", extra_headers: {} }
+    ollama: { enabled: false, base_url: "http://localhost:11434", model: "local-auto", api_format: "openai_chat", auth_header: "none", extra_headers: {} }
   },
   external_agents: {
     claude_code: {
