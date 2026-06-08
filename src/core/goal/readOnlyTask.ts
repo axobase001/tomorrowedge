@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -53,7 +54,9 @@ function resolveReadOnlyTarget(cwd: string, goal: string): string | undefined {
   const desktopMentioned = /desktop|桌面/i.test(goal);
   if (path.isAbsolute(explicit)) return path.normalize(explicit);
   if (desktopMentioned) return path.join(os.homedir(), "Desktop", explicit);
-  return path.resolve(cwd, explicit);
+  const resolved = path.resolve(cwd, explicit);
+  if (isLikelyPathToken(explicit) || existsSync(resolved)) return resolved;
+  return undefined;
 }
 
 function extractExplicitPath(goal: string): string | undefined {
@@ -76,6 +79,10 @@ function extractExplicitPath(goal: string): string | undefined {
 
 function cleanupTarget(value: string): string {
   return value.trim().replace(/[，。；;,]+$/g, "").replace(/^(?:的|下|里|中)\s*/g, "");
+}
+
+function isLikelyPathToken(value: string): boolean {
+  return value.includes("/") || value.includes("\\") || value.startsWith(".") || /\.[A-Za-z0-9]+$/.test(value);
 }
 
 async function describeLocalTarget(targetPath: string): Promise<{ summary: string; text: string }> {

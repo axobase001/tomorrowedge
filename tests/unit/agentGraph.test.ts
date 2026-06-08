@@ -76,6 +76,19 @@ describe("offline agent graph", () => {
     }
   });
 
+  it("keeps natural-language inspect requests from becoming fake missing paths", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "inspect provider setup flow for actionable bug; do not edit files", defaultConfig, { fixtureMode: true });
+    const evidence = state.finalSummary?.evidence.join("\n") ?? "";
+
+    expect(state.plan?.taskType).toBe("analysis");
+    expect(state.finalSummary?.result).toBe("completed");
+    expect(evidence).toContain("Read-only request completed without patch generation.");
+    expect(evidence).not.toContain(`${cwd}/provider`);
+    expect(evidence).not.toContain("Unable to inspect target");
+    expect(evidence).not.toContain("ENOENT");
+  });
+
   it("marks configured cloud/local model providers as live agent runs", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
