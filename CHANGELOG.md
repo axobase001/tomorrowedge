@@ -7,6 +7,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI live-model runs now stay opt-in through explicit live flags and fall back
+  to fixture mode when no provider is configured, preserving no-key onboarding
+  while still enabling live calls for configured providers.
+
 ## [1.2.1] - 2026-06-08
 
 1.2.1 is a local-startup patch release for fresh checkouts and dev users.

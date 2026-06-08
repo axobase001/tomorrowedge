@@ -183,9 +183,9 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const options: OfflineGraphOptions = {
         fixtureMode: body.fixtureMode !== false,
         accessMode,
-        livePatch: body.livePatch !== false,
-        liveAdvisory: body.liveAdvisory !== false,
-        liveVision: body.liveVision !== false,
+        livePatch: Boolean(body.livePatch),
+        liveAdvisory: Boolean(body.liveAdvisory),
+        liveVision: Boolean(body.liveVision),
         approvePatch: Boolean(body.approvePatch),
         approveShell: Boolean(body.approveShell),
         repairOnFail: Boolean(body.repairOnFail),

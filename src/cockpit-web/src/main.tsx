@@ -186,14 +186,16 @@ function CockpitWebRoot() {
       return;
     }
     setBusy(true);
-    setStatusMessage("Starting workflow with live models...");
+    const useLiveModels = Boolean(setupStatus && !setupStatus.needsSetup && accessMode !== "restricted");
+    setStatusMessage(useLiveModels ? "Starting workflow with live models..." : "Starting fixture workflow...");
     try {
       const payload = await startCockpitRun({
         goal: goal.trim() || "fix failing test",
         accessMode,
-        fixtureMode: false,
-        livePatch: true,
-        liveAdvisory: true,
+        fixtureMode: !useLiveModels,
+        livePatch: useLiveModels,
+        liveAdvisory: useLiveModels,
+        liveVision: false,
         to: "core"
       }, apiOptions);
       updateSelectedSession(payload.sessionId);
@@ -203,7 +205,7 @@ function CockpitWebRoot() {
       setBusy(false);
       setStatusMessage(`Run failed: ${errorMessage(error)}`);
     }
-  }, [accessMode, apiOptions, busy, connectLive, goal, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, goal, setupStatus, updateSelectedSession]);
 
   const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
     if (setupBusy) return;
