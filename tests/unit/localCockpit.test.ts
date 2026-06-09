@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
-import { loadConfig } from "../../src/config/configLoader.js";
+import { loadConfig, writeConfig } from "../../src/config/configLoader.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -352,6 +352,51 @@ describe("local cockpit server", () => {
       expect(localEnv).toContain('TEST_OPENROUTER_KEY="test-openrouter-key-value"');
     } finally {
       delete process.env.TEST_OPENROUTER_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("treats routed external agents as a configured GUI runtime", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-external-runtime-"));
+    await writeConfig(cwd, {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-role-external-mcp-server.mjs")],
+          autoStart: true,
+          roles: ["core", "coder_a", "reviewer", "judge"],
+          capabilities: ["core", "coding", "review", "judgment"],
+          trustLevel: "high"
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        core: { provider: "external:codex", model: "auto" },
+        coder_a: { provider: "external:codex", model: "auto" },
+        reviewer: { provider: "external:codex", model: "auto" },
+        judge: { provider: "external:codex", model: "auto" }
+      }
+    });
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+        needsSetup: boolean;
+        selectedProvider?: string;
+        selectedModel?: string;
+        roleAssignments: Array<{ role: string; provider: string; model: string }>;
+      };
+
+      expect(status.needsSetup).toBe(false);
+      expect(status.selectedProvider).toBe("external:codex");
+      expect(status.selectedModel).toBe("auto");
+      expect(status.roleAssignments.find((assignment) => assignment.role === "core")).toMatchObject({ provider: "external:codex", model: "auto" });
+      expect(status.roleAssignments.find((assignment) => assignment.role === "coder_a")).toMatchObject({ provider: "external:codex", model: "auto" });
+    } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }

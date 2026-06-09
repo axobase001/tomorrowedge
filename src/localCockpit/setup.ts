@@ -71,9 +71,10 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider, localEnv));
   const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model);
   const configuredAuthProvider = providers.find((provider) => provider.enabled && provider.authRequired && provider.model);
+  const configuredExternalAgent = configuredExternalRuntime(config);
   const selected = configuredLive ?? configuredAuthProvider;
   return {
-    needsSetup: !configuredLive,
+    needsSetup: !configuredLive && !configuredExternalAgent,
     recommendedProvider: config.model_discovery.recommended_provider,
     configPath: path.join(cwd, ".tomorrowedge", "config.yaml"),
     providers,
@@ -83,9 +84,21 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
       model: agent.model,
       reason: agent.reason
     })),
-    selectedProvider: selected?.id,
-    selectedModel: selected?.model
+    selectedProvider: selected?.id ?? configuredExternalAgent?.provider,
+    selectedModel: selected?.model ?? configuredExternalAgent?.model
   };
+}
+
+function configuredExternalRuntime(config: TomorrowEdgeConfig): { provider: string; model: string } | undefined {
+  for (const agent of Object.values(config.agents)) {
+    const externalId = agent.provider.startsWith("external:") ? agent.provider.slice("external:".length) : undefined;
+    if (!externalId) continue;
+    const profile = config.external_agents[externalId];
+    if (!profile?.enabled) continue;
+    if (!profile.command.trim() && !profile.proxyPort) continue;
+    return { provider: `external:${externalId}`, model: agent.model || "auto" };
+  }
+  return undefined;
 }
 
 export async function configureCockpitProvider(cwd: string, request: CockpitSetupRequest): Promise<CockpitSetupStatus> {
