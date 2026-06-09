@@ -45,7 +45,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
         {viewModel.errorLoopTimeline?.items.length ? (
           <>
             <p className="te-error-loop-summary">
-              candidates={viewModel.errorLoopTimeline.candidateAttempts} failures={viewModel.errorLoopTimeline.failedVerifications} policies={viewModel.errorLoopTimeline.policyDecisions} repairs={viewModel.errorLoopTimeline.repairAttempts} memory={viewModel.errorLoopTimeline.memoryRetrievals}
+              candidates={viewModel.errorLoopTimeline.candidateAttempts} predictions={viewModel.errorLoopTimeline.outcomePredictions} mismatches={viewModel.errorLoopTimeline.outcomeMismatches} failures={viewModel.errorLoopTimeline.failedVerifications} policies={viewModel.errorLoopTimeline.policyDecisions} repairs={viewModel.errorLoopTimeline.repairAttempts} memory={viewModel.errorLoopTimeline.memoryRetrievals}
             </p>
             {viewModel.errorLoopTimeline.items.map((item) => (
               <section key={item.id} className={`te-error-loop-item ${item.status}`}>

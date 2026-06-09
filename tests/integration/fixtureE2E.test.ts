@@ -138,6 +138,19 @@ describe("fixture E2E workflow", () => {
       occurrence: 1,
       action: "repair"
     }));
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "outcome_prediction",
+      target: "shell",
+      predictedOutcome: "passed"
+    }));
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "outcome_observation",
+      target: "shell",
+      observedOutcome: "failed",
+      matched: false,
+      mismatchType: "wrong_assumption"
+    }));
+    expect(state.events.findIndex((event) => event.type === "outcome_prediction" && event.target === "patch")).toBeLessThan(state.events.findIndex((event) => event.type === "patch_apply"));
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
     const stopReason = state.events.find((event) => event.type === "workflow_stop_reason");

@@ -40,6 +40,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Repair-policy trace events that classify failed verification runs, choose the
   next repair action, and escalate repeated same-signature failures instead of
   silently repeating the same repair strategy.
+- Outcome prediction and observation trace events for patch, shell, and repair
+  attempts, with mismatch classification, GUI timeline cards, failure-memory
+  references, and experiment prediction-accuracy reporting.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

@@ -4,6 +4,7 @@ import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import { redactText } from "../../safety/secretScanner.js";
+import type { OutcomeMismatchType } from "../events/eventTypes.js";
 
 export type TaskMemory = {
   preferredTestCommands: string[];
@@ -35,6 +36,10 @@ export type LearnedTaskMemory = {
   failureSignature?: string;
   correction?: string;
   evidenceRefs?: string[];
+  outcomePredictionRefs?: string[];
+  outcomeObservationRefs?: string[];
+  outcomeMismatchType?: OutcomeMismatchType;
+  predictionAccuracy?: { matched: number; total: number };
   confidence?: number;
   recurrenceCount?: number;
   fixedCount?: number;
@@ -102,6 +107,10 @@ export type FailureMemoryRecord = LearnedTaskMemory & {
   failureSignature: string;
   correction: string;
   evidenceRefs: string[];
+  outcomePredictionRefs?: string[];
+  outcomeObservationRefs?: string[];
+  outcomeMismatchType?: OutcomeMismatchType;
+  predictionAccuracy?: { matched: number; total: number };
   confidence: number;
   recurrence: number;
   recurrenceCount: number;
@@ -167,6 +176,7 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
           .map((assignment) => ({ role: assignment.role, provider: assignment.provider, model: assignment.model }))
       : []
   };
+  Object.assign(record, summarizeOutcomeEvents(state));
   const failure = buildFailureMemoryFields(state, record);
   if (!failure.failureClass) {
     return { wouldWrite: true, reason: "success_or_non_failure_task_metadata", policy, record };
@@ -344,10 +354,15 @@ function buildFailureMemoryFields(state: AgentGraphState, record: LearnedTaskMem
   if (record.result === "completed") return {};
   const failureClass = classifyFailure(state, record);
   const evidenceRefs = collectEvidenceRefs(state);
+  const outcome = summarizeOutcomeEvents(state);
   return {
     failureClass,
     correction: correctionForFailure(failureClass, state, record),
     evidenceRefs,
+    outcomePredictionRefs: outcome.outcomePredictionRefs,
+    outcomeObservationRefs: outcome.outcomeObservationRefs,
+    outcomeMismatchType: outcome.outcomeMismatchType,
+    predictionAccuracy: outcome.predictionAccuracy,
     confidence: confidenceForFailure(failureClass, evidenceRefs)
   };
 }
@@ -375,6 +390,10 @@ function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): Failure
     failureSignature: record.failureSignature ?? fallbackSignature,
     correction: record.correction ?? correctionForFailure(failureClass, undefined, record),
     evidenceRefs,
+    outcomePredictionRefs: record.outcomePredictionRefs,
+    outcomeObservationRefs: record.outcomeObservationRefs,
+    outcomeMismatchType: record.outcomeMismatchType,
+    predictionAccuracy: record.predictionAccuracy,
     confidence: record.confidence ?? confidenceForFailure(failureClass, evidenceRefs),
     recurrence: record.recurrenceCount ?? 1,
     recurrenceCount: record.recurrenceCount ?? 1,
@@ -452,6 +471,8 @@ function collectEvidenceRefs(state: AgentGraphState): string[] {
       if ("responseRef" in event && event.responseRef) values.push(event.responseRef);
       if ("packetRef" in event && event.packetRef) values.push(event.packetRef);
       if ("previewRef" in event && event.previewRef) values.push(event.previewRef);
+      if ("predictionRef" in event && event.predictionRef) values.push(event.predictionRef);
+      if ("observationRef" in event && event.observationRef) values.push(event.observationRef);
       if ("selectedArtifacts" in event) values.push(...event.selectedArtifacts);
       if ("projectedArtifacts" in event) values.push(...event.projectedArtifacts);
       if ("supportingArtifacts" in event) values.push(...event.supportingArtifacts);
@@ -459,6 +480,20 @@ function collectEvidenceRefs(state: AgentGraphState): string[] {
     })
   ];
   return [...new Set(refs.map((ref) => redactMemoryText(ref)).filter(Boolean))].slice(0, 12);
+}
+
+function summarizeOutcomeEvents(state: AgentGraphState): Pick<LearnedTaskMemory, "outcomePredictionRefs" | "outcomeObservationRefs" | "outcomeMismatchType" | "predictionAccuracy"> {
+  const predictions = state.events.filter((event) => event.type === "outcome_prediction");
+  const observations = state.events.filter((event) => event.type === "outcome_observation");
+  const mismatches = observations.filter((event) => !event.matched);
+  return {
+    outcomePredictionRefs: predictions.length ? predictions.map((event) => event.id).slice(-8) : undefined,
+    outcomeObservationRefs: observations.length ? observations.map((event) => event.id).slice(-8) : undefined,
+    outcomeMismatchType: mismatches.at(-1)?.mismatchType,
+    predictionAccuracy: observations.length
+      ? { matched: observations.filter((event) => event.matched).length, total: observations.length }
+      : undefined
+  };
 }
 
 function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemory): LearnedTaskMemory[] {
@@ -541,6 +576,7 @@ function buildFailureSignature(state: AgentGraphState, record: LearnedTaskMemory
     record.verificationCommands.join(","),
     failedRun?.command ?? "",
     files,
+    record.outcomeMismatchType ?? "",
     errorSignature
   ].join("|"));
 }

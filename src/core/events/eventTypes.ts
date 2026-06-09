@@ -130,6 +130,45 @@ export type RepairPolicyEvent = BaseEvent & {
   reason: string;
 };
 
+export type OutcomeTarget = "patch" | "repair" | "shell";
+export type PredictedOutcome = "applied" | "blocked" | "passed" | "failed" | "skipped";
+export type ObservedOutcome = "applied" | "blocked" | "passed" | "failed" | "skipped";
+export type OutcomeMismatchType =
+  | "matched"
+  | "wrong_assumption"
+  | "incomplete_context"
+  | "wrong_validator"
+  | "environment_issue"
+  | "flaky_result"
+  | "unsafe_action_blocked";
+
+export type OutcomePredictionEvent = BaseEvent & {
+  type: "outcome_prediction";
+  target: OutcomeTarget;
+  candidateId?: string;
+  command?: string;
+  expectedChangedFiles?: string[];
+  predictedOutcome: PredictedOutcome;
+  expectedBehavior: string;
+  expectedTestOutcome?: string;
+  uncertainty: "low" | "medium" | "high";
+  predictionRef?: string;
+};
+
+export type OutcomeObservationEvent = BaseEvent & {
+  type: "outcome_observation";
+  target: OutcomeTarget;
+  predictionEventId?: string;
+  candidateId?: string;
+  command?: string;
+  predictedOutcome: PredictedOutcome;
+  observedOutcome: ObservedOutcome;
+  matched: boolean;
+  mismatchType: OutcomeMismatchType;
+  summary: string;
+  observationRef?: string;
+};
+
 export type ProviderFallbackEvent = BaseEvent & {
   type: "provider_fallback";
   fromProvider: string;
@@ -391,6 +430,8 @@ export type TomorrowEdgeEvent =
   | ShellRunEvent
   | RepairEvent
   | RepairPolicyEvent
+  | OutcomePredictionEvent
+  | OutcomeObservationEvent
   | ProviderFallbackEvent
   | CostUsageEvent
   | ConversationTargetEvent

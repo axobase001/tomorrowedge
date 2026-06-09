@@ -165,6 +165,8 @@ function buildErrorLoopTimeline(state?: AgentGraphState): CockpitViewModel["erro
   const shellItems = items.filter((item) => item.kind === "verification");
   return {
     candidateAttempts: items.filter((item) => item.kind === "candidate").length,
+    outcomePredictions: items.filter((item) => item.kind === "prediction").length,
+    outcomeMismatches: items.filter((item) => item.kind === "observation" && item.status === "mismatch").length,
     failedVerifications: shellItems.filter((item) => item.status === "failed").length,
     passedVerifications: shellItems.filter((item) => item.status === "passed").length,
     policyDecisions: items.filter((item) => item.kind === "policy").length,
@@ -177,8 +179,10 @@ function buildErrorLoopTimeline(state?: AgentGraphState): CockpitViewModel["erro
 
 function isErrorLoopEvent(event: TomorrowEdgeEvent): boolean {
   return event.type === "patch_candidate"
+    || event.type === "outcome_prediction"
     || event.type === "patch_apply"
     || event.type === "shell_run"
+    || event.type === "outcome_observation"
     || event.type === "repair_policy"
     || event.type === "repair_attempt"
     || event.type === "memory_retrieval"
@@ -205,6 +209,19 @@ function errorLoopItem(event: TomorrowEdgeEvent, index: number): CockpitErrorLoo
       artifactRefs: compactRefs([event.diffRef])
     };
   }
+  if (event.type === "outcome_prediction") {
+    return {
+      ...base,
+      kind: "prediction",
+      status: "proposed",
+      title: "Outcome prediction",
+      summary: `${event.target} predicts ${event.predictedOutcome}: ${event.expectedBehavior}`,
+      candidateId: event.candidateId,
+      command: event.command,
+      filesChanged: event.expectedChangedFiles ?? [],
+      artifactRefs: compactRefs([event.predictionRef])
+    };
+  }
   if (event.type === "patch_apply") {
     return {
       ...base,
@@ -228,6 +245,18 @@ function errorLoopItem(event: TomorrowEdgeEvent, index: number): CockpitErrorLoo
       artifactRefs: compactRefs([event.stdoutRef, event.stderrRef]),
       exitCode: event.exitCode,
       durationMs: event.durationMs
+    };
+  }
+  if (event.type === "outcome_observation") {
+    return {
+      ...base,
+      kind: "observation",
+      status: event.matched ? "matched" : "mismatch",
+      title: "Outcome observation",
+      summary: `${event.observedOutcome}${event.matched ? " matched prediction" : ` mismatch=${event.mismatchType}`}: ${event.summary}`,
+      candidateId: event.candidateId,
+      command: event.command,
+      artifactRefs: compactRefs([event.observationRef])
     };
   }
   if (event.type === "repair_policy") {

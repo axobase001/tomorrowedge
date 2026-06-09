@@ -34,6 +34,10 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return event.applied ? `repair applied ${event.candidateId}` : `repair candidate ${event.candidateId}`;
     case "repair_policy":
       return `${event.failureClass} occurrence=${event.occurrence} action=${event.action}: ${event.reason}`;
+    case "outcome_prediction":
+      return `${event.target} predicts ${event.predictedOutcome}: ${event.expectedBehavior}`;
+    case "outcome_observation":
+      return `${event.target} observed ${event.observedOutcome}${event.matched ? " matched" : ` mismatch=${event.mismatchType}`}: ${event.summary}`;
     case "provider_fallback":
       return `${event.fromProvider}/${event.fromModel} -> ${event.toProvider}/${event.toModel}`;
     case "cost_usage":
@@ -119,6 +123,8 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
   if ("previewRef" in event && event.previewRef) refs.push(event.previewRef);
   if ("packetRef" in event && event.packetRef) refs.push(event.packetRef);
+  if ("predictionRef" in event && event.predictionRef) refs.push(event.predictionRef);
+  if ("observationRef" in event && event.observationRef) refs.push(event.observationRef);
   if ("artifactRef" in event && event.artifactRef) refs.push(event.artifactRef);
   return refs;
 }

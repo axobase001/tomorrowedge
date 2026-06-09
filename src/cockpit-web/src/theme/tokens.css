@@ -504,13 +504,15 @@ input, textarea, select {
 }
 .te-error-loop-item.failed,
 .te-error-loop-item.blocked,
-.te-error-loop-item.escalated {
+.te-error-loop-item.escalated,
+.te-error-loop-item.mismatch {
   border-left-color: var(--te-danger);
 }
 .te-error-loop-item.passed,
 .te-error-loop-item.applied,
 .te-error-loop-item.used,
-.te-error-loop-item.allowed {
+.te-error-loop-item.allowed,
+.te-error-loop-item.matched {
   border-left-color: var(--te-success);
 }
 .te-error-loop-item div {
