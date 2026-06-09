@@ -8,12 +8,39 @@ compact failure records from saved sessions and exposes them through:
 tedge memory failures
 tedge memory show <failure-id>
 tedge memory explain "task description"
+tedge experiment error-loop --ablation memory_on,memory_off
 ```
 
 Each failure record keeps a task fingerprint, a short redacted goal preview,
 a failure class, a correction strategy, confidence, recurrence count, and
 artifact refs. It intentionally avoids raw stdout, stderr, diffs, provider
 payloads, and secrets.
+
+## Deterministic Export Bundle
+
+`tedge experiment error-loop` runs a small no-key fixture experiment and writes a
+research-friendly bundle:
+
+- `manifest.json`
+- `trials.jsonl`
+- `memory_records.jsonl`
+- `retrieval_decisions.jsonl`
+- `metrics.json`
+- `report.md`
+
+Each trial includes `memoryUpdateStatus`. This field separates workflow failure
+or repair success from actual memory writes:
+
+- `written`
+- `skipped_no_failure`
+- `skipped_low_confidence`
+- `skipped_privacy`
+- `skipped_ablation`
+- `skipped_duplicate`
+
+Reports must not claim the system learned from a failure unless
+`memoryUpdateStatus` is `written`, or unless a skipped reason is explicitly
+audited.
 
 ## Current Failure Classes
 
@@ -67,6 +94,7 @@ Research exports should report:
 - estimated cost
 - strong-agent calls
 - trace completeness
+- memory update status counts
 - leakage checks
 
 The product claim should stay narrow:

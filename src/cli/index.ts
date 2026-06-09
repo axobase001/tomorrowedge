@@ -25,6 +25,7 @@ import { githubReportCommand } from "./commands/githubReport.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 import { recipesCommand } from "./commands/recipes.js";
+import { experimentErrorLoopCommand } from "./commands/experiment.js";
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -190,6 +191,18 @@ const memoryShow = memory.command("show").description("Show one failure memory b
 memoryShow.action((id: string) => memoryShowCommand(cwd, id, memoryShow.opts() as { json?: boolean }));
 const memoryExplain = memory.command("explain").description("Explain which failure memories apply to a task").argument("<task>", "task goal or natural-language problem").option("--limit <n>", "number of selected memories", "5").option("--json", "print machine-readable JSON");
 memoryExplain.action((task: string) => memoryExplainCommand(cwd, task, memoryExplain.opts() as { limit?: string; json?: boolean }));
+
+const experiment = program.command("experiment").description("Run deterministic workflow experiments and export reproducible bundles");
+experiment
+  .command("error-loop")
+  .description("Run a deterministic no-key error-loop experiment and export manifest, trials, memory, retrieval, metrics, and report files")
+  .option("--tasks <list>", "semicolon-separated task list")
+  .option("--repetitions <n>", "number of repetitions per task and ablation", "1")
+  .option("--ablation <modes>", "comma-separated modes: memory_on,memory_off", "memory_on")
+  .option("--output-dir <path>", "output directory for the reproducibility bundle")
+  .option("--seed <seed>", "recorded deterministic seed label")
+  .option("--json", "print machine-readable result metadata")
+  .action((options: { tasks?: string; repetitions?: string; ablation?: string; outputDir?: string; seed?: string; json?: boolean }) => experimentErrorLoopCommand(cwd, options));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));

@@ -1,6 +1,9 @@
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../../package.json") as { version: string };
@@ -67,4 +70,33 @@ describe("CLI contract", () => {
     expect(() => JSON.parse(failures.stdout)).not.toThrow();
     expect(() => JSON.parse(explained.stdout)).not.toThrow();
   }, 15_000);
+
+  it("runs the deterministic error-loop experiment command", async () => {
+    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-cli-error-loop-"));
+    try {
+      const result = await execa("tsx", [
+        "src/cli/index.ts",
+        "experiment",
+        "error-loop",
+        "--tasks",
+        "fix failing test",
+        "--ablation",
+        "memory_on,memory_off",
+        "--output-dir",
+        outputRoot,
+        "--json"
+      ], {
+        cwd: process.cwd(),
+        preferLocal: true
+      });
+      const payload = JSON.parse(result.stdout) as { schemaVersion: string; metrics: { trials: number; memoryWritten: number }; reportPath: string };
+
+      expect(payload.schemaVersion).toBe("error-loop-experiment/v1");
+      expect(payload.metrics.trials).toBe(2);
+      expect(payload.metrics.memoryWritten).toBe(1);
+      expect(payload.reportPath).toContain(outputRoot);
+    } finally {
+      await rm(outputRoot, { recursive: true, force: true });
+    }
+  }, 45_000);
 });
