@@ -5,6 +5,7 @@ import { ModelRouter } from "../routing/router.js";
 import { createEventLedger } from "../events/eventLedger.js";
 import { resolveConversationTarget, targetPromptPrefix } from "./conversationTargets.js";
 import type { ConversationTarget } from "../../schemas/conversation.js";
+import { createBudgetRuntimeState } from "../budget/budgetGate.js";
 
 export type ConversationSessionInput = {
   message: string;
@@ -66,6 +67,7 @@ export function createConversationSession(input: ConversationSessionInput): Agen
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetRuntime: createBudgetRuntimeState(),
     budgetStatuses: [],
     changedFiles: [],
     runResults: [],

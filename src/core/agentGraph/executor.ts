@@ -48,9 +48,11 @@ import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
-import { isStrongAgentRole } from "../budget/strongAgentBudget.js";
+import { canFallbackWhenBudgetBlocked, commitRoleCall, createBudgetRuntimeState, evaluateRoleInvocation, releaseRoleCall, reserveRoleCall, type BudgetGateDecision } from "../budget/budgetGate.js";
 import type { RouteAssignment } from "../routing/policies.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
+import { buildRoleGraph } from "../orchestration/roleGraph.js";
+import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -100,6 +102,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetRuntime: createBudgetRuntimeState(),
     budgetStatuses: [],
     changedFiles: [],
     runResults: [],
@@ -140,9 +143,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     phase: "routing",
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
-  const budgetCounters: BudgetCounters = { strongAgentCallsUsed: 0, roleCallsUsed: {} };
   for (const assignment of state.routing.assignments) {
-    recordRoutingAndBudgetDecision(config, ledger, assignment, goal, budgetCounters, "routing");
+    recordRoutingAndBudgetPreview(config, state, ledger, assignment, goal, "routing");
   }
 
   const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
@@ -153,6 +155,21 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     };
   }
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
+  const workflowIntent = await classifyWorkflowIntent({ goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
+  state.workflowKind = workflowIntent.workflowKind;
+  ledger.append({
+    type: "workflow_intent",
+    phase: "routing",
+    role: "planner",
+    provider: workflowIntent.provider,
+    model: workflowIntent.model,
+    intent: workflowIntent.intent,
+    requiresPatchWorkflow: workflowIntent.requiresPatchWorkflow,
+    workflowKind: workflowIntent.workflowKind,
+    confidence: workflowIntent.confidence,
+    reason: workflowIntent.reason,
+    fallbackUsed: workflowIntent.fallbackUsed
+  });
   const externalCore = externalProfileForRole(router, externalAgents, "core");
   if (externalCore) {
     const coreResult = await runAgentState(state, ledger, router, "core", () =>
@@ -186,7 +203,27 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         config.routing.max_cost_usd
       ));
       if (budgetStatus.status !== "blocked") {
-        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), "live");
+        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), {
+          agentKind: "live",
+          config,
+          budgetFallback: async () => {
+            const spec = await vision.run({ goal, imagePaths });
+            return {
+              spec,
+              note: {
+                id: "native_vision_budget_fallback",
+                role: "vision" as const,
+                provider: "local_tool",
+                model: "native_vision",
+                kind: "vision_spec" as const,
+                content: spec.handoffPrompt,
+                fallbackUsed: true,
+                fallbackReason: "budget gate fallback"
+              }
+            };
+          },
+          budgetFallbackLabel: "native vision"
+        });
         state.modelNotes.push(liveVision.note);
         state.usageSummary = summarizeModelUsage(state.modelNotes);
         recordModelNoteEvents(ledger, [liveVision.note], state.usageSummary);
@@ -203,7 +240,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger.append({ type: "autonomy_limit_reached", phase: "vision", status: "blocked_by_budget", reason: budgetStatus.reason });
     }
     if (!state.visualSpec) {
-      state.visualSpec = await runAgentState(state, ledger, router, "vision", () => vision.run({ goal, imagePaths }));
+      state.visualSpec = await runAgentState(state, ledger, router, "vision", () => vision.run({ goal, imagePaths }), "offline");
     }
     ledger.append({
       type: "evidence_update",
@@ -232,8 +269,13 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const plan = normalizeExternalPlan(result.payload, goal);
     if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
     return plan ?? planner.run({ goal: plannerGoal });
-  }, externalPlanner ? "external" : undefined);
-  if (!externalPlanner && !planFromExternalCore && state.plan) {
+  }, externalPlanner ? {
+    agentKind: "external",
+    config,
+    budgetFallback: () => planner.run({ goal: plannerGoal }),
+    budgetFallbackLabel: "native planner"
+  } : "offline");
+  if (!externalPlanner && !planFromExternalCore && state.plan && workflowIntent.requiresPatchWorkflow) {
     const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
     if (modelPlan.plan) {
       state.plan = {
@@ -260,34 +302,23 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     }
   }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
-  const workflowIntent = await classifyWorkflowIntent({ goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
-  ledger.append({
-    type: "workflow_intent",
-    phase: "routing",
-    role: "planner",
-    provider: workflowIntent.provider,
-    model: workflowIntent.model,
-    intent: workflowIntent.intent,
-    requiresPatchWorkflow: workflowIntent.requiresPatchWorkflow,
-    confidence: workflowIntent.confidence,
-    reason: workflowIntent.reason,
-    fallbackUsed: workflowIntent.fallbackUsed
-  });
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
+  state.workflowKind = workflowKindFromPlan(state.plan);
+  state.roleGraph = buildRoleGraph({ workflowKind: state.workflowKind, highRisk: state.plan.riskLevel === "high", debate: Boolean(state.plan.debateRecommended || config.debate.enabled) });
   const rerouteChanges = router.rerouteAfterPlan(state.plan, { hasImageInputs: imagePaths.length > 0 });
   if (rerouteChanges.length) {
     state.routing = routingForState(router, imagePaths.length > 0);
     for (const change of rerouteChanges) {
-      recordRoutingAndBudgetDecision(config, ledger, {
+      recordRoutingAndBudgetPreview(config, state, ledger, {
         ...change.to,
         reason: `${change.reason}; previous route was ${change.from.provider}/${change.from.model}`
-      }, goal, budgetCounters, "planning");
+      }, goal, "planning");
     }
   }
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();
-  state.contextSelection = await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }));
+  state.contextSelection = await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }), "offline");
   ledger.append({
     type: "context_select",
     phase: "exploration",
@@ -304,10 +335,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const coder = new CoderAgent();
-  state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options }));
+  state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options, config }));
   recordPatchCandidateEvent(state, ledger, "coder_a", state.candidates[state.candidates.length - 1]);
   if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options }));
+    state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options, config }));
     recordPatchCandidateEvent(state, ledger, "coder_b", state.candidates[state.candidates.length - 1]);
   }
 
@@ -361,7 +392,12 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const review = normalizeExternalReview(result.payload);
     if (!review) recordExternalNormalizeFallback(ledger, "reviewer", externalReviewer, "review", "native reviewer");
     return review ?? reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
-  }, externalReviewer ? "external" : undefined);
+  }, externalReviewer ? {
+    agentKind: "external",
+    config,
+    budgetFallback: () => reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview }),
+    budgetFallbackLabel: "native reviewer"
+  } : "offline");
   const reviewJson = JSON.stringify(state.review, null, 2);
   const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
   recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
@@ -391,7 +427,12 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     const judgment = normalizeExternalJudgment(result.payload);
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
     return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
-  }, externalJudge ? "external" : undefined);
+  }, externalJudge ? {
+    agentKind: "external",
+    config,
+    budgetFallback: () => judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets }),
+    budgetFallbackLabel: "native judge"
+  } : "offline");
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
   recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
@@ -446,7 +487,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (selected?.unifiedDiff) {
       const diffRef = ledger.writeArtifact("diffs", selected.unifiedDiff);
       try {
-        const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved));
+        const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved), "offline");
         state.changedFiles = applyResult.changedFiles;
         ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: applyResult.changedFiles, diffRef, undoSnapshotIds: applyResult.undoSnapshotIds, applied: true });
       } catch (error) {
@@ -478,7 +519,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
         if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
         shellRuns += 1;
-        const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+        const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
         const result = normalizeVerificationResult(rawResult, { defaultVerification });
         state.runResults.push(result);
         recordShellRunEvent(state, ledger, cwd, result);
@@ -502,20 +543,25 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
           const patch = normalizeExternalPatch(externalResult.payload, "repairer", "repair");
           if (!patch) recordExternalNormalizeFallback(ledger, "repairer", externalRepairer, "patch candidate", "native repairer");
           return patch ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
-        }, externalRepairer ? "external" : undefined);
+        }, externalRepairer ? {
+          agentKind: "external",
+          config,
+          budgetFallback: () => repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) }),
+          budgetFallbackLabel: "native repairer"
+        } : "offline");
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(state, ledger, "repairer", repairCandidate);
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
         ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
         if (repairCandidate.unifiedDiff) {
           try {
-            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved));
+            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
             if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
             shellRuns += 1;
-            const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)));
+            const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
             const repairedRun = normalizeVerificationResult(rawRepairedRun, { defaultVerification });
             state.runResults.push(repairedRun);
             recordShellRunEvent(state, ledger, cwd, repairedRun);
@@ -559,10 +605,10 @@ async function runCoderCandidate(input: {
   role: "coder_a" | "coder_b";
   variant: "a" | "b";
   options: OfflineGraphOptions;
+  config: TomorrowEdgeConfig;
 }): Promise<PatchCandidate> {
   const externalCoder = externalProfileForRole(input.router, input.externalAgents, input.role);
-  return runAgentState(input.state, input.ledger, input.router, input.role, async () => {
-    const fallback = () => input.coder.run({
+  const fallback = () => input.coder.run({
       plan: input.state.plan!,
       contextSelection: input.state.contextSelection!,
       variant: input.variant,
@@ -570,6 +616,7 @@ async function runCoderCandidate(input: {
       fixtureFailingPatch: input.options.fixtureFailingPatch,
       visualSpec: input.state.visualSpec
     });
+  return runAgentState(input.state, input.ledger, input.router, input.role, async () => {
     if (!externalCoder) return fallback();
     const result = await invokeExternalRole({
       cwd: input.cwd,
@@ -587,7 +634,12 @@ async function runCoderCandidate(input: {
     const patch = normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative");
     if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
     return patch ?? fallback();
-  }, externalCoder ? "external" : undefined);
+  }, externalCoder ? {
+    agentKind: "external",
+    config: input.config,
+    budgetFallback: fallback,
+    budgetFallbackLabel: `native ${input.role}`
+  } : "offline");
 }
 
 function recordExternalNormalizeFallback(ledger: EventLedger, role: AgentRole, profile: ExternalAgentProfile, expected: string, fallback: string): void {
@@ -778,7 +830,8 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
           ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
           ...state.runResults.map(evidenceFromRun)
         ]
-      })
+      }),
+      "offline"
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -799,7 +852,7 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
 async function finalizeReadOnlyState(cwd: string, state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {
   const result = await runAgentState(state, ledger, router, "summarizer", () =>
     buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
-  );
+  , "offline");
   const evidenceRef = ledger.writeArtifact("summaries", result.artifactText);
   ledger.append({
     type: "evidence_update",
@@ -837,13 +890,15 @@ function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger): 
     reason: workflowStopReason(state),
     result: state.finalSummary.result
   });
-  state.traceCompleteness = computeTraceCompleteness(ledger.events);
+  const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
+  state.traceCompleteness = computeTraceCompleteness(ledger.events, { workflowKind, plan: state.plan });
   ledger.append({
     type: "trace_completeness",
     phase: "summary",
     role: "summarizer",
     score: state.traceCompleteness.score,
-    missing: state.traceCompleteness.missing
+    missing: state.traceCompleteness.missing,
+    workflowKind
   });
 }
 
@@ -858,9 +913,77 @@ function workflowStopReason(state: AgentGraphState): string {
   return "no patch applied; workflow finalized after review and judge";
 }
 
-async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind?: AgentRunState["agentKind"]): Promise<T> {
+type RunAgentStateOptions<T> = {
+  agentKind?: AgentRunState["agentKind"];
+  config?: TomorrowEdgeConfig;
+  budgetFallback?: () => Promise<T>;
+  budgetFallbackLabel?: string;
+  budgetEstimateUsd?: number;
+  escalationSignals?: string[];
+};
+
+async function runAgentState<T>(
+  state: AgentGraphState,
+  ledger: EventLedger,
+  router: ModelRouter,
+  role: AgentRole,
+  fn: () => Promise<T>,
+  optionsOrAgentKind?: AgentRunState["agentKind"] | RunAgentStateOptions<T>
+): Promise<T> {
   const assignment = router.assignmentFor(role);
-  const effectiveAgentKind = agentKind ?? determineAgentKind(assignment.provider);
+  const options: RunAgentStateOptions<T> = typeof optionsOrAgentKind === "string" ? { agentKind: optionsOrAgentKind } : optionsOrAgentKind ?? {};
+  const effectiveAgentKind = options.agentKind ?? determineAgentKind(assignment.provider);
+  const gate = options.config && shouldGateInvocation(effectiveAgentKind)
+    ? evaluateRoleInvocation({
+      config: options.config,
+      runtime: state.budgetRuntime,
+      role,
+      phase: phaseForRole(role),
+      assignment,
+      roleBudget: roleBudgetFor(options.config, role),
+      estimatedCostUsd: options.budgetEstimateUsd ?? estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
+      escalationSignals: options.escalationSignals ?? inferStrongAgentEscalationSignals(state.goal),
+      canFallback: Boolean(options.budgetFallback) || canFallbackWhenBudgetBlocked(role)
+    })
+    : undefined;
+  if (gate) {
+    ledger.append({
+      type: "budget_decision",
+      phase: gate.phase,
+      role,
+      provider: assignment.provider,
+      model: assignment.model,
+      status: gate.action === "allow" ? "allowed" : "blocked",
+      reason: gate.reason,
+      budgetScope: gate.scope,
+      maxCostUsd: roleBudgetFor(options.config!, role)?.maxCostPerCallUsd ?? options.config!.strong_agents.max_cost_usd,
+      estimatedCostUsd: gate.estimatedCostUsd,
+      strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
+      strongAgentCallsRemaining: gate.remainingCalls
+    });
+    if (gate.action !== "allow") {
+      state.budgetRuntime.blockedRoles[role] = gate.reason;
+      recordBlockedAgentRun(state, ledger, role, assignment, effectiveAgentKind, gate);
+      if (options.budgetFallback) {
+        ledger.append({
+          type: "fallback_to_native",
+          phase: phaseForRole(role),
+          role,
+          provider: assignment.provider,
+          model: assignment.model,
+          fallbackRole: role,
+          reason: `${gate.reason} Falling back to ${options.budgetFallbackLabel ?? `native ${role}`}.`
+        });
+        return runFallbackAgentState(state, ledger, role, gate.fallbackAssignment ?? {
+          role,
+          provider: "local_tool",
+          model: `native_${role}`,
+          reason: "native fallback"
+        }, options.budgetFallback);
+      }
+      throw new Error(`Budget blocked ${role}: ${gate.reason}`);
+    }
+  }
   const agentState: AgentRunState = {
     id: role,
     role,
@@ -873,8 +996,10 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
   };
   state.agents.push(agentState);
   const start = Date.now();
+  const reservation = gate ? reserveRoleCall(state.budgetRuntime, gate) : undefined;
   try {
     const result = await fn();
+    if (reservation) commitRoleCall(state.budgetRuntime, reservation);
     agentState.status = "success";
     agentState.summary = `${role} completed`;
     updateCapabilityStep(state, role, "success", agentState.summary);
@@ -893,6 +1018,7 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
     }
     return result;
   } catch (error) {
+    if (reservation) releaseRoleCall(state.budgetRuntime, reservation, error instanceof Error ? error.message : String(error));
     agentState.status = "failed";
     agentState.summary = error instanceof Error ? error.message : String(error);
     updateCapabilityStep(state, role, "blocked", agentState.summary);
@@ -909,6 +1035,89 @@ async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, rou
         error: agentState.summary
       });
     }
+    throw error;
+  } finally {
+    agentState.endedAt = nowIso();
+    agentState.elapsedMs = Date.now() - start;
+  }
+}
+
+function shouldGateInvocation(agentKind: AgentRunState["agentKind"]): boolean {
+  return agentKind === "live" || agentKind === "external";
+}
+
+function recordBlockedAgentRun(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, agentKind: AgentRunState["agentKind"], gate: BudgetGateDecision): void {
+  const agentState: AgentRunState = {
+    id: `${role}_blocked_${state.agents.filter((agent) => agent.role === role).length + 1}`,
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    status: "blocked",
+    agentKind,
+    startedAt: nowIso(),
+    endedAt: nowIso(),
+    elapsedMs: 0,
+    summary: gate.reason
+  };
+  state.agents.push(agentState);
+  updateCapabilityStep(state, role, "blocked", gate.reason);
+  ledger.append({
+    type: "agent_run",
+    phase: phaseForRole(role),
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    agentKind,
+    status: "blocked",
+    runId: agentState.id,
+    error: gate.reason
+  });
+}
+
+async function runFallbackAgentState<T>(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, fn: () => Promise<T>): Promise<T> {
+  const agentState: AgentRunState = {
+    id: `${role}_fallback_${state.agents.filter((agent) => agent.role === role).length + 1}`,
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    status: "running",
+    agentKind: "offline",
+    startedAt: nowIso(),
+    summary: assignment.reason
+  };
+  state.agents.push(agentState);
+  const start = Date.now();
+  try {
+    const result = await fn();
+    agentState.status = "success";
+    agentState.summary = `${role} fallback completed`;
+    updateCapabilityStep(state, role, "success", agentState.summary);
+    ledger.append({
+      type: "agent_run",
+      phase: phaseForRole(role),
+      role,
+      provider: assignment.provider,
+      model: assignment.model,
+      agentKind: "offline",
+      status: "success",
+      runId: agentState.id,
+      responseRef: ledger.writeArtifact("responses", JSON.stringify(result, null, 2), "json")
+    });
+    return result;
+  } catch (error) {
+    agentState.status = "failed";
+    agentState.summary = error instanceof Error ? error.message : String(error);
+    ledger.append({
+      type: "agent_run",
+      phase: phaseForRole(role),
+      role,
+      provider: assignment.provider,
+      model: assignment.model,
+      agentKind: "offline",
+      status: "failure",
+      runId: agentState.id,
+      error: agentState.summary
+    });
     throw error;
   } finally {
     agentState.endedAt = nowIso();
@@ -1067,15 +1276,10 @@ function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSum
   });
 }
 
-type BudgetCounters = {
-  strongAgentCallsUsed: number;
-  roleCallsUsed: Partial<Record<AgentRole, number>>;
-};
-
-function recordRoutingAndBudgetDecision(config: TomorrowEdgeConfig, ledger: EventLedger, assignment: RouteAssignment, goal: string, counters: BudgetCounters, phase: "routing" | "planning"): void {
+function recordRoutingAndBudgetPreview(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, assignment: RouteAssignment, goal: string, phase: "routing" | "planning"): void {
   const decision = buildRoleRoutingDecision(config, assignment);
   const roleBudget = roleBudgetFor(config, assignment.role);
-  const budgetDecision = allocateStrongAgentCall(assignment.role, counters.strongAgentCallsUsed, {
+  const budgetDecision = allocateStrongAgentCall(assignment.role, state.budgetRuntime.strongAgentCallsUsed, {
     maxCallsPerTask: config.strong_agents.max_calls_per_task,
     maxCostUsd: config.strong_agents.max_cost_usd,
     reserveForRoles: config.strong_agents.reserve_for_roles,
@@ -1084,13 +1288,8 @@ function recordRoutingAndBudgetDecision(config: TomorrowEdgeConfig, ledger: Even
     estimatedCostUsd: estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
     escalationSignals: inferStrongAgentEscalationSignals(goal),
     roleBudget,
-    roleUsedCalls: counters.roleCallsUsed[assignment.role] ?? 0
+    roleUsedCalls: state.budgetRuntime.roleCallsUsed[assignment.role] ?? 0
   });
-  if (budgetDecision.allowed && budgetDecision.scope === "per_role") {
-    counters.roleCallsUsed[assignment.role] = (counters.roleCallsUsed[assignment.role] ?? 0) + 1;
-  } else if (budgetDecision.allowed && budgetDecision.scope === "global_strong_pool" && (isStrongAgentRole(assignment.role) || budgetDecision.escalationSignals.length > 0)) {
-    counters.strongAgentCallsUsed += 1;
-  }
   ledger.append({
     type: "routing_decision",
     phase,
@@ -1104,7 +1303,7 @@ function recordRoutingAndBudgetDecision(config: TomorrowEdgeConfig, ledger: Even
     policyTags: decision.policyTags
   });
   ledger.append({
-    type: "budget_decision",
+    type: "budget_preview",
     phase,
     role: assignment.role,
     provider: assignment.provider,
@@ -1114,7 +1313,7 @@ function recordRoutingAndBudgetDecision(config: TomorrowEdgeConfig, ledger: Even
     budgetScope: budgetDecision.scope,
     maxCostUsd: roleBudget?.maxCostPerCallUsd ?? config.strong_agents.max_cost_usd,
     estimatedCostUsd: budgetDecision.estimatedCostUsd,
-    strongAgentCallsUsed: counters.strongAgentCallsUsed,
+    strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
     strongAgentCallsRemaining: budgetDecision.remainingCalls
   });
 }

@@ -44,6 +44,23 @@ In `privacy` and `local` modes, cloud overrides are ignored and the route stays
 local-safe. This lets experiments freely compare models in normal modes without
 accidentally violating privacy-mode expectations.
 
+## Routing vs Budget Execution
+
+Since 1.2.11, routing is a proposal, not a budget commit. The event ledger
+distinguishes:
+
+- `routing_decision`: which provider/model is proposed for a role
+- `budget_preview`: whether that proposal appears affordable without consuming
+  budget
+- `budget_decision`: the invocation-time allow/fallback/block result
+
+Live and external role invocations pass through BudgetGate immediately before
+execution. If the gate blocks a role, TomorrowEdge does not call the provider or
+external agent. Planner, Coder-A, Reviewer, and Judge can fall back to native
+agents; optional roles such as Coder-B can be skipped by future scheduler work.
+This keeps trace output aligned with actual execution: a blocked external role
+should not also appear as a successful external invocation.
+
 This keeps the product principle visible in cockpit state:
 
 ```text

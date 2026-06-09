@@ -1,5 +1,6 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { Plan } from "../../schemas/plan.js";
+import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
@@ -9,6 +10,7 @@ export type WorkflowIntentKind = "inspect" | "patch" | "ask_user";
 export type WorkflowIntentDecision = {
   intent: WorkflowIntentKind;
   requiresPatchWorkflow: boolean;
+  workflowKind: WorkflowKind;
   confidence: number;
   reason: string;
   provider: string;
@@ -24,6 +26,15 @@ export async function classifyWorkflowIntent(input: {
   fixtureMode?: boolean;
   localOnly?: boolean;
 }): Promise<WorkflowIntentDecision> {
+  const heuristic = classifyWorkflowIntentLocally(input.goal);
+  if (input.fixtureMode || input.localOnly || heuristic.confidence >= 0.9) {
+    return {
+      ...heuristic,
+      provider: "local_intent_classifier",
+      model: "heuristic",
+      fallbackUsed: input.fixtureMode || input.localOnly
+    };
+  }
   const assignment = input.fixtureMode || input.localOnly ? { provider: "mock", model: "mock-balanced" } : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
     config: input.config,
@@ -70,10 +81,12 @@ export async function classifyWorkflowIntent(input: {
 
 export function applyWorkflowIntentToPlan(plan: Plan, decision: WorkflowIntentDecision): Plan {
   if (decision.requiresPatchWorkflow) {
-    if (plan.taskType !== "analysis") return plan;
+    if (plan.taskType !== "analysis") return { ...plan, workflowKind: decision.workflowKind, requiresPatchWorkflow: true };
     return {
       ...plan,
       taskType: "unknown",
+      workflowKind: decision.workflowKind,
+      requiresPatchWorkflow: true,
       verificationCommands: plan.verificationCommands?.length ? plan.verificationCommands : ["npm test"],
       steps: [
         { id: "understand", title: "Understand task", detail: "Use intent routing to preserve the requested patch workflow.", status: "done" },
@@ -87,6 +100,8 @@ export function applyWorkflowIntentToPlan(plan: Plan, decision: WorkflowIntentDe
   return {
     ...plan,
     taskType: "analysis",
+    workflowKind: decision.workflowKind,
+    requiresPatchWorkflow: false,
     verificationCommands: [],
     debateRecommended: false,
     reasonForDebate: undefined,
@@ -98,6 +113,46 @@ export function applyWorkflowIntentToPlan(plan: Plan, decision: WorkflowIntentDe
   };
 }
 
+export function classifyWorkflowIntentLocally(goal: string): Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed"> {
+  const text = goal.toLowerCase();
+  const hasImage = /\b(image|screenshot|ui screenshot|design|layout)\b|截图|图片|界面图|设计稿/.test(text);
+  const asksGenerateUi = /\b(generate|create|build|implement|restore)\b.*\b(ui|page|layout|component)\b|生成.*(界面|页面|布局|组件)|还原.*(界面|页面|布局|组件)/.test(text);
+  if (hasImage && asksGenerateUi) {
+    return {
+      intent: "patch",
+      requiresPatchWorkflow: true,
+      workflowKind: "vision_patch",
+      confidence: 0.92,
+      reason: "Local classifier detected image-to-implementation workflow."
+    };
+  }
+  if (/\b(do not edit|don't edit|no changes|read-only|readonly|inspect|list|read|summarize|describe|show|analyze|review architecture|suggest improvements)\b|不要修改|不修改|只读|查看|读取|列出|总结|梳理|分析|建议/.test(text)) {
+    return {
+      intent: "inspect",
+      requiresPatchWorkflow: false,
+      workflowKind: "read_only",
+      confidence: 0.95,
+      reason: "Local classifier detected a read-only inspection request."
+    };
+  }
+  if (/\b(fix|implement|modify|add|repair|refactor|delete|update|write|create)\b|修改|实现|修复|新增|添加|重构|删除|写/.test(text)) {
+    return {
+      intent: "patch",
+      requiresPatchWorkflow: true,
+      workflowKind: "patch",
+      confidence: 0.88,
+      reason: "Local classifier detected a patch-producing request."
+    };
+  }
+  return {
+    intent: "ask_user",
+    requiresPatchWorkflow: false,
+    workflowKind: "ask_user",
+    confidence: 0.55,
+    reason: "Local classifier could not determine whether file changes are required."
+  };
+}
+
 function parseIntentResponse(content?: string): Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed"> | undefined {
   if (!content) return undefined;
   const object = parseJsonObject(content);
@@ -105,9 +160,11 @@ function parseIntentResponse(content?: string): Omit<WorkflowIntentDecision, "pr
   const intent = object.intent;
   if (intent !== "inspect" && intent !== "patch" && intent !== "ask_user") return undefined;
   const requiresPatchWorkflow = typeof object.requiresPatchWorkflow === "boolean" ? object.requiresPatchWorkflow : intent === "patch";
+  const workflowKind = parseWorkflowKind(object.workflowKind, requiresPatchWorkflow);
   return {
     intent,
     requiresPatchWorkflow,
+    workflowKind,
     confidence: clampConfidence(object.confidence),
     reason: typeof object.reason === "string" && object.reason.trim() ? object.reason.trim() : `Model classified workflow intent as ${intent}.`
   };
@@ -136,10 +193,18 @@ function clampConfidence(value: unknown): number {
 }
 
 function conservativeFallback(goal: string, error?: string): Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed"> {
+  const local = classifyWorkflowIntentLocally(goal);
+  if (local.intent !== "ask_user") return { ...local, reason: `${local.reason} Intent model result was unavailable or invalid.${error ? ` ${error}` : ""}` };
   return {
-    intent: "patch",
-    requiresPatchWorkflow: true,
+    intent: "ask_user",
+    requiresPatchWorkflow: false,
+    workflowKind: "ask_user",
     confidence: 0.25,
-    reason: `Intent model result was unavailable or invalid; defaulted to patch workflow for safety.${error ? ` ${error}` : ""}`
+    reason: `Intent model result was unavailable or invalid; asking user instead of defaulting to patch workflow.${error ? ` ${error}` : ""}`
   };
+}
+
+function parseWorkflowKind(value: unknown, requiresPatchWorkflow: boolean): WorkflowKind {
+  if (value === "read_only" || value === "patch" || value === "repair" || value === "vision_patch" || value === "advisory" || value === "ask_user") return value;
+  return requiresPatchWorkflow ? "patch" : "read_only";
 }

@@ -12,6 +12,20 @@ Default order:
 8. Repairer
 9. Summarizer
 
+Since 1.2.11, the default order is treated as the native fallback execution
+path, not the only orchestration contract. `src/core/orchestration/roleGraph.ts`
+defines workflow-kind-aware role graphs:
+
+- `read_only`: Planner -> Explorer -> Summarizer
+- `patch`: Planner -> Explorer -> Coder-A -> Reviewer -> Judge -> Runner -> Summarizer
+- `debate_patch`: adds optional parallel Coder-B after Explorer
+- `high_risk_patch`: requires Reviewer and Judge before apply
+- `repair_loop`: Runner failure -> Repairer -> lightweight Review -> Runner
+
+The current native executor still runs mostly sequentially, but it now records
+the workflow kind and role graph so future scheduler work can move dependency
+handling out of the fixed pipeline without changing the event ledger contract.
+
 Runner is a local tool, not an LLM agent. In `partial` mode it cannot execute
 without approval. In `full` mode patch, shell, and repair actions are
 auto-approved and written to the event ledger.

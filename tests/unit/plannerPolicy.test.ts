@@ -64,7 +64,7 @@ describe("adaptive planning and governance policies", () => {
     const reviewerRoute = state.routing.assignments.find((assignment) => assignment.role === "reviewer");
     const judgeRoute = state.routing.assignments.find((assignment) => assignment.role === "judge");
     const rerouteEvent = state.events.find((event) => event.type === "routing_decision" && event.phase === "planning" && event.role === "reviewer");
-    const roleBudgetEvent = state.events.find((event) => event.type === "budget_decision" && event.role === "reviewer" && "budgetScope" in event && event.budgetScope === "per_role");
+    const roleBudgetEvent = state.events.find((event) => event.type === "budget_preview" && event.role === "reviewer" && "budgetScope" in event && event.budgetScope === "per_role");
 
     expect(state.plan?.riskLevel).toBe("high");
     expect(reviewerRoute?.provider).toBe("openrouter");

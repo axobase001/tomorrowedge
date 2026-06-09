@@ -1,3 +1,6 @@
+import type { EventPhase } from "../core/events/eventTypes.js";
+import type { WorkflowKind } from "../core/orchestration/workflowKind.js";
+
 export type RiskLevel = "low" | "medium" | "high";
 export type TaskType = "bugfix" | "feature" | "refactor" | "test" | "docs" | "analysis" | "unknown";
 
@@ -13,6 +16,10 @@ export type Plan = {
   constraints: string[];
   riskLevel: RiskLevel;
   taskType: TaskType;
+  workflowKind?: WorkflowKind;
+  requiresPatchWorkflow?: boolean;
+  allowedPhases?: EventPhase[];
+  acceptanceCriteria?: string[];
   steps: PlanStep[];
   expectedFiles?: string[];
   verificationCommands?: string[];

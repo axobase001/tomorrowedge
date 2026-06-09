@@ -63,6 +63,10 @@ are rejected instead of silently falling back to project defaults.
 `GET /api/sessions/:id/view-model` returns the shared cockpit ViewModel used by
 browser GUI surfaces. It includes task summaries, workflow spine state,
 telemetry, current approval, drawer details, route summaries, and trace items.
+For 1.2.11+ sessions, the underlying raw events may include `budget_preview`,
+invocation-time `budget_decision`, `agent_run: blocked`, and workflow-kind-aware
+`trace_completeness` entries. Clients should treat `budget_preview` as a route
+proposal signal and `budget_decision` as the actual execution gate result.
 
 `GET /api/runs/:id/events/live` streams server-sent events for an in-progress
 run. The stream emits a `ready` event first, then `event` messages for live
