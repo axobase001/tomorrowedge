@@ -155,6 +155,39 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("renames and deletes saved sessions through the local cockpit API", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-session-manage-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const rename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "renamed smoke session" })
+      });
+      const renamed = await rename.json() as { goal: string; viewModel?: { goal: string } };
+      const afterRename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`).then((response) => response.json()) as { state: { goal: string } };
+
+      expect(rename.status).toBe(200);
+      expect(renamed.goal).toBe("renamed smoke session");
+      expect(renamed.viewModel?.goal).toBe("renamed smoke session");
+      expect(afterRename.state.goal).toBe("renamed smoke session");
+
+      const deleted = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, { method: "DELETE" });
+      const sessions = await deleted.json() as Array<{ sessionId: string }>;
+      const missing = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`);
+
+      expect(deleted.status).toBe(200);
+      expect(sessions.some((session) => session.sessionId === state.sessionId)).toBe(false);
+      expect(missing.status).toBe(404);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("preserves accumulated live events when a run fails", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-failed-live-"));
     try {
@@ -467,7 +500,7 @@ describe("local cockpit server", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           provider: "openrouter",
-          model: "moonshotai/kimi-k2:free",
+          model: "MoonshotAI: Kimi K2.6 (free)",
           apiKeyEnv: "TEST_OPENROUTER_KEY",
           apiKey: "test-openrouter-key-value",
           bindRoles: true
@@ -480,7 +513,7 @@ describe("local cockpit server", () => {
       expect(response.status).toBe(200);
       expect(after.needsSetup).toBe(false);
       expect(after.selectedProvider).toBe("openrouter");
-      expect(after.selectedModel).toBe("moonshotai/kimi-k2:free");
+      expect(after.selectedModel).toBe("moonshotai/kimi-k2.6:free");
       expect(after.providers.find((provider) => provider.id === "openrouter")?.keyConfigured).toBe(true);
       expect(configText).toContain("api_key_env: TEST_OPENROUTER_KEY");
       expect(configText).not.toContain("test-openrouter-key-value");
@@ -517,6 +550,8 @@ describe("local cockpit server", () => {
         maskedKey: "test****-key"
       });
       expect(configText).toContain("api_key_env: TEST_KEY_PANEL_OPENROUTER");
+      expect(configText).toContain("model: moonshotai/kimi-k2.6:free");
+      expect(configText).not.toContain("moonshotai/kimi-k2:free");
       expect(configText).not.toContain("test-panel-openrouter-key");
       expect(localEnv).toContain('TEST_KEY_PANEL_OPENROUTER="test-panel-openrouter-key"');
 
@@ -574,7 +609,7 @@ describe("local cockpit server", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "moonshotai/kimi-k2:free",
+          model: "moonshotai/kimi-k2.6:free",
           apiKeyEnv: "TEST_MODEL_ONLY_OPENROUTER",
           apiKey: "test-model-only-key"
         })
@@ -843,7 +878,7 @@ describe("local cockpit server", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "moonshotai/kimi-k2:free",
+          model: "moonshotai/kimi-k2.6:free",
           apiKeyEnv: "TEST_ROLE_PANEL_OPENROUTER",
           apiKey: "test-role-panel-key"
         })

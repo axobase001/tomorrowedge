@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import { appendLearnedTaskMemory } from "./taskMemory.js";
@@ -83,6 +83,34 @@ export async function loadLatestSession(cwd: string): Promise<SessionRecord> {
   return latest;
 }
 
+export async function renameSessionGoal(cwd: string, sessionId: string, goal: string): Promise<SessionRecord> {
+  const filePath = await resolveSessionRecordPath(cwd, sessionId);
+  const record = JSON.parse(await readFile(filePath, "utf8")) as SessionRecord;
+  const nextRecord: SessionRecord = {
+    ...record,
+    state: {
+      ...record.state,
+      goal
+    }
+  };
+  await writeFile(filePath, JSON.stringify(redactSessionRecord(nextRecord), null, 2), "utf8");
+  const pointer = await readLatestSessionPointer(cwd);
+  if (pointer?.sessionId === sessionId) await writeLatestSessionPointer(cwd, { sessionId, goal });
+  return loadSession(cwd, sessionId);
+}
+
+export async function deleteSession(cwd: string, sessionId: string): Promise<void> {
+  const filePath = await resolveSessionRecordPath(cwd, sessionId);
+  const flatFile = path.basename(filePath) === `${sessionId}.json`;
+  await rm(flatFile ? filePath : path.dirname(filePath), { recursive: !flatFile, force: true });
+  const pointer = await readLatestSessionPointer(cwd);
+  if (pointer?.sessionId === sessionId) {
+    const [next] = await listSessions(cwd);
+    if (next) await writeLatestSessionPointer(cwd, next.state);
+    else await rm(path.join(cwd, ".tomorrowedge", "latest-session.json"), { force: true });
+  }
+}
+
 export async function writeLatestSessionPointer(cwd: string, state: Pick<AgentGraphState, "sessionId" | "goal">): Promise<void> {
   const dir = path.join(cwd, ".tomorrowedge");
   await mkdir(dir, { recursive: true });
@@ -104,6 +132,15 @@ async function readLatestSessionPointer(cwd: string): Promise<LatestSessionPoint
     log("warn", `Ignoring invalid latest-session pointer: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
+}
+
+async function resolveSessionRecordPath(cwd: string, sessionId: string): Promise<string> {
+  const sessionDirPath = path.join(cwd, ".tomorrowedge", "sessions", sessionId, "session.json");
+  const flatPath = path.join(cwd, ".tomorrowedge", "sessions", `${sessionId}.json`);
+  const dirText = await readFile(sessionDirPath, "utf8").catch(() => undefined);
+  if (dirText !== undefined) return sessionDirPath;
+  await readFile(flatPath, "utf8");
+  return flatPath;
 }
 
 async function hydrateEvents(record: SessionRecord, sessionDir: string): Promise<SessionRecord> {

@@ -25,6 +25,9 @@ describe("workflow simulation", () => {
 
       expect(result.corePlan.decomposition.length).toBeGreaterThan(0);
       expect(result.debateRounds).toBe(2);
+      expect(result.executorAlignment.backend).toBe("native");
+      expect(result.executorAlignment.workflowKind).toBe("debate_patch");
+      expect(result.executorAlignment.roleGraph.nodes.map((node) => node.role)).toContain("reviewer");
       expect(result.debate.filter((turn) => turn.round === 2).length).toBeGreaterThan(0);
       expect(result.review.verdict).toBe("accepted");
       expect(result.reportPath).toContain(".tomorrowedge");
@@ -92,7 +95,8 @@ describe("workflow simulation", () => {
         rounds: 1
       });
 
-      expect(result.assignments.map((assignment) => assignment.provider)).toEqual(["kimi", "kimi", "kimi"]);
+      expect(result.assignments.length).toBeGreaterThan(3);
+      expect(result.assignments.map((assignment) => assignment.provider).every((provider) => provider === "kimi")).toBe(true);
       expect([...result.debate, ...result.executions].every((turn) => turn.provider === "kimi")).toBe(true);
       expect(result.review.gaps.join("\n")).not.toContain("Provider unavailable");
     } finally {

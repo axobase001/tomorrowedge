@@ -45,8 +45,9 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 ## 当前版本
 
-当前版本：`1.2.13`。
+当前版本：`1.2.14`。
 
+- `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
 - `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
 - `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
 - `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
@@ -472,7 +473,16 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, rol
 
 ## Current Version
 
-Current version: `1.2.13`.
+Current version: `1.2.14`.
+
+`1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now
+canonicalize to real model IDs, verbose trace output compresses huge context
+exclusions, GUI final/failure panels show user-facing results and diagnosis,
+artifact refs are clickable, saved sessions can be renamed/deleted, live agent
+status updates telemetry, pre-judge reviewer/judge model advice feeds debate
+evidence, workflow simulation now runs through the NativeBackend dry-run path, and capability
+docs clarify env/local-env API key storage versus planned keychain/encrypted
+storage.
 
 `1.2.13` clears the next GUI orchestration issue batch: the composer can choose
 target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears

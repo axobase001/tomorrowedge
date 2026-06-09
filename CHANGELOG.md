@@ -7,6 +7,44 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.14] - 2026-06-09
+
+1.2.14 clears the P0-P2 issue sweep for provider routing, trace quality, GUI
+workflow usability, session management, and stronger debate orchestration.
+
+### Added
+
+- OpenRouter model canonicalization for GUI/setup/role saves, including display
+  labels such as `MoonshotAI: Kimi K2.6 (free)` and stale Kimi K2 defaults.
+- Clickable artifact links in the GUI detail drawer and task-goal labels in the
+  saved-session selector.
+- Local cockpit session rename/delete API and GUI controls.
+- Pre-judge live reviewer/judge advisory rounds that are converted into debate
+  evidence before the native judge selects a candidate.
+- Workflow simulation now runs through the NativeBackend dry-run path and
+  projects the shared executor event ledger into the legacy workflow report.
+
+### Changed
+
+- `tedge trace latest --verbose` now summarizes huge context-selection
+  exclusions instead of printing thousands of ignored/session artifact paths.
+- GUI final and failure panels now show user-facing task result, changed files,
+  verification status, root-cause candidates, stdout/stderr snippets, and next
+  actions instead of only raw trace references.
+- Live cockpit snapshots now absorb `model_call` and `agent_run` events into
+  agent status and telemetry.
+- Capability status now distinguishes implemented env/local-env API key storage
+  from proposed OS keychain / encrypted secret storage.
+
+### Fixed
+
+- OpenRouter free-model display labels are no longer stored as invalid model IDs
+  that later fall back to mock execution.
+- Missing sessions now return `404` from local cockpit session routes instead of
+  bubbling into generic server failures.
+- Flat legacy session records are deleted as files rather than deleting the
+  entire sessions directory.
+
 ## [1.2.13] - 2026-06-09
 
 1.2.13 clears the next GUI orchestration and provider-configuration issue batch.

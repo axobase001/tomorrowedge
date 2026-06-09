@@ -95,7 +95,8 @@ export function renderEventMarkdown(events: TomorrowEdgeEvent[]): string {
 
 export function renderVerboseEventLine(event: TomorrowEdgeEvent): string {
   const refs = artifactRefs(event);
-  return `${renderEventLine(event)}${refs.length ? ` refs=${refs.join(",")}` : ""}`;
+  const details = verboseDetails(event);
+  return `${renderEventLine(event)}${details ? ` ${details}` : ""}${refs.length ? ` refs=${refs.join(",")}` : ""}`;
 }
 
 export function artifactRefs(event: TomorrowEdgeEvent): string[] {
@@ -115,4 +116,45 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("previewRef" in event && event.previewRef) refs.push(event.previewRef);
   if ("packetRef" in event && event.packetRef) refs.push(event.packetRef);
   return refs;
+}
+
+function verboseDetails(event: TomorrowEdgeEvent): string {
+  if (event.type !== "context_select") return "";
+  const selected = samplePaths(event.selectedFiles, 5);
+  const excluded = summarizeExcludedPaths(event.excludedFiles, 6);
+  return [
+    selected ? `selected=[${selected}]` : undefined,
+    event.excludedFiles.length ? `excluded=${event.excludedFiles.length} [${excluded}]` : "excluded=0"
+  ].filter(Boolean).join(" ");
+}
+
+function samplePaths(paths: string[], limit: number): string {
+  if (!paths.length) return "";
+  const sample = paths.slice(0, limit);
+  const omitted = paths.length - sample.length;
+  return `${sample.join(", ")}${omitted > 0 ? `, ... +${omitted}` : ""}`;
+}
+
+function summarizeExcludedPaths(paths: string[], limit: number): string {
+  if (!paths.length) return "-";
+  const groups = new Map<string, number>();
+  for (const item of paths) {
+    const key = excludedGroupKey(item);
+    groups.set(key, (groups.get(key) ?? 0) + 1);
+  }
+  const entries = [...groups.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  const visible = entries.slice(0, limit).map(([key, count]) => `${key} x${count}`);
+  const omitted = entries.length - visible.length;
+  return `${visible.join(", ")}${omitted > 0 ? `, ... +${omitted} group(s)` : ""}`;
+}
+
+function excludedGroupKey(item: string): string {
+  const normalized = item.replace(/\\/g, "/").replace(/^\.?\//, "");
+  if (normalized.startsWith(".tomorrowedge/sessions/")) return ".tomorrowedge/sessions/**";
+  if (normalized.startsWith(".tomorrowedge/")) return ".tomorrowedge/**";
+  if (normalized.startsWith("node_modules/")) return "node_modules/**";
+  if (normalized.startsWith("dist/")) return "dist/**";
+  if (normalized.startsWith("coverage/")) return "coverage/**";
+  const first = normalized.split("/")[0];
+  return first || normalized || "(unknown)";
 }

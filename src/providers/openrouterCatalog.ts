@@ -61,6 +61,32 @@ export function formatOpenRouterModelLine(model: OpenRouterCatalogModel): string
   return `${model.id} - ${model.name ?? model.id} (${context}, ${price})${tags}`;
 }
 
+export function canonicalizeOpenRouterModelId(value: string, catalog: OpenRouterCatalogModel[] = []): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  const staleAlias = OPENROUTER_MODEL_ALIASES.get(trimmed.toLowerCase());
+  if (staleAlias) return staleAlias;
+  for (const model of catalog) {
+    const candidates = [
+      model.id,
+      model.name,
+      model.name ? `${model.name}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}` : undefined,
+      `${model.id} - ${model.name ?? model.id}`,
+      formatOpenRouterModelLine(model)
+    ].filter((item): item is string => Boolean(item));
+    if (candidates.some((candidate) => candidate.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return model.id;
+    }
+    if (candidates.some((candidate) => modelLabelKey(candidate) === modelLabelKey(trimmed))) {
+      return model.id;
+    }
+  }
+  const labelAlias = OPENROUTER_MODEL_ALIASES.get(modelLabelKey(trimmed));
+  if (labelAlias) return labelAlias;
+  if (trimmed.includes("/")) return trimmed;
+  return trimmed;
+}
+
 function normalizeOpenRouterModel(raw: RawOpenRouterModel): OpenRouterCatalogModel | undefined {
   if (typeof raw.id !== "string" || !raw.id.trim()) return undefined;
   const id = raw.id.trim();
@@ -88,6 +114,31 @@ function normalizeOpenRouterModel(raw: RawOpenRouterModel): OpenRouterCatalogMod
     contextWindow && contextWindow >= 128_000 ? "long-context" : ""
   ].filter(Boolean);
   return { id, name, contextWindow, promptPrice, completionPrice, isFree, isLowCost, tags };
+}
+
+const OPENROUTER_MODEL_ALIASES = new Map<string, string>([
+  ["moonshotai/kimi-k2:free", "moonshotai/kimi-k2.6:free"],
+  ["kimi k2 free", "moonshotai/kimi-k2.6:free"],
+  ["kimi k2.6 free", "moonshotai/kimi-k2.6:free"],
+  ["kimi k2.6", "moonshotai/kimi-k2.6:free"],
+  ["moonshot kimi k2.6 free", "moonshotai/kimi-k2.6:free"],
+  ["moonshot kimi k2.6", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai kimi k2.6 free", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai kimi k2.6", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai kimi k2 6 free", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai kimi k2 6", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai: kimi k2.6 (free)", "moonshotai/kimi-k2.6:free"],
+  ["moonshotai: kimi k2.6 free", "moonshotai/kimi-k2.6:free"]
+]);
+
+function modelLabelKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[:/_-]+/g, " ")
+    .replace(/[^a-z0-9.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function scoreOpenRouterModel(model: OpenRouterCatalogModel, options: OpenRouterRecommendationOptions): number {

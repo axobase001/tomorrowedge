@@ -42,12 +42,22 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <h3>{t("drawer.roleGraph")}</h3>
       <pre>{formatRoleGraph(viewModel)}</pre>
       <h3>{t("drawer.artifacts")}</h3>
-      <pre>{viewModel.artifacts.map((artifact) => artifact.ref).join("\n") || "-"}</pre>
+      <div className="te-artifact-list" data-testid="drawer-artifacts">
+        {viewModel.artifacts.length ? viewModel.artifacts.map((artifact) => (
+          <a key={artifact.ref} href={artifactHref(viewModel.sessionId, artifact.ref)} target="_blank" rel="noreferrer">{artifact.ref}</a>
+        )) : <span>-</span>}
+      </div>
       <h3>{t("drawer.rawEvents")}</h3>
       <pre>{JSON.stringify(viewModel.rawEvents.slice(-40), null, 2)}</pre>
     </aside>
     </>
   );
+}
+
+function artifactHref(sessionId: string | undefined, ref: string): string {
+  const nonce = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("nonce") : "";
+  const query = nonce ? `?nonce=${encodeURIComponent(nonce)}` : "";
+  return `/api/sessions/${encodeURIComponent(sessionId ?? "latest")}/artifacts/${encodeURIComponent(ref)}${query}`;
 }
 
 function formatRoleGraph(viewModel: CockpitViewModel): string {

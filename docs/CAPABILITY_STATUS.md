@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.2.13. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.2.14. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -13,10 +13,12 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Strong-agent and per-role budget enforcement | stable | Live and external role invocations pass through BudgetGate before execution. Blocked planner/reviewer/judge/coder roles use native fallback where available, and tests guard against blocked+success contradictions. |
 | Workflow-kind trace completeness | stable | Read-only workflows use a read-only rubric and no longer require patch, review, judge, apply, or shell events. Patch workflows retain patch/review/judge/apply/shell requirements. |
 | Workflow-kind role graph foundation | experimental | `RoleGraph` describes read-only, patch, debate patch, high-risk patch, and repair-loop role dependencies. The current native executor still executes mostly sequentially while consuming the graph for workflow classification and future scheduler hardening. |
+| Workflow simulation executor projection | stable | `tedge workflow` now calls the NativeBackend through a dry-run patch/review/judge path, records the shared event ledger, and projects that state into the legacy workflow report instead of maintaining an independent provider loop. |
 | Parallel candidate production | experimental | Coder-A, Coder-B, and live patch generation now start in the same candidate-production stage, then merge candidates in a stable review order. |
 | Planner/explorer context cache | experimental | Native planner and explorer outputs can be reused in-process. Explorer cache keys include repository file size and mtime fingerprints so repo changes invalidate context selection. |
 | Workflow recipes | experimental | `tedge recipes` lists built-in coding workflow recipes, and `tedge run --recipe <id>` applies recipe defaults for review-only, bugfix-sprint, and security-audit flows. |
-| Provider configuration and OpenAI-compatible adapters | stable | OpenRouter, DeepSeek, MiMo, Kimi, Anthropic, Gemini, Ollama, mock, fixture, generic OpenAI-compatible config, and user-named custom OpenAI-compatible gateways are available. GUI setup and key management expose provider IDs and base URLs for compatible gateways. Real usability depends on provider keys, quota, endpoint region, and model support. |
+| Provider configuration and OpenAI-compatible adapters | stable | OpenRouter, DeepSeek, MiMo, Kimi, Anthropic, Gemini, Ollama, mock, fixture, generic OpenAI-compatible config, and user-named custom OpenAI-compatible gateways are available. GUI setup and key management expose provider IDs, canonical model IDs, role assignments, and base URLs for compatible gateways. Real usability depends on provider keys, quota, endpoint region, and model support. |
+| API key storage | stable env/local-env path; keychain planned | Shell environment variables and ignored `.env` / `.tomorrowedge/local.env` are implemented. GUI setup and `Keys` panel store raw keys only in `.tomorrowedge/local.env` while config keeps env-var indirection. OS keychain / encrypted `secrets.enc` remains proposed in `docs/adr/encrypted-secret-storage.md`. |
 | Provider smoke and connection checks | stable | `tedge models --provider`, `--connection-test`, `--real-smoke`, and `--smoke-suite` exist. Doctor reports static configuration, not guaranteed live chat quota. DeepSeek, MiMo, and generic OpenAI-compatible providers have known defaults, and older blank `base_url` configs are normalized at load time. |
 | Live advisory and live patch candidates | experimental | Non-mutating live outputs are supported. Empty or malformed live patch diffs are rejected and retried before being marked unavailable. |
 | Capability stitching for image inputs | experimental | Vision handoff and structured visual specs exist; provider-specific vision quality depends on configured model support. |

@@ -31,6 +31,9 @@ export async function invokeExternalRole(input: {
   outputContract?: ExternalOutputContract;
 }): Promise<ExternalRoleInvocation> {
   const envelope = buildTaskEnvelope(input);
+  if (!input.profile.command) {
+    return runConfiguredExternalProfile(input, envelope);
+  }
   if (input.profile.command && !input.profile.autoStart) {
     const result = await runCommandExternalAgent({
       cwd: input.cwd,
@@ -139,6 +142,66 @@ export async function invokeExternalRole(input: {
   } finally {
     if (input.profile.command && input.profile.autoStart === false) await discardPooledExternalClient(pooled.key);
   }
+}
+
+function runConfiguredExternalProfile(input: {
+  cwd: string;
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  prompt: string;
+  context?: unknown;
+  ledger: EventLedger;
+  toolName?: string;
+  outputContract?: ExternalOutputContract;
+}, envelope: ExternalTaskEnvelope): ExternalRoleInvocation {
+  const requestRef = input.ledger.writeArtifact("external_requests", JSON.stringify({
+    role: input.role,
+    prompt: input.prompt,
+    context: envelope
+  }, null, 2), "json");
+  input.ledger.append({
+    type: "external_agent_call",
+    phase: phaseForRole(input.role),
+    role: input.role,
+    provider: `external:${input.profile.id}`,
+    model: input.profile.name,
+    externalAgentId: input.profile.id,
+    tool: "tomorrowedge.configured_profile",
+    status: "start",
+    requestRef
+  });
+  const payload = configuredProfilePayload(input.profile, input.role, envelope);
+  const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(payload, null, 2), "json");
+  const summary = summarizePayload(payload, `Configured external agent profile ${input.profile.id} produced a typed mock result.`);
+  input.ledger.append({
+    type: "external_agent_call",
+    phase: phaseForRole(input.role),
+    role: input.role,
+    provider: `external:${input.profile.id}`,
+    model: input.profile.name,
+    externalAgentId: input.profile.id,
+    tool: "tomorrowedge.configured_profile",
+    status: "success",
+    requestRef,
+    responseRef
+  });
+  input.ledger.append({
+    type: "external_agent_result",
+    phase: phaseForRole(input.role),
+    role: input.role,
+    provider: `external:${input.profile.id}`,
+    model: input.profile.name,
+    externalAgentId: input.profile.id,
+    resultRef: responseRef,
+    summary
+  });
+  return {
+    externalAgentId: input.profile.id,
+    role: input.role,
+    payload,
+    summary,
+    attempts: 1
+  };
 }
 
 export async function releaseExternalAgentProcessPool(): Promise<void> {
@@ -257,6 +320,115 @@ function summarizePayload(payload: unknown, fallback: string): string {
   const summary = object?.summary;
   if (typeof summary === "string" && summary.trim()) return summary.slice(0, 500);
   return fallback;
+}
+
+function configuredProfilePayload(profile: ExternalAgentProfile, role: AgentRole, envelope: ExternalTaskEnvelope): unknown {
+  const baseSummary = `${profile.name} is configured as an external ${role} agent, but no command/MCP process is attached yet.`;
+  if (role === "core" || role === "planner") {
+    return {
+      summary: baseSummary,
+      plan: {
+        goal: envelope.goal,
+        taskType: "unknown",
+        riskLevel: profile.trustLevel === "high" || profile.trustLevel === "owner" ? "medium" : "low",
+        constraints: [
+          "Configured external profile did not execute a real process.",
+          "Use this as a traceable role placeholder until command/autoStart is configured."
+        ],
+        steps: [
+          { id: "external-context", title: "Read external task envelope", detail: "Inspect role-bound context and output contract." },
+          { id: "external-evidence", title: "Request typed evidence", detail: "Require patch, review, judge, and artifact refs before approval." },
+          { id: "native-handoff", title: "Hand off to native executor", detail: "Let the NativeBackend continue with visible event ledger records." }
+        ],
+        verificationCommands: [],
+        debateRecommended: true,
+        reasonForDebate: "Configured external profile should be challenged by native reviewer/judge until a real command runner is attached."
+      }
+    };
+  }
+  if (role === "coder_a" || role === "coder_b" || role === "repairer") {
+    return {
+      summary: baseSummary,
+      candidate: {
+        candidateId: `${role}_${profile.id}_configured_candidate`,
+        agentId: role,
+        approach: role === "repairer" ? "repair" : role === "coder_b" ? "alternative" : "minimal_patch",
+        summary: `${baseSummary} No file mutation was proposed by the configured-profile mock.`,
+        filesChanged: [],
+        unifiedDiff: "",
+        testPlan: [],
+        knownTradeoffs: ["Attach a real command runner or MCP process for executable external agent output."],
+        estimatedRisk: "medium"
+      }
+    };
+  }
+  if (role === "reviewer") {
+    const candidates = Array.isArray(envelope.context.candidates) ? envelope.context.candidates : [];
+    const summary = [
+      baseSummary,
+      "Reviewer stance: require concrete diff/artifact refs, test evidence, and explicit risk notes before approval.",
+      "Judge stance: do not select a candidate with unresolved reviewer blocking concerns."
+    ].join(" ");
+    return {
+      summary,
+      review: {
+        mode: "standard",
+        reviews: candidates.length
+          ? candidates.map((candidate, index) => {
+            const candidateRecord = asRecord(candidate);
+            return {
+              candidateId: typeof candidateRecord?.candidateId === "string" ? candidateRecord.candidateId : `candidate_${index + 1}`,
+              correctnessScore: 60,
+              riskScore: 55,
+              invasiveness: "low",
+              testCoverage: "weak",
+              securityConcerns: [],
+              regressionConcerns: ["Configured external profile cannot validate the diff until a real process is attached."],
+              redTeamFindings: [],
+              recommendation: "revise",
+              notes: [baseSummary, "Typed mock review recorded for trace continuity."]
+            };
+          })
+          : [{
+            candidateId: "no_candidate",
+            correctnessScore: 0,
+            riskScore: 80,
+            invasiveness: "low",
+            testCoverage: "none",
+            securityConcerns: [],
+            regressionConcerns: ["No candidate was available to review."],
+            redTeamFindings: [],
+            recommendation: "reject",
+            notes: [baseSummary]
+          }],
+        overallRecommendation: "Configured external reviewer recorded a typed placeholder; native reviewer/judge should remain authoritative."
+      }
+    };
+  }
+  if (role === "judge") {
+    const summary = [
+      baseSummary,
+      "Reviewer stance: preserve blocking concerns in the judge handoff.",
+      "Judge stance: request revision until a real external command/MCP runner can validate the candidate."
+    ].join(" ");
+    return {
+      summary,
+      judgment: {
+        decision: "request_revision",
+        reason: "Configured external judge did not execute a real process; require native review or attach command/MCP runner before selection.",
+        confidence: 0.55
+      }
+    };
+  }
+  return {
+    summary: baseSummary,
+    result: {
+      role,
+      status: "partial",
+      summary: baseSummary,
+      payload: { outputContract: envelope.outputContract }
+    }
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

@@ -148,7 +148,7 @@ function defaultBaseUrlFor(provider: string): string {
 function suggestedModelFor(provider: string): string {
   const providerId = normalizeProviderId(provider);
   const lookup: Record<string, string> = {
-    openrouter: "moonshotai/kimi-k2:free",
+    openrouter: "moonshotai/kimi-k2.6:free",
     deepseek: "deepseek-chat",
     kimi: "kimi-k2-0711-preview",
     mimo: "mimo-v2.5-pro",

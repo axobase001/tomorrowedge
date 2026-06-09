@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { createProviderRegistry } from "../../src/providers/registry.js";
 import { OpenAICompatibleProvider } from "../../src/providers/openaiCompatible.js";
-import { recommendFreeOpenRouterModels } from "../../src/providers/openrouterCatalog.js";
+import { canonicalizeOpenRouterModelId, recommendFreeOpenRouterModels } from "../../src/providers/openrouterCatalog.js";
 import { testProviderConnection } from "../../src/providers/connectionTest.js";
 
 describe("provider registry", () => {
@@ -258,6 +258,23 @@ describe("provider registry", () => {
     );
 
     expect(recommended[0]?.id).toBe("moonshotai/kimi-k2.6:free");
+  });
+
+  it("canonicalizes OpenRouter display labels and stale Kimi defaults before provider calls", () => {
+    const catalog = [{
+      id: "moonshotai/kimi-k2.6:free",
+      name: "MoonshotAI: Kimi K2.6 (free)",
+      contextWindow: 262144,
+      promptPrice: 0,
+      completionPrice: 0,
+      isFree: true,
+      isLowCost: false,
+      tags: ["kimi", "k2.6"]
+    }];
+
+    expect(canonicalizeOpenRouterModelId("MoonshotAI: Kimi K2.6 (free)", catalog)).toBe("moonshotai/kimi-k2.6:free");
+    expect(canonicalizeOpenRouterModelId("moonshotai/kimi-k2:free", catalog)).toBe("moonshotai/kimi-k2.6:free");
+    expect(canonicalizeOpenRouterModelId("MoonshotAI: Kimi K2.6 (free)")).toBe("moonshotai/kimi-k2.6:free");
   });
 
   it("tests provider connectivity with a lightweight /models request", async () => {

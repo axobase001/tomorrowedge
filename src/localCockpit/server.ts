@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OfflineGraphOptions } from "../core/agentGraph/executor.js";
-import { loadLatestSession, loadSession, listSessions, saveSession } from "../core/memory/sessionMemory.js";
+import { deleteSession, loadLatestSession, loadSession, listSessions, renameSessionGoal, saveSession } from "../core/memory/sessionMemory.js";
 import { NativeBackend } from "../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../core/orchestration/registry.js";
 import { prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, liveOption } from "../core/runtime/runPreparation.js";
@@ -185,17 +185,42 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     }
     const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && sessionMatch) {
-      const session = sessionMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(sessionMatch[1]));
+      const session = await loadRequiredSession(cwd, decodeURIComponent(sessionMatch[1]));
       return sendJson(response, 200, session);
+    }
+    if (request.method === "PATCH" && sessionMatch) {
+      const sessionId = await resolveMutableSessionId(cwd, decodeURIComponent(sessionMatch[1]));
+      const body = await readJsonBody(request);
+      const goal = typeof body.goal === "string" ? body.goal.trim() : typeof body.title === "string" ? body.title.trim() : "";
+      if (!goal) throw new HttpError(400, "session_goal_required", "Session rename requires a non-empty goal or title.");
+      const session = await renameSessionGoal(cwd, sessionId, goal);
+      return sendJson(response, 200, {
+        sessionId: session.sessionId,
+        goal: session.state.goal,
+        viewModel: buildCockpitViewModel(cwd, session.state, { source: "saved" })
+      });
+    }
+    if (request.method === "DELETE" && sessionMatch) {
+      const sessionId = await resolveMutableSessionId(cwd, decodeURIComponent(sessionMatch[1]));
+      await deleteSession(cwd, sessionId);
+      const sessions = await listSessions(cwd);
+      return sendJson(response, 200, sessions.map((session) => ({
+        sessionId: session.sessionId,
+        createdAt: session.createdAt,
+        eventCount: session.eventCount ?? session.state.events?.length ?? 0,
+        artifactCount: session.artifactCount ?? session.state.eventArtifacts?.length ?? 0,
+        goal: session.state.goal,
+        result: session.state.finalSummary?.result
+      })));
     }
     const viewModelMatch = /^\/api\/sessions\/([^/]+)\/view-model$/.exec(url.pathname);
     if (request.method === "GET" && viewModelMatch) {
-      const session = viewModelMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(viewModelMatch[1]));
+      const session = await loadRequiredSession(cwd, decodeURIComponent(viewModelMatch[1]));
       return sendJson(response, 200, buildCockpitViewModel(cwd, session.state, { source: "saved" }));
     }
     const eventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (request.method === "GET" && eventsMatch) {
-      const session = eventsMatch[1] === "latest" ? await loadLatestSession(cwd) : await loadSession(cwd, decodeURIComponent(eventsMatch[1]));
+      const session = await loadRequiredSession(cwd, decodeURIComponent(eventsMatch[1]));
       return sendJson(response, 200, session.state.events ?? []);
     }
     const liveEventsMatch = /^\/api\/runs\/([^/]+)\/events\/live$/.exec(url.pathname);
@@ -411,6 +436,32 @@ export function markLiveRunFailed(state: AgentGraphState, error: string): AgentG
 
 function applyLiveEvent(state: AgentGraphState, event: TomorrowEdgeEvent): void {
   state.events.push(event);
+  if (event.type === "model_call" && event.role) {
+    upsertLiveAgent(state, {
+      id: `live_${event.role}`,
+      role: event.role,
+      provider: event.provider ?? "provider",
+      model: event.model ?? "model",
+      status: event.status === "failure" ? "failed" : event.status === "success" ? "success" : "running",
+      agentKind: "live",
+      summary: event.error ?? event.status ?? "model_call"
+    });
+    state.usageSummary.inputTokens += event.inputTokens ?? 0;
+    state.usageSummary.outputTokens += event.outputTokens ?? 0;
+    state.usageSummary.totalTokens += (event.inputTokens ?? 0) + (event.outputTokens ?? 0);
+    state.usageSummary.estimatedCostUsd = (state.usageSummary.estimatedCostUsd ?? 0) + (event.estimatedCostUsd ?? 0);
+  }
+  if (event.type === "agent_run" && event.role) {
+    upsertLiveAgent(state, {
+      id: event.runId || `live_${event.role}`,
+      role: event.role,
+      provider: event.provider ?? "provider",
+      model: event.model ?? "model",
+      status: event.status === "failure" ? "failed" : event.status === "blocked" ? "waiting_for_user" : "success",
+      agentKind: event.agentKind ?? "live",
+      summary: event.error ?? `agent ${event.status}`
+    });
+  }
   if (event.type === "access_mode") {
     state.access = {
       ...state.access,
@@ -490,6 +541,15 @@ function applyLiveEvent(state: AgentGraphState, event: TomorrowEdgeEvent): void 
       risksRemaining: [],
       suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
     };
+  }
+}
+
+function upsertLiveAgent(state: AgentGraphState, agent: AgentGraphState["agents"][number]): void {
+  const index = state.agents.findIndex((item) => item.role === agent.role && item.provider === agent.provider && item.model === agent.model);
+  if (index >= 0) {
+    state.agents[index] = { ...state.agents[index]!, ...agent };
+  } else {
+    state.agents.push(agent);
   }
 }
 
@@ -606,6 +666,11 @@ async function loadRequiredSession(cwd: string, sessionId: string) {
   } catch {
     throw new HttpError(404, "session_not_found", `Session ${sessionId} was not found.`);
   }
+}
+
+async function resolveMutableSessionId(cwd: string, sessionId: string): Promise<string> {
+  const session = await loadRequiredSession(cwd, sessionId);
+  return session.sessionId;
 }
 
 async function sendCockpitShell(response: ServerResponse, webRoot?: string | false): Promise<void> {
