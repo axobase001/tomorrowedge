@@ -850,7 +850,11 @@ The GUI detail drawer shows these as memory-influence cards with retrieved ids,
 role injection point, decision impact, violations/alignment, and artifact links.
 It also reconstructs an error-loop timeline from the shared event ledger,
 showing candidate attempts, patch application, failed/passed verification,
-repair attempts, memory retrieval, artifact refs, and the workflow stop reason.
+repair-policy decisions, repair attempts, memory retrieval, artifact refs, and
+the workflow stop reason. A `repair_policy` event classifies verifier failures
+as semantic, environment, provider-output, wrong-file, missing-context, or
+unknown, then records whether TomorrowEdge should repair, retry schema output,
+expand context, stop, or escalate a repeated same-signature failure.
 
 ```bash
 tedge memory failures

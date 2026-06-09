@@ -503,12 +503,14 @@ input, textarea, select {
   background: rgba(238, 245, 248, 0.42);
 }
 .te-error-loop-item.failed,
-.te-error-loop-item.blocked {
+.te-error-loop-item.blocked,
+.te-error-loop-item.escalated {
   border-left-color: var(--te-danger);
 }
 .te-error-loop-item.passed,
 .te-error-loop-item.applied,
-.te-error-loop-item.used {
+.te-error-loop-item.used,
+.te-error-loop-item.allowed {
   border-left-color: var(--te-success);
 }
 .te-error-loop-item div {

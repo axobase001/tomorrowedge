@@ -132,6 +132,12 @@ describe("fixture E2E workflow", () => {
     expect(state.runResults.map((result) => result.success)).toEqual([false, true]);
     expect(source).toContain("return a + b");
     expect(state.events.some((event) => event.type === "repair_attempt")).toBe(true);
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "repair_policy",
+      failureClass: "semantic_test_failure",
+      occurrence: 1,
+      action: "repair"
+    }));
     expect(state.events.filter((event) => event.type === "patch_apply" && event.applied).length).toBe(2);
     expect(state.events.filter((event) => event.type === "shell_run").length).toBe(2);
     const stopReason = state.events.find((event) => event.type === "workflow_stop_reason");
@@ -149,16 +155,18 @@ describe("fixture E2E workflow", () => {
     const sessionDir = path.dirname(sessionPath);
 
     const repairTrace = state.events
-      .filter((event) => ["patch_apply", "shell_run", "repair_attempt", "summary"].includes(event.type))
+      .filter((event) => ["patch_apply", "shell_run", "repair_policy", "repair_attempt", "summary"].includes(event.type))
       .map((event) => {
         if (event.type === "patch_apply") return `patch_apply:${event.phase}`;
         if (event.type === "shell_run") return `shell_run:${event.success ? "passed" : "failed"}`;
+        if (event.type === "repair_policy") return `repair_policy:${event.action}`;
         if (event.type === "repair_attempt") return `repair_attempt:${event.candidateId}`;
         return `summary:${event.result}`;
       });
     expect(repairTrace).toEqual([
       "patch_apply:patch",
       "shell_run:failed",
+      "repair_policy:repair",
       "repair_attempt:fixture_repair_candidate",
       "patch_apply:repair",
       "shell_run:passed",

@@ -120,6 +120,16 @@ export type RepairEvent = BaseEvent & {
   error?: string;
 };
 
+export type RepairPolicyEvent = BaseEvent & {
+  type: "repair_policy";
+  failureClass: string;
+  failureSignature: string;
+  occurrence: number;
+  action: "repair" | "retry_schema" | "expand_context" | "stop" | "escalate";
+  strategy: string;
+  reason: string;
+};
+
 export type ProviderFallbackEvent = BaseEvent & {
   type: "provider_fallback";
   fromProvider: string;
@@ -380,6 +390,7 @@ export type TomorrowEdgeEvent =
   | PatchApplyEvent
   | ShellRunEvent
   | RepairEvent
+  | RepairPolicyEvent
   | ProviderFallbackEvent
   | CostUsageEvent
   | ConversationTargetEvent

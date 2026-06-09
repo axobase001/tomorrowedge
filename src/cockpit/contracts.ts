@@ -184,8 +184,8 @@ export type CockpitMemoryInfluenceSummary = {
 export type CockpitErrorLoopTimelineItem = {
   id: string;
   timestamp: string;
-  kind: "candidate" | "patch_apply" | "verification" | "repair" | "memory" | "stop";
-  status: "proposed" | "applied" | "blocked" | "failed" | "passed" | "used" | "stopped";
+  kind: "candidate" | "patch_apply" | "verification" | "policy" | "repair" | "memory" | "stop";
+  status: "proposed" | "applied" | "blocked" | "failed" | "passed" | "used" | "allowed" | "escalated" | "stopped";
   title: string;
   summary: string;
   candidateId?: string;
@@ -201,6 +201,7 @@ export type CockpitErrorLoopTimelineSummary = {
   candidateAttempts: number;
   failedVerifications: number;
   passedVerifications: number;
+  policyDecisions: number;
   repairAttempts: number;
   memoryRetrievals: number;
   stopReason?: string;

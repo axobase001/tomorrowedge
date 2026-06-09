@@ -167,6 +167,7 @@ function buildErrorLoopTimeline(state?: AgentGraphState): CockpitViewModel["erro
     candidateAttempts: items.filter((item) => item.kind === "candidate").length,
     failedVerifications: shellItems.filter((item) => item.status === "failed").length,
     passedVerifications: shellItems.filter((item) => item.status === "passed").length,
+    policyDecisions: items.filter((item) => item.kind === "policy").length,
     repairAttempts: items.filter((item) => item.kind === "repair").length,
     memoryRetrievals: items.filter((item) => item.kind === "memory").length,
     stopReason: [...items].reverse().find((item) => item.kind === "stop")?.summary,
@@ -178,6 +179,7 @@ function isErrorLoopEvent(event: TomorrowEdgeEvent): boolean {
   return event.type === "patch_candidate"
     || event.type === "patch_apply"
     || event.type === "shell_run"
+    || event.type === "repair_policy"
     || event.type === "repair_attempt"
     || event.type === "memory_retrieval"
     || event.type === "workflow_stop_reason";
@@ -226,6 +228,15 @@ function errorLoopItem(event: TomorrowEdgeEvent, index: number): CockpitErrorLoo
       artifactRefs: compactRefs([event.stdoutRef, event.stderrRef]),
       exitCode: event.exitCode,
       durationMs: event.durationMs
+    };
+  }
+  if (event.type === "repair_policy") {
+    return {
+      ...base,
+      kind: "policy",
+      status: event.action === "escalate" ? "escalated" : event.action === "repair" ? "allowed" : "blocked",
+      title: "Repair policy decision",
+      summary: `${event.failureClass} occurrence=${event.occurrence} action=${event.action}: ${event.reason}`
     };
   }
   if (event.type === "repair_attempt") {
