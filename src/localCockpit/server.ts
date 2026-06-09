@@ -23,6 +23,7 @@ import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
+import { log } from "../utils/logger.js";
 import {
   configureCockpitProvider,
   deleteCockpitProviderKey,
@@ -230,7 +231,8 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           const failedState = markLiveRunFailed(liveState, message);
           try {
             await saveSession(cwd, failedState);
-          } catch {
+          } catch (saveError) {
+            log("warn", `Failed to save failed live cockpit session ${sessionId}: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
             // The live cockpit should still expose the in-memory failure snapshot.
           }
           cockpitEventBus.setSnapshot({
@@ -548,7 +550,8 @@ async function sendCockpitShell(response: ServerResponse, webRoot?: string | fal
     if (indexPath) {
       try {
         return send(response, 200, await readFile(indexPath, "utf8"), "text/html; charset=utf-8");
-      } catch {
+      } catch (error) {
+        log("warn", `Falling back to embedded cockpit HTML because built index could not be read: ${error instanceof Error ? error.message : String(error)}`);
         // Fall back to the embedded client when a stale build directory is missing index.html.
       }
     }
@@ -569,7 +572,10 @@ async function sendCockpitAsset(response: ServerResponse, pathname: string, webR
     const content = await readFile(assetPath);
     send(response, 200, content, contentTypeForStaticAsset(assetPath));
     return true;
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      log("warn", `Cockpit asset ${assetPath} could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return false;
   }
 }
@@ -601,7 +607,10 @@ async function isUsableCockpitWebRoot(value: string): Promise<boolean> {
     }
     const styleContents = await Promise.all(styleRefs.map((ref) => readFile(path.join(value, ref.replace(/^\/+/, "")), "utf8")));
     return styleContents.some((content) => content.includes(".te-shell"));
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      log("warn", `Cockpit web root ${value} is not usable: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return false;
   }
 }

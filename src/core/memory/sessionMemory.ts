@@ -4,6 +4,7 @@ import type { AgentGraphState } from "../agentGraph/state.js";
 import { appendLearnedTaskMemory } from "./taskMemory.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { redactSessionRecord } from "../../safety/providerRedaction.js";
+import { log } from "../../utils/logger.js";
 
 export type SessionRecord = {
   sessionId: string;
@@ -99,7 +100,8 @@ async function readLatestSessionPointer(cwd: string): Promise<LatestSessionPoint
   if (!text) return undefined;
   try {
     return JSON.parse(text) as LatestSessionPointer;
-  } catch {
+  } catch (error) {
+    log("warn", `Ignoring invalid latest-session pointer: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
 }

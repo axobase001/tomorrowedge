@@ -65,7 +65,7 @@ export function KeyRoleManager({
   return (
     <div className="te-keymgr-backdrop" data-testid="key-role-manager">
       <section className="te-keymgr-card">
-        <header>
+        <header className="te-keymgr-header">
           <div>
             <span className="te-chip te-chip-blue">{t("keymgr.badge")}</span>
             <h2>{t("keymgr.title")}</h2>

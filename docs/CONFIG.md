@@ -93,6 +93,9 @@ agents:
   reviewer:
     provider: openrouter
     model: anthropic/claude-opus-4.1
+    budget:
+      max_cost_per_call_usd: 1.5
+      max_calls_per_task: 2
 ```
 
 Recommended experiment pattern:
@@ -100,6 +103,8 @@ Recommended experiment pattern:
 - Keep `runner` local; it is a tool route, not a model route.
 - Use strong models for `planner`, `reviewer`, and `judge`.
 - Use efficient coding models for `explorer`, `coder_a`, `coder_b`, and `repairer`.
+- Use optional `agents.<role>.budget` overrides when one role needs an
+  independent cost/call cap instead of sharing the global strong-agent pool.
 - Use a vision-capable model for `vision` when screenshot/image tasks are tested.
 - Use `ollama` for roles that must stay local in privacy experiments.
 - Use OpenRouter as the easiest onboarding provider when users do not yet want
@@ -107,6 +112,20 @@ Recommended experiment pattern:
 - Prefer separate API keys per provider/account for cost tracking,
   rate-limit isolation, and debugging.
 - In `privacy` or `local` routing mode, cloud role overrides are ignored and routed to local-safe providers.
+
+Planner and routing behavior:
+
+- The native planner now produces variable task-specific steps instead of a
+  fixed four-step template.
+- When a planner route is live and available, TomorrowEdge asks the configured
+  planner model for a structured plan and falls back to the native adaptive
+  planner if the model is unavailable or returns invalid JSON.
+- After planning, TomorrowEdge can run a post-plan routing pass. High-risk
+  tasks upgrade reviewer/judge routes where no user override exists; docs or
+  read-only tasks can keep execution roles cheap; image inputs keep a vision
+  route.
+- Post-plan routing decisions and per-role budget decisions are written to the
+  event ledger as `routing_decision` and `budget_decision` events.
 
 ## External MCP agents
 

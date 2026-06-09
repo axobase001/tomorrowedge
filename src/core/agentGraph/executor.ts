@@ -36,6 +36,7 @@ import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
+import { createModelBackedPlan } from "../goal/modelPlanner.js";
 import { applyWorkflowIntentToPlan, classifyWorkflowIntent } from "../goal/workflowIntent.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
 import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
@@ -48,6 +49,7 @@ import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
 import { isStrongAgentRole } from "../budget/strongAgentBudget.js";
+import type { RouteAssignment } from "../routing/policies.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
 
 export type OfflineGraphOptions = {
@@ -138,44 +140,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     phase: "routing",
     evidence: [`routing mode=${state.routing.mode}`, `access mode=${state.access.mode}`, `assignments=${state.routing.assignments.length}`]
   });
-  let strongAgentCallsUsed = 0;
+  const budgetCounters: BudgetCounters = { strongAgentCallsUsed: 0, roleCallsUsed: {} };
   for (const assignment of state.routing.assignments) {
-    const decision = buildRoleRoutingDecision(config, assignment);
-    const budgetDecision = allocateStrongAgentCall(assignment.role, strongAgentCallsUsed, {
-      maxCallsPerTask: config.strong_agents.max_calls_per_task,
-      maxCostUsd: config.strong_agents.max_cost_usd,
-      reserveForRoles: config.strong_agents.reserve_for_roles,
-      escalateOn: config.strong_agents.escalate_on
-    }, {
-      estimatedCostUsd: estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
-      escalationSignals: inferStrongAgentEscalationSignals(goal)
-    });
-    if (isStrongAgentRole(assignment.role)) strongAgentCallsUsed += 1;
-    ledger.append({
-      type: "routing_decision",
-      phase: "routing",
-      role: assignment.role,
-      provider: assignment.provider,
-      model: assignment.model,
-      assignedRole: decision.role,
-      assignedProvider: decision.provider,
-      assignedModel: decision.model,
-      reason: decision.reason,
-      policyTags: decision.policyTags
-    });
-    ledger.append({
-      type: "budget_decision",
-      phase: "routing",
-      role: assignment.role,
-      provider: assignment.provider,
-      model: assignment.model,
-      status: budgetDecision.allowed ? "allowed" : "blocked",
-      reason: budgetDecision.reason,
-      maxCostUsd: config.strong_agents.max_cost_usd,
-      estimatedCostUsd: budgetDecision.estimatedCostUsd,
-      strongAgentCallsUsed,
-      strongAgentCallsRemaining: budgetDecision.remainingCalls
-    });
+    recordRoutingAndBudgetDecision(config, ledger, assignment, goal, budgetCounters, "routing");
   }
 
   const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
@@ -251,6 +218,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const planner = new PlannerAgent();
   const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
   const externalPlanner = externalProfileForRole(router, externalAgents, "planner");
+  const planFromExternalCore = Boolean(state.plan);
   state.plan = state.plan ?? await runAgentState(state, ledger, router, "planner", async () => {
     if (!externalPlanner) return planner.run({ goal: plannerGoal });
     const result = await invokeExternalRole({
@@ -265,6 +233,32 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
     return plan ?? planner.run({ goal: plannerGoal });
   }, externalPlanner ? "external" : undefined);
+  if (!externalPlanner && !planFromExternalCore && state.plan) {
+    const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
+    if (modelPlan.plan) {
+      state.plan = {
+        ...modelPlan.plan,
+        constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints])
+      };
+      updateCapabilityStep(state, "planner", "success", "planner completed");
+      ledger.append({
+        type: "evidence_update",
+        phase: "planning",
+        role: "planner",
+        provider: modelPlan.provider,
+        model: modelPlan.model,
+        evidence: [`model-backed planner produced ${state.plan.steps.length} step(s)`, `risk=${state.plan.riskLevel}`, `taskType=${state.plan.taskType}`],
+        evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json")
+      });
+    } else {
+      ledger.append({
+        type: "fallback_to_native",
+        phase: "planning",
+        fallbackRole: "planner",
+        reason: `Model-backed planner unavailable; using native adaptive planner. ${modelPlan.error ?? ""}`.trim()
+      });
+    }
+  }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   const workflowIntent = await classifyWorkflowIntent({ goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
   ledger.append({
@@ -280,6 +274,16 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     fallbackUsed: workflowIntent.fallbackUsed
   });
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
+  const rerouteChanges = router.rerouteAfterPlan(state.plan, { hasImageInputs: imagePaths.length > 0 });
+  if (rerouteChanges.length) {
+    state.routing = routingForState(router, imagePaths.length > 0);
+    for (const change of rerouteChanges) {
+      recordRoutingAndBudgetDecision(config, ledger, {
+        ...change.to,
+        reason: `${change.reason}; previous route was ${change.from.provider}/${change.from.model}`
+      }, goal, budgetCounters, "planning");
+    }
+  }
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();
@@ -926,6 +930,10 @@ function updateCapabilityStep(state: AgentGraphState, role: AgentRole, status: "
   };
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim()).map((value) => value.trim()))];
+}
+
 function recordPatchCandidateEvent(state: AgentGraphState, ledger: EventLedger, role: AgentRole, candidate: PatchCandidate): void {
   const diffRef = candidate.unifiedDiff ? ledger.writeArtifact("diffs", candidate.unifiedDiff) : undefined;
   const phase = role === "repairer" ? "repair" : "coding";
@@ -1057,6 +1065,78 @@ function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSum
     totalTokens: usageSummary.totalTokens,
     estimatedCostUsd: usageSummary.estimatedCostUsd
   });
+}
+
+type BudgetCounters = {
+  strongAgentCallsUsed: number;
+  roleCallsUsed: Partial<Record<AgentRole, number>>;
+};
+
+function recordRoutingAndBudgetDecision(config: TomorrowEdgeConfig, ledger: EventLedger, assignment: RouteAssignment, goal: string, counters: BudgetCounters, phase: "routing" | "planning"): void {
+  const decision = buildRoleRoutingDecision(config, assignment);
+  const roleBudget = roleBudgetFor(config, assignment.role);
+  const budgetDecision = allocateStrongAgentCall(assignment.role, counters.strongAgentCallsUsed, {
+    maxCallsPerTask: config.strong_agents.max_calls_per_task,
+    maxCostUsd: config.strong_agents.max_cost_usd,
+    reserveForRoles: config.strong_agents.reserve_for_roles,
+    escalateOn: config.strong_agents.escalate_on
+  }, {
+    estimatedCostUsd: estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
+    escalationSignals: inferStrongAgentEscalationSignals(goal),
+    roleBudget,
+    roleUsedCalls: counters.roleCallsUsed[assignment.role] ?? 0
+  });
+  if (budgetDecision.allowed && budgetDecision.scope === "per_role") {
+    counters.roleCallsUsed[assignment.role] = (counters.roleCallsUsed[assignment.role] ?? 0) + 1;
+  } else if (budgetDecision.allowed && budgetDecision.scope === "global_strong_pool" && (isStrongAgentRole(assignment.role) || budgetDecision.escalationSignals.length > 0)) {
+    counters.strongAgentCallsUsed += 1;
+  }
+  ledger.append({
+    type: "routing_decision",
+    phase,
+    role: assignment.role,
+    provider: assignment.provider,
+    model: assignment.model,
+    assignedRole: decision.role,
+    assignedProvider: decision.provider,
+    assignedModel: decision.model,
+    reason: decision.reason,
+    policyTags: decision.policyTags
+  });
+  ledger.append({
+    type: "budget_decision",
+    phase,
+    role: assignment.role,
+    provider: assignment.provider,
+    model: assignment.model,
+    status: budgetDecision.allowed ? "allowed" : "blocked",
+    reason: budgetDecision.reason,
+    budgetScope: budgetDecision.scope,
+    maxCostUsd: roleBudget?.maxCostPerCallUsd ?? config.strong_agents.max_cost_usd,
+    estimatedCostUsd: budgetDecision.estimatedCostUsd,
+    strongAgentCallsUsed: counters.strongAgentCallsUsed,
+    strongAgentCallsRemaining: budgetDecision.remainingCalls
+  });
+}
+
+function roleBudgetFor(config: TomorrowEdgeConfig, role: AgentRole): NonNullable<Parameters<typeof allocateStrongAgentCall>[3]>["roleBudget"] {
+  const budget = config.agents[role]?.budget;
+  if (!budget) return undefined;
+  if (budget.max_calls_per_task === undefined && budget.max_cost_per_call_usd === undefined) return undefined;
+  return {
+    maxCallsPerTask: budget.max_calls_per_task,
+    maxCostPerCallUsd: budget.max_cost_per_call_usd
+  };
+}
+
+function routingForState(router: ModelRouter, hasImageInputs: boolean): AgentGraphState["routing"] {
+  const plan = router.getPlan();
+  if (hasImageInputs) return plan;
+  return {
+    ...plan,
+    assignments: plan.assignments.filter((assignment) => assignment.role !== "vision"),
+    fallbacks: plan.fallbacks.filter((assignment) => assignment.role !== "vision")
+  };
 }
 
 function canRunShell(config: TomorrowEdgeConfig, shellRuns: number, ledger: EventLedger): boolean {

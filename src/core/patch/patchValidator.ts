@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadConfig } from "../../config/configLoader.js";
 import { classifyFileRisk } from "../../safety/fileRisk.js";
 import { createIgnoreMatcher, normalizePath } from "../../safety/ignoreRules.js";
+import { log } from "../../utils/logger.js";
 import { parseUnifiedDiff } from "./patchParser.js";
 
 export type PatchValidationIssue = {
@@ -79,10 +80,14 @@ function isPathTraversal(cwd: string, relativePath: string): boolean {
     try {
       const realResolved = realpathSync(resolved);
       return realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep);
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        log("warn", `Patch path realpath fallback for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
       return false;
     }
-  } catch {
+  } catch (error) {
+    log("warn", `Patch traversal check failed closed for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
     return true;
   }
 }

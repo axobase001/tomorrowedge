@@ -303,6 +303,7 @@ export type BudgetDecisionEvent = BaseEvent & {
   type: "budget_decision";
   status: "allowed" | "blocked" | "warn";
   reason: string;
+  budgetScope?: "global_strong_pool" | "per_role" | "efficient";
   maxCostUsd?: number;
   estimatedCostUsd?: number;
   strongAgentCallsUsed?: number;

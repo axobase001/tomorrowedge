@@ -22,6 +22,17 @@ export class MockProvider implements ModelProvider {
         }
       };
     }
+    if (req.metadata?.tomorrowedgeTask === "planner_plan") {
+      return {
+        id: "mock-planner-plan",
+        model: req.model,
+        content: JSON.stringify(createMockPlannerPlan(last)),
+        usage: {
+          inputTokens: estimateTokens(req.messages.map((m) => stringifyContent(m.content)).join("\n")),
+          outputTokens: 120
+        }
+      };
+    }
     return {
       id: "mock-response",
       model: req.model,
@@ -37,6 +48,39 @@ export class MockProvider implements ModelProvider {
       }
     };
   }
+}
+
+function createMockPlannerPlan(text: string) {
+  const lower = text.toLowerCase();
+  const readOnly = /\b(read|list|show|inspect|scan|describe|summarize|tree|structure|directory|folder)\b|璇诲彇|鏌ョ湅|鍒楀嚭|杈撳嚭|鏂囦欢缁撴瀯|鍒嗘瀽/.test(lower);
+  const highRisk = /\b(auth|oauth|payment|billing|secret|credential|database|schema|delete|security)\b/.test(lower);
+  const feature = /\b(add|feature|implement|create|build|support)\b/.test(lower);
+  const refactor = /\b(refactor|migrate|cleanup|rename)\b/.test(lower);
+  const docs = /\b(doc|readme|changelog)\b/.test(lower);
+  const taskType = readOnly ? "analysis" : docs ? "docs" : refactor ? "refactor" : feature ? "feature" : lower.includes("test") ? "test" : lower.includes("fix") || lower.includes("bug") ? "bugfix" : "unknown";
+  const steps = readOnly
+    ? [
+        { id: "understand", title: "Understand read-only request", detail: "Identify the requested evidence and avoid file mutation." },
+        { id: "inspect", title: "Inspect context", detail: "Read the relevant files, folders, or trace artifacts." },
+        { id: "summarize", title: "Summarize findings", detail: "Return concise evidence and caveats." }
+      ]
+    : [
+        { id: "understand", title: "Understand task", detail: "Extract scope, constraints, risks, and expected deliverable." },
+        { id: "explore", title: "Explore repository", detail: "Select the smallest relevant context for implementation." },
+        ...(highRisk ? [{ id: "risk-map", title: "Map risk boundary", detail: "Identify auth, data, secret, destructive, or release-sensitive behavior." }] : []),
+        { id: feature ? "design" : refactor ? "dependency-map" : "propose", title: feature ? "Design implementation path" : refactor ? "Map dependencies" : "Propose candidate patch", detail: feature ? "Choose interfaces, state changes, and verification strategy." : refactor ? "Find callers and compatibility boundaries." : "Generate a scoped candidate patch." },
+        { id: "review", title: "Review candidate", detail: "Evaluate risk and evidence before judge selection." },
+        { id: "verify", title: "Verify", detail: "Run approved checks and gather evidence." }
+      ];
+  return {
+    taskType,
+    riskLevel: highRisk ? "high" : "low",
+    constraints: [],
+    steps,
+    verificationCommands: readOnly || docs ? [] : ["npm test"],
+    debateRecommended: highRisk,
+    reasonForDebate: highRisk ? "Mock planner detected high-risk workflow signals." : undefined
+  };
 }
 
 function classifyMockWorkflowIntent(text: string) {

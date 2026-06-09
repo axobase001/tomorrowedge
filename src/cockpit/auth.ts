@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
+import { log } from "../utils/logger.js";
 
 export function isAuthorizedCockpitRequest(request: IncomingMessage, url: URL, nonce: string): boolean {
   const provided = request.headers["x-tomorrowedge-token"] ?? request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? url.searchParams.get("nonce") ?? "";
@@ -20,7 +21,8 @@ export function isAllowedBrowserOrigin(request: IncomingMessage): boolean {
   try {
     const parsed = new URL(origin);
     return parsed.host === host && (parsed.protocol === "http:" || parsed.protocol === "https:");
-  } catch {
+  } catch (error) {
+    log("warn", `Invalid cockpit Origin header ignored: ${error instanceof Error ? error.message : String(error)}`);
     return false;
   }
 }

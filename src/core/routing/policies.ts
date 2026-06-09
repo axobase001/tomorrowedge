@@ -1,5 +1,6 @@
 import type { RoutingMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { Plan } from "../../schemas/plan.js";
 import { isExternalProvider } from "../externalAgents/externalAgentRouter.js";
 import { editableDefaultProfiles, type ModelProfile } from "./modelProfiles.js";
 
@@ -25,6 +26,17 @@ export type AgentRouteOverride = {
 
 export type AgentRouteOverrides = Partial<Record<AgentRole, AgentRouteOverride>>;
 
+export type PostPlanRoutingContext = {
+  hasImageInputs?: boolean;
+};
+
+export type RoutingPlanChange = {
+  role: AgentRole;
+  from: RouteAssignment;
+  to: RouteAssignment;
+  reason: string;
+};
+
 export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = editableDefaultProfiles, overrides: AgentRouteOverrides = {}): RoutingPlan {
   const roles: AgentRole[] = coreRoleRequested(overrides) ? ["core", ...defaultRoutingRoles()] : defaultRoutingRoles();
   const assignments = roles.map((role) => applyOverride(assignRole(role, mode, profiles), mode, profiles, overrides[role]));
@@ -34,6 +46,48 @@ export function buildRoutingPlan(mode: RoutingMode, profiles: ModelProfile[] = e
     assignments,
     fallbacks: assignments.filter((assignment) => assignment.provider !== "mock").map((assignment) => ({ ...assignment, provider: "mock", model: "mock-balanced", reason: "offline fallback" }))
   };
+}
+
+export function rerouteRoutingPlanForPlan(
+  current: RoutingPlan,
+  plan: Plan,
+  mode: RoutingMode,
+  profiles: ModelProfile[] = editableDefaultProfiles,
+  overrides: AgentRouteOverrides = {},
+  context: PostPlanRoutingContext = {}
+): { plan: RoutingPlan; changes: RoutingPlanChange[] } {
+  if (current.privacyLocked) return { plan: current, changes: [] };
+  const highRisk = plan.riskLevel === "high" || plan.debateRecommended;
+  const analysisOnly = plan.taskType === "analysis";
+  const docsOnly = plan.taskType === "docs";
+  const changes: RoutingPlanChange[] = [];
+  const assignments = current.assignments.map((assignment) => {
+    if (assignment.provider === "local_tool" || hasExplicitOverride(overrides[assignment.role])) return assignment;
+    let next = assignment;
+    if (context.hasImageInputs && assignment.role === "vision") {
+      next = pick(assignment.role, profiles, ["vision", "ocr", "perception"], "post-plan reroute: image input requires a perception-capable model");
+    } else if (highRisk && (assignment.role === "reviewer" || assignment.role === "judge")) {
+      next = pick(assignment.role, profiles, ["reasoning", "review"], `post-plan reroute: ${plan.riskLevel}-risk ${plan.taskType} task reserves stronger review/judgment`);
+    } else if (highRisk && assignment.role === "coder_b") {
+      next = pick(assignment.role, profiles, ["coding", "reasoning"], "post-plan reroute: high-risk task keeps an alternate reasoning-capable implementation path");
+    } else if ((analysisOnly || docsOnly) && (assignment.role === "coder_a" || assignment.role === "coder_b" || assignment.role === "repairer")) {
+      next = pick(assignment.role, profiles, ["cheap", "fast"], `post-plan reroute: ${plan.taskType} task can use cost-efficient execution roles`);
+    } else if (plan.taskType === "feature" && assignment.role === "coder_a") {
+      next = pick(assignment.role, profiles, ["coding", "long_context"], "post-plan reroute: feature work prefers coding plus enough context");
+    } else if (plan.taskType === "refactor" && (assignment.role === "explorer" || assignment.role === "coder_a")) {
+      next = pick(assignment.role, profiles, ["long_context", "coding"], "post-plan reroute: refactor work prefers dependency context and coding strength");
+    }
+    if (next.provider !== assignment.provider || next.model !== assignment.model || next.reason !== assignment.reason) {
+      changes.push({ role: assignment.role, from: assignment, to: next, reason: next.reason });
+    }
+    return next;
+  });
+  const nextPlan = {
+    ...current,
+    assignments,
+    fallbacks: assignments.filter((assignment) => assignment.provider !== "mock" && !assignment.provider.startsWith("external:")).map((assignment) => ({ ...assignment, provider: "mock", model: "mock-balanced", reason: "offline fallback" }))
+  };
+  return { plan: nextPlan, changes };
 }
 
 function assignRole(role: AgentRole, mode: RoutingMode, profiles: ModelProfile[]): RouteAssignment {
@@ -90,6 +144,10 @@ function applyOverride(assignment: RouteAssignment, mode: RoutingMode, profiles:
 function normalizeOverride(value?: string): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized !== "auto" ? normalized : undefined;
+}
+
+function hasExplicitOverride(override?: AgentRouteOverride): boolean {
+  return Boolean(normalizeOverride(override?.provider) || normalizeOverride(override?.model));
 }
 
 function isPrivacyLockedMode(mode: RoutingMode): boolean {

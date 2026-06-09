@@ -1,14 +1,21 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import { agentRoles, type AgentRole } from "../../schemas/agentTask.js";
+import type { Plan } from "../../schemas/plan.js";
 import { validateExternalAssignment } from "../externalAgents/externalAgentRouter.js";
-import { profilesFromConfig } from "./modelProfiles.js";
-import { buildRoutingPlan, type AgentRouteOverrides, type RouteAssignment, type RoutingPlan } from "./policies.js";
+import { profilesFromConfig, type ModelProfile } from "./modelProfiles.js";
+import { buildRoutingPlan, rerouteRoutingPlanForPlan, type AgentRouteOverrides, type PostPlanRoutingContext, type RouteAssignment, type RoutingPlan, type RoutingPlanChange } from "./policies.js";
 
 export class ModelRouter {
-  private readonly plan: RoutingPlan;
+  private plan: RoutingPlan;
+  private readonly config: TomorrowEdgeConfig;
+  private readonly profiles: ModelProfile[];
+  private readonly overrides: AgentRouteOverrides;
 
   constructor(config: TomorrowEdgeConfig) {
-    const plan = buildRoutingPlan(config.routing.mode, profilesFromConfig(config), overridesFromConfig(config));
+    this.config = config;
+    this.profiles = profilesFromConfig(config);
+    this.overrides = overridesFromConfig(config);
+    const plan = buildRoutingPlan(config.routing.mode, this.profiles, this.overrides);
     this.plan = {
       ...plan,
       assignments: plan.assignments.map((assignment) => validateExternalAssignment(config, assignment)),
@@ -30,6 +37,16 @@ export class ModelRouter {
 
   fallbackFor(role: AgentRole): RouteAssignment | undefined {
     return this.plan.fallbacks.find((item) => item.role === role);
+  }
+
+  rerouteAfterPlan(plan: Plan, context: PostPlanRoutingContext = {}): RoutingPlanChange[] {
+    const result = rerouteRoutingPlanForPlan(this.plan, plan, this.config.routing.mode, this.profiles, this.overrides, context);
+    this.plan = {
+      ...result.plan,
+      assignments: result.plan.assignments.map((assignment) => validateExternalAssignment(this.config, assignment)),
+      fallbacks: result.plan.fallbacks.filter((assignment) => !assignment.provider.startsWith("external:"))
+    };
+    return result.changes;
   }
 }
 

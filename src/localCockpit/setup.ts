@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
+import { log } from "../utils/logger.js";
 
 export type CockpitProviderReadiness = {
   id: string;
@@ -275,7 +276,10 @@ async function removeLocalEnvValue(cwd: string, key: string): Promise<string | u
   let existing = "";
   try {
     existing = await readFile(envPath, "utf8");
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      log("warn", `Failed to remove local cockpit env key ${key}: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return undefined;
   }
   let removed: string | undefined;
@@ -304,7 +308,10 @@ function readLocalEnvMap(cwd: string): Map<string, string> {
       values.set(match[1]!, unquoteLocalEnvValue(match[2] ?? ""));
     }
     return values;
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      log("warn", `Failed to read local cockpit env file: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return new Map();
   }
 }

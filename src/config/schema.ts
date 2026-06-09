@@ -28,10 +28,17 @@ export const providerConfigSchema = z.object({
 });
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
+export const roleBudgetConfigSchema = z.object({
+  max_cost_per_call_usd: z.number().nonnegative().optional(),
+  max_calls_per_task: z.number().int().nonnegative().optional()
+});
+export type RoleBudgetConfig = z.infer<typeof roleBudgetConfigSchema>;
+
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),
   model: z.string().default("auto"),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  budget: roleBudgetConfigSchema.optional()
 });
 
 export const externalAgentConfigSchema = z.object({

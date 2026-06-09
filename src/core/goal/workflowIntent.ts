@@ -69,7 +69,21 @@ export async function classifyWorkflowIntent(input: {
 }
 
 export function applyWorkflowIntentToPlan(plan: Plan, decision: WorkflowIntentDecision): Plan {
-  if (decision.requiresPatchWorkflow) return plan;
+  if (decision.requiresPatchWorkflow) {
+    if (plan.taskType !== "analysis") return plan;
+    return {
+      ...plan,
+      taskType: "unknown",
+      verificationCommands: plan.verificationCommands?.length ? plan.verificationCommands : ["npm test"],
+      steps: [
+        { id: "understand", title: "Understand task", detail: "Use intent routing to preserve the requested patch workflow.", status: "done" },
+        { id: "explore", title: "Explore repository", detail: "Find the smallest relevant context.", status: "pending" },
+        { id: "propose", title: "Propose candidate patch", detail: "Generate one or more patch candidates.", status: "pending" },
+        { id: "review", title: "Review candidate", detail: "Evaluate patch risk and evidence before judge selection.", status: "pending" },
+        { id: "verify", title: "Verify", detail: "Run approved checks and gather evidence.", status: "pending" }
+      ]
+    };
+  }
   return {
     ...plan,
     taskType: "analysis",

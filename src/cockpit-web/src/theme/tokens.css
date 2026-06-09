@@ -456,6 +456,14 @@ input, textarea, select {
   gap: 12px;
   margin-bottom: 10px;
 }
+.te-keymgr-header {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  padding: 16px 0 10px;
+  background: var(--te-surface);
+  border-bottom: 1px solid var(--te-border);
+}
 .te-setup-card h2,
 .te-keymgr-card h2 {
   margin: 8px 0 0;
