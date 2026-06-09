@@ -1,4 +1,6 @@
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { RiskLevel } from "../../schemas/plan.js";
+import type { EventPhase } from "../events/eventTypes.js";
 import type { WorkflowKind } from "./workflowKind.js";
 
 export type StopCondition =
@@ -27,20 +29,36 @@ export type RoleGraph = {
   stopConditions: StopCondition[];
 };
 
-export function buildRoleGraph(input: { workflowKind: WorkflowKind; highRisk?: boolean; debate?: boolean; repairLoop?: boolean }): RoleGraph {
-  if (input.repairLoop) return repairLoopGraph();
-  if (input.workflowKind === "read_only" || input.workflowKind === "advisory") return readOnlyGraph(input.workflowKind, Boolean(input.highRisk || input.debate));
-  if (input.highRisk) return patchGraph("high_risk_patch", true, true);
-  if (input.debate) return patchGraph("debate_patch", false, true);
-  if (input.workflowKind === "vision_patch") return patchGraph("vision_patch", false, false);
+export type BuildRoleGraphInput = {
+  workflowKind: WorkflowKind;
+  highRisk?: boolean;
+  riskLevel?: RiskLevel;
+  debate?: boolean;
+  repairLoop?: boolean;
+  allowedRoles?: AgentRole[];
+  allowedPhases?: EventPhase[];
+};
+
+export function buildRoleGraph(input: BuildRoleGraphInput): RoleGraph {
+  const highRisk = Boolean(input.highRisk || input.riskLevel === "high");
+  let graph: RoleGraph;
+  if (input.repairLoop) return constrainRoleGraph(repairLoopGraph(), input, highRisk);
+  if (input.workflowKind === "read_only" || input.workflowKind === "advisory") {
+    graph = readOnlyGraph(input.workflowKind, Boolean(highRisk || input.debate));
+    return constrainRoleGraph(graph, input, highRisk);
+  }
+  if (highRisk) return constrainRoleGraph(patchGraph("high_risk_patch", true, true), input, highRisk);
+  if (input.debate) return constrainRoleGraph(patchGraph("debate_patch", false, true), input, highRisk);
+  if (input.workflowKind === "vision_patch") return constrainRoleGraph(patchGraph("vision_patch", false, false), input, highRisk);
   if (input.workflowKind === "ask_user") {
-    return {
+    graph = {
       workflowKind: "ask_user",
       nodes: [node("planner", [], { required: true, produces: ["clarifying_question"] })],
       stopConditions: ["budget_blocked_without_fallback"]
     };
+    return constrainRoleGraph(graph, input, highRisk);
   }
-  return patchGraph("patch", false, false);
+  return constrainRoleGraph(patchGraph("patch", false, false), input, highRisk);
 }
 
 export function optionalNodeCanSkip(graph: RoleGraph, nodeId: string): boolean {
@@ -112,4 +130,75 @@ function node(role: AgentRole, dependencies: string[], overrides: Partial<RoleNo
     produces: overrides.produces ?? [],
     consumes: overrides.consumes ?? []
   };
+}
+
+function constrainRoleGraph(graph: RoleGraph, input: BuildRoleGraphInput, highRisk: boolean): RoleGraph {
+  const readOnly = input.workflowKind === "read_only" || input.workflowKind === "advisory" || input.workflowKind === "ask_user";
+  const allowedRoles = input.allowedRoles ? new Set(input.allowedRoles) : undefined;
+  if (highRisk) {
+    allowedRoles?.add("reviewer");
+    allowedRoles?.add("judge");
+  }
+  if (readOnly) {
+    for (const role of ["coder_a", "coder_b", "runner", "repairer"] as AgentRole[]) allowedRoles?.delete(role);
+  }
+
+  let nodes = graph.nodes.filter((item) => {
+    if (readOnly && ["coder_a", "coder_b", "runner", "repairer"].includes(item.role)) return false;
+    if (allowedRoles && !allowedRoles.has(item.role)) return false;
+    return phaseAllowedForRole(item.role, input.allowedPhases, highRisk);
+  });
+
+  if (highRisk) {
+    nodes = ensureGovernanceNodes(nodes, graph.workflowKind);
+  }
+
+  const nodeIds = new Set(nodes.map((item) => item.id));
+  nodes = nodes.map((item) => ({
+    ...item,
+    dependencies: item.dependencies.filter((dependency) => nodeIds.has(dependency))
+  }));
+  return { ...graph, nodes };
+}
+
+function ensureGovernanceNodes(nodes: RoleNode[], workflowKind: RoleGraph["workflowKind"]): RoleNode[] {
+  const next = [...nodes];
+  if (!next.some((item) => item.role === "reviewer")) {
+    next.push(node("reviewer", dependencyIfPresent(next, workflowKind === "read_only" || workflowKind === "advisory" ? "explorer" : "coder_a"), {
+      required: true,
+      produces: ["review_evidence"],
+      consumes: ["plan", "context", "patch_candidate", "patch_evidence"]
+    }));
+  }
+  if (!next.some((item) => item.role === "judge")) {
+    next.push(node("judge", dependencyIfPresent(next, "reviewer"), {
+      required: true,
+      produces: ["judge_decision"],
+      consumes: ["plan", "context", "review_evidence"]
+    }));
+  }
+  return next;
+}
+
+function dependencyIfPresent(nodes: RoleNode[], roleOrId: string): string[] {
+  return nodes.some((item) => item.id === roleOrId || item.role === roleOrId) ? [roleOrId] : [];
+}
+
+function phaseAllowedForRole(role: AgentRole, allowedPhases: EventPhase[] | undefined, highRisk: boolean): boolean {
+  if (!allowedPhases) return true;
+  if (highRisk && (role === "reviewer" || role === "judge")) return true;
+  const phases = phasesForRole(role);
+  return phases.some((phase) => allowedPhases.includes(phase));
+}
+
+function phasesForRole(role: AgentRole): EventPhase[] {
+  if (role === "core" || role === "planner") return ["planning", "routing"];
+  if (role === "vision") return ["vision"];
+  if (role === "explorer") return ["exploration"];
+  if (role === "coder_a" || role === "coder_b") return ["coding"];
+  if (role === "reviewer") return ["review"];
+  if (role === "judge") return ["judge"];
+  if (role === "runner") return ["patch", "shell", "verification"];
+  if (role === "repairer") return ["repair"];
+  return ["summary"];
 }

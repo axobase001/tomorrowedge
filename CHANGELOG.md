@@ -7,6 +7,25 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-06-10
+
+1.3.1 hardens the 1.3 self-iterating orchestration release by moving
+Orchestration Policy Genome from documentation and trace metadata into the
+runtime decision path.
+
+### Changed
+
+- Orchestration Policy Genome now affects runtime contract depth, plan-step
+  evidence binding, role routing explanations, verification/trace strictness,
+  repair budgets, stop decisions, and tool gates instead of only being recorded
+  as metadata.
+- Policy evolution now scores policy fields over multiple objective traces, so
+  variants with different contract depth, verification strictness, repair, and
+  stop policies can receive different fitness.
+- Failed Objective Contracts now hard-stop before planning, patch, shell, or
+  repair execution, and contract `allowedTools` / `forbiddenActions` gate patch
+  application, file writes, and shell runs.
+
 ## [1.3.0] - 2026-06-10
 
 1.3.0 introduces the contract-first self-iterating orchestration layer:

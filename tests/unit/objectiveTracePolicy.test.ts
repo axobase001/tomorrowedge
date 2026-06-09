@@ -6,6 +6,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { generateNativeObjectiveContract } from "../../src/core/contracts/contractGenerator.js";
 import { verifyAndRepairContract } from "../../src/core/contracts/contractVerifier.js";
 import { evolvePoliciesOffline } from "../../src/core/orchestrationPolicy/policyEvolution.js";
+import { evaluatePolicyFitness } from "../../src/core/orchestrationPolicy/policyEvaluator.js";
 import { loadBestPolicy, savePolicyScore } from "../../src/core/orchestrationPolicy/policyStore.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
 import { classifyWorkflowIntentLocally, type WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
@@ -52,6 +53,41 @@ describe("objective trace memory and policy evolution", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("scores different policy variants differently over the same trace set", () => {
+    const base = defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z");
+    const strictQuality = {
+      ...base,
+      policyId: "strict_quality",
+      contractPolicy: { ...base.contractPolicy, contractDepth: "strict" as const },
+      routingPolicy: { ...base.routingPolicy, routingPreference: "quality" as const, reviewerThreshold: "low" as const, judgeThreshold: "medium" as const },
+      verificationPolicy: { ...base.verificationPolicy, verificationStrictness: "strict" as const },
+      stopPolicy: { ...base.stopPolicy, stopMode: "evidence_strict" as const, allowPartialCompletion: false }
+    };
+    const lightCheap = {
+      ...base,
+      policyId: "light_cheap",
+      contractPolicy: { ...base.contractPolicy, contractDepth: "light" as const, requireEvidence: false },
+      routingPolicy: { ...base.routingPolicy, routingPreference: "cheap" as const, reviewerThreshold: "high" as const, judgeThreshold: "high" as const },
+      verificationPolicy: { ...base.verificationPolicy, verificationStrictness: "light" as const, requireEvidencePacket: false },
+      stopPolicy: { ...base.stopPolicy, stopMode: "early" as const, allowPartialCompletion: true }
+    };
+    const successTrace = makeTrace("fix failing test", "success");
+    const partialTrace = makeTrace("fix failing test", "partial");
+
+    const strictFitness = evaluatePolicyFitness(strictQuality, successTrace).finalFitness;
+    const cheapFitness = evaluatePolicyFitness(lightCheap, successTrace).finalFitness;
+    const evolved = evolvePoliciesOffline({
+      basePolicy: strictQuality,
+      traces: [successTrace, partialTrace],
+      maxPolicyVariants: 4,
+      eliteRetention: 2
+    });
+
+    expect(strictFitness).not.toBe(cheapFitness);
+    expect(new Set(evolved.scored.map((item) => item.fitness.finalFitness)).size).toBeGreaterThan(1);
+    expect(evolved.scored.every((item) => item.fitness.policyAlignmentScore !== undefined)).toBe(true);
   });
 });
 

@@ -4,6 +4,8 @@
 
 **中文** | [English](#english)
 
+> **新版定义：** 明日边缘是一个 **面向用户场景的自迭代 Agent 编排层 GUI/runtime**。它以多模型强治理、多 Agent 工作流编排和本地 GUI cockpit 为底座，并在 1.3 引入 **Objective Contract、objective-action-feedback trace 与 Orchestration Policy Genome**。核心创新不是让某个模型更强，而是把 **编排策略本身** 变成可审计、可评分、可离线改进的运行时对象。
+
 明日边缘是一个 **基于多模型的强模型治理与多 Agent 工作流编排的编排层 GUI 工具**。
 
 它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents 和人类授权组织成一个可监督、可审计、可回滚的软件工程工作流。
@@ -39,14 +41,18 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 | Codex / Claude Code | 给强 agent 完整工具权限 | 治理强 agent 的调用位置、预算、证据、审查和最终交付 |
 | OpenRouter | 路由模型请求 | 路由角色、能力、预算和工程工作流 |
 | LangGraph / CrewAI / AutoGen | 构建 agent framework | 把 native workflow 和现有 agent framework 纳入同一个可视化 cockpit |
+| Prompt / workflow optimization tools | 优化 prompt、固定 workflow 或 benchmark 分数 | 把 **编排策略本身** 作为进化单位：目标契约生成、规划、路由、验证、修复、停止和 trace 检索都可被审计、评分和离线改进 |
 | 普通 GUI wrapper | 显示聊天和输出 | 显示路由理由、成本、风险、diff、测试、fallback、审批、trace 和 artifact |
 
-一句话：**OpenRouter routes requests. TomorrowEdge routes capabilities, roles, budgets, and engineering delivery.**
+一句话：**OpenRouter 路由请求；TomorrowEdge 路由目标、能力、角色、工具、预算、证据和工程交付。**
+
+In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, and engineering delivery.**
 
 ## 当前版本
 
-当前版本：`1.3.0`。
+当前版本：`1.3.1`。
 
+- `1.3.1` integrates the Orchestration Policy Genome into the runtime path: policy fields now affect contract depth, plan-step evidence binding, role routing, verification strictness, repair limits, stop decisions, and contract tool/action gates.
 - `1.3.0` introduces the contract-first self-iterating orchestration layer: Objective Contracts before planning, objective-action-feedback trace memory after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI inspection surfaces for contract, trace, and policy state.
 - `1.2.15` releases the failure-memory/error-loop upgrade: retrieval policy now supports balanced exploit, forced exploit, forced exploration, and deterministic random control; failure lessons store scoped correction rules and verification status; error-loop experiments export falsifiable hypothesis metrics; and ablation runs can compare memory-off, write-only, retrieve-only, success-only, failure-only, and random-control modes.
 - `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, model discovery now refreshes common non-OpenRouter providers, provider tests smoke-test the selected model, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, local cockpit URLs no longer expose nonce tokens in the address bar, strong-agent role budgets now also debit the global strong-agent pool, parallel candidate state is normalized before review, document-only deliverables avoid irrelevant repository test runs, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
@@ -91,19 +97,45 @@ authoritative stable / experimental / placeholder / planned table.
 README GUI, desktop, and release-package promises are tracked in
 [README Promise Map](docs/README_PROMISE_MAP.md).
 
-## Self-Iterating Orchestration Layer
+## Self-Iterating Agent Orchestration Layer
 
-TomorrowEdge now includes a contract-first, trace-guided orchestration layer.
-Before a workflow plans or edits, it creates an **Objective Contract**: the
-local objective, workflow kind, success/failure criteria, required evidence,
-allowed tools, forbidden actions, budget bounds, and stop conditions. Planner
-output can add detail, but it cannot relax the contract.
+TomorrowEdge 1.3 introduces a **contract-first, trace-shaped, evolution-inspired orchestration layer**.
 
-After a run, TomorrowEdge writes an **objective-action-feedback trace**: a
-compact learning record over the full event ledger. Future runs can retrieve
-similar traces and reuse lessons without sending full logs, diffs, or shell
-output back to a model. Policy evolution is deliberately offline: it mutates
-only safe orchestration knobs and scores variants against stored traces.
+Most agents jump directly from user instruction to planning and tool calls. TomorrowEdge inserts a verifiable **Objective Contract** before planning. The contract defines:
+
+- what the local objective is;
+- what success and failure mean;
+- what evidence is required;
+- which tools, roles, and actions are allowed;
+- which actions are forbidden;
+- what budget and risk bounds apply;
+- when the system should continue, repair, downgrade, ask the user, or stop.
+
+Planner output can add operational detail, but it cannot relax the contract.
+
+After each run, TomorrowEdge writes an **objective-action-feedback trace**: a compact learning record over the full event ledger, including the objective contract, plan, role graph, tool calls, observations, evidence packets, verification result, repair outcome, cost, failure type, and user feedback signals. Future runs can retrieve similar traces and reuse lessons without sending full logs, diffs, or shell output back to a model.
+
+### Core innovation: Orchestration Policy Genome
+
+Inspired by evolutionary algorithms, **TomorrowEdge makes orchestration policy the unit of evolution.**
+
+The system does not evolve model weights, raw prompts, or individual answers. It evolves bounded runtime policies that decide:
+
+- how objective contracts are generated;
+- how plans are derived;
+- how models, roles, tools, and external agents are routed;
+- how evidence is verified;
+- how failures are repaired;
+- how traces are retrieved;
+- when a run should stop, downgrade, or ask the user.
+
+Each policy genome can be scored against objective-action-feedback traces. Successful, evidence-complete, low-risk, cost-efficient runs increase policy fitness; risky, incomplete, unstable, or expensive runs reduce it. Policy evolution is deliberately offline and bounded: it mutates only safe orchestration knobs, never the safety boundary itself.
+
+In plain terms: the unit of evolution is not answer, prompt, or agent; it is orchestration policy.
+
+> The unit of evolution is not the answer, the prompt, or the agent. It is the orchestration policy.
+>
+> This is not just memory. It is experience-shaped orchestration.
 
 ```bash
 tedge contract inspect latest
@@ -210,6 +242,10 @@ tedge desktop --runtime electron
 
 ## 核心能力
 
+- 目标契约优先：每次 run 在 planning / editing 前生成 Objective Contract，明确 local objective、success criteria、required evidence、allowed tools、forbidden actions、budget bounds 和 stop conditions
+- 自迭代编排层：每次执行都会写入 objective-action-feedback trace，让后续任务可以复用相似场景下的成功经验、失败教训和验证策略
+- 编排策略基因组：将 contract generation、planning、routing、verification、repair、stop 和 trace retrieval 抽象为可评分、可选择、可离线变异的 Orchestration Policy Genome
+- 进化算法启发的离线改进：不修改模型权重，不放宽安全边界，只在可审计的 orchestration policy 层基于 trace fitness 做离线评估和改进
 - 强模型治理：把昂贵/强推理 agent 保留给 planner、reviewer、judge、失败升级和安全敏感变更
 - 预算约束路由：按角色、风险、能力、上下文长度、延迟、隐私和成本选择模型，而不是盲目调用最贵模型
 - 多 Agent 工作流编排：Planner、Explorer、Coder-A/B、Reviewer、Judge、Runner、Repairer、Summarizer 等角色协同完成工程任务
@@ -473,23 +509,23 @@ vision roles.
 
 ## English
 
-TomorrowEdge is a **GUI orchestration layer for multi-model strong-agent governance and multi-agent coding workflows**.
+TomorrowEdge is not another coding agent. It is a **contract-first, multi-model, multi-agent orchestration GUI/runtime for user-facing software engineering workflows**.
 
-It sits between model APIs, external coding agents, and real repositories. It is not trying to make one model win. It organizes strong models, cost-efficient models, local models, external agents, and human authorization into a supervised, auditable, reversible engineering workflow.
+It sits between model APIs, external coding agents, and real repositories. It is not trying to make one model win. It organizes strong models, cost-efficient models, local models, external agents, human authorization, objective contracts, evidence verification, and execution feedback into a supervised, auditable, replayable, self-improving engineering runtime.
 
-TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks.
+TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks, plus an evolution-inspired orchestration layer that learns which policies should define objectives, route roles, verify evidence, repair failures, and stop safely.
 
 ```text
 Full autonomy, full visibility.
 ```
 
-The core problem in AI coding is no longer simply that models are not strong enough. The harder problem is orchestration: context selection, role assignment, budget discipline, risk review, repair loops, evidence capture, and human authorization. A single full-access agent can be powerful, but it can also become a black box: why this file, why this command, why this patch, why this strong-model call?
+The core problem in AI coding is no longer simply that models are not strong enough. The harder problem is orchestration that is governed and improved as runtime policy: context selection, role assignment, budget discipline, risk review, repair loops, evidence capture, human authorization, and a clear definition of what it means for the task to be done correctly. A single full-access agent can be powerful, but it can also become a black box: why this file, why this command, why this patch, why this strong-model call?
 
-TomorrowEdge is the orchestration layer for that problem: **strong models decide, efficient models execute, local models protect privacy, and humans authorize the actions that matter.**
+TomorrowEdge is the orchestration layer for that problem: **strong models decide, efficient models execute, local models protect privacy, humans authorize the actions that matter, Objective Contracts define task boundaries, objective-action-feedback traces preserve execution experience, and Orchestration Policy Genomes improve orchestration inside immutable safety boundaries.**
 
 Full mode is autonomous execution with complete workspace tool access. TomorrowEdge will apply patches, run shell commands, execute repair loops, and continue iterating without per-step confirmation.
 
-The difference from black-box full-access agents is governance and visibility: every model call, context selection, routing reason, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the local GUI client and saved to a replayable event ledger.
+The difference from black-box full-access agents is governance, visibility, and self-iteration: every model call, context selection, routing reason, objective contract, patch, command, review, judge decision, fallback, cost update, verification result, and policy feedback signal is rendered in the local GUI client and saved to a replayable event ledger.
 
 ## Why It Exists
 
@@ -507,15 +543,21 @@ OpenRouter solves "how to call multiple models"; TomorrowEdge solves "how to mak
 | --- | --- | --- |
 | Single-model coding CLI | Let one model directly read and write code | Split work into planner / coder / reviewer / judge / repairer roles and route each role to the right model |
 | Codex / Claude Code | Give a strong agent full tool access | Govern where strong agents are used, how much budget they consume, what evidence they produce, and how delivery is reviewed |
-| OpenRouter | Route model requests | Route roles, capabilities, budgets, and engineering workflows |
+| OpenRouter | Route model requests | Route objectives, roles, capabilities, tools, budgets, evidence, and engineering workflows |
 | LangGraph / CrewAI / AutoGen | Build agent frameworks | Put native workflows and existing agent frameworks under one visible cockpit |
+| Prompt / workflow optimization tools | Optimize prompts, fixed workflows, or benchmark scores | Make **orchestration policy itself** the evolvable unit: objective contracts, planning, routing, verification, repair, stop conditions, and trace retrieval can be audited, scored, and improved offline |
 | Generic GUI wrapper | Display chat and output | Display routing reasons, cost, risk, diff, tests, fallback, approvals, trace, and artifacts |
 
-In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, roles, budgets, and engineering delivery.**
+In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, and engineering delivery.**
 
 ## Current Version
 
-Current version: `1.3.0`.
+Current version: `1.3.1`.
+
+`1.3.1` integrates the Orchestration Policy Genome into the runtime path:
+policy fields now affect contract depth, plan-step evidence binding, role
+routing, verification strictness, repair limits, stop decisions, and contract
+tool/action gates.
 
 `1.3.0` introduces the contract-first self-iterating orchestration layer:
 Objective Contracts before planning, objective-action-feedback trace memory
@@ -800,6 +842,10 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 
 ## Core Features
 
+- Objective Contracts before planning: every serious workflow can define success criteria, required evidence, allowed tools, forbidden actions, and stop conditions before agents touch the repo
+- Self-iterating orchestration layer: objective-action-feedback traces turn completed workflows into reusable execution experience
+- Orchestration Policy Genome: contract depth, planning style, routing preference, verification strictness, repair limits, stop policy, and trace retrieval become explicit runtime policy fields
+- Evolutionary-algorithm-inspired policy improvement: offline variants can be scored against trace fitness, while safety boundaries stay immutable and cannot be mutated
 - Strong-agent governance: reserve expensive / strong-reasoning agents for planning, review, judgment, failed-repair escalation, and security-sensitive changes
 - Budget-constrained routing: choose models by role, risk, capability, context length, latency, privacy, and cost instead of blindly calling the strongest model
 - Multi-agent workflow orchestration: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer, and optional Core roles

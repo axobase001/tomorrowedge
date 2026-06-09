@@ -241,13 +241,16 @@ function allowedPhasesFor(workflowKind: WorkflowKind): EventPhase[] {
 function allowedRolesFor(suggested: AgentRole[], workflowKind: WorkflowKind, riskLevel: RiskLevel): AgentRole[] {
   const roles = new Set<AgentRole>(suggested);
   roles.add("planner");
+  roles.add("explorer");
   roles.add("summarizer");
   if (workflowKind === "patch" || workflowKind === "vision_patch" || workflowKind === "repair") {
     roles.add("explorer");
     roles.add("coder_a");
+    roles.add("coder_b");
     roles.add("reviewer");
     roles.add("judge");
     roles.add("runner");
+    roles.add("repairer");
   }
   if (riskLevel === "high") {
     roles.add("reviewer");

@@ -5,6 +5,8 @@ import os from "node:os";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { clearContextCaches } from "../../src/core/context/contextCache.js";
+import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
+import { savePolicyScore } from "../../src/core/orchestrationPolicy/policyStore.js";
 
 describe("offline agent graph", () => {
   const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
@@ -80,6 +82,35 @@ describe("offline agent graph", () => {
     ]));
   });
 
+  it("applies selected policy genome fields inside the runtime contract and role graph", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-runtime-policy-"));
+    await cp(source, cwd, { recursive: true });
+    const policy = {
+      ...defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z"),
+      policyId: "runtime_strict_quality",
+      contractPolicy: { ...defaultOrchestrationPolicy().contractPolicy, contractDepth: "strict" as const, successCriteriaCount: 5 },
+      planningPolicy: { ...defaultOrchestrationPolicy().planningPolicy, maxStepsMode: "conservative" as const, requirePlanStepEvidenceBinding: true },
+      routingPolicy: { ...defaultOrchestrationPolicy().routingPolicy, routingPreference: "quality" as const, reviewerThreshold: "low" as const, judgeThreshold: "medium" as const },
+      verificationPolicy: { ...defaultOrchestrationPolicy().verificationPolicy, verificationStrictness: "strict" as const },
+      stopPolicy: { ...defaultOrchestrationPolicy().stopPolicy, stopMode: "evidence_strict" as const },
+      metadata: { ...defaultOrchestrationPolicy().metadata, source: "selected" as const, fitness: 999, scenarioType: "debugging" as const }
+    };
+    await savePolicyScore(cwd, policy);
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+
+      expect(state.orchestrationPolicy?.policyId).toBe("runtime_strict_quality");
+      expect(state.objectiveContract?.requiredEvidence).toEqual(expect.arrayContaining(["trace completeness", "objective-action-feedback trace"]));
+      expect(state.plan?.steps.length).toBeLessThanOrEqual(6);
+      expect(state.plan?.steps.map((step) => step.detail).join("\n")).toContain("Evidence binding:");
+      expect(state.roleGraph?.nodes.map((node) => node.role)).toEqual(expect.arrayContaining(["reviewer", "judge"]));
+      expect(state.events.some((event) => event.type === "routing_decision" && event.policyTags.includes("policy:quality"))).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("starts alternative coder candidates in the same candidate-production stage", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
@@ -142,6 +173,7 @@ describe("offline agent graph", () => {
       expect(eventTypes).not.toContain("review_decision");
       expect(eventTypes).not.toContain("judge_decision");
       expect(eventTypes).not.toContain("patch_apply");
+      expect(eventTypes).not.toContain("shell_run");
       expect(state.events.find((event) => event.type === "workflow_stop_reason")).toMatchObject({
         reason: "read-only request completed without patch workflow"
       });

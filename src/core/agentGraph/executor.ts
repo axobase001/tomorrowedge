@@ -86,6 +86,27 @@ import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome, type SelfIt
 import { loadBestPolicy, savePolicyScore } from "../orchestrationPolicy/policyStore.js";
 import { evaluatePolicyFitness, policyWithFitness } from "../orchestrationPolicy/policyEvaluator.js";
 import { evolvePoliciesOffline } from "../orchestrationPolicy/policyEvolution.js";
+import {
+  applyPolicyToContract,
+  contractPhaseAllowed,
+  contractRoleAllowed,
+  contractToolGate,
+  contractVerificationBlocksExecution,
+  effectiveMaxRepairRounds,
+  effectiveMaxShellRuns,
+  policyAllowsPartialCompletion,
+  policyBudgetEstimate,
+  policyEscalationSignals,
+  policyRouteTag,
+  policyStopMode,
+  requiredEvidenceThreshold,
+  shouldPolicyRequireJudge,
+  shouldPolicyRequireReviewer,
+  shouldRetryFailedVerification,
+  shouldRetryMissingEvidence,
+  shouldStopOnRecurringFailure,
+  traceCompletenessThreshold
+} from "../orchestrationPolicy/runtimePolicy.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -131,6 +152,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   await runExternalCorePhase(runtime, state);
   await runVisionPhase(runtime, state);
   await runContractPhase(runtime, state, workflowIntent);
+  if (contractVerificationBlocksExecution(state.contractVerification)) {
+    return finalizeBlockedByContract(runtime, state, "Objective contract verification failed; execution blocked before planning, patch, shell, or repair.");
+  }
   await runPlanningPhase(runtime, state, workflowIntent);
   await runExplorationPhase(runtime, state);
   if (isReadOnlyPlan(state.plan!)) {
@@ -319,7 +343,7 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     })), null, 2), "json")
   });
 
-  const generated = generateNativeObjectiveContract({
+  const generatedBaseline = generateNativeObjectiveContract({
     goal,
     workflowIntent,
     scenarioProfile,
@@ -327,11 +351,13 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     config,
     accessMode: access.mode
   });
+  const generated = applyPolicyToContract(generatedBaseline, policy);
   const { contract, verification } = verifyAndRepairContract(generated, {
     accessMode: access.mode,
     workflowIntent,
     scenarioProfile,
-    config
+    config,
+    baseline: generatedBaseline
   });
   state.objectiveContract = contract;
   state.contractVerification = verification;
@@ -472,7 +498,8 @@ async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphSta
 async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
   const { access, config, cwd, externalAgents, goal, imagePaths, ledger, options, router, conversationTarget } = runtime;
   const planner = new PlannerAgent();
-  const contractPlan = state.objectiveContract ? contractToPlan(state.objectiveContract) : undefined;
+  const policy = state.orchestrationPolicy;
+  const contractPlan = state.objectiveContract ? contractToPlan(state.objectiveContract, policy) : undefined;
   const contractPrompt = state.objectiveContract
     ? [
         "Objective Contract:",
@@ -510,12 +537,12 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     budgetFallback: () => planner.run({ goal: plannerGoal }),
     budgetFallbackLabel: "native planner"
   } : "offline");
-  state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract) : state.plan ?? contractPlan;
+  state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract, policy) : state.plan ?? contractPlan;
   if (!externalPlanner && !planFromExternalCore && !cachedPlan && state.plan && workflowIntent.requiresPatchWorkflow) {
     const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
     if (modelPlan.plan) {
       state.plan = state.objectiveContract
-        ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints]) }, state.objectiveContract)
+        ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints]) }, state.objectiveContract, policy)
         : {
             ...modelPlan.plan,
             constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints])
@@ -541,7 +568,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
-  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract);
+  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract, policy);
   state.taskGovernance = await classifyTaskGovernance({ goal, plan: state.plan, workflowIntent, config, router, ledger, localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed });
   ledger.append({
     type: "task_governance",
@@ -557,7 +584,8 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     fallbackUsed: state.taskGovernance.fallbackUsed
   });
   state.plan = applyTaskGovernanceToPlan(state.plan, state.taskGovernance);
-  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract);
+  state.plan = applyPolicyGovernanceToPlan(state.plan, policy);
+  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract, policy);
   if (!externalPlanner) {
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
@@ -566,7 +594,14 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   const plan = state.plan;
   if (!plan) throw new Error("Planning phase completed without a plan.");
   state.workflowKind = workflowKindFromPlan(plan);
-  state.roleGraph = buildRoleGraph({ workflowKind: state.workflowKind, highRisk: plan.riskLevel === "high", debate: Boolean(plan.debateRecommended || config.debate.enabled) });
+  state.roleGraph = buildRoleGraph({
+    workflowKind: state.workflowKind,
+    riskLevel: plan.riskLevel,
+    highRisk: plan.riskLevel === "high",
+    debate: Boolean(plan.debateRecommended || config.debate.enabled),
+    allowedRoles: state.objectiveContract?.allowedRoles,
+    allowedPhases: state.objectiveContract?.allowedPhases
+  });
   const rerouteChanges = router.rerouteAfterPlan(plan, { hasImageInputs: imagePaths.length > 0 });
   if (rerouteChanges.length) {
     state.routing = routingForState(router, imagePaths.length > 0);
@@ -849,6 +884,7 @@ async function runLiveAdvisoryPhase(runtime: OfflineGraphRuntime, state: AgentGr
 
 async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { access, cwd, ledger, options, router } = runtime;
+  if (state.judge?.decision === "select" && state.judge.selectedCandidateId && !contractAllowsPatchMutation(state, ledger, "patch")) return;
   if (options.dryRun && state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     const diffRef = selected?.unifiedDiff ? ledger.writeArtifact("diffs", selected.unifiedDiff) : undefined;
@@ -918,7 +954,8 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
     try {
       for (const testCommand of testCommands) {
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
-        if (!canRunShell(config, shellRuns, ledger)) return;
+        if (!contractAllowsShell(state, ledger)) return;
+        if (!canRunShell(config, state, shellRuns, ledger)) return;
         shellRuns += 1;
         const shellPrediction = recordShellPrediction(ledger, testCommand, state.repairCandidates.length ? "Validate the repaired patch." : "Validate the selected patch.");
         const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
@@ -929,9 +966,17 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         if (result.success) continue;
         const repairPolicy = recordRepairPolicyDecision(state, ledger, result, failureOccurrences);
         if (!options.repairOnFail) break;
+        if (!shouldRetryFailedVerification(state.orchestrationPolicy)) {
+          ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: "Orchestration policy disables retryOnFailedVerification." });
+          break;
+        }
+        if (!shouldRetryMissingEvidence(state.orchestrationPolicy) && state.evidencePackets.length === 0) {
+          ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: "Orchestration policy disables retryOnMissingEvidence and no evidence packet is available." });
+          break;
+        }
         if (!allowsPatchRepair(repairPolicy)) break;
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return;
-        if (!canAttemptRepair(config, repairAttempts, ledger)) return;
+        if (!canAttemptRepair(config, state, repairAttempts, ledger)) return;
         repairAttempts += 1;
         const repairer = new RepairerAgent();
         const externalRepairer = externalProfileForRole(router, externalAgents, "repairer");
@@ -962,13 +1007,15 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         const repairPrediction = recordPatchApplicationPrediction(ledger, repairCandidate, "repair", access.repairAllowed && access.repairApproved, "Repair candidate should update the files implicated by the failed verifier.");
         ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
         if (repairCandidate.unifiedDiff) {
+          if (!contractAllowsPatchMutation(state, ledger, "repair")) return;
           try {
             const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
             recordOutcomeObservation(ledger, repairPrediction, "applied", `${repairApplyResult.changedFiles.length} repair file(s) changed.`);
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
-            if (!canRunShell(config, shellRuns, ledger)) return;
+            if (!contractAllowsShell(state, ledger)) return;
+            if (!canRunShell(config, state, shellRuns, ledger)) return;
             shellRuns += 1;
             const repairedShellPrediction = recordShellPrediction(ledger, testCommand, "Validate the repair candidate after applying it.");
             const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
@@ -1272,6 +1319,37 @@ async function finalizeState(runtime: OfflineGraphRuntime, state: AgentGraphStat
   return state;
 }
 
+async function finalizeBlockedByContract(runtime: OfflineGraphRuntime, state: AgentGraphState, reason: string): Promise<AgentGraphState> {
+  const { ledger } = runtime;
+  state.finalSummary = {
+    task: state.goal,
+    result: "aborted",
+    changedFiles: [],
+    testsRun: [],
+    evidence: [
+      reason,
+      ...(state.contractVerification?.violations ?? []),
+      ...(state.contractVerification?.missing ?? []).map((item) => `Missing contract field: ${item}`)
+    ],
+    risksRemaining: ["unsafe/blocked/advisory: objective contract failed verification, so execution was not started."],
+    suggestedCommitMessage: "chore: no code changes"
+  };
+  ledger.append({
+    type: "agent_run",
+    phase: "planning",
+    role: "planner",
+    provider: "local_tool",
+    model: "contract_gate",
+    agentKind: "offline",
+    status: "blocked",
+    runId: "objective_contract_gate",
+    error: reason
+  });
+  await appendFinalSummaryEvents(state, ledger, runtime);
+  await releaseExternalAgentProcessPool();
+  return state;
+}
+
 async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
   const { cwd, ledger, router } = runtime;
   const result = await runAgentState(state, ledger, router, "summarizer", () =>
@@ -1301,6 +1379,8 @@ async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentG
 
 async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
   if (!state.finalSummary) throw new Error("Cannot finalize workflow without a final summary.");
+  const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
+  applyPolicyStopDecision(state, computeProjectedTraceCompleteness(ledger.events, workflowKind, state.plan));
   ledger.append({
     type: "summary",
     phase: "summary",
@@ -1315,7 +1395,6 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     reason: workflowStopReason(state),
     result: state.finalSummary.result
   });
-  const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
   state.traceCompleteness = computeTraceCompleteness(ledger.events, { workflowKind, plan: state.plan });
   ledger.append({
     type: "trace_completeness",
@@ -1326,6 +1405,49 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     workflowKind
   });
   await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
+}
+
+function computeProjectedTraceCompleteness(events: TomorrowEdgeEvent[], workflowKind: ReturnType<typeof inferWorkflowKindFromEvents>, plan?: Plan) {
+  return computeTraceCompleteness([
+    ...events,
+    { type: "summary" } as TomorrowEdgeEvent,
+    { type: "workflow_stop_reason" } as TomorrowEdgeEvent
+  ], { workflowKind, plan });
+}
+
+function applyPolicyStopDecision(state: AgentGraphState, projectedCompleteness: ReturnType<typeof computeTraceCompleteness>): void {
+  if (!state.finalSummary) return;
+  const policy = state.orchestrationPolicy;
+  if (state.contractVerification?.status === "failed") {
+    state.finalSummary = {
+      ...state.finalSummary,
+      result: "aborted",
+      risksRemaining: uniqueStrings([...state.finalSummary.risksRemaining, "Objective contract verification failed; execution was blocked as unsafe/blocked/advisory."])
+    };
+    return;
+  }
+  if (!policy || state.finalSummary.result === "aborted" || state.finalSummary.result === "failed") return;
+  const required = state.objectiveContract?.requiredEvidence ?? [];
+  const satisfied = state.objectiveContract ? satisfiedEvidence(required, state) : [];
+  const evidenceRatio = required.length ? satisfied.length / required.length : 1;
+  const threshold = requiredEvidenceThreshold(policy);
+  const traceThreshold = traceCompletenessThreshold(policy);
+  const reasons: string[] = [];
+  if (evidenceRatio < threshold) reasons.push(`required evidence ratio ${evidenceRatio.toFixed(2)} is below policy threshold ${threshold.toFixed(2)}`);
+  if (projectedCompleteness.score < traceThreshold) reasons.push(`trace completeness ${projectedCompleteness.score} is below policy threshold ${traceThreshold}`);
+  if (policyStopMode(policy) === "evidence_strict" && state.runResults.some((result) => !result.success && !result.skipped)) {
+    reasons.push("evidence_strict stop policy found failed verification evidence");
+  }
+  if (!policyAllowsPartialCompletion(policy) && state.finalSummary.result === "partially_completed") {
+    reasons.push("partial completion is disabled by stopPolicy.allowPartialCompletion=false");
+  }
+  if (!reasons.length) return;
+  const downgradedResult = policyAllowsPartialCompletion(policy) && policyStopMode(policy) !== "evidence_strict" ? "partially_completed" : "failed";
+  state.finalSummary = {
+    ...state.finalSummary,
+    result: downgradedResult,
+    risksRemaining: uniqueStrings([...state.finalSummary.risksRemaining, ...reasons])
+  };
 }
 
 async function writeObjectiveTraceAndPolicyEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
@@ -1496,6 +1618,11 @@ function satisfiedEvidence(requiredEvidence: string[], state: AgentGraphState): 
     if (normalized.includes("review")) return eventTypes.has("review_decision");
     if (normalized.includes("judge")) return eventTypes.has("judge_decision");
     if (normalized.includes("shell") || normalized.includes("verification") || normalized.includes("verifier")) return eventTypes.has("shell_run") || state.runResults.length > 0 || state.plan?.requiresPatchWorkflow === false;
+    if (normalized.includes("evidence packet")) return eventTypes.has("evidence_packet") || state.evidencePackets.length > 0;
+    if (normalized.includes("trace completeness")) return eventTypes.has("trace_completeness") || Boolean(state.traceCompleteness) || Boolean(state.finalSummary);
+    if (normalized.includes("objective-action-feedback trace")) return eventTypes.has("objective_trace_written") || Boolean(state.objectiveTrace) || Boolean(state.finalSummary);
+    if (normalized.includes("workflow stop reason")) return eventTypes.has("workflow_stop_reason") || Boolean(state.finalSummary);
+    if (normalized.includes("artifact projection")) return eventTypes.has("artifact_projection") || state.providerViews.length > 0;
     if (normalized.includes("summary")) return Boolean(state.finalSummary);
     if (normalized.includes("event ledger")) return state.events.length > 0;
     if (normalized.includes("objective")) return eventTypes.has("objective_contract");
@@ -1567,6 +1694,19 @@ function applyTaskGovernanceToPlan(plan: Plan, governance: NonNullable<AgentGrap
     workflowKind: plan.requiresPatchWorkflow === false || plan.taskType === "analysis" ? "advisory" : plan.workflowKind,
     debateRecommended: true,
     reasonForDebate: `Task governance requires independent review/judge: ${governance.reason}`
+  };
+}
+
+function applyPolicyGovernanceToPlan(plan: Plan, policy?: OrchestrationPolicyGenome): Plan {
+  if (!policy) return plan;
+  const patchLike = plan.requiresPatchWorkflow !== false && plan.taskType !== "analysis";
+  const requiresReviewer = shouldPolicyRequireReviewer(policy, plan.riskLevel, patchLike);
+  const requiresJudge = shouldPolicyRequireJudge(policy, plan.riskLevel, patchLike);
+  if (!requiresReviewer && !requiresJudge) return plan;
+  return {
+    ...plan,
+    debateRecommended: true,
+    reasonForDebate: plan.reasonForDebate ?? `Orchestration policy escalated governance: reviewerThreshold=${policy.routingPolicy.reviewerThreshold}, judgeThreshold=${policy.routingPolicy.judgeThreshold}.`
   };
 }
 
@@ -1711,6 +1851,11 @@ async function runAgentState<T>(
   const assignment = router.assignmentFor(role);
   const options: RunAgentStateOptions<T> = typeof optionsOrAgentKind === "string" ? { agentKind: optionsOrAgentKind } : optionsOrAgentKind ?? {};
   const effectiveAgentKind = options.agentKind ?? determineAgentKind(assignment.provider);
+  if (!contractRoleAllowed(state.objectiveContract, role)) {
+    const reason = `Objective contract does not allow role ${role}.`;
+    recordContractToolBlockedAgent(state, ledger, role, phaseForRole(role), reason);
+    throw new Error(reason);
+  }
   const gate = options.config && shouldGateInvocation(effectiveAgentKind)
     ? evaluateRoleInvocation({
       config: options.config,
@@ -1719,8 +1864,8 @@ async function runAgentState<T>(
       phase: phaseForRole(role),
       assignment,
       roleBudget: roleBudgetFor(options.config, role),
-      estimatedCostUsd: options.budgetEstimateUsd ?? estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
-      escalationSignals: options.escalationSignals ?? inferStrongAgentEscalationSignals(state.goal),
+      estimatedCostUsd: policyBudgetEstimate(options.budgetEstimateUsd ?? estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }), state.orchestrationPolicy, role),
+      escalationSignals: policyEscalationSignals(state.orchestrationPolicy, state.plan?.riskLevel, options.escalationSignals ?? inferStrongAgentEscalationSignals(state.goal)),
       canFallback: Boolean(options.budgetFallback) || canFallbackWhenBudgetBlocked(role)
     })
     : undefined;
@@ -2251,15 +2396,21 @@ function recordModelNoteEvents(ledger: EventLedger, notes: ModelNote[], usageSum
 
 function recordRoutingAndBudgetPreview(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, assignment: RouteAssignment, goal: string, phase: "routing" | "planning"): void {
   const decision = buildRoleRoutingDecision(config, assignment);
+  const policy = state.orchestrationPolicy;
   const roleBudget = roleBudgetFor(config, assignment.role);
+  const estimatedCostUsd = policyBudgetEstimate(
+    estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
+    policy,
+    assignment.role
+  );
   const budgetDecision = allocateStrongAgentCall(assignment.role, state.budgetRuntime.strongAgentCallsUsed, {
     maxCallsPerTask: config.strong_agents.max_calls_per_task,
     maxCostUsd: config.strong_agents.max_cost_usd,
     reserveForRoles: config.strong_agents.reserve_for_roles,
     escalateOn: config.strong_agents.escalate_on
   }, {
-    estimatedCostUsd: estimateCostUsd(assignment.provider, { inputTokens: 1000, outputTokens: 1000 }),
-    escalationSignals: inferStrongAgentEscalationSignals(goal),
+    estimatedCostUsd,
+    escalationSignals: policyEscalationSignals(policy, state.plan?.riskLevel, inferStrongAgentEscalationSignals(goal)),
     roleBudget,
     roleUsedCalls: state.budgetRuntime.roleCallsUsed[assignment.role] ?? 0
   });
@@ -2272,8 +2423,8 @@ function recordRoutingAndBudgetPreview(config: TomorrowEdgeConfig, state: AgentG
     assignedRole: decision.role,
     assignedProvider: decision.provider,
     assignedModel: decision.model,
-    reason: decision.reason,
-    policyTags: decision.policyTags
+    reason: `${decision.reason}; ${policyRouteTag(policy)}`,
+    policyTags: [...decision.policyTags, policyRouteTag(policy)]
   });
   ledger.append({
     type: "budget_preview",
@@ -2311,15 +2462,80 @@ function routingForState(router: ModelRouter, hasImageInputs: boolean): AgentGra
   };
 }
 
-function canRunShell(config: TomorrowEdgeConfig, shellRuns: number, ledger: EventLedger): boolean {
-  if (shellRuns < config.autonomy.max_shell_runs) return true;
-  ledger.append({ type: "autonomy_limit_reached", phase: "shell", status: "blocked_by_iteration_limit", reason: `max_shell_runs=${config.autonomy.max_shell_runs} reached` });
+function contractAllowsPatchMutation(state: AgentGraphState, ledger: EventLedger, phase: "patch" | "repair"): boolean {
+  const patchGate = contractToolGate(state.objectiveContract, "patch_apply");
+  const writeGate = contractToolGate(state.objectiveContract, "file_write");
+  const phaseAllowed = contractPhaseAllowed(state.objectiveContract, phase);
+  const roleAllowed = contractRoleAllowed(state.objectiveContract, "runner");
+  const reason = !patchGate.allowed
+    ? patchGate.reason
+    : !writeGate.allowed
+      ? writeGate.reason
+      : !phaseAllowed
+        ? `Objective contract does not allow phase ${phase}.`
+        : !roleAllowed
+          ? "Objective contract does not allow runner role."
+          : "";
+  if (!reason) return true;
+  ledger.append({ type: "workflow_stop_reason", phase, role: "runner", reason, result: "aborted" });
+  recordContractToolBlockedAgent(state, ledger, "runner", phase, reason);
   return false;
 }
 
-function canAttemptRepair(config: TomorrowEdgeConfig, repairs: number, ledger: EventLedger): boolean {
-  if (repairs < config.autonomy.max_repairs) return true;
-  ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: `max_repairs=${config.autonomy.max_repairs} reached` });
+function contractAllowsShell(state: AgentGraphState, ledger: EventLedger): boolean {
+  const shellGate = contractToolGate(state.objectiveContract, "shell");
+  const phaseAllowed = contractPhaseAllowed(state.objectiveContract, "shell");
+  const roleAllowed = contractRoleAllowed(state.objectiveContract, "runner");
+  const reason = !shellGate.allowed
+    ? shellGate.reason
+    : !phaseAllowed
+      ? "Objective contract does not allow shell phase."
+      : !roleAllowed
+        ? "Objective contract does not allow runner role."
+        : "";
+  if (!reason) return true;
+  ledger.append({ type: "workflow_stop_reason", phase: "shell", role: "runner", reason, result: "aborted" });
+  recordContractToolBlockedAgent(state, ledger, "runner", "shell", reason);
+  return false;
+}
+
+function recordContractToolBlockedAgent(state: AgentGraphState, ledger: EventLedger, role: AgentRole, phase: EventPhase, reason: string): void {
+  state.agents.push({
+    id: `${role}_contract_gate_${state.agents.filter((agent) => agent.role === role).length + 1}`,
+    role,
+    provider: "local_tool",
+    model: "contract_gate",
+    status: "blocked",
+    agentKind: "offline",
+    startedAt: nowIso(),
+    endedAt: nowIso(),
+    elapsedMs: 0,
+    summary: reason
+  });
+  ledger.append({
+    type: "agent_run",
+    phase,
+    role,
+    provider: "local_tool",
+    model: "contract_gate",
+    agentKind: "offline",
+    status: "blocked",
+    runId: `${role}_contract_gate`,
+    error: reason
+  });
+}
+
+function canRunShell(config: TomorrowEdgeConfig, state: AgentGraphState, shellRuns: number, ledger: EventLedger): boolean {
+  const maxShellRuns = effectiveMaxShellRuns(config, state.objectiveContract);
+  if (shellRuns < maxShellRuns) return true;
+  ledger.append({ type: "autonomy_limit_reached", phase: "shell", status: "blocked_by_iteration_limit", reason: `max_shell_runs=${maxShellRuns} reached` });
+  return false;
+}
+
+function canAttemptRepair(config: TomorrowEdgeConfig, state: AgentGraphState, repairs: number, ledger: EventLedger): boolean {
+  const maxRepairs = effectiveMaxRepairRounds(config, state.objectiveContract, state.orchestrationPolicy);
+  if (repairs < maxRepairs) return true;
+  ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: `max_repairs=${maxRepairs} reached` });
   return false;
 }
 
@@ -2329,27 +2545,30 @@ function recordRepairPolicyDecision(state: AgentGraphState, ledger: EventLedger,
   const decision = previousOccurrences
     ? decideRepairPolicy({ failedRun, changedFiles: state.changedFiles, previousOccurrences })
     : firstPass;
-  occurrences.set(decision.failureSignature, decision.occurrence);
+  const policyDecision = shouldStopOnRecurringFailure(state.orchestrationPolicy) && decision.occurrence > 1
+    ? { ...decision, action: "stop" as const, strategy: "policy stop on recurring failure", reason: `${decision.reason} Orchestration policy stopOnRecurringFailure=true.` }
+    : decision;
+  occurrences.set(policyDecision.failureSignature, policyDecision.occurrence);
   ledger.append({
     type: "repair_policy",
     phase: "repair",
     role: "repairer",
-    failureClass: decision.failureClass,
-    failureSignature: decision.failureSignature,
-    occurrence: decision.occurrence,
-    action: decision.action,
-    strategy: decision.strategy,
-    reason: decision.reason
+    failureClass: policyDecision.failureClass,
+    failureSignature: policyDecision.failureSignature,
+    occurrence: policyDecision.occurrence,
+    action: policyDecision.action,
+    strategy: policyDecision.strategy,
+    reason: policyDecision.reason
   });
-  if (decision.action === "escalate") {
+  if (policyDecision.action === "escalate" || policyDecision.action === "stop") {
     ledger.append({
       type: "autonomy_limit_reached",
       phase: "repair",
       status: "blocked_by_iteration_limit",
-      reason: decision.reason
+      reason: policyDecision.reason
     });
   }
-  return decision;
+  return policyDecision;
 }
 
 function allowsPatchRepair(decision: RepairPolicyDecision): boolean {

@@ -31,4 +31,40 @@ describe("role graph", () => {
     expect(coderB?.canSkip).toBe(true);
     expect(optionalNodeCanSkip(graph, "coder_b")).toBe(true);
   });
+
+  it("filters forbidden contract roles out of the role graph", () => {
+    const graph = buildRoleGraph({
+      workflowKind: "patch",
+      allowedRoles: ["planner", "explorer", "coder_a", "reviewer", "judge", "summarizer"],
+      allowedPhases: ["planning", "exploration", "coding", "review", "judge", "summary"]
+    });
+    const roles = graph.nodes.map((node) => node.role);
+
+    expect(roles).toEqual(expect.arrayContaining(["planner", "explorer", "coder_a", "reviewer", "judge", "summarizer"]));
+    expect(roles).not.toContain("runner");
+    expect(roles).not.toContain("repairer");
+  });
+
+  it("forces reviewer and judge for high-risk contracts even when the input omitted them", () => {
+    const graph = buildRoleGraph({
+      workflowKind: "patch",
+      riskLevel: "high",
+      allowedRoles: ["planner", "explorer", "coder_a", "summarizer"],
+      allowedPhases: ["planning", "exploration", "coding", "summary"]
+    });
+
+    expect(graph.nodes.find((node) => node.role === "reviewer")?.required).toBe(true);
+    expect(graph.nodes.find((node) => node.role === "judge")?.required).toBe(true);
+  });
+
+  it("keeps read-only contracts out of coder, runner, and repairer even if roles were supplied", () => {
+    const graph = buildRoleGraph({
+      workflowKind: "read_only",
+      allowedRoles: ["planner", "explorer", "coder_a", "runner", "repairer", "summarizer"],
+      allowedPhases: ["planning", "exploration", "coding", "patch", "shell", "repair", "summary"]
+    });
+    const roles = graph.nodes.map((node) => node.role);
+
+    expect(roles).toEqual(["planner", "explorer", "summarizer"]);
+  });
 });
