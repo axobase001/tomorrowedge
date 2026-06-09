@@ -31,14 +31,6 @@ export const defaultConfig: TomorrowEdgeConfig = {
     hard_cap_usd: 10,
     warn_at_percent: 80
   },
-  agent_budget: {
-    vision: 0.30,
-    planner: 0.10,
-    coder: 0.15,
-    reviewer: 0.10,
-    judge: 0.10,
-    other: 0.10
-  },
   strong_agents: {
     max_calls_per_task: 3,
     max_cost_usd: 2,
@@ -72,9 +64,9 @@ export const defaultConfig: TomorrowEdgeConfig = {
       auth_header: "bearer",
       extra_headers: {}
     },
-    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "", model: "mimo-v2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
-    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "", model: "gpt-4o-mini", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
-    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1", model: "mimo-v2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
+    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "https://api.moonshot.ai/v1", model: "kimi-k2.6", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
     anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "https://api.anthropic.com/v1", model: "claude-sonnet-4-5", api_format: "legacy_chat", auth_header: "api-key", extra_headers: {} },
     gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },

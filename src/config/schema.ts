@@ -28,10 +28,17 @@ export const providerConfigSchema = z.object({
 });
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
+export const roleBudgetConfigSchema = z.object({
+  max_cost_per_call_usd: z.number().nonnegative().optional(),
+  max_calls_per_task: z.number().int().nonnegative().optional()
+});
+export type RoleBudgetConfig = z.infer<typeof roleBudgetConfigSchema>;
+
 export const agentConfigSchema = z.object({
   provider: z.string().default("auto"),
   model: z.string().default("auto"),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  budget: roleBudgetConfigSchema.optional()
 });
 
 export const externalAgentConfigSchema = z.object({
@@ -102,17 +109,6 @@ export const configSchema = z.object({
   budget: z.object({
     hard_cap_usd: z.number().nonnegative().default(10),
     warn_at_percent: z.number().min(1).max(100).default(80)
-  }),
-  agent_budget: z.object({
-    vision: z.number().nonnegative().default(0.30),
-    planner: z.number().nonnegative().default(0.10),
-    coder: z.number().nonnegative().default(0.15),
-    reviewer: z.number().nonnegative().default(0.10),
-    judge: z.number().nonnegative().default(0.10),
-    other: z.number().nonnegative().default(0.10),
-  }).default({
-    vision: 0.30, planner: 0.10, coder: 0.15,
-    reviewer: 0.10, judge: 0.10, other: 0.10,
   }),
   strong_agents: z.object({
     max_calls_per_task: z.number().int().nonnegative().default(3),
