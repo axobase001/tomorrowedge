@@ -1,7 +1,7 @@
 ﻿import path from "node:path";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { buildCapabilityDashboard } from "./capabilityRegistry.js";
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
@@ -56,6 +56,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     approvals,
     approvalHistory,
     capabilities: buildCapabilityDashboard(state),
+    memoryInfluence: buildMemoryInfluence(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -153,6 +154,93 @@ function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleG
       consumes: node.consumes
     })),
     stopConditions: state.roleGraph.stopConditions
+  };
+}
+
+function buildMemoryInfluence(state?: AgentGraphState): CockpitViewModel["memoryInfluence"] {
+  const memory = state?.failureMemory;
+  const events = (state?.events ?? []).filter((event) => event.type === "memory_retrieval");
+  if (!memory && !events.length) return undefined;
+  const cards: CockpitMemoryInfluenceCard[] = [];
+  if (memory?.premortem) {
+    const event = events.find((item) => item.retrievalStage === "premortem");
+    cards.push({
+      id: "memory-premortem",
+      stage: "premortem",
+      status: memory.premortem.selectedMemoryIds.length ? "accepted" : "filtered",
+      injectedRole: "planner",
+      memoryIds: memory.premortem.selectedMemoryIds,
+      score: maxScore(memory.premortem.constraints),
+      matchedFeatures: uniqueStrings(memory.premortem.constraints.map((constraint) => `${constraint.failureClass}:${constraint.kind}`)),
+      decisionImpact: memory.premortem.constraints.length
+        ? `Added ${memory.premortem.constraints.length} planner constraint/check item(s).`
+        : "No planner constraint injected.",
+      artifactRef: event?.artifactRef,
+      constraints: memory.premortem.constraints.map((constraint) => constraint.text),
+      violations: [],
+      alignment: memory.premortem.extraChecks
+    });
+  }
+  if (memory?.coderConstraints.length) {
+    const event = events.find((item) => item.retrievalStage === "coder_constraints");
+    cards.push({
+      id: "memory-coder-constraints",
+      stage: "coder_constraints",
+      status: "accepted",
+      injectedRole: "coder_a",
+      memoryIds: uniqueStrings(memory.coderConstraints.map((constraint) => constraint.memoryId)),
+      score: maxScore(memory.coderConstraints),
+      matchedFeatures: uniqueStrings(memory.coderConstraints.map((constraint) => constraint.kind)),
+      decisionImpact: `Shown to coder roles as ${memory.coderConstraints.length} compact constraint(s).`,
+      artifactRef: event?.artifactRef,
+      constraints: memory.coderConstraints.map((constraint) => constraint.text),
+      violations: [],
+      alignment: []
+    });
+  }
+  for (const assessment of memory?.reviewAssessments ?? []) {
+    const event = events.find((item) => item.retrievalStage === "review_guard");
+    cards.push({
+      id: `memory-review-${assessment.candidateId}`,
+      stage: "review_guard",
+      status: assessment.memoryViolations.length ? "contradicted" : "guarded",
+      injectedRole: "reviewer",
+      memoryIds: assessment.memoryIds,
+      matchedFeatures: [`candidate:${assessment.candidateId}`],
+      decisionImpact: assessment.memoryViolations.length
+        ? `Candidate ${assessment.candidateId} was penalized by ${assessment.penalty}.`
+        : `Candidate ${assessment.candidateId} aligned with retrieved memory checks.`,
+      artifactRef: event?.artifactRef,
+      constraints: [],
+      violations: assessment.memoryViolations,
+      alignment: assessment.memoryAlignment
+    });
+  }
+  if (memory?.repairContext) {
+    const event = events.find((item) => item.retrievalStage === "repair_context");
+    cards.push({
+      id: "memory-repair-context",
+      stage: "repair_context",
+      status: memory.repairContext.selectedMemoryIds.length ? "accepted" : "filtered",
+      injectedRole: "repairer",
+      memoryIds: memory.repairContext.selectedMemoryIds,
+      score: maxScore(memory.repairContext.constraints),
+      matchedFeatures: uniqueStrings(memory.repairContext.constraints.map((constraint) => `${constraint.failureClass}:${constraint.kind}`)),
+      decisionImpact: memory.repairContext.corrections.length
+        ? `Provided ${memory.repairContext.corrections.length} retrieved correction(s) to repairer.`
+        : "No repair correction selected.",
+      artifactRef: event?.artifactRef,
+      constraints: memory.repairContext.corrections,
+      violations: [],
+      alignment: memory.repairContext.counterexamples
+    });
+  }
+  if (!cards.length) return undefined;
+  return {
+    selectedCount: uniqueStrings(cards.flatMap((card) => card.memoryIds)).length,
+    rejectedCount: events.reduce((sum, event) => sum + event.rejectedCount, 0),
+    negativeTransferCandidates: cards.filter((card) => card.status === "contradicted").length,
+    cards
   };
 }
 
@@ -311,6 +399,15 @@ function blockingSummary(approval: CockpitApproval): string {
 
 function compactTags(tags: Array<CockpitApprovalHistoryItem["filterTags"][number] | undefined>): CockpitApprovalHistoryItem["filterTags"] {
   return tags.filter((tag): tag is CockpitApprovalHistoryItem["filterTags"][number] => Boolean(tag));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function maxScore(values: Array<{ score?: number }>): number | undefined {
+  const scores = values.map((value) => value.score).filter((score): score is number => typeof score === "number");
+  return scores.length ? Math.max(...scores) : undefined;
 }
 
 function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRouteSummary[], approval?: CockpitApproval): CockpitTelemetry {

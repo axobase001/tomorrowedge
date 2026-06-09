@@ -159,6 +159,28 @@ export type CockpitTraceItem = {
   summary: string;
 };
 
+export type CockpitMemoryInfluenceCard = {
+  id: string;
+  stage: "premortem" | "coder_constraints" | "review_guard" | "repair_context";
+  status: "accepted" | "filtered" | "guarded" | "contradicted";
+  injectedRole: AgentRole;
+  memoryIds: string[];
+  score?: number;
+  matchedFeatures: string[];
+  decisionImpact: string;
+  artifactRef?: string;
+  constraints: string[];
+  violations: string[];
+  alignment: string[];
+};
+
+export type CockpitMemoryInfluenceSummary = {
+  selectedCount: number;
+  rejectedCount: number;
+  negativeTransferCandidates: number;
+  cards: CockpitMemoryInfluenceCard[];
+};
+
 export type CockpitViewModel = {
   version: "1";
   sessionId?: string;
@@ -177,6 +199,7 @@ export type CockpitViewModel = {
   approvals: CockpitApproval[];
   approvalHistory: CockpitApprovalHistoryItem[];
   capabilities: CockpitCapabilitySummary[];
+  memoryInfluence?: CockpitMemoryInfluenceSummary;
   currentApproval?: CockpitApproval;
   main: {
     title: string;

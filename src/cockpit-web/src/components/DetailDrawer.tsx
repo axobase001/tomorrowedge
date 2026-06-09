@@ -25,6 +25,21 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
         item.undoSnapshotIds?.length ? `undo=${item.undoSnapshotIds.join(", ")}` : undefined,
         `filters=${item.filterTags.join(", ")}`
       ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
+      <h3>{t("drawer.memoryInfluence")}</h3>
+      <div className="te-memory-list" data-testid="drawer-memory-influence">
+        {viewModel.memoryInfluence?.cards.length ? viewModel.memoryInfluence.cards.map((card) => (
+          <section key={card.id} className="te-memory-card">
+            <div><strong>{card.stage}</strong> <span>{card.status}</span> <span>{card.injectedRole}</span></div>
+            <p>{card.decisionImpact}</p>
+            <p>ids={card.memoryIds.join(", ") || "-"}{card.score === undefined ? "" : ` score=${card.score}`}</p>
+            <p>features={card.matchedFeatures.join(", ") || "-"}</p>
+            {card.constraints.length ? <p>constraints={card.constraints.slice(0, 3).join(" | ")}</p> : null}
+            {card.violations.length ? <p>violations={card.violations.join(" | ")}</p> : null}
+            {card.alignment.length ? <p>alignment={card.alignment.slice(0, 3).join(" | ")}</p> : null}
+            {card.artifactRef ? <a href={artifactHref(viewModel.sessionId, card.artifactRef)} target="_blank" rel="noreferrer">{card.artifactRef}</a> : null}
+          </section>
+        )) : <span>-</span>}
+      </div>
       <h3>{t("drawer.capabilityDashboard")}</h3>
       <pre>{viewModel.capabilities.map((capability) => [
         `${capability.label} [${capability.status}]`,

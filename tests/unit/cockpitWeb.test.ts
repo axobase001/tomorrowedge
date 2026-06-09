@@ -294,6 +294,37 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("[available]");
   });
 
+  it("renders retrieved memory influence cards in the detail drawer", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      memoryInfluence: {
+        selectedCount: 1,
+        rejectedCount: 1,
+        negativeTransferCandidates: 0,
+        cards: [{
+          id: "memory-premortem",
+          stage: "premortem",
+          status: "accepted",
+          injectedRole: "planner",
+          memoryIds: ["mem_validation"],
+          score: 8,
+          matchedFeatures: ["validation_failed:test_command"],
+          decisionImpact: "Added 1 planner constraint/check item(s).",
+          artifactRef: "artifacts/memory/memory_1.json",
+          constraints: ["Run npm test before approving."],
+          violations: [],
+          alignment: ["npm test"]
+        }]
+      }
+    });
+
+    expect(html).toContain("Memory influence");
+    expect(html).toContain("premortem");
+    expect(html).toContain("mem_validation");
+    expect(html).toContain("Added 1 planner constraint/check item(s).");
+    expect(html).toContain("href=\"/api/sessions/session_test/artifacts/artifacts%2Fmemory%2Fmemory_1.json\"");
+  });
+
   it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
     const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
     const fallback = renderCockpitHtml();

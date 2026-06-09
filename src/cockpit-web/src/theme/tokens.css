@@ -449,6 +449,43 @@ input, textarea, select {
   color: var(--te-deep-blue);
   white-space: nowrap;
 }
+.te-memory-list {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.te-memory-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--te-border);
+  border-radius: 6px;
+  background: var(--te-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.te-memory-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--te-muted);
+}
+.te-memory-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.te-memory-card span {
+  padding: 1px 5px;
+  border: 1px solid var(--te-border);
+  border-radius: 999px;
+  background: #fff;
+}
+.te-memory-card a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--te-deep-blue);
+}
 
 .te-setup-backdrop,
 .te-keymgr-backdrop {

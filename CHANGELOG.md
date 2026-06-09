@@ -29,6 +29,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Failure-memory workflow influence: planner pre-mortems, coder-visible memory
   constraints, reviewer/judge memory guards, and repair-context correction
   retrieval, all recorded as `memory_retrieval` events.
+- GUI/detail drawer memory-influence cards that show retrieved memory ids,
+  status, injected role, matched features, decision impact, violations,
+  alignment, and artifact links.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

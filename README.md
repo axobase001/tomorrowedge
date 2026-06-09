@@ -846,6 +846,8 @@ constraints, coder-visible anti-patterns/verifier checks, reviewer/judge memory
 guards, and repair-context corrections after a failed validation run. These
 injection points can be ablated independently with `failure_premortem`,
 `coder_constraints`, `review_guard`, and `repair_context`.
+The GUI detail drawer shows these as memory-influence cards with retrieved ids,
+role injection point, decision impact, violations/alignment, and artifact links.
 
 ```bash
 tedge memory failures
