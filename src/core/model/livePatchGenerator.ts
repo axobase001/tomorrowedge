@@ -13,6 +13,7 @@ import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import { isBinaryLikePath } from "../../safety/fileRisk.js";
+import { textQualityIssueForUnifiedDiff } from "../patch/patchValidator.js";
 
 const maxPatchCompletionTokens = 3600;
 const maxFileChars = 2400;
@@ -160,6 +161,10 @@ function buildCandidateFromResponse(input: LivePatchInput, plan: LivePatchPlan, 
   if (!result.response) throw new Error(result.error ?? "Live patch provider failed.");
   const parsed = parsePatchJson(content);
   validateUsableUnifiedDiff(parsed.unifiedDiff, parsed.filesChanged);
+  const textQualityIssue = textQualityIssueForUnifiedDiff(parsed.unifiedDiff);
+  if (textQualityIssue) {
+    throw new Error(`Live patch response text quality issue: ${textQualityIssue}`);
+  }
   const candidate: PatchCandidate = {
     candidateId: makeId(`live_${plan.role}`),
     agentId: plan.role,
@@ -264,6 +269,7 @@ function buildRetryPrompt(originalPrompt: string, previousResponse: string, erro
     `Patch error: ${error}`,
     "Return ONLY one valid JSON object with exactly these keys: summary, unifiedDiff, filesChanged, testPlan, knownTradeoffs, estimatedRisk.",
     "The unifiedDiff value must be a non-empty git-style unified diff with --- and +++ file headers and at least one hunk.",
+    "All generated text must be readable valid UTF-8. Do not return mojibake, replacement characters, or garbled Chinese/CJK text.",
     "Do not include markdown fences. Escape newlines inside unifiedDiff as JSON string characters.",
     "Previous invalid response excerpt:",
     previousResponse.slice(0, 1600)

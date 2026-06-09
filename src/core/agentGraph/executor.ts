@@ -37,6 +37,7 @@ import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRout
 import { invokeExternalRole, releaseExternalAgentProcessPool } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
 import { createModelBackedPlan } from "../goal/modelPlanner.js";
+import { classifyTaskGovernance } from "../goal/taskGovernance.js";
 import { applyWorkflowIntentToPlan, classifyWorkflowIntent } from "../goal/workflowIntent.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
 import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
@@ -308,6 +309,21 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
+  state.taskGovernance = await classifyTaskGovernance({ goal, plan: state.plan, workflowIntent, config, router, ledger, localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed });
+  ledger.append({
+    type: "task_governance",
+    phase: "planning",
+    role: "planner",
+    provider: state.taskGovernance.provider,
+    model: state.taskGovernance.model,
+    reasoningSensitivity: state.taskGovernance.reasoningSensitivity,
+    requiresReviewer: state.taskGovernance.requiresReviewer,
+    requiresJudge: state.taskGovernance.requiresJudge,
+    confidence: state.taskGovernance.confidence,
+    reason: state.taskGovernance.reason,
+    fallbackUsed: state.taskGovernance.fallbackUsed
+  });
+  state.plan = applyTaskGovernanceToPlan(state.plan, state.taskGovernance);
   if (!externalPlanner) {
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
@@ -346,6 +362,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     ledger.append({ type: "file_read", phase: "exploration", role: "explorer", path: file.path, reason: file.reason, risk: file.risk });
   }
   if (isReadOnlyPlan(state.plan)) {
+    await maybeRunGovernedReadOnlyAdvisory({ cwd, goal, config, router, ledger, state, access });
     return finalizeReadOnlyState(cwd, state, ledger, router);
   }
 
@@ -510,7 +527,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       candidates: state.candidates,
       review: state.review,
       visualSpec: state.visualSpec,
-      ledger
+      ledger,
+      governance: state.taskGovernance
     };
     const advisoryPlans = buildAdvisoryPlans(advisoryInput);
     const budgetStatus = setBudgetStatus(state, preflightBudget(
@@ -966,6 +984,68 @@ function workflowStopReason(state: AgentGraphState): string {
   if (latestRun?.success && state.repairCandidates.length) return "repair applied and verification passed";
   if (state.changedFiles.length) return "selected patch applied and workflow finalized";
   return "no patch applied; workflow finalized after review and judge";
+}
+
+function applyTaskGovernanceToPlan(plan: Plan, governance: NonNullable<AgentGraphState["taskGovernance"]>): Plan {
+  const elevated = governance.requiresReviewer || governance.requiresJudge || governance.reasoningSensitivity !== "low";
+  if (!elevated) return plan;
+  const riskLevel = governance.reasoningSensitivity === "high" ? "high" : plan.riskLevel === "low" ? "medium" : plan.riskLevel;
+  return {
+    ...plan,
+    riskLevel,
+    workflowKind: plan.requiresPatchWorkflow === false || plan.taskType === "analysis" ? "advisory" : plan.workflowKind,
+    debateRecommended: true,
+    reasonForDebate: `Task governance requires independent review/judge: ${governance.reason}`
+  };
+}
+
+async function maybeRunGovernedReadOnlyAdvisory(input: {
+  cwd: string;
+  goal: string;
+  config: TomorrowEdgeConfig;
+  router: ModelRouter;
+  ledger: EventLedger;
+  state: AgentGraphState;
+  access: AgentGraphState["access"];
+}): Promise<void> {
+  const governance = input.state.taskGovernance;
+  const shouldAdvise = Boolean(governance && (governance.requiresReviewer || governance.requiresJudge || governance.reasoningSensitivity !== "low"));
+  if (!shouldAdvise) return;
+  if (!input.access.cloudAllowed) {
+    input.ledger.append({
+      type: "evidence_update",
+      phase: "planning",
+      role: "planner",
+      evidence: [`Governance advisory required but blocked by access mode ${input.access.mode}.`, governance?.reason ?? ""]
+    });
+    return;
+  }
+  const advisoryInput = {
+    cwd: input.cwd,
+    goal: input.goal,
+    config: input.config,
+    router: input.router,
+    plan: input.state.plan,
+    candidates: input.state.candidates,
+    review: input.state.review,
+    visualSpec: input.state.visualSpec,
+    ledger: input.ledger,
+    governance
+  };
+  const advisoryPlans = buildAdvisoryPlans(advisoryInput);
+  const budgetStatus = setBudgetStatus(input.state, preflightBudget(
+    advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
+    input.config.routing.max_cost_usd
+  ));
+  recordLiveBudgetDecisions(input.ledger, "planning", advisoryPlans, budgetStatus);
+  if (budgetStatus.status === "blocked") {
+    input.ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
+    return;
+  }
+  const advisoryNotes = await runLiveAdvisory(advisoryInput);
+  input.state.modelNotes.push(...advisoryNotes);
+  input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
+  recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
 }
 
 type RunAgentStateOptions<T> = {

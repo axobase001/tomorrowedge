@@ -19,6 +19,7 @@ import type { TraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import type { BudgetRuntimeState } from "../budget/budgetGate.js";
 import type { RoleGraph } from "../orchestration/roleGraph.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
+import type { TaskGovernanceDecision } from "../goal/taskGovernance.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -41,6 +42,7 @@ export type AgentGraphState = {
   modelNotes: ModelNote[];
   usageSummary: ModelUsageSummary;
   workflowKind?: WorkflowKind;
+  taskGovernance?: TaskGovernanceDecision;
   roleGraph?: RoleGraph;
   budgetRuntime: BudgetRuntimeState;
   budgetStatus?: ModelBudgetStatus;

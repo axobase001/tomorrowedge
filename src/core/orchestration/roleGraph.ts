@@ -29,7 +29,7 @@ export type RoleGraph = {
 
 export function buildRoleGraph(input: { workflowKind: WorkflowKind; highRisk?: boolean; debate?: boolean; repairLoop?: boolean }): RoleGraph {
   if (input.repairLoop) return repairLoopGraph();
-  if (input.workflowKind === "read_only" || input.workflowKind === "advisory") return readOnlyGraph(input.workflowKind);
+  if (input.workflowKind === "read_only" || input.workflowKind === "advisory") return readOnlyGraph(input.workflowKind, Boolean(input.highRisk || input.debate));
   if (input.highRisk) return patchGraph("high_risk_patch", true, true);
   if (input.debate) return patchGraph("debate_patch", false, true);
   if (input.workflowKind === "vision_patch") return patchGraph("vision_patch", false, false);
@@ -48,14 +48,21 @@ export function optionalNodeCanSkip(graph: RoleGraph, nodeId: string): boolean {
   return Boolean(found && !found.required && found.canSkip);
 }
 
-function readOnlyGraph(workflowKind: "read_only" | "advisory"): RoleGraph {
+function readOnlyGraph(workflowKind: "read_only" | "advisory", governed = false): RoleGraph {
+  const nodes: RoleNode[] = [
+    node("planner", [], { produces: ["plan"] }),
+    node("explorer", ["planner"], { produces: ["context"], consumes: ["plan"] })
+  ];
+  if (governed) {
+    nodes.push(
+      node("reviewer", ["explorer"], { required: false, canSkip: true, produces: ["review_advice"], consumes: ["plan", "context"] }),
+      node("judge", ["reviewer"], { required: false, canSkip: true, produces: ["judge_advice"], consumes: ["plan", "context", "review_advice"] })
+    );
+  }
+  nodes.push(node("summarizer", governed ? ["judge"] : ["explorer"], { produces: ["summary"], consumes: governed ? ["plan", "context", "review_advice", "judge_advice"] : ["plan", "context"] }));
   return {
     workflowKind,
-    nodes: [
-      node("planner", [], { produces: ["plan"] }),
-      node("explorer", ["planner"], { produces: ["context"], consumes: ["plan"] }),
-      node("summarizer", ["explorer"], { produces: ["summary"], consumes: ["plan", "context"] })
-    ],
+    nodes,
     stopConditions: ["read_only_complete", "budget_blocked_without_fallback"]
   };
 }

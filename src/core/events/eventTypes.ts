@@ -165,6 +165,16 @@ export type WorkflowIntentEvent = BaseEvent & {
   fallbackUsed?: boolean;
 };
 
+export type TaskGovernanceEvent = BaseEvent & {
+  type: "task_governance";
+  reasoningSensitivity: "low" | "medium" | "high";
+  requiresReviewer: boolean;
+  requiresJudge: boolean;
+  confidence: number;
+  reason: string;
+  fallbackUsed?: boolean;
+};
+
 export type ExternalAgentRegisteredEvent = BaseEvent & {
   type: "external_agent_registered";
   externalAgentId: string;
@@ -365,6 +375,7 @@ export type TomorrowEdgeEvent =
   | ConversationTargetEvent
   | ConversationMessageEvent
   | WorkflowIntentEvent
+  | TaskGovernanceEvent
   | ExternalAgentRegisteredEvent
   | ExternalAgentCallEvent
   | ExternalAgentResultEvent
