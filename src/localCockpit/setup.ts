@@ -25,11 +25,20 @@ export type CockpitRoleAssignment = {
   reason?: string;
 };
 
+export type CockpitExternalAgentOption = {
+  id: string;
+  provider: string;
+  name: string;
+  roles: string[];
+  capabilities: string[];
+};
+
 export type CockpitSetupStatus = {
   needsSetup: boolean;
   recommendedProvider: string;
   configPath: string;
   providers: CockpitProviderReadiness[];
+  externalAgents: CockpitExternalAgentOption[];
   roleAssignments: CockpitRoleAssignment[];
   selectedProvider?: string;
   selectedModel?: string;
@@ -78,6 +87,7 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
     recommendedProvider: config.model_discovery.recommended_provider,
     configPath: path.join(cwd, ".tomorrowedge", "config.yaml"),
     providers,
+    externalAgents: externalAgentOptions(config),
     roleAssignments: Object.entries(config.agents).map(([role, agent]) => ({
       role,
       provider: agent.provider,
@@ -87,6 +97,18 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
     selectedProvider: selected?.id,
     selectedModel: selected?.model
   };
+}
+
+function externalAgentOptions(config: TomorrowEdgeConfig): CockpitExternalAgentOption[] {
+  return Object.entries(config.external_agents)
+    .filter(([, agent]) => agent.enabled)
+    .map(([id, agent]) => ({
+      id,
+      provider: `external:${id}`,
+      name: agent.name || id,
+      roles: agent.roles,
+      capabilities: agent.capabilities
+    }));
 }
 
 export async function configureCockpitProvider(cwd: string, request: CockpitSetupRequest): Promise<CockpitSetupStatus> {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CockpitExternalAgentOption,
   CockpitProviderConnectionResult,
   CockpitProviderKeyRequest,
   CockpitRoleAssignment,
@@ -34,6 +35,7 @@ export function KeyRoleManager({
 }: KeyRoleManagerProps) {
   const providers = useMemo(() => setupStatus?.providers.filter((provider) => provider.authRequired) ?? [], [setupStatus]);
   const providerIds = providers.map((provider) => provider.id);
+  const externalAgents = setupStatus?.externalAgents ?? [];
   const initialProvider = setupStatus?.selectedProvider ?? setupStatus?.recommendedProvider ?? providerIds[0] ?? "openrouter";
   const [tab, setTab] = useState<"keys" | "roles">("keys");
   const [provider, setProvider] = useState(initialProvider);
@@ -131,8 +133,8 @@ export function KeyRoleManager({
                 <div key={assignment.role} className="te-role-row">
                   <strong>{assignment.role}</strong>
                   <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, providers, assignment.model) }))}>
-                    {["auto", ...providerIds, assignment.provider.startsWith("external:") ? assignment.provider : ""].filter(Boolean).map((item) => (
-                      <option key={item} value={item}>{item}</option>
+                    {roleProviderOptions(providerIds, externalAgents, assignment.provider).map((item) => (
+                      <option key={item} value={item}>{labelProvider(item, externalAgents)}</option>
                     ))}
                   </select>
                   <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} />
@@ -159,8 +161,18 @@ function updateAssignment(assignments: CockpitRoleAssignment[], role: string, pa
   return assignments.map((assignment) => assignment.role === role ? { ...assignment, ...patch } : assignment);
 }
 
+export function roleProviderOptions(providerIds: string[], externalAgents: CockpitExternalAgentOption[], currentProvider: string): string[] {
+  return [...new Set([
+    "auto",
+    ...providerIds,
+    ...externalAgents.map((agent) => agent.provider),
+    currentProvider.startsWith("external:") ? currentProvider : ""
+  ].filter(Boolean))];
+}
+
 function defaultModelFor(provider: string, providers: Array<{ id: string; model: string }>, fallback: string): string {
   if (provider === "auto") return "auto";
+  if (provider.startsWith("external:")) return "auto";
   return providers.find((item) => item.id === provider)?.model || fallback || "auto";
 }
 
@@ -202,6 +214,8 @@ function suggestedModelFor(provider: string): string {
   return lookup[provider] ?? "";
 }
 
-function labelProvider(provider: string): string {
+function labelProvider(provider: string, externalAgents: CockpitExternalAgentOption[] = []): string {
+  const externalAgent = externalAgents.find((agent) => agent.provider === provider);
+  if (externalAgent) return `${externalAgent.provider} (${externalAgent.name})`;
   return provider.replace(/_/g, " ");
 }
