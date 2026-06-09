@@ -324,7 +324,7 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     policyRef: ledger.writeArtifact("policies", JSON.stringify(policy, null, 2), "json")
   });
 
-  const retrievedTraces = policyMode === "off" ? [] : await retrieveSimilar(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK);
+  const retrievedTraces = policyMode === "off" ? [] : await retrieveSimilar(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK, policy.tracePolicy);
   state.retrievedObjectiveTraces = retrievedTraces;
   ledger.append({
     type: "trace_retrieval",
@@ -586,6 +586,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   state.plan = applyTaskGovernanceToPlan(state.plan, state.taskGovernance);
   state.plan = applyPolicyGovernanceToPlan(state.plan, policy);
   if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract, policy);
+  state.plan = enforceParallelRolePolicy(state.plan, policy);
   if (!externalPlanner) {
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
@@ -598,7 +599,8 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     workflowKind: state.workflowKind,
     riskLevel: plan.riskLevel,
     highRisk: plan.riskLevel === "high",
-    debate: Boolean(plan.debateRecommended || config.debate.enabled),
+    debate: parallelRolesAllowed(state) && Boolean(plan.debateRecommended || config.debate.enabled),
+    allowParallelRoles: parallelRolesAllowed(state),
     allowedRoles: state.objectiveContract?.allowedRoles,
     allowedPhases: state.objectiveContract?.allowedPhases
   });
@@ -681,7 +683,8 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
       })
     }
   ];
-  if (config.debate.enabled && config.debate.max_candidates > 1) {
+  const allowParallelRoles = parallelRolesAllowed(state);
+  if (allowParallelRoles && config.debate.enabled && config.debate.max_candidates > 1) {
     candidateJobs.push({
       label: "coder_b",
       run: async () => ({
@@ -690,7 +693,14 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
       })
     });
   }
-  if (options.livePatch && access.cloudAllowed) {
+  if (options.livePatch && !allowParallelRoles) {
+    ledger.append({
+      type: "evidence_update",
+      phase: "coding",
+      role: "coder_a",
+      evidence: ["live patch optional branch disabled by planningPolicy.allowParallelRoles=false"]
+    });
+  } else if (options.livePatch && access.cloudAllowed) {
     candidateJobs.push({
       label: "livePatch",
       run: async () => {
@@ -702,7 +712,8 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
           plan: state.plan!,
           contextSelection: state.contextSelection!,
           visualSpec: state.visualSpec,
-          ledger
+          ledger,
+          allowParallelRoles
         };
         const patchPlans = await buildLivePatchPlans(livePatchInput);
         const budgetStatus = setBudgetStatus(state, preflightBudget(
@@ -801,8 +812,12 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
     reviewRef,
     recommendation: state.review.overallRecommendation
   });
-  state.debateRounds = buildDebateRounds(state.candidates, state.review, config.debate.max_rounds);
-  await maybeRunPreJudgeModelDebate({ cwd, goal, config, router, ledger, state, access, options });
+  if (parallelRolesAllowed(state)) {
+    state.debateRounds = buildDebateRounds(state.candidates, state.review, config.debate.max_rounds);
+    await maybeRunPreJudgeModelDebate({ cwd, goal, config, router, ledger, state, access, options });
+  } else {
+    state.debateRounds = [];
+  }
   ledger.append({ type: "evidence_update", phase: "review", role: "reviewer", evidence: [`debate rounds=${state.debateRounds.length}`] });
 
   const judge = new JudgeAgent();
@@ -1699,6 +1714,7 @@ function applyTaskGovernanceToPlan(plan: Plan, governance: NonNullable<AgentGrap
 
 function applyPolicyGovernanceToPlan(plan: Plan, policy?: OrchestrationPolicyGenome): Plan {
   if (!policy) return plan;
+  if (!policy.planningPolicy.allowParallelRoles) return { ...plan, debateRecommended: false, reasonForDebate: undefined };
   const patchLike = plan.requiresPatchWorkflow !== false && plan.taskType !== "analysis";
   const requiresReviewer = shouldPolicyRequireReviewer(policy, plan.riskLevel, patchLike);
   const requiresJudge = shouldPolicyRequireJudge(policy, plan.riskLevel, patchLike);
@@ -1708,6 +1724,15 @@ function applyPolicyGovernanceToPlan(plan: Plan, policy?: OrchestrationPolicyGen
     debateRecommended: true,
     reasonForDebate: plan.reasonForDebate ?? `Orchestration policy escalated governance: reviewerThreshold=${policy.routingPolicy.reviewerThreshold}, judgeThreshold=${policy.routingPolicy.judgeThreshold}.`
   };
+}
+
+function enforceParallelRolePolicy(plan: Plan, policy?: OrchestrationPolicyGenome): Plan {
+  if (policy?.planningPolicy.allowParallelRoles !== false) return plan;
+  return { ...plan, debateRecommended: false, reasonForDebate: undefined };
+}
+
+function parallelRolesAllowed(state: AgentGraphState): boolean {
+  return state.orchestrationPolicy?.planningPolicy.allowParallelRoles !== false;
 }
 
 async function maybeRunGovernedReadOnlyAdvisory(input: {

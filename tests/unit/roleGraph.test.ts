@@ -32,6 +32,16 @@ describe("role graph", () => {
     expect(optionalNodeCanSkip(graph, "coder_b")).toBe(true);
   });
 
+  it("disables optional parallel candidate nodes when policy forbids parallel roles", () => {
+    const graph = buildRoleGraph({ workflowKind: "patch", debate: true, highRisk: true, allowParallelRoles: false });
+    const roles = graph.nodes.map((node) => node.role);
+
+    expect(graph.workflowKind).toBe("high_risk_patch");
+    expect(roles).not.toContain("coder_b");
+    expect(roles).toEqual(expect.arrayContaining(["coder_a", "reviewer", "judge"]));
+    expect(graph.nodes.find((node) => node.role === "reviewer")?.dependencies).toEqual(["coder_a"]);
+  });
+
   it("filters forbidden contract roles out of the role graph", () => {
     const graph = buildRoleGraph({
       workflowKind: "patch",

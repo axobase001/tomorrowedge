@@ -18,6 +18,28 @@ Each policy genome is a structured set of orchestration preferences:
 - repair retry behavior
 - stop mode
 
+## Runtime Status
+
+As of `1.3.1`, the core policy genome is connected to the runtime path, not only
+to docs or trace metadata:
+
+- `contractPolicy` changes Objective Contract depth, success criteria, required
+  evidence, verification rubric, and stop conditions.
+- `planningPolicy.maxStepsMode` and `requirePlanStepEvidenceBinding` affect
+  contract-derived plans.
+- `routingPolicy`, `verificationPolicy`, `repairPolicy`, and `stopPolicy`
+  influence routing tags, verification strictness, repair budgets, and final
+  stop decisions.
+
+As of `1.3.2`, the remaining policy knobs in this section are also wired:
+
+- `planningPolicy.allowParallelRoles=false` disables optional `coder_b`,
+  parallel patch candidates, and debate-style optional branches while keeping
+  required reviewer/judge governance available.
+- `tracePolicy.preferRecent`, `preferSuccessTraces`, `preferFailureTraces`, and
+  `avoidStaleTraces` weight `retrieveSimilar` scoring alongside same-scenario
+  and same-workflow boosts.
+
 Mutation is limited to these fields. It does not modify prompts, permissions,
 provider credentials, shell policy, or source code.
 

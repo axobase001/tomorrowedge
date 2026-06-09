@@ -29,6 +29,7 @@ export type LivePatchInput = {
   contextSelection: ContextSelection;
   visualSpec?: StructuredVisualSpec;
   ledger?: EventLedger;
+  allowParallelRoles?: boolean;
 };
 
 export type LivePatchPlan = {
@@ -40,7 +41,7 @@ export type LivePatchPlan = {
 };
 
 export async function buildLivePatchPlans(input: LivePatchInput): Promise<LivePatchPlan[]> {
-  const roles: Array<"coder_a" | "coder_b"> = ["coder_a", "coder_b"];
+  const roles: Array<"coder_a" | "coder_b"> = input.allowParallelRoles === false ? ["coder_a"] : ["coder_a", "coder_b"];
   const context = await buildPatchContext(input.cwd, input.goal, input.contextSelection, input.config.privacy.allow_cloud_repo_context);
   return roles.map((role) => {
     const assignment = input.router.assignmentFor(role);

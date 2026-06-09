@@ -1,8 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ScenarioProfile, ScenarioType } from "../scenarios/scenarioTypes.js";
+import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import type { ObjectiveTraceV1 } from "./objectiveTrace.js";
 import { scoreTraceUtility } from "./traceScorer.js";
+
+export type TraceRetrievalPolicy = Pick<OrchestrationPolicyGenome["tracePolicy"],
+  "preferRecent" | "preferSuccessTraces" | "preferFailureTraces" | "avoidStaleTraces">;
 
 export async function addTrace(cwd: string, trace: ObjectiveTraceV1): Promise<void> {
   const traces = await readTraces(cwd, { limit: 10_000, newestFirst: false });
@@ -28,14 +32,39 @@ export async function readTraces(cwd: string, options: { limit?: number; newestF
   return options.newestFirst === false ? selected : selected.reverse();
 }
 
-export async function retrieveSimilar(cwd: string, goal: string, scenarioProfile: ScenarioProfile, topK = 3): Promise<ObjectiveTraceV1[]> {
+export async function retrieveSimilar(
+  cwd: string,
+  goal: string,
+  scenarioProfile: ScenarioProfile,
+  topK = 3,
+  tracePolicy?: TraceRetrievalPolicy
+): Promise<ObjectiveTraceV1[]> {
   const traces = await readTraces(cwd, { limit: 200, newestFirst: true });
   return traces
-    .map((trace) => ({ trace, score: scoreTraceUtility(trace, goal, scenarioProfile).score }))
+    .map((trace) => ({ trace, score: scoreTraceForRetrieval(trace, goal, scenarioProfile, tracePolicy) }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || b.trace.createdAt.localeCompare(a.trace.createdAt))
     .slice(0, topK)
     .map((item) => item.trace);
+}
+
+export function scoreTraceForRetrieval(
+  trace: ObjectiveTraceV1,
+  goal: string,
+  scenarioProfile: ScenarioProfile,
+  tracePolicy?: TraceRetrievalPolicy
+): number {
+  let score = scoreTraceUtility(trace, goal, scenarioProfile).score;
+  if (trace.scenarioProfile.scenarioType === scenarioProfile.scenarioType) score += 6;
+  if (trace.scenarioProfile.likelyWorkflowKind === scenarioProfile.likelyWorkflowKind) score += 4;
+
+  if (!tracePolicy) return score;
+
+  if (tracePolicy.preferSuccessTraces && trace.outcome.finalStatus === "success") score += 8;
+  if (tracePolicy.preferFailureTraces && (trace.outcome.finalStatus === "failure" || trace.outcome.finalStatus === "partial")) score += 8;
+  if (tracePolicy.preferRecent) score += recentBoost(trace.createdAt);
+  if (tracePolicy.avoidStaleTraces) score -= stalePenalty(trace.createdAt);
+  return Math.max(0, score);
 }
 
 export async function sampleRecent(cwd: string, n = 5): Promise<ObjectiveTraceV1[]> {
@@ -63,3 +92,25 @@ function traceFile(cwd: string): string {
   return path.join(cwd, ".tomorrowedge", "objective-traces.jsonl");
 }
 
+function recentBoost(createdAt: string): number {
+  const ageDays = ageInDays(createdAt);
+  if (ageDays === undefined) return 0;
+  if (ageDays <= 7) return 6;
+  if (ageDays <= 30) return 3;
+  return 0;
+}
+
+function stalePenalty(createdAt: string): number {
+  const ageDays = ageInDays(createdAt);
+  if (ageDays === undefined) return 0;
+  if (ageDays > 180) return 16;
+  if (ageDays > 90) return 10;
+  if (ageDays > 30) return 5;
+  return 0;
+}
+
+function ageInDays(createdAt: string): number | undefined {
+  const parsed = Date.parse(createdAt);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, (Date.now() - parsed) / (24 * 60 * 60 * 1000));
+}

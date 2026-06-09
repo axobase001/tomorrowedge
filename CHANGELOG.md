@@ -7,6 +7,22 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-06-10
+
+1.3.2 polishes the 1.3 runtime release by making the README narrative sharper
+and wiring the remaining policy knobs into execution and trace retrieval.
+
+### Changed
+
+- README now merges the new and old top-level definitions into one definition
+  and moves the self-iterating orchestration section before differentiation.
+- `planningPolicy.allowParallelRoles=false` now disables optional `coder_b`,
+  parallel patch candidates, and debate-style optional branches while keeping
+  required reviewer/judge governance intact.
+- `tracePolicy.preferRecent`, `preferSuccessTraces`, `preferFailureTraces`, and
+  `avoidStaleTraces` now weight `retrieveSimilar` scoring with recency,
+  success/failure, stale, same-scenario, and same-workflow signals.
+
 ## [1.3.1] - 2026-06-10
 
 1.3.1 hardens the 1.3 self-iterating orchestration release by moving

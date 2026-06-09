@@ -34,6 +34,7 @@ export type BuildRoleGraphInput = {
   highRisk?: boolean;
   riskLevel?: RiskLevel;
   debate?: boolean;
+  allowParallelRoles?: boolean;
   repairLoop?: boolean;
   allowedRoles?: AgentRole[];
   allowedPhases?: EventPhase[];
@@ -41,14 +42,15 @@ export type BuildRoleGraphInput = {
 
 export function buildRoleGraph(input: BuildRoleGraphInput): RoleGraph {
   const highRisk = Boolean(input.highRisk || input.riskLevel === "high");
+  const allowParallelRoles = input.allowParallelRoles !== false;
   let graph: RoleGraph;
   if (input.repairLoop) return constrainRoleGraph(repairLoopGraph(), input, highRisk);
   if (input.workflowKind === "read_only" || input.workflowKind === "advisory") {
     graph = readOnlyGraph(input.workflowKind, Boolean(highRisk || input.debate));
     return constrainRoleGraph(graph, input, highRisk);
   }
-  if (highRisk) return constrainRoleGraph(patchGraph("high_risk_patch", true, true), input, highRisk);
-  if (input.debate) return constrainRoleGraph(patchGraph("debate_patch", false, true), input, highRisk);
+  if (highRisk) return constrainRoleGraph(patchGraph("high_risk_patch", true, allowParallelRoles), input, highRisk);
+  if (input.debate && allowParallelRoles) return constrainRoleGraph(patchGraph("debate_patch", false, true), input, highRisk);
   if (input.workflowKind === "vision_patch") return constrainRoleGraph(patchGraph("vision_patch", false, false), input, highRisk);
   if (input.workflowKind === "ask_user") {
     graph = {
@@ -91,7 +93,7 @@ function patchGraph(workflowKind: RoleGraph["workflowKind"], highRisk: boolean, 
     node("explorer", ["planner"], { produces: ["context"], consumes: ["plan"] }),
     node("coder_a", ["explorer"], { produces: ["patch_candidate", "patch_evidence"], consumes: ["plan", "context"] })
   ];
-  if (debate || highRisk) nodes.push(node("coder_b", ["explorer"], { required: false, canSkip: true, produces: ["patch_candidate", "patch_evidence"], consumes: ["plan", "context"] }));
+  if (debate) nodes.push(node("coder_b", ["explorer"], { required: false, canSkip: true, produces: ["patch_candidate", "patch_evidence"], consumes: ["plan", "context"] }));
   nodes.push(
     node("reviewer", debate || highRisk ? ["coder_a", "coder_b"] : ["coder_a"], { required: highRisk, produces: ["review_evidence"], consumes: ["patch_candidate", "patch_evidence"] }),
     node("judge", ["reviewer"], { required: true, produces: ["judge_decision"], consumes: ["patch_candidate", "patch_evidence", "review_evidence"] }),

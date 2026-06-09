@@ -4,9 +4,7 @@
 
 **中文** | [English](#english)
 
-> **新版定义：** 明日边缘是一个 **面向用户场景的自迭代 Agent 编排层 GUI/runtime**。它以多模型强治理、多 Agent 工作流编排和本地 GUI cockpit 为底座，并在 1.3 引入 **Objective Contract、objective-action-feedback trace 与 Orchestration Policy Genome**。核心创新不是让某个模型更强，而是把 **编排策略本身** 变成可审计、可评分、可离线改进的运行时对象。
-
-明日边缘是一个 **基于多模型的强模型治理与多 Agent 工作流编排的编排层 GUI 工具**。
+明日边缘是一个 **面向用户场景的自迭代 Agent 编排层 GUI/runtime**：它以 **多模型强治理** 和 **多 Agent 工作流编排** 为核心，通过 **Objective Contract、objective-action-feedback trace 与 Orchestration Policy Genome** 把编排策略本身变成可审计、可评分、可离线改进的运行时对象。
 
 它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents 和人类授权组织成一个可监督、可审计、可回滚的软件工程工作流。
 
@@ -32,70 +30,6 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 TomorrowEdge 关注的不是“接入更多模型”本身，而是 **预算约束下的异构模型系统效率**：哪些步骤值得调用强模型，哪些步骤应该交给便宜模型，什么时候需要外部 agent，什么时候需要本地模型，什么时候必须让人类确认。它把这些选择变成可解释、可追踪、可复盘的工作流。
 
 OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么让多个模型和多个 agents 在一个真实工程任务里分工、争辩、监督、交付”。
-
-## 差异化
-
-| 对比对象 | 它们通常解决什么 | TomorrowEdge 解决什么 |
-| --- | --- | --- |
-| 单模型 coding CLI | 让一个模型直接读写代码 | 把任务拆成 planner / coder / reviewer / judge / repairer 等角色，并为每个角色选择合适模型 |
-| Codex / Claude Code | 给强 agent 完整工具权限 | 治理强 agent 的调用位置、预算、证据、审查和最终交付 |
-| OpenRouter | 路由模型请求 | 路由角色、能力、预算和工程工作流 |
-| LangGraph / CrewAI / AutoGen | 构建 agent framework | 把 native workflow 和现有 agent framework 纳入同一个可视化 cockpit |
-| Prompt / workflow optimization tools | 优化 prompt、固定 workflow 或 benchmark 分数 | 把 **编排策略本身** 作为进化单位：目标契约生成、规划、路由、验证、修复、停止和 trace 检索都可被审计、评分和离线改进 |
-| 普通 GUI wrapper | 显示聊天和输出 | 显示路由理由、成本、风险、diff、测试、fallback、审批、trace 和 artifact |
-
-一句话：**OpenRouter 路由请求；TomorrowEdge 路由目标、能力、角色、工具、预算、证据和工程交付。**
-
-In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, and engineering delivery.**
-
-## 当前版本
-
-当前版本：`1.3.1`。
-
-- `1.3.1` integrates the Orchestration Policy Genome into the runtime path: policy fields now affect contract depth, plan-step evidence binding, role routing, verification strictness, repair limits, stop decisions, and contract tool/action gates.
-- `1.3.0` introduces the contract-first self-iterating orchestration layer: Objective Contracts before planning, objective-action-feedback trace memory after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI inspection surfaces for contract, trace, and policy state.
-- `1.2.15` releases the failure-memory/error-loop upgrade: retrieval policy now supports balanced exploit, forced exploit, forced exploration, and deterministic random control; failure lessons store scoped correction rules and verification status; error-loop experiments export falsifiable hypothesis metrics; and ablation runs can compare memory-off, write-only, retrieve-only, success-only, failure-only, and random-control modes.
-- `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, model discovery now refreshes common non-OpenRouter providers, provider tests smoke-test the selected model, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, local cockpit URLs no longer expose nonce tokens in the address bar, strong-agent role budgets now also debit the global strong-agent pool, parallel candidate state is normalized before review, document-only deliverables avoid irrelevant repository test runs, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
-- `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
-- `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
-- `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
-- `1.2.10` upgrades planner/routing/budget governance: planning can use a structured model-backed planner with native fallback, native plans are adaptive instead of fixed four-step templates, routes can update after planning, and per-role budget caps are now configurable.
-- `1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start blank.
-- `1.2.8` fixes DeepSeek GUI key-manager onboarding by supplying the known default endpoint and migrating older blank `base_url` configs at load time.
-- `1.2.7` adds GUI language switching. The local client defaults to English and can switch to Chinese from the top bar, with the preference saved locally.
-- `1.2.6` adds a GUI `Keys` panel for simple provider API-key setup and per-role model assignment while keeping raw keys out of config.
-- `1.2.5` tightens GUI E2E coverage for telemetry routing, drawer open/close, and patch/shell approval completion.
-- `1.2.4` clears the latest community GUI/config issue batch: no-op approvals, stale session selectors, setup defaults, read-only path detection, and MCP-aware provider reference validation.
-- `1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly sent through the patch approval workflow.
-- `1.2.2` hardens GUI/live-model defaults and release packaging after the latest community PR sweep.
-- `1.2.1` fixes local dev startup so `client`, `desktop`, and `serve` build React cockpit assets before launching, avoiding stale embedded fallback UI on fresh checkouts.
-- `1.2.0` GUI client adds first-run provider/model setup, local env-key storage, provider connection testing, and a composer-side access-mode dropdown for `restricted` / `partial` / `full`.
-- `1.1.10` GUI CSS now supports OS dark mode in the React and fallback HTML cockpits, and the fallback HTML cockpit no longer hard-locks 1080px/980px minimum widths.
-- `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
-- `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
-- `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
-- `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开本地 cockpit URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
-
-- `1.1.5` 是 GitHub issue 队列加固版：合并 local cockpit API 安全校验、React GUI client 接入、desktop launcher 生命周期测试、package zip/pack smoke、README promise map，并补上 CLI contract 测试与 benchmark demo 警告。
-
-- `1.1.4` 修正 GUI/desktop 品牌标识：客户端顶部栏、favicon 和 web manifest 现在使用 TomorrowEdge 几何 mark，不再退回浏览器默认图标。
-
-- `1.1.3` 修复 GUI command composer 的严重交互问题：Enter 现在发送自然语言指令，Shift+Enter 保留换行，并保护中文/日文/韩文输入法 composition，不会在组词中误发送。
-- `1.1.2` 新增可选本地桌面 app 启动方式：`tedge desktop` / `npm run desktop` 会复用同一套 nonce-protected local cockpit，在独立桌面窗口中打开 TomorrowEdge。默认不强制安装 Electron；需要 Electron 壳时可使用 `--runtime electron`。
-- `1.1.1` 把主入口收口为 **TomorrowEdge GUI Client**：新增 `tedge client` / `npm run client`，README 隐藏 TUI 截图介绍和 UI style 说明，让用户第一次启动时只看到一个清晰客户端入口。
-- `1.1.0` 引入 **TomorrowEdge GUI Client**：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 是默认操作者入口，而不是后台管理系统。
-- `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
-- `1.0.0` 的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
-
-- TomorrowEdge preserves full artifacts for replay, but projects compact evidence packets to models.
-- Reviewer/Judge 可以消费结构化 evidence packets，而不是只看 raw diff/log。
-- `tedge trace latest --diagnostics` 和 `tedge diagnostics latest` 会显示 routing、fallback、projection、budget、repair、trace completeness。
-- 外部 agent handoff 新增 typed task/result envelopes，为真实 Codex/Claude Code role binding 打基础。
-
-Capability maturity: see [Capability Status](docs/CAPABILITY_STATUS.md) for the
-authoritative stable / experimental / placeholder / planned table.
-README GUI, desktop, and release-package promises are tracked in
-[README Promise Map](docs/README_PROMISE_MAP.md).
 
 ## Self-Iterating Agent Orchestration Layer
 
@@ -152,6 +86,71 @@ Docs:
 - [Trace Memory](docs/TRACE_MEMORY.md)
 - [Self-Iterating Orchestration](docs/SELF_ITERATING_ORCHESTRATION.md)
 - [Policy Evolution](docs/POLICY_EVOLUTION.md)
+
+## 差异化
+
+| 对比对象 | 它们通常解决什么 | TomorrowEdge 解决什么 |
+| --- | --- | --- |
+| 单模型 coding CLI | 让一个模型直接读写代码 | 把任务拆成 planner / coder / reviewer / judge / repairer 等角色，并为每个角色选择合适模型 |
+| Codex / Claude Code | 给强 agent 完整工具权限 | 治理强 agent 的调用位置、预算、证据、审查和最终交付 |
+| OpenRouter | 路由模型请求 | 路由角色、能力、预算和工程工作流 |
+| LangGraph / CrewAI / AutoGen | 构建 agent framework | 把 native workflow 和现有 agent framework 纳入同一个可视化 cockpit |
+| Prompt / workflow optimization tools | 优化 prompt、固定 workflow 或 benchmark 分数 | 把 **编排策略本身** 作为进化单位：目标契约生成、规划、路由、验证、修复、停止和 trace 检索都可被审计、评分和离线改进 |
+| 普通 GUI wrapper | 显示聊天和输出 | 显示路由理由、成本、风险、diff、测试、fallback、审批、trace 和 artifact |
+
+一句话：**OpenRouter 路由请求；TomorrowEdge 路由目标、能力、角色、工具、预算、证据和工程交付。**
+
+In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, and engineering delivery.**
+
+## 当前版本
+
+当前版本：`1.3.2`。
+
+- `1.3.2` polishes the 1.3 runtime release: README now has one top-level definition and the self-iterating orchestration section appears before differentiation; `planningPolicy.allowParallelRoles=false` disables optional parallel candidate/debate branches; trace retrieval now applies `tracePolicy` recency, success/failure, stale, same-scenario, and same-workflow weighting.
+- `1.3.1` integrates the Orchestration Policy Genome into the runtime path: policy fields now affect contract depth, plan-step evidence binding, role routing, verification strictness, repair limits, stop decisions, and contract tool/action gates.
+- `1.3.0` introduces the contract-first self-iterating orchestration layer: Objective Contracts before planning, objective-action-feedback trace memory after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI inspection surfaces for contract, trace, and policy state.
+- `1.2.15` releases the failure-memory/error-loop upgrade: retrieval policy now supports balanced exploit, forced exploit, forced exploration, and deterministic random control; failure lessons store scoped correction rules and verification status; error-loop experiments export falsifiable hypothesis metrics; and ablation runs can compare memory-off, write-only, retrieve-only, success-only, failure-only, and random-control modes.
+- `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, model discovery now refreshes common non-OpenRouter providers, provider tests smoke-test the selected model, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, local cockpit URLs no longer expose nonce tokens in the address bar, strong-agent role budgets now also debit the global strong-agent pool, parallel candidate state is normalized before review, document-only deliverables avoid irrelevant repository test runs, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
+- `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
+- `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
+- `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
+- `1.2.10` upgrades planner/routing/budget governance: planning can use a structured model-backed planner with native fallback, native plans are adaptive instead of fixed four-step templates, routes can update after planning, and per-role budget caps are now configurable.
+- `1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start blank.
+- `1.2.8` fixes DeepSeek GUI key-manager onboarding by supplying the known default endpoint and migrating older blank `base_url` configs at load time.
+- `1.2.7` adds GUI language switching. The local client defaults to English and can switch to Chinese from the top bar, with the preference saved locally.
+- `1.2.6` adds a GUI `Keys` panel for simple provider API-key setup and per-role model assignment while keeping raw keys out of config.
+- `1.2.5` tightens GUI E2E coverage for telemetry routing, drawer open/close, and patch/shell approval completion.
+- `1.2.4` clears the latest community GUI/config issue batch: no-op approvals, stale session selectors, setup defaults, read-only path detection, and MCP-aware provider reference validation.
+- `1.2.3` fixes GUI tasks that are semantically read-only but were incorrectly sent through the patch approval workflow.
+- `1.2.2` hardens GUI/live-model defaults and release packaging after the latest community PR sweep.
+- `1.2.1` fixes local dev startup so `client`, `desktop`, and `serve` build React cockpit assets before launching, avoiding stale embedded fallback UI on fresh checkouts.
+- `1.2.0` GUI client adds first-run provider/model setup, local env-key storage, provider connection testing, and a composer-side access-mode dropdown for `restricted` / `partial` / `full`.
+- `1.1.10` GUI CSS now supports OS dark mode in the React and fallback HTML cockpits, and the fallback HTML cockpit no longer hard-locks 1080px/980px minimum widths.
+- `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
+- `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
+- `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
+- `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开本地 cockpit URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
+
+- `1.1.5` 是 GitHub issue 队列加固版：合并 local cockpit API 安全校验、React GUI client 接入、desktop launcher 生命周期测试、package zip/pack smoke、README promise map，并补上 CLI contract 测试与 benchmark demo 警告。
+
+- `1.1.4` 修正 GUI/desktop 品牌标识：客户端顶部栏、favicon 和 web manifest 现在使用 TomorrowEdge 几何 mark，不再退回浏览器默认图标。
+
+- `1.1.3` 修复 GUI command composer 的严重交互问题：Enter 现在发送自然语言指令，Shift+Enter 保留换行，并保护中文/日文/韩文输入法 composition，不会在组词中误发送。
+- `1.1.2` 新增可选本地桌面 app 启动方式：`tedge desktop` / `npm run desktop` 会复用同一套 nonce-protected local cockpit，在独立桌面窗口中打开 TomorrowEdge。默认不强制安装 Electron；需要 Electron 壳时可使用 `--runtime electron`。
+- `1.1.1` 把主入口收口为 **TomorrowEdge GUI Client**：新增 `tedge client` / `npm run client`，README 隐藏 TUI 截图介绍和 UI style 说明，让用户第一次启动时只看到一个清晰客户端入口。
+- `1.1.0` 引入 **TomorrowEdge GUI Client**：简化顶栏、轻量任务队列、中心 workflow 主区、右侧 collapsed telemetry summary，以及底部自然语言 command composer。GUI 是默认操作者入口，而不是后台管理系统。
+- `1.0.1` 是 1.0 后的稳定性修复版本：修正 live provider agent kind 标记，补上真实 Ink raw-mode 键盘 smoke 测试，并清理/关闭当前远端 issue 与过期 PR。
+- `1.0.0` 的重点是 **Architecture Upgrade Phase 1**：引入 context projection、evidence packet、role-routing diagnostics、strong-agent budget scaffolding 和 typed external-agent handoff contracts。
+
+- TomorrowEdge preserves full artifacts for replay, but projects compact evidence packets to models.
+- Reviewer/Judge 可以消费结构化 evidence packets，而不是只看 raw diff/log。
+- `tedge trace latest --diagnostics` 和 `tedge diagnostics latest` 会显示 routing、fallback、projection、budget、repair、trace completeness。
+- 外部 agent handoff 新增 typed task/result envelopes，为真实 Codex/Claude Code role binding 打基础。
+
+Capability maturity: see [Capability Status](docs/CAPABILITY_STATUS.md) for the
+authoritative stable / experimental / placeholder / planned table.
+README GUI, desktop, and release-package promises are tracked in
+[README Promise Map](docs/README_PROMISE_MAP.md).
 
 ## 3-minute tryout
 
@@ -552,7 +551,13 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.3.1`.
+Current version: `1.3.2`.
+
+`1.3.2` polishes the 1.3 runtime release: README now has one top-level
+definition and the self-iterating orchestration section appears before
+differentiation; `planningPolicy.allowParallelRoles=false` disables optional
+parallel candidate/debate branches; trace retrieval now applies `tracePolicy`
+recency, success/failure, stale, same-scenario, and same-workflow weighting.
 
 `1.3.1` integrates the Orchestration Policy Genome into the runtime path:
 policy fields now affect contract depth, plan-step evidence binding, role

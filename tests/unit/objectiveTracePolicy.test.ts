@@ -30,6 +30,48 @@ describe("objective trace memory and policy evolution", () => {
     }
   });
 
+  it("weights retrieved traces with tracePolicy success, failure, recency, and stale preferences", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-trace-policy-weight-"));
+    try {
+      const recentSuccess = makeTrace("fix failing test", "success", {
+        traceId: "recent_success",
+        createdAt: new Date().toISOString()
+      });
+      const recentFailure = makeTrace("fix failing test", "failure", {
+        traceId: "recent_failure",
+        createdAt: new Date().toISOString()
+      });
+      const staleSuccess = makeTrace("fix failing test", "success", {
+        traceId: "stale_success",
+        createdAt: "2020-01-01T00:00:00.000Z"
+      });
+      await addTrace(cwd, staleSuccess);
+      await addTrace(cwd, recentSuccess);
+      await addTrace(cwd, recentFailure);
+
+      const failureFirst = await retrieveSimilar(cwd, "fix failing test", recentSuccess.scenarioProfile, 3, {
+        preferRecent: false,
+        preferSuccessTraces: false,
+        preferFailureTraces: true,
+        avoidStaleTraces: false
+      });
+      const freshSuccessFirst = await retrieveSimilar(cwd, "fix failing test", recentSuccess.scenarioProfile, 3, {
+        preferRecent: true,
+        preferSuccessTraces: true,
+        preferFailureTraces: false,
+        avoidStaleTraces: true
+      });
+
+      expect(failureFirst[0]?.traceId).toBe("recent_failure");
+      expect(freshSuccessFirst[0]?.traceId).toBe("recent_success");
+      expect(freshSuccessFirst.map((trace) => trace.traceId).indexOf("recent_success")).toBeLessThan(
+        freshSuccessFirst.map((trace) => trace.traceId).indexOf("stale_success")
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("evolves and persists policy variants from objective traces", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-policy-evolve-"));
     try {
@@ -91,7 +133,11 @@ describe("objective trace memory and policy evolution", () => {
   });
 });
 
-function makeTrace(goal: string, status: ObjectiveTraceV1["outcome"]["finalStatus"]): ObjectiveTraceV1 {
+function makeTrace(
+  goal: string,
+  status: ObjectiveTraceV1["outcome"]["finalStatus"],
+  overrides: { traceId?: string; createdAt?: string } = {}
+): ObjectiveTraceV1 {
   const workflowIntent = withProvider(classifyWorkflowIntentLocally(goal));
   const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: "partial" });
   const contract = generateNativeObjectiveContract({
@@ -105,9 +151,9 @@ function makeTrace(goal: string, status: ObjectiveTraceV1["outcome"]["finalStatu
   const { verification } = verifyAndRepairContract(contract, { accessMode: "partial", workflowIntent, scenarioProfile, config: defaultConfig, baseline: contract });
   return {
     schemaVersion: "objective-trace/v1",
-    traceId: "trace_test",
+    traceId: overrides.traceId ?? "trace_test",
     runId: "session_test",
-    createdAt: "2026-06-09T00:00:00.000Z",
+    createdAt: overrides.createdAt ?? "2026-06-09T00:00:00.000Z",
     goal,
     scenarioProfile,
     contract,

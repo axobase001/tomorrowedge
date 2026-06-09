@@ -5,6 +5,7 @@ import type { ObjectiveContractV1 } from "./objectiveContract.js";
 
 export function contractToPlan(contract: ObjectiveContractV1, policy?: OrchestrationPolicyGenome): Plan {
   const patchLike = contract.workflowKind !== "read_only" && contract.workflowKind !== "advisory" && contract.workflowKind !== "ask_user";
+  const allowParallelRoles = policy?.planningPolicy.allowParallelRoles !== false;
   return {
     goal: contract.goal,
     taskType: contract.taskType,
@@ -19,11 +20,13 @@ export function contractToPlan(contract: ObjectiveContractV1, policy?: Orchestra
     acceptanceCriteria: contract.successCriteria,
     steps: stepsFromContract(contract, policy),
     verificationCommands: contract.verificationRubric.requiredCommands,
-    debateRecommended: contract.riskLevel === "high"
+    debateRecommended: allowParallelRoles && (
+      contract.riskLevel === "high"
       || contract.reasoningSensitivity === "high"
       || shouldPolicyRequireReviewer(policy, contract.riskLevel, patchLike)
-      || shouldPolicyRequireJudge(policy, contract.riskLevel, patchLike),
-    reasonForDebate: debateReason(contract, policy, patchLike)
+      || shouldPolicyRequireJudge(policy, contract.riskLevel, patchLike)
+    ),
+    reasonForDebate: allowParallelRoles ? debateReason(contract, policy, patchLike) : undefined
   };
 }
 
@@ -42,8 +45,8 @@ export function overlayPlanWithContract(plan: Plan, contract: ObjectiveContractV
     constraints: mergeStrings(contractPlan.constraints, plan.constraints ?? []),
     steps: mergePlanSteps(contractPlan.steps, plan.steps, policy),
     verificationCommands: mergeStrings(contract.verificationRubric.requiredCommands, plan.verificationCommands ?? []),
-    debateRecommended: plan.debateRecommended || contractPlan.debateRecommended,
-    reasonForDebate: plan.reasonForDebate ?? contractPlan.reasonForDebate
+    debateRecommended: policy?.planningPolicy.allowParallelRoles === false ? false : plan.debateRecommended || contractPlan.debateRecommended,
+    reasonForDebate: policy?.planningPolicy.allowParallelRoles === false ? undefined : plan.reasonForDebate ?? contractPlan.reasonForDebate
   };
 }
 

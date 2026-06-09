@@ -126,6 +126,31 @@ describe("offline agent graph", () => {
     expect(state.agents.findIndex((agent) => agent.role === "reviewer")).toBeGreaterThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
   });
 
+  it("honors planningPolicy.allowParallelRoles=false in the runtime candidate and debate path", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-no-parallel-policy-"));
+    await cp(source, cwd, { recursive: true });
+    const base = defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z");
+    await savePolicyScore(cwd, {
+      ...base,
+      policyId: "no_parallel_roles",
+      planningPolicy: { ...base.planningPolicy, allowParallelRoles: false },
+      metadata: { ...base.metadata, source: "selected" as const, fitness: 999, scenarioType: "debugging" as const }
+    });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+
+      expect(state.orchestrationPolicy?.policyId).toBe("no_parallel_roles");
+      expect(state.plan?.debateRecommended).toBe(false);
+      expect(state.candidates.map((candidate) => candidate.agentId)).not.toContain("coder_b");
+      expect(state.agents.map((agent) => agent.role)).not.toContain("coder_b");
+      expect(state.roleGraph?.nodes.map((node) => node.role)).not.toContain("coder_b");
+      expect(state.debateRounds).toHaveLength(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("reuses planner and explorer results while invalidating explorer on repo changes", async () => {
     clearContextCaches();
     const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
