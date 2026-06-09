@@ -101,7 +101,25 @@ export class ExternalAgentProcessClient {
     const child = this.child;
     if (!child) return;
     this.child = undefined;
-    child.kill();
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(done, 1_000);
+      timer.unref?.();
+      child.once("exit", done);
+      child.once("error", done);
+      child.once("close", done);
+      if (child.exitCode !== null || child.killed) {
+        done();
+        return;
+      }
+      child.kill();
+    });
   }
 
   private async request(method: string, params: Record<string, unknown>, timeoutMs?: number): Promise<ExternalAgentProcessResult> {

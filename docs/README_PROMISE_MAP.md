@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.2.11 README product promises. Use this
+Authoritative map for TomorrowEdge 1.2.12 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -27,6 +27,10 @@ an implementation owner plus either a validation command or a tracking issue.
 | compatible-base-url | GUI setup and key management can persist provider base URLs for MiMo, generic OpenAI-compatible gateways, and custom compatible endpoints. | `src/config/defaultConfig.ts`, `src/config/configLoader.ts`, `src/localCockpit/setup.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/SetupWizard.tsx`, `src/cockpit-web/src/components/KeyRoleManager.tsx` | `tests/unit/config.test.ts`, `tests/unit/localCockpit.test.ts`, `tests/unit/cockpitWeb.test.ts` | implemented |
 | composer-access-mode | The natural-language composer exposes `restricted`, `partial`, and `full` mode selection beside the input before task submission. | `src/cockpit-web/src/components/ComposerPanel.tsx`, `src/cockpit-web/src/main.tsx`, `src/localCockpit/server.ts` | `tests/unit/cockpitWeb.test.ts`, `tests/unit/localCockpit.test.ts` | implemented |
 | orchestration-governance | README positions TomorrowEdge as a GUI orchestration layer for strong-agent governance, budget-constrained routing, and multi-agent coding workflows. | `src/core/goal/modelPlanner.ts`, `src/core/goal/workflowIntent.ts`, `src/core/routing/policies.ts`, `src/core/routing/router.ts`, `src/core/budget/budgetAllocator.ts`, `src/core/budget/budgetGate.ts`, `src/core/orchestration/roleGraph.ts`, `src/core/diagnostics/traceCompleteness.ts`, `src/config/schema.ts` | `tests/unit/plannerPolicy.test.ts`, `tests/unit/budgetGate.test.ts`, `tests/integration/governedWorkflow.test.ts`, `tests/unit/workflowIntentRouting.test.ts`, `tests/unit/roleGraph.test.ts`, `tests/unit/agentGraph.test.ts` | #296, #297, #298, #299, #323 |
+| workflow-recipes | Built-in coding workflow recipes provide review-only, bugfix-sprint, and security-audit starting points without becoming a general personal-agent skill system. | `src/core/recipes/recipeLoader.ts`, `src/cli/commands/recipes.ts`, `src/cli/commands/run.ts` | `tests/unit/recipes.test.ts`, `tests/unit/agentGraph.test.ts` | #314 |
+| route-reasons | GUI detail drawer route rows include role, provider/model, and routing reason. | `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitWeb.test.ts` | #318 |
+| repair-approval-focus | Failed verification repair candidates remain visible as repair approval cards and browser approval applies the repair candidate. | `src/cockpit/viewModel.ts`, `src/cockpit/approvalExecutor.ts` | `tests/unit/cockpitViewModel.test.ts` | #320 |
+| external-mcp-process-reuse | Auto-started external MCP process clients are reused during role calls and released after workflow finalization. | `src/core/externalAgents/externalRoleInvoker.ts`, `src/core/externalAgents/externalAgentProcess.ts`, `src/core/agentGraph/executor.ts` | `tests/unit/externalAgentRunner.test.ts`, `tests/unit/agentGraph.test.ts` | #311 |
 
 ## Desktop Entrypoint
 

@@ -82,6 +82,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.fallbackRole} fallback: ${event.reason}`;
     case "trace_completeness":
       return `score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}`;
+    case "agent_cache":
+      return `${event.cache} cache ${event.status}: ${event.keyHint}`;
   }
 }
 

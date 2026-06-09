@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
+import { clearContextCaches } from "../../src/core/context/contextCache.js";
 
 describe("offline agent graph", () => {
   const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
@@ -40,6 +41,39 @@ describe("offline agent graph", () => {
       "workflow_stop_reason",
       "trace_completeness"
     ]));
+  });
+
+  it("starts alternative coder candidates in the same candidate-production stage", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    const coderA = state.agents.find((agent) => agent.role === "coder_a");
+    const coderB = state.agents.find((agent) => agent.role === "coder_b");
+
+    expect(coderA?.status).toBe("success");
+    expect(coderB?.status).toBe("success");
+    expect(Math.abs(Date.parse(coderA!.startedAt!) - Date.parse(coderB!.startedAt!))).toBeLessThan(50);
+    expect(state.candidates.map((candidate) => candidate.agentId).slice(0, 2)).toEqual(["coder_a", "coder_b"]);
+  });
+
+  it("reuses planner and explorer results while invalidating explorer on repo changes", async () => {
+    clearContextCaches();
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-context-cache-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+      const second = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+      await writeFile(path.join(cwd, "index.js"), "export function add(a, b) { return a + b; }\n// cache invalidation\n", "utf8");
+      const third = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+
+      expect(second.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "hit" }));
+      expect(second.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "explorer", status: "hit" }));
+      expect(third.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "hit" }));
+      expect(third.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "explorer", status: "miss" }));
+    } finally {
+      clearContextCaches();
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("keeps read-only directory inspection out of patch approval", async () => {

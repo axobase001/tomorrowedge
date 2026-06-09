@@ -1,20 +1,21 @@
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../schemas/review.js";
+import type { DebateRound } from "../../schemas/debate.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }, JudgeDecision> {
+export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }, JudgeDecision> {
   readonly role = "judge";
 
-  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }): Promise<JudgeDecision> {
+  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }): Promise<JudgeDecision> {
     const acceptable = input.review.reviews
       .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
       .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
     if (!acceptable) {
       return {
         decision: input.review.reviews.some(hasCriticalConcern) ? "ask_user" : "request_revision",
-        reason: "No candidate cleared reviewer blocking concerns for safe automatic application.",
+        reason: `No candidate cleared reviewer blocking concerns for safe automatic application.${debateSuffix(input.debateRounds)}`,
         confidence: 0.62
       };
     }
@@ -29,13 +30,21 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
     }
     const redTeamSuffix = input.review.mode === "red_team" ? " Red-team findings were included in the decision." : "";
     const evidenceSuffix = input.evidencePackets?.length ? ` Evidence packets considered=${input.evidencePackets.length}.` : "";
+    const debateEvidence = debateSuffix(input.debateRounds?.filter((round) => round.targetCandidateId === acceptable.candidateId));
     return {
       selectedCandidateId: acceptable.candidateId,
       decision: "select",
-      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}`,
+      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}${debateEvidence}`,
       confidence: 0.78
     };
   }
+}
+
+function debateSuffix(rounds?: DebateRound[]): string {
+  if (!rounds?.length) return "";
+  const risks = rounds.map((round) => round.riskRaised).filter((risk): risk is string => Boolean(risk));
+  const riskText = risks.length ? ` risks=${risks.slice(0, 2).join("; ")}` : " no blocking debate risk";
+  return ` Debate rounds considered=${rounds.length};${riskText}.`;
 }
 
 function hasBlockingConcern(review: ReviewReport["reviews"][number]): boolean {

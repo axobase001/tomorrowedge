@@ -35,7 +35,10 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <h3>{t("drawer.diff")}</h3>
       <pre>{viewModel.main.diff || t("drawer.noDiff")}</pre>
       <h3>{t("drawer.routes")}</h3>
-      <pre>{viewModel.routes.map((route) => `${route.role} -> ${route.provider}/${route.model}`).join("\n") || "-"}</pre>
+      <pre>{viewModel.routes.map((route) => [
+        `${route.role} -> ${route.provider}/${route.model}`,
+        route.reason ? `because ${route.reason}` : undefined
+      ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
       <h3>{t("drawer.artifacts")}</h3>
       <pre>{viewModel.artifacts.map((artifact) => artifact.ref).join("\n") || "-"}</pre>
       <h3>{t("drawer.rawEvents")}</h3>

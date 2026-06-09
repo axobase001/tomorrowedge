@@ -45,8 +45,9 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 ## 当前版本
 
-当前版本：`1.2.11`。
+当前版本：`1.2.12`。
 
+- `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
 - `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
 - `1.2.10` upgrades planner/routing/budget governance: planning can use a structured model-backed planner with native fallback, native plans are adaptive instead of fixed four-step templates, routes can update after planning, and per-role budget caps are now configurable.
 - `1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start blank.
@@ -93,6 +94,8 @@ git clone https://github.com/axobase001/tomorrowedge
 cd tomorrowedge
 npm ci
 npm run verify
+npm run dev -- recipes
+npm run dev -- run --recipe bugfix-sprint --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
 npm run client
@@ -468,7 +471,14 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, rol
 
 ## Current Version
 
-Current version: `1.2.11`.
+Current version: `1.2.12`.
+
+`1.2.12` closes the high-priority orchestration and GUI trace issue batch:
+coder candidates and live patch generation now start in the same
+candidate-production stage, external MCP processes are reused during role
+calls, planner/explorer results can be cached, built-in workflow recipes are
+available, judge decisions consume debate evidence, repair approvals stay
+visible, and route drawers show routing reasons.
 
 `1.2.11` hardens the native runtime governance loop: routing now emits budget
 previews without consuming budget, live/external role calls pass through an

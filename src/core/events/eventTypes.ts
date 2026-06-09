@@ -342,6 +342,13 @@ export type TraceCompletenessEvent = BaseEvent & {
   workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
 };
 
+export type AgentCacheEvent = BaseEvent & {
+  type: "agent_cache";
+  cache: "planner" | "explorer";
+  status: "hit" | "miss" | "write";
+  keyHint: string;
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -378,7 +385,8 @@ export type TomorrowEdgeEvent =
   | BudgetDecisionEvent
   | WorkflowStopReasonEvent
   | FallbackToNativeEvent
-  | TraceCompletenessEvent;
+  | TraceCompletenessEvent
+  | AgentCacheEvent;
 
 export type EventArtifact = {
   ref: string;

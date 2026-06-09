@@ -31,16 +31,18 @@ export async function executeCockpitApprovalAction(cwd: string, state: AgentGrap
 }
 
 async function approvePatch(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
-  if (!state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "patch") };
   const selected = selectedCandidate(state);
   if (!selected?.unifiedDiff) return { state, message: "No patch candidate is available." };
+  const isRepair = selected.approach === "repair";
+  if (isRepair && !state.access.repairAllowed) return { state, message: accessBlockedMessage(state, "repair") };
+  if (!isRepair && !state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "patch") };
 
   try {
     const applyResult = await applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, true);
     const next = {
       ...state,
-      changedFiles: applyResult.changedFiles,
-      approvals: { ...state.approvals, patchApproved: true },
+      changedFiles: [...new Set([...state.changedFiles, ...applyResult.changedFiles])],
+      approvals: isRepair ? { ...state.approvals, repairApproved: true } : { ...state.approvals, patchApproved: true },
       finalSummary: undefined,
       agents: [
         ...resolveWaitingAgents(state, "success", "Patch approved by cockpit operator."),
@@ -77,7 +79,7 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
         ...state.events,
         makeEvent(state, {
           type: "patch_apply",
-          phase: "patch",
+          phase: isRepair ? "repair" : "patch",
           role: "runner",
           provider: "local_tool",
           model: "patch",
@@ -96,15 +98,16 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
 
 function rejectPatch(state: AgentGraphState, feedback?: string): CockpitApprovalExecutionResult {
   const selected = selectedCandidate(state);
+  const isRepair = selected?.approach === "repair";
   const next = withAbortSummary({
     ...state,
-    approvals: { ...state.approvals, patchApproved: false },
+    approvals: isRepair ? { ...state.approvals, repairApproved: false } : { ...state.approvals, patchApproved: false },
     agents: resolveWaitingAgents(state, "failed", "Patch rejected by cockpit operator."),
     events: [
       ...state.events,
       makeEvent(state, {
         type: "patch_apply",
-        phase: "patch",
+        phase: isRepair ? "repair" : "patch",
         role: "runner",
         provider: "local_cockpit",
         model: "approval",
@@ -262,6 +265,8 @@ async function undoLatestPatch(cwd: string, state: AgentGraphState): Promise<Coc
 }
 
 function selectedCandidate(state: AgentGraphState) {
+  const pendingRepair = state.repairCandidates.at(-1);
+  if (pendingRepair && state.agents.some((agent) => agent.status === "waiting_for_user" && agent.role === "runner")) return pendingRepair;
   const candidates = [...state.candidates, ...state.repairCandidates];
   return candidates.find((candidate) => candidate.candidateId === state.judge?.selectedCandidateId) ?? candidates[0];
 }
@@ -329,7 +334,7 @@ function makeEvent(state: AgentGraphState, event: Record<string, unknown>) {
   } as AgentGraphState["events"][number];
 }
 
-function accessBlockedMessage(state: AgentGraphState, action: "patch" | "shell" | "undo"): string {
+function accessBlockedMessage(state: AgentGraphState, action: "patch" | "repair" | "shell" | "undo"): string {
   return `Current ${state.access.mode} access mode does not allow ${action} from the browser cockpit.`;
 }
 

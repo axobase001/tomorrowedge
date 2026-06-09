@@ -154,11 +154,12 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   const selected = selectedCandidate(state);
   const latestRun = state.runResults.at(-1);
   if (selected && hasActionablePatchCandidate(selected) && (!state.changedFiles.length || waiting)) {
+    const isRepair = selected.approach === "repair";
     approvals.push({
       id: `patch:${selected.candidateId}`,
-      kind: selected.approach === "repair" ? "repair" : "patch",
-      title: selected.approach === "repair" ? "Waiting for repair approval" : "Waiting for patch approval",
-      status: state.changedFiles.length ? "approved" : "waiting",
+      kind: isRepair ? "repair" : "patch",
+      title: isRepair ? "Waiting for repair approval" : "Waiting for patch approval",
+      status: isRepair ? state.approvals.repairApproved ? "approved" : "waiting" : state.changedFiles.length ? "approved" : "waiting",
       candidateId: selected.candidateId,
       filesChanged: selected.filesChanged,
       riskLevel: selected.estimatedRisk,
@@ -372,6 +373,8 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
   return { title: "Workflow running", subtitle: state.goal, body: "Collecting context and generating candidate changes.", filesChanged: [] };
 }
 function selectedCandidate(state?: AgentGraphState) {
+  const pendingRepair = state?.repairCandidates.at(-1);
+  if (pendingRepair && state?.agents.some((agent) => agent.status === "waiting_for_user" && agent.role === "runner")) return pendingRepair;
   const candidates = [...(state?.candidates ?? []), ...(state?.repairCandidates ?? [])];
   return candidates.find((candidate) => candidate.candidateId === state?.judge?.selectedCandidateId) ?? candidates[0];
 }

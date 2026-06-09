@@ -61,6 +61,36 @@ describe("reviewer and judge quality gates", () => {
     expect(review.reviews[0].regressionConcerns.join("\n")).toContain("filesChanged does not match");
     expect(judge.decision).toBe("request_revision");
   });
+
+  it("includes debate evidence in native judge decisions", async () => {
+    const candidate = candidateWithDiff({
+      candidateId: "debated",
+      filesChanged: ["index.js"],
+      unifiedDiff: `--- a/index.js
++++ b/index.js
+@@ -1 +1 @@
+-export const value = 1;
++export const value = 2;
+`
+    });
+    const review = await new ReviewerAgent().run({ candidates: [candidate] });
+    const judge = await new JudgeAgent().run({
+      candidates: [candidate],
+      review,
+      debateRounds: [{
+        round: 1,
+        speaker: "opponent",
+        targetCandidateId: "debated",
+        claim: "Reviewer challenges missing edge-case coverage.",
+        evidence: ["test plan only has npm test"],
+        riskRaised: "edge-case coverage may be thin"
+      }]
+    });
+
+    expect(judge.decision).toBe("select");
+    expect(judge.reason).toContain("Debate rounds considered=1");
+    expect(judge.reason).toContain("edge-case coverage may be thin");
+  });
 });
 
 function candidateWithDiff(overrides: Partial<PatchCandidate>): PatchCandidate {
