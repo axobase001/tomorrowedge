@@ -38,7 +38,7 @@ import { invokeExternalRole, releaseExternalAgentProcessPool } from "../external
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
 import { createModelBackedPlan } from "../goal/modelPlanner.js";
 import { classifyTaskGovernance } from "../goal/taskGovernance.js";
-import { applyWorkflowIntentToPlan, classifyWorkflowIntent } from "../goal/workflowIntent.js";
+import { applyWorkflowIntentToPlan, classifyWorkflowIntent, type WorkflowIntentDecision } from "../goal/workflowIntent.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
 import { projectRuntimeArtifact, type ProviderView } from "../contextProjection/providerView.js";
 import { buildPatchEvidence } from "../evidence/patchEvidence.js";
@@ -77,7 +77,44 @@ export type OfflineGraphOptions = {
   sessionId?: string;
 };
 
+type OfflineGraphRuntime = {
+  cwd: string;
+  goal: string;
+  config: TomorrowEdgeConfig;
+  options: OfflineGraphOptions;
+  router: ModelRouter;
+  externalAgents: ExternalAgentRegistry;
+  access: AgentGraphState["access"];
+  ledger: EventLedger;
+  startedAtMs: number;
+  conversationTarget: NonNullable<AgentGraphState["conversationTarget"]>;
+  imagePaths: string[];
+};
+
 export async function runOfflineGraph(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions = {}): Promise<AgentGraphState> {
+  const runtime = createOfflineGraphRuntime(cwd, goal, config, options);
+  const state = createInitialGraphState(runtime);
+
+  recordStartupPhase(runtime, state);
+  const workflowIntent = await runRoutingIntentPhase(runtime, state);
+  await runExternalCorePhase(runtime, state);
+  await runVisionPhase(runtime, state);
+  await runPlanningPhase(runtime, state, workflowIntent);
+  await runExplorationPhase(runtime, state);
+  if (isReadOnlyPlan(state.plan!)) {
+    await maybeRunGovernedReadOnlyAdvisory({ cwd, goal, config, router: runtime.router, ledger: runtime.ledger, state, access: runtime.access });
+    return finalizeReadOnlyState(cwd, state, runtime.ledger, runtime.router);
+  }
+
+  await runCandidatePhase(runtime, state);
+  await runReviewAndJudgePhase(runtime, state);
+  await runLiveAdvisoryPhase(runtime, state);
+  await runPatchApplicationPhase(runtime, state);
+  await runVerificationAndRepairPhase(runtime, state);
+  return finalizeState(state, runtime.ledger, runtime.router);
+}
+
+function createOfflineGraphRuntime(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions): OfflineGraphRuntime {
   const router = new ModelRouter(config);
   const externalAgents = externalAgentRegistryFromConfig(config);
   const access = buildAccessPolicy(config, {
@@ -87,16 +124,30 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     approveRepair: options.approveRepair
   });
   const ledger = createEventLedger(access.mode, options.sessionId, options.onEvent);
-  const startedAtMs = Date.now();
-  const conversationTarget = resolveConversationTarget(config, options.conversationTarget);
-  const state: AgentGraphState = {
-    sessionId: ledger.sessionId,
+  return {
+    cwd,
     goal,
-    conversationTarget,
-    routing: router.getPlan(),
+    config,
+    options,
+    router,
+    externalAgents,
     access,
-    events: ledger.events,
-    eventArtifacts: ledger.artifacts,
+    ledger,
+    startedAtMs: Date.now(),
+    conversationTarget: resolveConversationTarget(config, options.conversationTarget),
+    imagePaths: validateImagePaths(cwd, options.imagePaths ?? [])
+  };
+}
+
+function createInitialGraphState(runtime: OfflineGraphRuntime): AgentGraphState {
+  const state: AgentGraphState = {
+    sessionId: runtime.ledger.sessionId,
+    goal: runtime.goal,
+    conversationTarget: runtime.conversationTarget,
+    routing: runtime.router.getPlan(),
+    access: runtime.access,
+    events: runtime.ledger.events,
+    eventArtifacts: runtime.ledger.artifacts,
     providerViews: [],
     evidencePackets: [],
     agents: [],
@@ -110,11 +161,16 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     changedFiles: [],
     runResults: [],
     approvals: {
-      patchApproved: access.patchApproved,
-      shellApproved: access.shellApproved,
-      repairApproved: access.repairApproved
+      patchApproved: runtime.access.patchApproved,
+      shellApproved: runtime.access.shellApproved,
+      repairApproved: runtime.access.repairApproved
     }
   };
+  return state;
+}
+
+function recordStartupPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): void {
+  const { access, conversationTarget, goal, config, ledger } = runtime;
   ledger.append({
     type: "access_mode",
     phase: "routing",
@@ -149,8 +205,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   for (const assignment of state.routing.assignments) {
     recordRoutingAndBudgetPreview(config, state, ledger, assignment, goal, "routing");
   }
+}
 
-  const imagePaths = validateImagePaths(cwd, options.imagePaths ?? []);
+async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<WorkflowIntentDecision> {
+  const { access, config, goal, ledger, options, router, imagePaths } = runtime;
   if (!imagePaths.length) {
     state.routing = {
       ...state.routing,
@@ -173,6 +231,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     reason: workflowIntent.reason,
     fallbackUsed: workflowIntent.fallbackUsed
   });
+  return workflowIntent;
+}
+
+async function runExternalCorePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, conversationTarget, cwd, externalAgents, goal, ledger, router } = runtime;
   const externalCore = externalProfileForRole(router, externalAgents, "core");
   if (externalCore) {
     const coreResult = await runAgentState(state, ledger, router, "core", () =>
@@ -197,6 +260,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(coreResult.payload, null, 2), "json")
     });
   }
+}
+
+async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, config, goal, imagePaths, ledger, options, router } = runtime;
   if (imagePaths.length) {
     const vision = new VisionAgent();
     if (options.liveVision && access.cloudAllowed) {
@@ -254,7 +321,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     });
     state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router, visualSpec: state.visualSpec });
   }
+}
 
+async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
+  const { access, config, cwd, externalAgents, goal, imagePaths, ledger, options, router, conversationTarget } = runtime;
   const planner = new PlannerAgent();
   const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
   const externalPlanner = externalProfileForRole(router, externalAgents, "planner");
@@ -329,9 +399,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
   }
-  state.workflowKind = workflowKindFromPlan(state.plan);
-  state.roleGraph = buildRoleGraph({ workflowKind: state.workflowKind, highRisk: state.plan.riskLevel === "high", debate: Boolean(state.plan.debateRecommended || config.debate.enabled) });
-  const rerouteChanges = router.rerouteAfterPlan(state.plan, { hasImageInputs: imagePaths.length > 0 });
+  const plan = state.plan;
+  if (!plan) throw new Error("Planning phase completed without a plan.");
+  state.workflowKind = workflowKindFromPlan(plan);
+  state.roleGraph = buildRoleGraph({ workflowKind: state.workflowKind, highRisk: plan.riskLevel === "high", debate: Boolean(plan.debateRecommended || config.debate.enabled) });
+  const rerouteChanges = router.rerouteAfterPlan(plan, { hasImageInputs: imagePaths.length > 0 });
   if (rerouteChanges.length) {
     state.routing = routingForState(router, imagePaths.length > 0);
     for (const change of rerouteChanges) {
@@ -341,15 +413,20 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       }, goal, "planning");
     }
   }
-  ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
+  ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(plan, null, 2), "json") });
+}
 
+async function runExplorationPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { cwd, ledger, router } = runtime;
+  const plan = state.plan;
+  if (!plan) throw new Error("Exploration phase requires a plan.");
   const explorer = new ExplorerAgent();
-  const cachedContextSelection = await getCachedContextSelection(cwd, state.plan);
-  ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: cachedContextSelection ? "hit" : "miss", keyHint: `${state.plan.taskType}:${state.plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
-  state.contextSelection = cachedContextSelection ?? await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }), "offline");
+  const cachedContextSelection = await getCachedContextSelection(cwd, plan);
+  ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: cachedContextSelection ? "hit" : "miss", keyHint: `${plan.taskType}:${plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
+  state.contextSelection = cachedContextSelection ?? await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan }, { cwd, router }), "offline");
   if (!cachedContextSelection) {
-    await rememberContextSelection(cwd, state.plan, state.contextSelection);
-    ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: "write", keyHint: `${state.plan.taskType}:${state.plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
+    await rememberContextSelection(cwd, plan, state.contextSelection);
+    ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: "write", keyHint: `${plan.taskType}:${plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
   }
   ledger.append({
     type: "context_select",
@@ -362,11 +439,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   for (const file of state.contextSelection.selectedFiles) {
     ledger.append({ type: "file_read", phase: "exploration", role: "explorer", path: file.path, reason: file.reason, risk: file.risk });
   }
-  if (isReadOnlyPlan(state.plan)) {
-    await maybeRunGovernedReadOnlyAdvisory({ cwd, goal, config, router, ledger, state, access });
-    return finalizeReadOnlyState(cwd, state, ledger, router);
-  }
+}
 
+async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, config, cwd, externalAgents, goal, ledger, options, router } = runtime;
   const coder = new CoderAgent();
   const candidateJobs: Array<{ label: string; run: () => Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> }> = [
     {
@@ -448,7 +524,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       recordModelNoteEvents(ledger, result.value.notes, state.usageSummary);
     }
   }
+}
 
+async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, config, cwd, externalAgents, goal, ledger, options, router } = runtime;
   const reviewer = new ReviewerAgent();
   const externalReviewer = externalProfileForRole(router, externalAgents, "reviewer");
   state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
@@ -520,7 +599,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     confidence: state.judge.confidence,
     decisionRef
   });
+}
 
+async function runLiveAdvisoryPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, config, cwd, goal, ledger, options, router } = runtime;
   if (options.liveAdvisory && access.cloudAllowed) {
     const advisoryInput = {
       cwd,
@@ -556,7 +638,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       });
       ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
+}
 
+async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, cwd, ledger, options, router } = runtime;
   if (options.dryRun && state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     const diffRef = selected?.unifiedDiff ? ledger.writeArtifact("diffs", selected.unifiedDiff) : undefined;
@@ -599,16 +684,21 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: state.judge.selectedCandidateId, filesChanged: [], diffRef: undefined, undoSnapshotIds: [], applied: false, error: reason });
     }
   }
+}
 
-  const testCommands = options.testCommand ? [options.testCommand] : state.plan.verificationCommands ?? [];
+async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { access, config, cwd, externalAgents, ledger, options, router, startedAtMs } = runtime;
+  const plan = state.plan;
+  if (!plan) throw new Error("Verification phase requires a plan.");
+  const testCommands = options.testCommand ? [options.testCommand] : plan.verificationCommands ?? [];
   const defaultVerification = !options.testCommand;
   let shellRuns = 0;
   let repairAttempts = 0;
   if (state.changedFiles.length && testCommands.length) {
     try {
       for (const testCommand of testCommands) {
-        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
-        if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
+        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
+        if (!canRunShell(config, shellRuns, ledger)) return;
         shellRuns += 1;
         const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
         const result = normalizeVerificationResult(rawResult, { defaultVerification });
@@ -616,28 +706,28 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         recordShellRunEvent(state, ledger, cwd, result);
         if (result.success) continue;
         if (!options.repairOnFail) break;
-        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return finalizeState(state, ledger, router);
-        if (!canAttemptRepair(config, repairAttempts, ledger)) return finalizeState(state, ledger, router);
+        if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return;
+        if (!canAttemptRepair(config, repairAttempts, ledger)) return;
         repairAttempts += 1;
         const repairer = new RepairerAgent();
         const externalRepairer = externalProfileForRole(router, externalAgents, "repairer");
         const repairCandidate = await runAgentState(state, ledger, router, "repairer", async () => {
-          if (!externalRepairer) return repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          if (!externalRepairer) return repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
           const externalResult = await invokeExternalRole({
             cwd,
             profile: externalRepairer,
             role: "repairer",
             prompt: "Repair the failed test run and return a TomorrowEdge patch candidate.",
-            context: { plan: state.plan, failedRun: result, appliedFiles: state.changedFiles },
+            context: { plan, failedRun: result, appliedFiles: state.changedFiles },
             ledger
           });
           const patch = normalizeExternalPatch(externalResult.payload, "repairer", "repair");
           if (!patch) recordExternalNormalizeFallback(ledger, "repairer", externalRepairer, "patch candidate", "native repairer");
-          return patch ?? repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          return patch ?? repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
         }, externalRepairer ? {
           agentKind: "external",
           config,
-          budgetFallback: () => repairer.run({ plan: state.plan!, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) }),
+          budgetFallback: () => repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) }),
           budgetFallbackLabel: "native repairer"
         } : "offline");
         state.repairCandidates.push(repairCandidate);
@@ -649,8 +739,8 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
             const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
-            if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return finalizeState(state, ledger, router);
-            if (!canRunShell(config, shellRuns, ledger)) return finalizeState(state, ledger, router);
+            if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
+            if (!canRunShell(config, shellRuns, ledger)) return;
             shellRuns += 1;
             const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
             const repairedRun = normalizeVerificationResult(rawRepairedRun, { defaultVerification });
@@ -682,8 +772,6 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       });
     }
   }
-
-  return finalizeState(state, ledger, router);
 }
 
 async function runCoderCandidate(input: {
