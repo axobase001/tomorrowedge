@@ -114,18 +114,19 @@ function externalAgentOptions(config: TomorrowEdgeConfig): CockpitExternalAgentO
 export async function configureCockpitProvider(cwd: string, request: CockpitSetupRequest): Promise<CockpitSetupStatus> {
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(request.provider);
-  if (!config.providers[providerId]) throw new Error(`Unknown provider: ${providerId}`);
+  const currentProvider = providerConfigForSetup(config, providerId);
   const model = request.model.trim();
   if (!model) throw new Error("At least one model id is required.");
-  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? config.providers[providerId].base_url;
-  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? config.providers[providerId].api_key_env ?? defaultEnvNames[providerId];
-  if (requiresAuth(config.providers[providerId]) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
+  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
+  if (!baseUrl) throw new Error("Base URL is required for this provider.");
+  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
+  if (requiresAuth(currentProvider) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   if (request.apiKey?.trim() && apiKeyEnv) {
     await writeLocalEnvValue(cwd, apiKeyEnv, request.apiKey.trim());
     process.env[apiKeyEnv] = request.apiKey.trim();
   }
   const nextProvider: ProviderConfig = {
-    ...config.providers[providerId],
+    ...currentProvider,
     enabled: true,
     model,
     base_url: baseUrl,
@@ -146,14 +147,15 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
 export async function saveCockpitProviderKey(cwd: string, request: CockpitProviderKeyRequest): Promise<CockpitSetupStatus> {
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(request.provider);
-  if (!config.providers[providerId]) throw new Error(`Unknown provider: ${providerId}`);
+  const currentProvider = providerConfigForSetup(config, providerId);
   const apiKey = request.apiKey.trim();
   if (!apiKey) throw new Error("API key is required.");
-  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? config.providers[providerId].api_key_env ?? defaultEnvNames[providerId];
+  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
   if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
-  const model = request.model?.trim() || config.providers[providerId].model;
+  const model = request.model?.trim() || currentProvider.model;
   if (!model) throw new Error("At least one model id is required.");
-  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? config.providers[providerId].base_url;
+  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
+  if (!baseUrl) throw new Error("Base URL is required for this provider.");
   await writeLocalEnvValue(cwd, apiKeyEnv, apiKey);
   process.env[apiKeyEnv] = apiKey;
   await writeConfig(cwd, {
@@ -161,7 +163,7 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
     providers: {
       ...config.providers,
       [providerId]: {
-        ...config.providers[providerId],
+        ...currentProvider,
         enabled: true,
         model,
         base_url: baseUrl,
@@ -177,7 +179,7 @@ export async function deleteCockpitProviderKey(cwd: string, providerIdValue: str
   const providerId = normalizeProviderId(providerIdValue);
   const provider = config.providers[providerId];
   if (!provider) throw new Error(`Unknown provider: ${providerId}`);
-  const apiKeyEnv = provider.api_key_env ?? defaultEnvNames[providerId];
+  const apiKeyEnv = provider.api_key_env ?? defaultEnvNameFor(providerId);
   if (apiKeyEnv) {
     const previous = await removeLocalEnvValue(cwd, apiKeyEnv);
     if (previous !== undefined && process.env[apiKeyEnv] === previous) delete process.env[apiKeyEnv];
@@ -250,8 +252,29 @@ function requiresAuth(provider: ProviderConfig): boolean {
   return provider.auth_header !== "none";
 }
 
+function providerConfigForSetup(config: TomorrowEdgeConfig, providerId: string): ProviderConfig {
+  return config.providers[providerId] ?? {
+    enabled: false,
+    api_key_env: defaultEnvNameFor(providerId),
+    base_url: "",
+    model: "",
+    api_format: "openai_chat",
+    auth_header: "bearer",
+    extra_headers: {}
+  };
+}
+
+function defaultEnvNameFor(providerId: string): string {
+  const known = defaultEnvNames[providerId];
+  if (known) return known;
+  const prefix = providerId.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  return /^[A-Z_]/.test(prefix) ? `${prefix}_API_KEY` : `PROVIDER_${prefix}_API_KEY`;
+}
+
 function normalizeProviderId(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+  if (!normalized) throw new Error("Provider id is required.");
+  return normalized;
 }
 
 function sanitizeEnvName(value?: string): string | undefined {

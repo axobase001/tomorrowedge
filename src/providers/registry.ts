@@ -11,6 +11,8 @@ import { createAnthropicProvider } from "./anthropic.js";
 import { createGeminiProvider } from "./gemini.js";
 import type { ModelProvider } from "./types.js";
 
+const staticProviderIds = new Set(["mock", "fixture", "openrouter", "mimo", "openai_compatible", "deepseek", "kimi", "anthropic", "gemini", "ollama"]);
+
 export class ProviderRegistry {
   private readonly providers = new Map<string, ModelProvider>();
 
@@ -80,6 +82,22 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
     registry.register(new OllamaProvider(process.env.OLLAMA_BASE_URL ?? config.providers.ollama.base_url));
   }
 
+  for (const [providerId, provider] of Object.entries(config.providers)) {
+    if (staticProviderIds.has(providerId) || !isRegistrable(config, providerId)) continue;
+    registry.register(
+      new OpenAICompatibleProvider({
+        id: providerId,
+        name: `Custom OpenAI-compatible (${providerId})`,
+        apiKey: providerKey(config, providerId),
+        baseUrl: provider.base_url,
+        defaultModel: providerModel(config, providerId, providerModelEnvName(providerId), "configured-model"),
+        apiFormat: provider.api_format,
+        authHeader: provider.auth_header,
+        extraHeaders: provider.extra_headers
+      })
+    );
+  }
+
   return registry;
 }
 
@@ -93,6 +111,11 @@ function providerModel(config: TomorrowEdgeConfig, provider: string, envName: st
   if (configured) return configured;
   const fromEnv = process.env[envName]?.trim();
   return fromEnv || fallback;
+}
+
+function providerModelEnvName(provider: string): string {
+  const prefix = provider.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  return `${prefix}_MODEL`;
 }
 
 function isRegistrable(config: TomorrowEdgeConfig, provider: string): boolean {

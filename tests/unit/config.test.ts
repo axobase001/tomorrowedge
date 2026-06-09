@@ -229,6 +229,36 @@ describe("config loader", () => {
     }
   });
 
+  it("accepts agent references to custom OpenAI-compatible providers", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-custom-provider-ref-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "providers:",
+          "  oneapi_gateway:",
+          "    enabled: true",
+          "    api_key_env: ONEAPI_GATEWAY_KEY",
+          "    base_url: https://oneapi.example/v1",
+          "    model: gpt-4o-mini",
+          "agents:",
+          "  planner:",
+          "    provider: oneapi_gateway",
+          "    model: gpt-4o-mini"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const config = loadConfig(cwd);
+
+      expect(config.providers.oneapi_gateway.base_url).toBe("https://oneapi.example/v1");
+      expect(config.agents.planner).toMatchObject({ provider: "oneapi_gateway", model: "gpt-4o-mini" });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("accepts external agent provider references when the profile exists", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-external-ref-"));
     try {
