@@ -35,6 +35,12 @@ export type LearnedTaskMemory = {
   failureClass?: FailureClass;
   failureSignature?: string;
   correction?: string;
+  wrongAssumption?: string;
+  correctedRule?: string;
+  applicability?: string[];
+  counterexamples?: string[];
+  validationCommand?: string;
+  correctionStatus?: CorrectionStatus;
   evidenceRefs?: string[];
   outcomePredictionRefs?: string[];
   outcomeObservationRefs?: string[];
@@ -52,6 +58,7 @@ export type LearnedTaskMemory = {
 
 export type FailureMemoryStorageScope = "project" | "experiment";
 export type FailureMemoryRedaction = "metadata_only" | "artifact_refs";
+export type CorrectionStatus = "verified" | "partial" | "unverified";
 
 export type FailureMemoryPolicy = {
   enabled: boolean;
@@ -106,6 +113,12 @@ export type FailureMemoryRecord = LearnedTaskMemory & {
   failureClass: FailureClass;
   failureSignature: string;
   correction: string;
+  wrongAssumption?: string;
+  correctedRule?: string;
+  applicability?: string[];
+  counterexamples?: string[];
+  validationCommand?: string;
+  correctionStatus?: CorrectionStatus;
   evidenceRefs: string[];
   outcomePredictionRefs?: string[];
   outcomeObservationRefs?: string[];
@@ -307,6 +320,12 @@ export async function explainFailureMemories(cwd: string, task: string, options:
       record.riskLevel,
       record.failureClass,
       record.correction,
+      record.wrongAssumption,
+      record.correctedRule,
+      record.validationCommand,
+      record.correctionStatus,
+      ...(record.applicability ?? []),
+      ...(record.counterexamples ?? []),
       ...(record.constraints ?? []),
       ...(record.verificationCommands ?? [])
     ].filter(Boolean).join(" "));
@@ -316,6 +335,7 @@ export async function explainFailureMemories(cwd: string, task: string, options:
       (record.taskType !== "unknown" && taskSignals.has(record.taskType) ? 4 : 0) +
       (record.failureClass === "review_or_judge_blocked" && /review|judge|审查|裁决/i.test(task) ? 4 : 0) +
       (record.failureClass === "validation_failed" && /test|verify|验证|测试/i.test(task) ? 4 : 0) +
+      correctionStatusScore(record.correctionStatus) +
       Math.min(record.recurrence, 4);
     if (score >= 3) selected.push({ ...record, score, matchedSignals });
     else rejected.push({ id: record.id, reason: "low task-signal overlap" });
@@ -355,9 +375,16 @@ function buildFailureMemoryFields(state: AgentGraphState, record: LearnedTaskMem
   const failureClass = classifyFailure(state, record);
   const evidenceRefs = collectEvidenceRefs(state);
   const outcome = summarizeOutcomeEvents(state);
+  const correction = correctionForFailure(failureClass, state, record);
   return {
     failureClass,
-    correction: correctionForFailure(failureClass, state, record),
+    correction,
+    wrongAssumption: wrongAssumptionForFailure(failureClass, state, record),
+    correctedRule: correctedRuleForFailure(failureClass, correction, state, record),
+    applicability: applicabilityForFailure(failureClass, state, record),
+    counterexamples: counterexamplesForFailure(failureClass, state, record),
+    validationCommand: primaryValidationCommand(state, record),
+    correctionStatus: correctionStatusForState(state, evidenceRefs),
     evidenceRefs,
     outcomePredictionRefs: outcome.outcomePredictionRefs,
     outcomeObservationRefs: outcome.outcomeObservationRefs,
@@ -373,6 +400,7 @@ function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): Failure
   const firstSeen = record.firstSeen ?? record.createdAt;
   const lastSeen = record.lastSeen ?? record.createdAt;
   const lifecycle = staleStatus(record, cwd);
+  const correction = record.correction ?? correctionForFailure(failureClass, undefined, record);
   const fallbackSignature = hashText([
     failureClass,
     record.taskType,
@@ -388,7 +416,13 @@ function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): Failure
     lastSeen,
     failureClass,
     failureSignature: record.failureSignature ?? fallbackSignature,
-    correction: record.correction ?? correctionForFailure(failureClass, undefined, record),
+    correction,
+    wrongAssumption: record.wrongAssumption ?? wrongAssumptionForFailure(failureClass, undefined, record),
+    correctedRule: record.correctedRule ?? correctedRuleForFailure(failureClass, correction, undefined, record),
+    applicability: record.applicability ?? applicabilityForFailure(failureClass, undefined, record),
+    counterexamples: record.counterexamples ?? counterexamplesForFailure(failureClass, undefined, record),
+    validationCommand: record.validationCommand ?? primaryValidationCommand(undefined, record),
+    correctionStatus: record.correctionStatus ?? correctionStatusForRecord(record, evidenceRefs),
     evidenceRefs,
     outcomePredictionRefs: record.outcomePredictionRefs,
     outcomeObservationRefs: record.outcomeObservationRefs,
@@ -457,6 +491,112 @@ function correctionForFailure(failureClass: FailureClass, state: AgentGraphState
   }
 }
 
+function wrongAssumptionForFailure(failureClass: FailureClass, state: AgentGraphState | undefined, record: LearnedTaskMemory): string {
+  const command = primaryValidationCommand(state, record);
+  switch (failureClass) {
+    case "validation_failed":
+      return command
+        ? `The patch was assumed safe before ${command} passed.`
+        : "The patch was assumed safe before a verifier passed.";
+    case "review_or_judge_blocked":
+      return "A candidate was treated as selectable before reviewer/judge blockers were resolved.";
+    case "provider_failure":
+      return "Provider output or availability was treated as reliable enough to continue.";
+    case "routing_blocked":
+      return "The selected route was assumed executable without a confirmed fallback path.";
+    case "environment_failure":
+      return "A local tool or permission failure was treated like an implementation failure.";
+    case "partial_completion":
+      return "The workflow was assumed complete before all required trace stages existed.";
+    case "no_candidate_selected":
+      return "The judge path was assumed usable without an inspectable candidate.";
+    case "workflow_incomplete":
+      return "The run stopped before enough evidence existed to reuse it as a success pattern.";
+    case "coding_error":
+      return "The implementation patch was assumed narrow and correct before concrete evidence supported it.";
+  }
+}
+
+function correctedRuleForFailure(failureClass: FailureClass, correction: string, state: AgentGraphState | undefined, record: LearnedTaskMemory): string {
+  const command = primaryValidationCommand(state, record);
+  switch (failureClass) {
+    case "validation_failed":
+      return command
+        ? `Reproduce and pass ${command} before treating the patch as fixed.`
+        : "Reproduce and pass the relevant verifier before treating the patch as fixed.";
+    case "review_or_judge_blocked":
+      return "Reviewer and judge blockers must be resolved before selection or summary completion.";
+    case "provider_failure":
+      return "Provider failures require health check, fallback trace, or alternate route before implementation blame.";
+    case "routing_blocked":
+      return "Blocked role routes must record the reason and use a native or configured fallback before success is claimed.";
+    case "environment_failure":
+      return "Separate environment/tooling failures from patch quality and verify cwd/tool availability first.";
+    case "partial_completion":
+    case "workflow_incomplete":
+      return "Require patch, review, judge, verification, and stop-reason evidence appropriate to the workflow kind.";
+    case "no_candidate_selected":
+      return "Regenerate or split planning until at least one candidate has an inspectable diff or explicit no-op rationale.";
+    case "coding_error":
+      return "Keep the patch narrow, evidence-backed, and reviewed against the concrete changed files.";
+  }
+  return correction;
+}
+
+function applicabilityForFailure(failureClass: FailureClass, state: AgentGraphState | undefined, record: LearnedTaskMemory): string[] {
+  return unique([
+    `failure_class:${failureClass}`,
+    `task_type:${record.taskType}`,
+    `risk:${record.riskLevel}`,
+    primaryValidationCommand(state, record) ? `verifier:${primaryValidationCommand(state, record)}` : "",
+    ...(state?.changedFiles ?? []).slice(0, 4).map((file) => `file:${redactMemoryText(file)}`)
+  ]).slice(0, 8);
+}
+
+function counterexamplesForFailure(failureClass: FailureClass, state: AgentGraphState | undefined, record: LearnedTaskMemory): string[] {
+  const command = primaryValidationCommand(state, record);
+  const values: string[] = [];
+  if (failureClass === "validation_failed" && command) values.push(`Do not apply when ${command} already passed after the candidate patch.`);
+  if (failureClass === "environment_failure") values.push("Do not treat as a coding lesson when the verifier fails for missing tools, cwd, or permissions.");
+  if (failureClass === "provider_failure") values.push("Do not treat as a coding lesson when the provider call failed before producing a usable patch.");
+  if (failureClass === "routing_blocked") values.push("Do not reuse as implementation advice when only role routing was blocked.");
+  if (!values.length) values.push("Do not apply when the current task has different verifier, changed files, and failure class.");
+  return values.map((value) => redactMemoryText(value)).slice(0, 6);
+}
+
+function primaryValidationCommand(state: AgentGraphState | undefined, record: LearnedTaskMemory): string | undefined {
+  return state?.runResults.find((run) => !run.success && !run.skipped)?.command
+    ?? state?.runResults.find((run) => run.success && !run.skipped)?.command
+    ?? record.verificationCommands?.[0];
+}
+
+function correctionStatusForState(state: AgentGraphState, evidenceRefs: string[]): CorrectionStatus {
+  if (state.finalSummary?.result === "completed" && state.runResults.some((run) => run.success && !run.skipped)) return "verified";
+  if (state.runResults.some((run) => !run.success && !run.skipped) || evidenceRefs.length) return "partial";
+  return "unverified";
+}
+
+function correctionStatusForRecord(record: LearnedTaskMemory, evidenceRefs: string[]): CorrectionStatus {
+  if (record.correctionStatus) return record.correctionStatus;
+  if ((record.fixedCount ?? 0) > 0 || record.result === "completed") return "verified";
+  if (evidenceRefs.length || record.outcomeObservationRefs?.length) return "partial";
+  return "unverified";
+}
+
+function correctionStatusScore(status: CorrectionStatus | undefined): number {
+  if (status === "verified") return 2;
+  if (status === "partial") return 1;
+  if (status === "unverified") return -1;
+  return 0;
+}
+
+function strongerCorrectionStatus(a: CorrectionStatus | undefined, b: CorrectionStatus | undefined): CorrectionStatus | undefined {
+  const rank: Record<CorrectionStatus, number> = { unverified: 0, partial: 1, verified: 2 };
+  if (!a) return b;
+  if (!b) return a;
+  return rank[b] > rank[a] ? b : a;
+}
+
 function collectEvidenceRefs(state: AgentGraphState): string[] {
   const refs = [
     ...state.eventArtifacts.map((artifact) => artifact.ref),
@@ -514,6 +654,9 @@ function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemor
     fixedCount: (current.fixedCount ?? (current.result === "completed" ? 1 : 0)) + (next.result === "completed" ? 1 : 0),
     sourceSessionIds: unique([...(current.sourceSessionIds ?? []), ...(next.sourceSessionIds ?? [])]),
     evidenceRefs: unique([...(current.evidenceRefs ?? []), ...(next.evidenceRefs ?? [])]).slice(0, 12),
+    applicability: unique([...(current.applicability ?? []), ...(next.applicability ?? [])]).slice(0, 12),
+    counterexamples: unique([...(current.counterexamples ?? []), ...(next.counterexamples ?? [])]).slice(0, 8),
+    correctionStatus: strongerCorrectionStatus(current.correctionStatus, next.correctionStatus),
     confidence: Math.max(current.confidence ?? 0, next.confidence ?? 0)
   };
   return records.map((record, recordIndex) => recordIndex === index ? merged : record);

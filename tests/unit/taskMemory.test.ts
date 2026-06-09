@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
@@ -214,6 +214,12 @@ describe("learned task memory", () => {
       expect(record.failureMemoryConsent).toBe("enabled");
       expect(record.failureMemoryRedaction).toBe("artifact_refs");
       expect(record.correction).toContain("npm test");
+      expect(record.wrongAssumption).toContain("npm test");
+      expect(record.correctedRule).toContain("npm test");
+      expect(record.applicability).toContain("failure_class:validation_failed");
+      expect(record.counterexamples?.some((item) => item.includes("npm test"))).toBe(true);
+      expect(record.validationCommand).toBe("npm test");
+      expect(record.correctionStatus).toBe("partial");
       expect(record.outcomePredictionRefs).toEqual(["event_prediction_sensitive"]);
       expect(record.outcomeObservationRefs).toEqual(["event_observation_sensitive"]);
       expect(record.outcomeMismatchType).toBe("wrong_assumption");
@@ -358,6 +364,75 @@ describe("learned task memory", () => {
       expect(explanation.selected[0]?.id).toBe(failure.id);
       expect(explanation.selected[0]?.matchedSignals).toContain("npm");
       expect(explanation.rejected).toEqual([]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("ranks verified corrections above unverified lessons with the same task signals", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-failure-verified-rank-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      const rows = [
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "unverified",
+          goalPreview: "fix npm test validation failure",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "failed",
+          failureClass: "validation_failed",
+          failureSignature: "unverified-signature",
+          correction: "Try a verifier-focused repair.",
+          correctedRule: "Rerun npm test before claiming the patch is fixed.",
+          correctionStatus: "unverified",
+          evidenceRefs: [],
+          confidence: 0.9,
+          recurrenceCount: 1,
+          fixedCount: 0,
+          sourceSessionIds: ["session_unverified"]
+        },
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "verified",
+          goalPreview: "fix npm test validation failure",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "failed",
+          failureClass: "validation_failed",
+          failureSignature: "verified-signature",
+          correction: "Apply a verifier-backed repair.",
+          correctedRule: "Rerun npm test before claiming the patch is fixed.",
+          correctionStatus: "verified",
+          evidenceRefs: [],
+          confidence: 0.9,
+          recurrenceCount: 1,
+          fixedCount: 1,
+          sourceSessionIds: ["session_verified"]
+        }
+      ];
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+      const explanation = await explainFailureMemories(cwd, "fix npm test validation failure");
+
+      expect(explanation.selected[0]?.correctionStatus).toBe("verified");
+      expect(explanation.selected[0]?.score).toBeGreaterThan(explanation.selected[1]?.score ?? 0);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

@@ -24,6 +24,11 @@ export type MemoryDerivedConstraint = {
   confidence: number;
   score: number;
   evidenceRefs: string[];
+  correctionStatus?: string;
+  wrongAssumption?: string;
+  correctedRule?: string;
+  applicability: string[];
+  counterexamples: string[];
 };
 
 export type FailureMemoryPremortem = {
@@ -78,7 +83,7 @@ export function buildFailureMemoryPremortem(task: string, explanation: FailureMe
     task: redactText(task),
     selectedMemoryIds: selected.map((record) => record.id),
     rejected: explanation.rejected,
-    knownTraps: selected.map((record) => `${record.id}: ${record.failureClass} score=${record.score} - ${record.correction}`),
+    knownTraps: selected.map((record) => `${record.id}: ${record.failureClass} score=${record.score} status=${record.correctionStatus ?? "unknown"} - ${record.correctedRule ?? record.correction}`),
     avoidRules: constraints
       .filter((constraint) => constraint.kind === "avoid_patch_pattern" || constraint.kind === "review_guard")
       .map((constraint) => constraint.text),
@@ -225,8 +230,8 @@ export function buildRepairMemoryContext(query: string, explanation: FailureMemo
     schemaVersion: "failure-memory-repair/v1",
     query: redactText(query),
     selectedMemoryIds: selected.map((record) => record.id),
-    corrections: selected.map((record) => `${record.id}: ${record.correction}`),
-    counterexamples: selected.map((record) => `${record.id}: avoid repeating ${record.failureClass}`),
+    corrections: selected.map((record) => `${record.id} [${record.correctionStatus ?? "unknown"}]: ${record.correctedRule ?? record.correction}`),
+    counterexamples: selected.flatMap((record) => record.counterexamples?.length ? record.counterexamples.map((item) => `${record.id}: ${item}`) : [`${record.id}: avoid repeating ${record.failureClass}`]),
     constraints
   };
 }
@@ -257,7 +262,12 @@ function constraintsForRecord(record: ScoredFailureMemory, overrideKind?: Memory
     command,
     confidence: record.confidence,
     score: record.score,
-    evidenceRefs: record.evidenceRefs
+    evidenceRefs: record.evidenceRefs,
+    correctionStatus: record.correctionStatus,
+    wrongAssumption: record.wrongAssumption,
+    correctedRule: record.correctedRule,
+    applicability: record.applicability ?? [],
+    counterexamples: record.counterexamples ?? []
   }));
   const kind = overrideKind ?? kindForFailure(record.failureClass);
   constraints.push({
@@ -268,7 +278,12 @@ function constraintsForRecord(record: ScoredFailureMemory, overrideKind?: Memory
     text: textForFailure(record),
     confidence: record.confidence,
     score: record.score,
-    evidenceRefs: record.evidenceRefs
+    evidenceRefs: record.evidenceRefs,
+    correctionStatus: record.correctionStatus,
+    wrongAssumption: record.wrongAssumption,
+    correctedRule: record.correctedRule,
+    applicability: record.applicability ?? [],
+    counterexamples: record.counterexamples ?? []
   });
   return constraints;
 }
@@ -293,23 +308,33 @@ function kindForFailure(failureClass: FailureClass): MemoryConstraintKind {
 }
 
 function textForFailure(record: ScoredFailureMemory): string {
+  const correction = correctionSummary(record);
   switch (record.failureClass) {
     case "validation_failed":
-      return `Do not rely on the patch until the failing verifier is reproduced and rerun. Correction: ${record.correction}`;
+      return `Do not rely on the patch until the failing verifier is reproduced and rerun. ${correction}`;
     case "review_or_judge_blocked":
-      return `Resolve the prior review/judge blocking concern before selection. Correction: ${record.correction}`;
+      return `Resolve the prior review/judge blocking concern before selection. ${correction}`;
     case "no_candidate_selected":
     case "partial_completion":
     case "workflow_incomplete":
-      return `Avoid opaque or incomplete candidates; produce an inspectable diff and stop reason. Correction: ${record.correction}`;
+      return `Avoid opaque or incomplete candidates; produce an inspectable diff and stop reason. ${correction}`;
     case "environment_failure":
-      return `Separate local environment/tooling failures from patch quality. Correction: ${record.correction}`;
+      return `Separate local environment/tooling failures from patch quality. ${correction}`;
     case "provider_failure":
     case "routing_blocked":
-      return `Check provider/routing health before blaming implementation. Correction: ${record.correction}`;
+      return `Check provider/routing health before blaming implementation. ${correction}`;
     case "coding_error":
-      return `Avoid repeating the prior coding trap; keep the patch narrow and evidence-backed. Correction: ${record.correction}`;
+      return `Avoid repeating the prior coding trap; keep the patch narrow and evidence-backed. ${correction}`;
   }
+}
+
+function correctionSummary(record: ScoredFailureMemory): string {
+  const pieces = [
+    `Correction(${record.correctionStatus ?? "unknown"}): ${record.correctedRule ?? record.correction}`,
+    record.wrongAssumption ? `Wrong assumption: ${record.wrongAssumption}` : "",
+    record.applicability?.length ? `Applies when: ${record.applicability.slice(0, 4).join(", ")}` : ""
+  ].filter(Boolean);
+  return pieces.join(" ");
 }
 
 function downgradeRecommendation(value: ReviewReport["reviews"][number]["recommendation"]): ReviewReport["reviews"][number]["recommendation"] {

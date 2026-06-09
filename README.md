@@ -906,6 +906,13 @@ bypassed before model-visible context is built:
 Every decision is recorded as a `memory_policy` event, and error-loop reports
 show policy exploit/bypass counts.
 
+Failure-memory lessons also store structured correction scope: wrong assumption,
+corrected rule, applicability, counterexamples, validation command, and a
+`correctionStatus` of `verified`, `partial`, or `unverified`. Planner/coder
+constraints and repair hints use those fields instead of opaque "we failed
+before" notes, and retrieval scores verified corrections above unverified
+lessons with the same task signals.
+
 ## Conversation Targets
 
 TomorrowEdge Core is the default natural-language conversation object. Users can

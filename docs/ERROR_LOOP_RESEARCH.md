@@ -16,6 +16,11 @@ a failure class, a correction strategy, confidence, recurrence count, artifact
 refs, project scope, source session IDs, and first/last seen timestamps. It
 intentionally avoids raw stdout, stderr, diffs, provider payloads, and secrets.
 
+Each correction strategy is scoped. Records include the wrong assumption,
+corrected rule, applicability signals, counterexamples, validation command, and
+`correctionStatus` (`verified`, `partial`, or `unverified`). Unverified lessons
+remain visible for audit but should not be interpreted as proven fixes.
+
 Repeated matching failures are merged by stable failure signature and project
 scope. This preserves recurrence evidence without letting a hot loop flood the
 memory file with duplicate rows.
@@ -78,6 +83,8 @@ stale records as rejected evidence with a reason such as `memory TTL expired` or
 `project scope changed`, so negative transfer decisions remain inspectable.
 Use `tedge memory failures --include-stale` or
 `tedge memory show <id> --include-stale` when auditing lifecycle decisions.
+Among otherwise similar records, verified correction lessons receive a stronger
+retrieval score than partial or unverified lessons.
 
 When strategy memory is enabled, retrieval can influence four workflow points:
 
