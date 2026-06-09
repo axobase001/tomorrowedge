@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
-import { loadConfig } from "../../src/config/configLoader.js";
+import { loadConfig, writeConfig } from "../../src/config/configLoader.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -352,6 +352,52 @@ describe("local cockpit server", () => {
       expect(localEnv).toContain('TEST_OPENROUTER_KEY="test-openrouter-key-value"');
     } finally {
       delete process.env.TEST_OPENROUTER_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("treats configured local providers without auth as ready for GUI live runs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-local-provider-"));
+    await writeConfig(cwd, {
+      ...defaultConfig,
+      routing: { ...defaultConfig.routing, mode: "local" },
+      providers: {
+        ...defaultConfig.providers,
+        ollama: {
+          ...defaultConfig.providers.ollama,
+          enabled: true,
+          base_url: "http://localhost:11434",
+          model: "local-auto",
+          auth_header: "none"
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "ollama", model: "local-auto" },
+        coder_a: { provider: "ollama", model: "local-auto" },
+        reviewer: { provider: "ollama", model: "local-auto" },
+        judge: { provider: "ollama", model: "local-auto" }
+      }
+    });
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+        needsSetup: boolean;
+        selectedProvider?: string;
+        selectedModel?: string;
+        providers: Array<{ id: string; keyConfigured: boolean; keySource: string; authRequired: boolean }>;
+      };
+
+      expect(status.needsSetup).toBe(false);
+      expect(status.selectedProvider).toBe("ollama");
+      expect(status.selectedModel).toBe("local-auto");
+      expect(status.providers.find((provider) => provider.id === "ollama")).toMatchObject({
+        keyConfigured: true,
+        keySource: "not_required",
+        authRequired: false
+      });
+    } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }

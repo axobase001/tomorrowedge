@@ -69,8 +69,9 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const config = loadConfig(cwd);
   const localEnv = readLocalEnvMap(cwd);
   const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider, localEnv));
-  const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model);
-  const configuredAuthProvider = providers.find((provider) => provider.enabled && provider.authRequired && provider.model);
+  const explicitlyRoutedProviders = new Set(Object.values(config.agents).map((agent) => agent.provider).filter((provider) => provider !== "auto"));
+  const configuredLive = providers.find((provider) => isConfiguredRuntimeProvider(provider, explicitlyRoutedProviders));
+  const configuredAuthProvider = providers.find((provider) => isRuntimeProvider(provider) && provider.enabled && provider.authRequired && provider.model);
   const selected = configuredLive ?? configuredAuthProvider;
   return {
     needsSetup: !configuredLive,
@@ -86,6 +87,15 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
     selectedProvider: selected?.id,
     selectedModel: selected?.model
   };
+}
+
+function isConfiguredRuntimeProvider(provider: CockpitProviderReadiness, explicitlyRoutedProviders: Set<string>): boolean {
+  if (!isRuntimeProvider(provider) || !provider.enabled || !provider.keyConfigured || !provider.model) return false;
+  return provider.authRequired || explicitlyRoutedProviders.has(provider.id);
+}
+
+function isRuntimeProvider(provider: CockpitProviderReadiness): boolean {
+  return provider.id !== "mock" && provider.id !== "fixture";
 }
 
 export async function configureCockpitProvider(cwd: string, request: CockpitSetupRequest): Promise<CockpitSetupStatus> {
