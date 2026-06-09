@@ -258,4 +258,81 @@ describe("live patch generator", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("retries and blocks DeepSeek live patch candidates that contain CJK mojibake", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-deepseek-mojibake-"));
+    const originalFetch = globalThis.fetch;
+    const bodies: Array<Record<string, unknown>> = [];
+    try {
+      await writeFile(path.join(cwd, "index.js"), "export const value = 1;\n", "utf8");
+      globalThis.fetch = (async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "Garbled Chinese text slipped into the patch.",
+                    filesChanged: ["index.js"],
+                    unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-export const value = 1;\n+export const value = '鏁板鐭ヨ瘑鏍?';\n",
+                    testPlan: ["npm test"],
+                    knownTradeoffs: [],
+                    estimatedRisk: "low"
+                  })
+                }
+              }
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 10 }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          deepseek: {
+            ...defaultConfig.providers.deepseek,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://deepseek.test/v1",
+            model: "deepseek-chat",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "deepseek", model: "deepseek-chat" },
+          coder_b: { provider: "deepseek", model: "deepseek-chat" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const plan = await planner.run({ goal: "update index.js with Chinese text" });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal: "Update index.js with readable Chinese text",
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [{ path: "index.js", reason: "target file", risk: "safe" }],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "single file"
+        }
+      });
+
+      expect(bodies.length).toBeGreaterThanOrEqual(4);
+      expect(bodies.every((body) => !("response_format" in body))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.filesChanged.length === 0 && candidate.unifiedDiff === "")).toBe(true);
+      expect(result.notes.every((note) => note.retryUsed)).toBe(true);
+      expect(result.notes.map((note) => note.error).join("\n")).toContain("mojibake");
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

@@ -112,8 +112,23 @@ function isInside(root: string, candidate: string): boolean {
   return relative === "" || (Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+export function textQualityIssueForUnifiedDiff(unifiedDiff: string): string | undefined {
+  const patches = parsePatch(unifiedDiff);
+  for (const patch of patches) {
+    const filePath = normalizePath(stripPrefix(patch.newFileName ?? patch.oldFileName ?? ""));
+    if (!filePath) continue;
+    const issue = textQualityIssueForAddedText(addedTextFromPatch(patch), filePath);
+    if (issue) return `${filePath}: ${issue}`;
+  }
+  return undefined;
+}
+
 function textQualityIssueForPatch(unifiedDiff: string, filePath: string): string | undefined {
   const addedText = addedTextForFile(unifiedDiff, filePath);
+  return textQualityIssueForAddedText(addedText, filePath);
+}
+
+function textQualityIssueForAddedText(addedText: string, filePath: string): string | undefined {
   if (!addedText.trim()) return undefined;
   if (/\.(?:html?|xhtml)$/i.test(filePath) && /\?\/(?:p|strong|em|h[1-6]|div|span|body|html)>/i.test(addedText)) {
     return "added HTML appears to contain malformed closing tags";
@@ -139,10 +154,21 @@ function addedTextForFile(unifiedDiff: string, filePath: string): string {
   return "";
 }
 
-function looksLikeMojibake(text: string): boolean {
-  const markers = ["鏄", "涓", "鐨", "鎴", "鍥", "绋", "甯", "杈", "紭", "璇", "鎬", "寤", "銆", "锛"];
+function addedTextFromPatch(patch: ReturnType<typeof parsePatch>[number]): string {
+  return patch.hunks
+    .flatMap((hunk) => hunk.lines)
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1))
+    .join("\n");
+}
+
+export function looksLikeMojibake(text: string): boolean {
+  if (text.includes("\uFFFD") || text.includes("锟斤拷")) return true;
+  const markers = ["鏄", "涓", "鐨", "鎴", "鍥", "绋", "甯", "杈", "紭", "璇", "鎬", "寤", "銆", "锛", "鏁", "鐭", "鏍", "閺", "閻", "閹", "娑", "缁", "绱", "鐠", "瀵", "閵", "閿", "顩", "绨", "粙", "瀣", "碍", "搴", "嫯", "鐦", "毉", "滈"];
   const hits = markers.reduce((sum, marker) => sum + countOccurrences(text, marker), 0);
-  return hits >= 4 && hits / Math.max(text.length, 1) > 0.015;
+  const cjkCount = [...text].filter((char) => /[\u3400-\u9fff]/u.test(char)).length;
+  const danglingQuestionMarks = (text.match(/[\u3400-\u9fff]\?/gu) ?? []).length;
+  return danglingQuestionMarks >= 2 || (hits >= 3 && hits / Math.max(cjkCount, 1) > 0.08);
 }
 
 function countOccurrences(text: string, marker: string): number {

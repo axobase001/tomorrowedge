@@ -10,6 +10,7 @@ import { ModelRouter } from "../routing/router.js";
 import { estimateCostUsd } from "./costAccounting.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
 import type { EventLedger } from "../events/eventLedger.js";
+import type { TaskGovernanceDecision } from "../goal/taskGovernance.js";
 
 const advisoryMaxCompletionTokens = 600;
 
@@ -32,6 +33,7 @@ export type AdvisoryInput = {
   review?: ReviewReport;
   visualSpec?: StructuredVisualSpec;
   ledger?: EventLedger;
+  governance?: TaskGovernanceDecision;
 };
 
 export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]> {
@@ -40,11 +42,13 @@ export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]
 }
 
 export function buildAdvisoryPlans(input: AdvisoryInput): AdvisoryCallPlan[] {
+  const governanceRequiresReview = Boolean(input.governance?.requiresReviewer || input.governance?.reasoningSensitivity === "medium" || input.governance?.reasoningSensitivity === "high");
+  const governanceRequiresJudge = Boolean(input.governance?.requiresJudge || input.governance?.reasoningSensitivity === "high");
   const roles: Array<{ role: AgentRole; kind: ModelNote["kind"]; prompt: string; enabled: boolean }> = [
     { role: "planner", kind: "plan_advice", prompt: buildPlannerPrompt(input), enabled: true },
     { role: "coder_a", kind: "implementation_advice", prompt: buildCoderPrompt(input), enabled: true },
-    { role: "reviewer", kind: "review_advice", prompt: buildReviewerPrompt(input), enabled: Boolean(input.candidates?.length) },
-    { role: "judge", kind: "judge_advice", prompt: buildJudgePrompt(input), enabled: Boolean(input.review) }
+    { role: "reviewer", kind: "review_advice", prompt: buildReviewerPrompt(input), enabled: Boolean(input.candidates?.length) || governanceRequiresReview },
+    { role: "judge", kind: "judge_advice", prompt: buildJudgePrompt(input), enabled: Boolean(input.review) || governanceRequiresJudge }
   ];
 
   return roles.filter((item) => item.enabled).map((item) => {
@@ -117,6 +121,7 @@ function buildPlannerPrompt(input: AdvisoryInput): string {
   return [
     `Task: ${input.goal}`,
     `Workspace: ${input.cwd}`,
+    governanceLine(input),
     input.visualSpec ? input.visualSpec.handoffPrompt : "",
     "Give a short plan with key risk, expected files, and verification command. Do not propose direct execution."
   ].filter(Boolean).join("\n");
@@ -129,9 +134,12 @@ function buildReviewerPrompt(input: AdvisoryInput): string {
   return [
     `Task: ${input.goal}`,
     `Plan risk: ${input.plan?.riskLevel ?? "unknown"}`,
+    governanceLine(input),
     "Candidates:",
-    candidates,
-    "Give concise review concerns and what a human should inspect before approval."
+    candidates || "(none; this is a reasoning/advisory workflow rather than a patch review)",
+    input.candidates?.length
+      ? "Give concise review concerns and what a human should inspect before approval."
+      : "Independently review the likely answer strategy for correctness risks, missing assumptions, and required verification before the cockpit presents a final answer."
   ].join("\n");
 }
 
@@ -140,6 +148,7 @@ function buildCoderPrompt(input: AdvisoryInput): string {
     `Task: ${input.goal}`,
     `Plan steps: ${(input.plan?.steps ?? []).map((step) => step.title).join(" | ") || "unknown"}`,
     `Expected files: ${(input.plan?.expectedFiles ?? []).join(", ") || "unknown"}`,
+    governanceLine(input),
     input.visualSpec ? input.visualSpec.handoffPrompt : "",
     "Suggest a minimal implementation approach and name the first files to inspect. Do not output a patch."
   ].filter(Boolean).join("\n");
@@ -151,8 +160,16 @@ function buildJudgePrompt(input: AdvisoryInput): string {
     .join("\n");
   return [
     `Task: ${input.goal}`,
+    governanceLine(input),
     "Reviews:",
-    reviews,
-    "Advise whether judge should select, request revision, or ask user. Explain in one paragraph."
+    reviews || "(none; this is a reasoning/advisory workflow rather than a reviewed patch)",
+    input.review
+      ? "Advise whether judge should select, request revision, or ask user. Explain in one paragraph."
+      : "Act as the independent quality gate. State whether a single-model answer is acceptable, what must be checked, and whether a stronger reviewer/judge should be kept in the loop."
   ].join("\n");
+}
+
+function governanceLine(input: AdvisoryInput): string {
+  if (!input.governance) return "";
+  return `Governance: sensitivity=${input.governance.reasoningSensitivity}, reviewer=${input.governance.requiresReviewer}, judge=${input.governance.requiresJudge}, reason=${input.governance.reason}`;
 }

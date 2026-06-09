@@ -418,9 +418,10 @@ describe("local cockpit server", () => {
       expect(response.status).toBe(202);
       const session = await waitForLatestSession(server.url, server.nonce);
       const target = session.state.events.find((event) => event.type === "conversation_target") as { target?: string } | undefined;
+      const modelCalls = session.state.events.filter((event) => event.type === "model_call");
 
       expect(target?.target).toBe("reviewer");
-      expect(session.state.events.some((event) => event.type === "model_call")).toBe(false);
+      expect(modelCalls.every((event) => event.provider === "mock")).toBe(true);
       expect(session.state.finalSummary?.result).toBe("completed");
     } finally {
       await server.close();

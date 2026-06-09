@@ -33,6 +33,17 @@ export class MockProvider implements ModelProvider {
         }
       };
     }
+    if (req.metadata?.tomorrowedgeTask === "task_governance") {
+      return {
+        id: "mock-task-governance",
+        model: req.model,
+        content: JSON.stringify(classifyMockTaskGovernance(last)),
+        usage: {
+          inputTokens: estimateTokens(req.messages.map((m) => stringifyContent(m.content)).join("\n")),
+          outputTokens: 54
+        }
+      };
+    }
     return {
       id: "mock-response",
       model: req.model,
@@ -48,6 +59,28 @@ export class MockProvider implements ModelProvider {
       }
     };
   }
+}
+
+function classifyMockTaskGovernance(text: string) {
+  const lower = text.toLowerCase();
+  const correctnessCritical = /\b(prove|proof|theorem|lemma|logic|mathematical|correctness-critical|formal argument|counterexample)\b|\u8bc1\u660e|\u5b9a\u7406|\u5f15\u7406|\u53cd\u4f8b|\u6570\u5b66|\u903b\u8f91/.test(lower);
+  const risky = /\b(security|auth|credential|irreversible|production|benchmark|research claim|medical|legal|financial)\b/i.test(lower);
+  if (correctnessCritical || risky) {
+    return {
+      reasoningSensitivity: correctnessCritical ? "high" : "medium",
+      requiresReviewer: true,
+      requiresJudge: correctnessCritical,
+      confidence: 0.82,
+      reason: "Mock governance model classified the request as requiring independent correctness review."
+    };
+  }
+  return {
+    reasoningSensitivity: "low",
+    requiresReviewer: false,
+    requiresJudge: false,
+    confidence: 0.74,
+    reason: "Mock governance model found no need for an extra decision gate."
+  };
 }
 
 function createMockPlannerPlan(text: string) {
