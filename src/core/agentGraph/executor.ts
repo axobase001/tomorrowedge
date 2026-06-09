@@ -846,15 +846,9 @@ function workflowStopReason(state: AgentGraphState): string {
   return "no patch applied; workflow finalized after review and judge";
 }
 
-/** Per-role budget cap from config. Roles not explicitly listed use "other". */
+/** Per-role budget cap from config.agent[role].budget.max_cost_per_call_usd. */
 function roleBudgetFor(role: AgentRole, config: TomorrowEdgeConfig): number {
-  const b = config.agent_budget;
-  if (role === "vision") return b.vision;
-  if (role === "planner") return b.planner;
-  if (role === "coder_a" || role === "coder_b" || role === "repairer") return b.coder;
-  if (role === "reviewer") return b.reviewer;
-  if (role === "judge") return b.judge;
-  return b.other;
+  return config.agents[role]?.budget?.max_cost_per_call_usd ?? Infinity;
 }
 
 /** Cumulative USD spent by a given role in this session. */
