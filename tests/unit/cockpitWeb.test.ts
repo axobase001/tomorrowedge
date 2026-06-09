@@ -330,6 +330,8 @@ describe("cockpit web React surface", () => {
       ...sampleViewModel(),
       errorLoopTimeline: {
         candidateAttempts: 1,
+        outcomePredictions: 1,
+        outcomeMismatches: 1,
         failedVerifications: 1,
         passedVerifications: 1,
         policyDecisions: 1,
@@ -337,6 +339,17 @@ describe("cockpit web React surface", () => {
         memoryRetrievals: 1,
         stopReason: "repair applied and verification passed",
         items: [{
+          id: "shell_prediction",
+          timestamp: "2026-06-07T00:00:00.000Z",
+          kind: "prediction",
+          status: "proposed",
+          title: "Outcome prediction",
+          summary: "shell predicts passed",
+          command: "npm test",
+          filesChanged: [],
+          artifactRefs: ["artifacts/predictions/shell.json"],
+          memoryIds: []
+        }, {
           id: "shell_failed",
           timestamp: "2026-06-07T00:00:00.000Z",
           kind: "verification",
@@ -348,6 +361,17 @@ describe("cockpit web React surface", () => {
           artifactRefs: ["artifacts/stderr/failed.txt"],
           exitCode: 1,
           durationMs: 22,
+          memoryIds: []
+        }, {
+          id: "shell_observation",
+          timestamp: "2026-06-07T00:00:00.250Z",
+          kind: "observation",
+          status: "mismatch",
+          title: "Outcome observation",
+          summary: "failed mismatch=wrong_assumption",
+          command: "npm test",
+          filesChanged: [],
+          artifactRefs: ["artifacts/observations/shell.json"],
           memoryIds: []
         }, {
           id: "repair_policy",

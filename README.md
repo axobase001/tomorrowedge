@@ -855,6 +855,10 @@ the workflow stop reason. A `repair_policy` event classifies verifier failures
 as semantic, environment, provider-output, wrong-file, missing-context, or
 unknown, then records whether TomorrowEdge should repair, retry schema output,
 expand context, stop, or escalate a repeated same-signature failure.
+Patch, shell, and repair attempts also emit `outcome_prediction` before the
+action and `outcome_observation` after it. Those records capture expected
+behavior, observed result, mismatch type, and artifact refs so failure memory can
+point to the prediction and observation rather than only raw failure text.
 
 ```bash
 tedge memory failures
@@ -885,7 +889,8 @@ The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,
 `retrieval_decisions.jsonl`, `metrics.json`, and `report.md`, with explicit
 `memoryUpdateStatus` values such as `written`, `skipped_no_failure`, and
 `skipped_ablation`. Metrics separate new memory writes from observed recurrence
-and suspected negative transfer.
+and suspected negative transfer, and include prediction accuracy when observed
+outcomes are available.
 
 ## Conversation Targets
 

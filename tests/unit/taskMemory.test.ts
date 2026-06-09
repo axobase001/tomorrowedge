@@ -147,6 +147,21 @@ describe("learned task memory", () => {
       ];
       state.eventArtifacts = [{ ref: "artifacts/stderr.txt", content: "OPENROUTER_API_KEY=sk-123456789012345678901234\nAssertionError" }];
       state.events = [{
+        id: "event_prediction_sensitive",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "outcome_prediction",
+        phase: "shell",
+        role: "runner",
+        target: "shell",
+        command: "npm test",
+        predictedOutcome: "passed",
+        expectedBehavior: "Validate selected patch.",
+        expectedTestOutcome: "npm test should pass.",
+        uncertainty: "medium",
+        predictionRef: "artifacts/predictions/prediction.json"
+      }, {
         id: "event_shell_sensitive",
         timestamp: "2026-06-07T00:00:00.000Z",
         sessionId: state.sessionId,
@@ -159,6 +174,23 @@ describe("learned task memory", () => {
         success: false,
         exitCode: 1,
         stderrRef: "C:\\Users\\PC\\secret\\repo\\.tomorrowedge\\artifacts\\stderr.txt"
+      }, {
+        id: "event_observation_sensitive",
+        timestamp: "2026-06-07T00:00:00.001Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "outcome_observation",
+        phase: "shell",
+        role: "runner",
+        target: "shell",
+        predictionEventId: "event_prediction_sensitive",
+        command: "npm test",
+        predictedOutcome: "passed",
+        observedOutcome: "failed",
+        matched: false,
+        mismatchType: "wrong_assumption",
+        summary: "Command failed: npm test",
+        observationRef: "artifacts/observations/observation.json"
       }];
       state.finalSummary = {
         task: state.goal,
@@ -182,7 +214,13 @@ describe("learned task memory", () => {
       expect(record.failureMemoryConsent).toBe("enabled");
       expect(record.failureMemoryRedaction).toBe("artifact_refs");
       expect(record.correction).toContain("npm test");
+      expect(record.outcomePredictionRefs).toEqual(["event_prediction_sensitive"]);
+      expect(record.outcomeObservationRefs).toEqual(["event_observation_sensitive"]);
+      expect(record.outcomeMismatchType).toBe("wrong_assumption");
+      expect(record.predictionAccuracy).toEqual({ matched: 0, total: 1 });
       expect(record.evidenceRefs).toContain("artifacts/stderr.txt");
+      expect(record.evidenceRefs).toContain("artifacts/predictions/prediction.json");
+      expect(record.evidenceRefs).toContain("artifacts/observations/observation.json");
       expect(record.evidenceRefs).toContain("[path]");
       expect(record.goalPreview).not.toContain("sk-");
       expect(JSON.stringify(record)).not.toContain("123456789012345678901234");

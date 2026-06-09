@@ -99,6 +99,14 @@ provider-output, wrong-file, and missing-context failures are routed away from
 blind patch repair so the trace explains why the workflow stopped or needs
 broader context.
 
+Patch, shell, and repair attempts emit `outcome_prediction` before the action and
+`outcome_observation` after it. Observations classify mismatches as
+`wrong_assumption`, `incomplete_context`, `wrong_validator`,
+`environment_issue`, `flaky_result`, or `unsafe_action_blocked`. Failure-memory
+records store prediction and observation event ids plus aggregate prediction
+accuracy, so a lesson can reference what the workflow expected before comparing
+it with external validation.
+
 ## Current Failure Classes
 
 - `coding_error`
@@ -161,6 +169,7 @@ Research exports should report:
 - strong-agent calls
 - trace completeness
 - memory update status counts
+- prediction accuracy / mismatch counts
 - leakage checks
 
 The product claim should stay narrow:

@@ -51,7 +51,7 @@ import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
 import { canFallbackWhenBudgetBlocked, commitRoleCall, createBudgetRuntimeState, evaluateRoleInvocation, releaseRoleCall, reserveRoleCall, type BudgetGateDecision } from "../budget/budgetGate.js";
 import type { RouteAssignment } from "../routing/policies.js";
-import type { EventPhase, TomorrowEdgeEvent } from "../events/eventTypes.js";
+import type { EventPhase, ObservedOutcome, OutcomeMismatchType, OutcomePredictionEvent, OutcomeTarget, PredictedOutcome, ShellRunEvent, TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { buildRoleGraph } from "../orchestration/roleGraph.js";
 import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
 import { getCachedContextSelection, getCachedPlan, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
@@ -702,6 +702,9 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
   if (options.dryRun && state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     const diffRef = selected?.unifiedDiff ? ledger.writeArtifact("diffs", selected.unifiedDiff) : undefined;
+    const prediction = selected
+      ? recordPatchApplicationPrediction(ledger, selected, "patch", false, "dryRun=true records the selected patch without mutating files.")
+      : undefined;
     ledger.append({
       type: "patch_apply",
       phase: "patch",
@@ -715,16 +718,21 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
       applied: false,
       error: "dryRun=true; selected patch was recorded but not applied."
     });
+    if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", "dryRun=true; selected patch was recorded but not applied.");
   } else if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     if (selected?.unifiedDiff) {
       const diffRef = ledger.writeArtifact("diffs", selected.unifiedDiff);
+      const prediction = recordPatchApplicationPrediction(ledger, selected, "patch", access.patchAllowed && access.patchApproved);
       try {
         const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved), "offline");
         state.changedFiles = applyResult.changedFiles;
         ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: applyResult.changedFiles, diffRef, undoSnapshotIds: applyResult.undoSnapshotIds, applied: true });
+        recordOutcomeObservation(ledger, prediction, "applied", `${applyResult.changedFiles.length} file(s) changed.`);
       } catch (error) {
-        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: selected.filesChanged, diffRef, undoSnapshotIds: [], applied: false, error: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: selected.filesChanged, diffRef, undoSnapshotIds: [], applied: false, error: message });
+        recordOutcomeObservation(ledger, prediction, "blocked", message);
         state.agents.push({
           id: "approval_patch",
           role: "runner",
@@ -738,7 +746,11 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
       const reason = selected
         ? `Judge selected candidate ${selected.candidateId} but it has no unified diff to apply.`
         : `Judge selected candidate ${state.judge.selectedCandidateId} but it was not found in the candidate list.`;
+      const prediction = selected
+        ? recordPatchApplicationPrediction(ledger, selected, "patch", false, "Selected candidate has no unified diff to apply.")
+        : undefined;
       ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: state.judge.selectedCandidateId, filesChanged: [], diffRef: undefined, undoSnapshotIds: [], applied: false, error: reason });
+      if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", reason);
     }
   }
 }
@@ -758,10 +770,12 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
         if (!canRunShell(config, shellRuns, ledger)) return;
         shellRuns += 1;
+        const shellPrediction = recordShellPrediction(ledger, testCommand, state.repairCandidates.length ? "Validate the repaired patch." : "Validate the selected patch.");
         const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
         const result = normalizeVerificationResult(rawResult, { defaultVerification });
         state.runResults.push(result);
         recordShellRunEvent(state, ledger, cwd, result);
+        recordOutcomeObservation(ledger, shellPrediction, observedShellOutcome(result), evidenceFromRun(result), result);
         if (result.success) continue;
         const repairPolicy = recordRepairPolicyDecision(state, ledger, result, failureOccurrences);
         if (!options.repairOnFail) break;
@@ -795,25 +809,31 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         state.repairCandidates.push(repairCandidate);
         recordPatchCandidateEvent(state, ledger, "repairer", repairCandidate);
         const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
+        const repairPrediction = recordPatchApplicationPrediction(ledger, repairCandidate, "repair", access.repairAllowed && access.repairApproved, "Repair candidate should update the files implicated by the failed verifier.");
         ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
         if (repairCandidate.unifiedDiff) {
           try {
             const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
             ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
+            recordOutcomeObservation(ledger, repairPrediction, "applied", `${repairApplyResult.changedFiles.length} repair file(s) changed.`);
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
             if (!canRunShell(config, shellRuns, ledger)) return;
             shellRuns += 1;
+            const repairedShellPrediction = recordShellPrediction(ledger, testCommand, "Validate the repair candidate after applying it.");
             const rawRepairedRun = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
             const repairedRun = normalizeVerificationResult(rawRepairedRun, { defaultVerification });
             state.runResults.push(repairedRun);
             recordShellRunEvent(state, ledger, cwd, repairedRun);
+            recordOutcomeObservation(ledger, repairedShellPrediction, observedShellOutcome(repairedRun), evidenceFromRun(repairedRun), repairedRun);
             if (!repairedRun.success) {
               recordRepairPolicyDecision(state, ledger, repairedRun, failureOccurrences);
               break;
             }
           } catch (error) {
-            ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: error instanceof Error ? error.message : String(error) });
+            const message = error instanceof Error ? error.message : String(error);
+            ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: message });
+            recordOutcomeObservation(ledger, repairPrediction, "blocked", message);
             state.agents.push({
               id: "approval_repair",
               role: "runner",
@@ -1597,13 +1617,13 @@ function recordPatchCandidateEvent(state: AgentGraphState, ledger: EventLedger, 
   });
 }
 
-function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: string, result: RunResult): void {
+function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: string, result: RunResult): ShellRunEvent {
   const stdoutRef = ledger.writeArtifact("stdout", result.stdout);
   const stderrRef = ledger.writeArtifact("stderr", result.stderr);
   recordArtifactProjection(state, ledger, "shell", stdoutRef, result.stdout, "stdout", "runner");
   recordArtifactProjection(state, ledger, "shell", stderrRef, result.stderr, "stderr", "runner");
   recordEvidencePacket(state, ledger, buildTestEvidence(result, { stdoutRef, stderrRef }), "runner");
-  ledger.append({
+  return ledger.append({
     type: "shell_run",
     phase: "shell",
     role: "runner",
@@ -1618,7 +1638,7 @@ function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: s
     success: result.success,
     skipped: result.skipped,
     skipReason: result.skipReason
-  });
+  }) as ShellRunEvent;
 }
 
 function normalizeVerificationResult(result: RunResult, options: { defaultVerification: boolean }): RunResult {
@@ -1680,6 +1700,131 @@ function recordEvidencePacket(state: AgentGraphState, ledger: EventLedger, packe
     supportingArtifacts: packet.supportingArtifacts,
     packetRef: ledger.writeArtifact("evidence_packets", JSON.stringify(packet, null, 2), "json")
   });
+}
+
+function recordPatchApplicationPrediction(ledger: EventLedger, candidate: PatchCandidate, target: Extract<OutcomeTarget, "patch" | "repair">, willApply: boolean, note?: string): OutcomePredictionEvent {
+  const expectedBehavior = [
+    target === "repair" ? `Repair ${candidate.candidateId}` : `Apply ${candidate.candidateId}`,
+    candidate.summary,
+    candidate.filesChanged.length ? `expected files: ${candidate.filesChanged.join(", ")}` : "no expected files recorded",
+    note
+  ].filter(Boolean).join("; ");
+  return recordOutcomePrediction(ledger, {
+    phase: target === "repair" ? "repair" : "patch",
+    role: target === "repair" ? "repairer" : "runner",
+    target,
+    candidateId: candidate.candidateId,
+    expectedChangedFiles: candidate.filesChanged,
+    predictedOutcome: willApply ? "applied" : "blocked",
+    expectedBehavior,
+    expectedTestOutcome: candidate.testPlan.join("; ") || "verification should confirm the patch behavior",
+    uncertainty: candidate.estimatedRisk === "high" ? "high" : candidate.estimatedRisk === "medium" ? "medium" : "low"
+  });
+}
+
+function recordShellPrediction(ledger: EventLedger, command: string, expectedBehavior: string): OutcomePredictionEvent {
+  return recordOutcomePrediction(ledger, {
+    phase: "shell",
+    role: "runner",
+    target: "shell",
+    command,
+    predictedOutcome: "passed",
+    expectedBehavior,
+    expectedTestOutcome: `${command} should pass or be explicitly skipped by verifier policy.`,
+    uncertainty: "medium"
+  });
+}
+
+function recordOutcomePrediction(
+  ledger: EventLedger,
+  input: {
+    phase: EventPhase;
+    role: AgentRole;
+    target: OutcomeTarget;
+    candidateId?: string;
+    command?: string;
+    expectedChangedFiles?: string[];
+    predictedOutcome: PredictedOutcome;
+    expectedBehavior: string;
+    expectedTestOutcome?: string;
+    uncertainty: "low" | "medium" | "high";
+  }
+): OutcomePredictionEvent {
+  const predictionRef = ledger.writeArtifact("predictions", JSON.stringify({
+    target: input.target,
+    candidateId: input.candidateId,
+    command: input.command,
+    predictedOutcome: input.predictedOutcome,
+    expectedBehavior: input.expectedBehavior,
+    expectedTestOutcome: input.expectedTestOutcome,
+    uncertainty: input.uncertainty
+  }, null, 2), "json");
+  return ledger.append({
+    type: "outcome_prediction",
+    phase: input.phase,
+    role: input.role,
+    target: input.target,
+    candidateId: input.candidateId,
+    command: input.command,
+    expectedChangedFiles: input.expectedChangedFiles,
+    predictedOutcome: input.predictedOutcome,
+    expectedBehavior: input.expectedBehavior,
+    expectedTestOutcome: input.expectedTestOutcome,
+    uncertainty: input.uncertainty,
+    predictionRef
+  }) as OutcomePredictionEvent;
+}
+
+function recordOutcomeObservation(
+  ledger: EventLedger,
+  prediction: OutcomePredictionEvent,
+  observedOutcome: ObservedOutcome,
+  summary: string,
+  run?: RunResult
+): void {
+  const mismatchType = classifyOutcomeMismatch(prediction, observedOutcome, run);
+  const observationRef = ledger.writeArtifact("observations", JSON.stringify({
+    predictionEventId: prediction.id,
+    target: prediction.target,
+    candidateId: prediction.candidateId,
+    command: prediction.command,
+    predictedOutcome: prediction.predictedOutcome,
+    observedOutcome,
+    matched: mismatchType === "matched",
+    mismatchType,
+    summary
+  }, null, 2), "json");
+  ledger.append({
+    type: "outcome_observation",
+    phase: prediction.phase,
+    role: prediction.role,
+    target: prediction.target,
+    predictionEventId: prediction.id,
+    candidateId: prediction.candidateId,
+    command: prediction.command,
+    predictedOutcome: prediction.predictedOutcome,
+    observedOutcome,
+    matched: mismatchType === "matched",
+    mismatchType,
+    summary,
+    observationRef
+  });
+}
+
+function observedShellOutcome(result: RunResult): ObservedOutcome {
+  if (result.skipped) return "skipped";
+  return result.success ? "passed" : "failed";
+}
+
+function classifyOutcomeMismatch(prediction: OutcomePredictionEvent, observedOutcome: ObservedOutcome, run?: RunResult): OutcomeMismatchType {
+  if (prediction.predictedOutcome === observedOutcome) return "matched";
+  if (observedOutcome === "blocked") return "unsafe_action_blocked";
+  const text = `${run?.command ?? ""}\n${run?.stdout ?? ""}\n${run?.stderr ?? ""}`.toLowerCase();
+  if (/not recognized|command not found|enoent|permission denied|access is denied|spawn .* enoent/.test(text)) return "environment_issue";
+  if (/cannot find module|module not found|no such file|file not found|missing dependency/.test(text)) return "incomplete_context";
+  if (/flaky|flake|intermittent|timeout|timed out|random/i.test(text)) return "flaky_result";
+  if (prediction.target === "shell" && observedOutcome === "skipped") return "wrong_validator";
+  return "wrong_assumption";
 }
 
 type TomorrowEdgeProjectionPhase = "coding" | "review" | "judge" | "shell" | "repair" | "verification";

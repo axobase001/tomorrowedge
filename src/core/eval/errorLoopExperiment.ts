@@ -42,6 +42,9 @@ export type ErrorLoopTrial = {
   eventCount: number;
   artifactCount: number;
   failureClass?: string;
+  predictionMatched: number;
+  predictionTotal: number;
+  predictionAccuracy: number | null;
 };
 
 export type ErrorLoopMetrics = {
@@ -54,6 +57,7 @@ export type ErrorLoopMetrics = {
   memorySkipped: Record<MemoryUpdateReason, number>;
   retrievalDecisions: number;
   suspectedNegativeTransfer: number;
+  predictionAccuracy: number | null;
   averageTraceCompleteness?: number;
 };
 
@@ -200,9 +204,9 @@ memory and retrieval behavior. It is not a live provider benchmark.
 
 ## Metrics
 
-| Trials | Completed | Failures | Memory written | Occurrences | Retrieval decisions | Suspected negative transfer | Avg trace |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
+| Trials | Completed | Failures | Memory written | Occurrences | Retrieval decisions | Suspected negative transfer | Prediction accuracy | Avg trace |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.predictionAccuracy === null ? "-" : `${(input.metrics.predictionAccuracy * 100).toFixed(1)}%`} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
 
 ## Memory Update Status
 
@@ -210,9 +214,9 @@ ${skippedRows}
 
 ## Trials
 
-| Trial | Ablation | Result | Memory update | Retrieval | Failure class |
-| --- | --- | --- | --- | ---: | --- |
-${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.failureClass ?? "-"} |`).join("\n")}
+| Trial | Ablation | Result | Memory update | Retrieval | Prediction | Failure class |
+| --- | --- | --- | --- | ---: | ---: | --- |
+${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
 `;
 }
 
@@ -274,6 +278,7 @@ async function runTrial(input: {
     rejected: retrieval.rejected
   };
   const [firstFailure] = memoryRecords;
+  const prediction = predictionStats(state);
   return {
     trial: {
       schemaVersion: "error-loop-trial/v1",
@@ -291,7 +296,10 @@ async function runTrial(input: {
       traceCompletenessScore: state.traceCompleteness?.score,
       eventCount: state.events.length,
       artifactCount: state.eventArtifacts.length,
-      failureClass: firstFailure?.failureClass
+      failureClass: firstFailure?.failureClass,
+      predictionMatched: prediction.matched,
+      predictionTotal: prediction.total,
+      predictionAccuracy: prediction.total ? prediction.matched / prediction.total : null
     },
     memoryRecords,
     retrievalDecision
@@ -311,6 +319,8 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     if (trial.memoryUpdateStatus !== "written") memorySkipped[trial.memoryUpdateStatus] += 1;
   }
   const traceScores = trials.map((trial) => trial.traceCompletenessScore).filter((score): score is number => typeof score === "number");
+  const predictionMatched = trials.reduce((sum, trial) => sum + trial.predictionMatched, 0);
+  const predictionTotal = trials.reduce((sum, trial) => sum + trial.predictionTotal, 0);
   return {
     schemaVersion: "error-loop-metrics/v1",
     trials: trials.length,
@@ -321,7 +331,16 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     memorySkipped,
     retrievalDecisions,
     suspectedNegativeTransfer: trials.filter((trial) => trial.retrievalSelected > 0 && trial.result !== "completed").length,
+    predictionAccuracy: predictionTotal ? predictionMatched / predictionTotal : null,
     averageTraceCompleteness: traceScores.length ? traceScores.reduce((sum, score) => sum + score, 0) / traceScores.length : undefined
+  };
+}
+
+function predictionStats(state: AgentGraphState): { matched: number; total: number } {
+  const observations = state.events.filter((event) => event.type === "outcome_observation");
+  return {
+    matched: observations.filter((event) => event.matched).length,
+    total: observations.length
   };
 }
 
