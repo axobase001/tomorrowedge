@@ -39,6 +39,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
         `${route.role} -> ${route.provider}/${route.model}`,
         route.reason ? `because ${route.reason}` : undefined
       ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
+      <h3>{t("drawer.roleGraph")}</h3>
+      <pre>{formatRoleGraph(viewModel)}</pre>
       <h3>{t("drawer.artifacts")}</h3>
       <pre>{viewModel.artifacts.map((artifact) => artifact.ref).join("\n") || "-"}</pre>
       <h3>{t("drawer.rawEvents")}</h3>
@@ -46,4 +48,23 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
     </aside>
     </>
   );
+}
+
+function formatRoleGraph(viewModel: CockpitViewModel): string {
+  const graph = viewModel.roleGraph;
+  if (!graph) return "-";
+  const nodes = graph.nodes.map((node) => [
+    `${node.id} (${node.role}) ${node.required ? "required" : "optional"}`,
+    `after=${node.dependencies.join(", ") || "-"}`,
+    `fallback=${node.canFallback ? "yes" : "no"} skip=${node.canSkip ? "yes" : "no"} retries=${node.maxRetries}`,
+    node.consumes.length ? `consumes=${node.consumes.join(", ")}` : undefined,
+    node.produces.length ? `produces=${node.produces.join(", ")}` : undefined
+  ].filter(Boolean).join("\n"));
+  return [
+    `workflow=${graph.workflowKind}`,
+    "",
+    ...nodes,
+    "",
+    `stop=${graph.stopConditions.join(", ") || "-"}`
+  ].join("\n");
 }

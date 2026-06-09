@@ -1,18 +1,16 @@
 import { existsSync } from "node:fs";
-import { cp, mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { loadConfig } from "../../config/configLoader.js";
 import { accessModeSchema, type AccessMode } from "../../config/schema.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
-import { loadProjectPreferences } from "../../core/memory/preferences.js";
-import { buildStrategyMemoryHints } from "../../core/memory/taskMemory.js";
 import { NativeBackend } from "../../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../../core/orchestration/registry.js";
 import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
 import { getGitStatus } from "../../core/tools/gitTool.js";
 import { renderCockpit } from "../renderCockpit.js";
 import { getWorkflowRecipe, materializeRecipeGoal } from "../../core/recipes/recipeLoader.js";
+import { liveOption, prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, isFixtureRun } from "../../core/runtime/runPreparation.js";
+
+export { prepareRunWorkspace, type RunWorkspace } from "../../core/runtime/runPreparation.js";
 
 export type RunOptions = {
   headless?: boolean;
@@ -45,11 +43,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   if (!effectiveGoal) throw new Error("Task goal is required unless --recipe supplies a default goal.");
   const accessMode = parseAccessMode(options.accessMode);
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
-  const loadedConfig = loadConfig(targetCwd);
-  const prefs = loadProjectPreferences(targetCwd);
-  const baseConfig = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
-  const memoryHints = baseConfig.strategy_memory.enabled ? await buildStrategyMemoryHints(targetCwd, { limit: baseConfig.strategy_memory.max_records }) : undefined;
-  const config = memoryHints ? applyStrategyMemory(baseConfig, memoryHints) : baseConfig;
+  const { prefs, memoryHints, config } = await resolveRuntimeConfig(targetCwd);
   const effectiveAccessMode = accessMode ?? recipe?.accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {
@@ -119,30 +113,6 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   await renderCockpit(state, config.project.safe_mode, workspace.executionCwd);
 }
 
-export type RunWorkspace = {
-  executionCwd: string;
-  fixtureWorkspace?: string;
-};
-
-export async function prepareRunWorkspace(cwd: string, options: Pick<RunOptions, "provider" | "fixtureMode">): Promise<RunWorkspace> {
-  if (!isFixtureRun(options)) {
-    return { executionCwd: cwd };
-  }
-
-  if (existsSync(path.join(cwd, "index.js")) && existsSync(path.join(cwd, "package.json"))) {
-    return { executionCwd: cwd };
-  }
-
-  const fixtureSource = path.join(cwd, "tests", "fixtures", "sample-repo-basic");
-  if (!existsSync(path.join(fixtureSource, "index.js")) || !existsSync(path.join(fixtureSource, "package.json"))) {
-    return { executionCwd: cwd };
-  }
-
-  const fixtureWorkspace = await mkdtemp(path.join(os.tmpdir(), "tedge-fixture-demo-"));
-  await cp(fixtureSource, fixtureWorkspace, { recursive: true });
-  return { executionCwd: fixtureWorkspace, fixtureWorkspace };
-}
-
 function parseAccessMode(mode?: string): AccessMode | undefined {
   if (mode === undefined) return undefined;
   const parsed = accessModeSchema.safeParse(mode);
@@ -150,37 +120,6 @@ function parseAccessMode(mode?: string): AccessMode | undefined {
     throw new Error(`invalid access mode "${mode}". Allowed values: restricted, partial, or full.`);
   }
   return parsed.data;
-}
-
-function liveOption(offline: boolean | undefined, live: boolean | undefined, autoLive: boolean, explicit: boolean | undefined): boolean {
-  if (offline) return false;
-  if (live) return true;
-  if (explicit !== undefined) return explicit;
-  return autoLive;
-}
-
-function shouldAutoLive(config: ReturnType<typeof loadConfig>, options: RunOptions): boolean {
-  if (options.offline || isFixtureRun(options)) return false;
-  if (options.live) return true;
-  return Object.entries(config.providers).some(([id, provider]) => {
-    if (!provider.enabled || !provider.base_url || provider.auth_header === "none") return false;
-    return Boolean(provider.api_key_env && process.env[provider.api_key_env]);
-  });
-}
-
-function applyStrategyMemory(config: ReturnType<typeof loadConfig>, hints: Awaited<ReturnType<typeof buildStrategyMemoryHints>>): ReturnType<typeof loadConfig> {
-  if (!config.strategy_memory.prefer_successful_routes || !hints.routeAssignments.length) return config;
-  const agents = { ...config.agents };
-  for (const route of hints.routeAssignments) {
-    const current = agents[route.role];
-    if (!current || (current.provider !== "auto" && current.model !== "auto")) continue;
-    agents[route.role] = { provider: route.provider, model: route.model, reason: route.reason };
-  }
-  return { ...config, agents };
-}
-
-function isFixtureRun(options: Pick<RunOptions, "provider" | "fixtureMode">): boolean {
-  return Boolean(options.fixtureMode || options.provider === "fixture");
 }
 
 async function warnFullMode(cwd: string): Promise<void> {

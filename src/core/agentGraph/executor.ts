@@ -24,7 +24,7 @@ import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } f
 import { buildDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
-import type { ModelNote } from "../../schemas/modelNote.js";
+import type { ModelBudgetStatus, ModelNote } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { RunResult } from "../../schemas/evidence.js";
@@ -387,6 +387,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
           patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
           config.routing.max_cost_usd
         ));
+        recordLiveBudgetDecisions(ledger, "coding", patchPlans, budgetStatus);
         if (budgetStatus.status === "blocked") return { candidates: [], notes: [] };
         const livePatchResult = await runLivePatchCandidates(livePatchInput);
         return { candidates: livePatchResult.candidates, notes: livePatchResult.notes };
@@ -516,6 +517,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
       config.routing.max_cost_usd
     ));
+    recordLiveBudgetDecisions(ledger, "planning", advisoryPlans, budgetStatus);
     if (budgetStatus.status !== "blocked") {
       const advisoryNotes = await runLiveAdvisory(advisoryInput);
       state.modelNotes.push(...advisoryNotes);
@@ -1407,6 +1409,28 @@ function setBudgetStatus(state: AgentGraphState, status: NonNullable<AgentGraphS
   state.budgetStatus = status;
   state.budgetStatuses.push(status);
   return status;
+}
+
+function recordLiveBudgetDecisions(
+  ledger: EventLedger,
+  phase: "planning" | "coding",
+  plans: Array<{ role: AgentRole; provider: string; model: string }>,
+  status: ModelBudgetStatus
+): void {
+  for (const plan of plans) {
+    ledger.append({
+      type: "budget_decision",
+      phase,
+      role: plan.role,
+      provider: plan.provider,
+      model: plan.model,
+      status: status.status === "blocked" ? "blocked" : status.status === "price_unknown" ? "warn" : "allowed",
+      reason: status.reason,
+      budgetScope: "efficient",
+      maxCostUsd: status.maxCostUsd,
+      estimatedCostUsd: status.estimatedCostUsd
+    });
+  }
 }
 
 function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, startedAtMs: number, phase: "shell" | "repair" | "summary" | "coding"): boolean {

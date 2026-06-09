@@ -7,6 +7,46 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.13] - 2026-06-09
+
+1.2.13 clears the next GUI orchestration and provider-configuration issue batch.
+
+### Added
+
+- GUI composer target routing for `core`, `planner`, `reviewer`, `judge`,
+  `coder`, `repairer`, and `debate`.
+- GUI run mode selection for `auto`, isolated `fixture`, local `offline`, and
+  configured-provider `live` runs.
+- Detail drawer RoleGraph section with workflow kind, role dependencies,
+  required/optional nodes, fallback/skip flags, and stop conditions.
+- GUI support for adding custom OpenAI-compatible gateway providers.
+
+### Changed
+
+- GUI composer input now clears once a run is accepted; the submitted command
+  remains in the session goal, task card, and trace ledger.
+- Local cockpit `/api/runs` now uses the orchestration backend registry instead
+  of calling the native graph directly.
+- GUI runs now honor the same project preferences and strategy-memory hints used
+  by CLI runs.
+- GUI fixture demos now execute in an isolated sample workspace instead of the
+  current project directory.
+- Live patch and advisory provider calls now emit invocation-time
+  `budget_decision` events in addition to routing-time `budget_preview` events.
+
+### Fixed
+
+- Chinese file-creation tasks with read-only constraints are classified as patch
+  workflows when they explicitly ask to create/write/generate files.
+- Pending patch authorization is no longer displayed as rejected approval
+  history.
+- Patch approval failures now leave the waiting-approval state, show a failed
+  workflow diagnosis, and reject repeat approvals for stale approval ids.
+- Project-relative add-file paths under new directories are no longer rejected
+  as escaping the workspace root.
+- Obvious mojibake additions and malformed generated HTML closing tags are
+  blocked before a patch is surfaced for approval.
+
 ## [1.2.12] - 2026-06-09
 
 1.2.12 closes the high-priority orchestration and GUI trace issue batch.

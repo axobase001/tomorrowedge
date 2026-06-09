@@ -1,24 +1,36 @@
 import type { KeyboardEvent } from "react";
+import type { CockpitRunMode } from "../../../cockpit/contracts.js";
 import type { AccessMode } from "../../../config/schema.js";
 import type { Translator } from "../i18n.js";
+
+const composerTargets = ["core", "planner", "reviewer", "judge", "coder", "repairer", "debate"] as const;
+type ComposerTarget = typeof composerTargets[number];
 
 export function ComposerPanel({
   goal,
   accessMode,
+  runMode,
+  target,
   busy,
   statusMessage,
   t,
   onGoalChange,
   onAccessModeChange,
+  onRunModeChange,
+  onTargetChange,
   onSubmit
 }: {
   goal: string;
   accessMode: AccessMode;
+  runMode: CockpitRunMode;
+  target: string;
   busy: boolean;
   statusMessage?: string;
   t: Translator;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
+  onRunModeChange: (mode: CockpitRunMode) => void;
+  onTargetChange: (target: string) => void;
   onSubmit: () => void;
 }) {
   const isEmpty = goal.trim().length === 0;
@@ -48,9 +60,39 @@ export function ComposerPanel({
           <option value="full">full</option>
         </select>
       </label>
-      <span className="te-chip">{t("composer.targetCore")}</span>
+      <label className="te-mode-control">
+        <span>{t("composer.runMode")}</span>
+        <select
+          value={runMode}
+          onChange={(event) => onRunModeChange(event.target.value as CockpitRunMode)}
+          title={t("composer.runModeHelp")}
+          aria-label={t("composer.runMode")}
+          data-testid="composer-run-mode"
+        >
+          <option value="auto">{t("composer.runModeAuto")}</option>
+          <option value="fixture">{t("composer.runModeFixture")}</option>
+          <option value="offline">{t("composer.runModeOffline")}</option>
+          <option value="live">{t("composer.runModeLive")}</option>
+        </select>
+      </label>
+      <label className="te-mode-control">
+        <span>{t("composer.target")}</span>
+        <select
+          value={normalizeComposerTarget(target)}
+          onChange={(event) => onTargetChange(event.target.value)}
+          title={t("composer.targetHelp")}
+          aria-label={t("composer.target")}
+          data-testid="composer-target"
+        >
+          {composerTargets.map((item) => <option value={item} key={item}>{item}</option>)}
+        </select>
+      </label>
       {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
       <button type="submit" disabled={busy || isEmpty} data-testid="composer-submit">{t("composer.send")}</button>
     </form>
   );
+}
+
+function normalizeComposerTarget(value: string): ComposerTarget {
+  return composerTargets.includes(value as ComposerTarget) ? value as ComposerTarget : "core";
 }

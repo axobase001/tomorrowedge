@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App } from "./App.js";
-import type { CockpitApprovalIntent, CockpitViewModel } from "../../cockpit/contracts.js";
+import type { CockpitApprovalIntent, CockpitRunMode, CockpitViewModel } from "../../cockpit/contracts.js";
 import type { AccessMode } from "../../config/schema.js";
 import {
   applyCockpitApproval,
@@ -80,6 +80,8 @@ function CockpitWebRoot() {
   const [selectedSession, setSelectedSession] = useState("latest");
   const [goal, setGoal] = useState("");
   const [accessMode, setAccessMode] = useState<AccessMode>("partial");
+  const [runMode, setRunMode] = useState<CockpitRunMode>("auto");
+  const [conversationTarget, setConversationTarget] = useState("core");
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
@@ -212,18 +214,19 @@ function CockpitWebRoot() {
     }
     setBusy(true);
     const setupReady = Boolean(setupStatus && !setupStatus.needsSetup);
-    const useLiveModels = setupReady && accessMode !== "restricted";
-    setStatusMessage(useLiveModels ? t("status.startingLive") : t("status.startingFixture"));
+    const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget });
+    setStatusMessage(statusForRunRequest(request.runMode ?? "auto", Boolean(request.livePatch || request.liveAdvisory || request.liveVision), t));
     try {
-      const payload = await startCockpitRun(buildCockpitRunRequest({ goal, accessMode, setupReady }), apiOptions);
+      const payload = await startCockpitRun(request, apiOptions);
       updateSelectedSession(payload.sessionId);
+      setGoal("");
       setStatusMessage(t("status.workflowRunning"));
       connectLive(payload.sessionId);
     } catch (error) {
       setBusy(false);
       setStatusMessage(t("status.runFailed", { message: errorMessage(error) }));
     }
-  }, [accessMode, apiOptions, busy, connectLive, goal, setupStatus, t, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, goal, runMode, setupStatus, t, updateSelectedSession]);
 
   const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
     if (setupBusy) return;
@@ -345,6 +348,8 @@ function CockpitWebRoot() {
     setViewModel(emptyViewModel);
     setGoal("");
     setAccessMode("partial");
+    setRunMode("auto");
+    setConversationTarget("core");
     setStatusMessage(t("status.readyNewTask"));
   }, [closeLiveSource, t, updateSelectedSession]);
 
@@ -355,6 +360,8 @@ function CockpitWebRoot() {
       selectedSession={selectedSession}
       goal={goal}
       accessMode={accessMode}
+      runMode={runMode}
+      conversationTarget={conversationTarget}
       busy={busy}
       statusMessage={statusMessage}
       setupStatus={setupStatus}
@@ -368,6 +375,8 @@ function CockpitWebRoot() {
       t={t}
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
+      onRunModeChange={setRunMode}
+      onConversationTargetChange={setConversationTarget}
       onLanguageChange={updateLanguage}
       onConfigureSetup={configureSetup}
       onSaveProviderKey={saveProviderKey}
@@ -386,6 +395,13 @@ function CockpitWebRoot() {
       onCloseDrawer={() => setDrawerOpen(false)}
     />
   );
+}
+
+function statusForRunRequest(runMode: CockpitRunMode, usesLiveModels: boolean, t: ReturnType<typeof createTranslator>): string {
+  if (runMode === "fixture") return t("status.startingFixture");
+  if (runMode === "offline") return t("status.startingOffline");
+  if (runMode === "live" || usesLiveModels) return t("status.startingLive");
+  return t("status.startingFixture");
 }
 
 function apiUnavailableViewModel(message: string, t = createTranslator("en")): CockpitViewModel {

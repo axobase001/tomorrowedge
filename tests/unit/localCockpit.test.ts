@@ -277,6 +277,52 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("moves failed patch approvals out of waiting state and rejects repeat approves", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-patch-failure-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    const brokenState = {
+      ...state,
+      candidates: state.candidates.map((candidate) => candidate.candidateId === "fixture_candidate_a" ? {
+        ...candidate,
+        unifiedDiff: `--- a/index.js
++++ b/index.js
+@@ -1 +1 @@
+-definitely-not-present
++replacement`
+      } : candidate)
+    };
+    await saveSession(cwd, brokenState);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const first = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
+      });
+      const payload = await first.json() as { viewModel: { status: string; currentApproval?: unknown; main: { title: string; body: string } } };
+
+      expect(first.status).toBe(200);
+      expect(payload.viewModel.status).toBe("failed");
+      expect(payload.viewModel.currentApproval).toBeUndefined();
+      expect(payload.viewModel.main.title).toBe("Failure diagnosis");
+      expect(payload.viewModel.main.body).toContain("Patch apply failed");
+
+      const second = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
+      });
+      const secondPayload = await second.json() as { error: string };
+
+      expect(second.status).toBe(409);
+      expect(secondPayload.error).toBe("no_active_approval");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("returns invalid_json for malformed JSON request bodies", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-json-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -312,6 +358,93 @@ describe("local cockpit server", () => {
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid GUI run modes before starting browser runs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-mode-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", runMode: "cloudish" })
+      });
+      const payload = await response.json() as { error: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("invalid_run_mode");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("runs GUI fixture demos in an isolated sample workspace", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-isolated-fixture-"));
+    await mkdir(path.join(cwd, "tests", "fixtures"), { recursive: true });
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), path.join(cwd, "tests", "fixtures", "sample-repo-basic"), { recursive: true });
+    await writeFile(path.join(cwd, "package.json"), "{\"scripts\":{\"test\":\"node test.js\"}}\n", "utf8");
+    await writeFile(path.join(cwd, "index.js"), "module.exports = { add: () => 'root should stay unchanged' };\n", "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial", approvePatch: true })
+      });
+      expect(response.status).toBe(202);
+      const session = await waitForLatestSession(server.url, server.nonce);
+      const rootIndex = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(session.state.changedFiles).toContain("index.js");
+      expect(rootIndex).toContain("root should stay unchanged");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("passes GUI target and offline mode through the native backend", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-target-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "review architecture and suggest improvements, do not edit", runMode: "offline", accessMode: "restricted", to: "reviewer" })
+      });
+      expect(response.status).toBe(202);
+      const session = await waitForLatestSession(server.url, server.nonce);
+      const target = session.state.events.find((event) => event.type === "conversation_target") as { target?: string } | undefined;
+
+      expect(target?.target).toBe("reviewer");
+      expect(session.state.events.some((event) => event.type === "model_call")).toBe(false);
+      expect(session.state.finalSummary?.result).toBe("completed");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("honors CLI project preferences for GUI runs", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-prefs-"));
+    await mkdir(path.join(cwd, ".tomorrowedge"), { recursive: true });
+    await writeFile(path.join(cwd, ".tomorrowedge", "preferences.json"), JSON.stringify({ accessMode: "full" }), "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "list files and summarize structure", runMode: "offline" })
+      });
+      expect(response.status).toBe(202);
+      const session = await waitForLatestSession(server.url, server.nonce);
+
+      expect(session.state.access.mode).toBe("full");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     }
   });
 
@@ -773,3 +906,15 @@ describe("local cockpit server", () => {
     }
   });
 });
+
+async function waitForLatestSession(url: string, nonce: string): Promise<{ state: { access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } }> {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await fetch(`${url}/api/sessions/latest?nonce=${nonce}`);
+    if (response.status === 200) {
+      const session = await response.json() as { state: { access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } };
+      if (session.state.finalSummary) return session;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Timed out waiting for latest cockpit session.");
+}

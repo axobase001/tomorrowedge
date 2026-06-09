@@ -73,8 +73,11 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
     };
     return { state: next, message: `Patch applied: ${applyResult.changedFiles.join(", ")}` };
   } catch (error) {
-    const next = {
+    const message = error instanceof Error ? error.message : String(error);
+    const next = withFailureSummary({
       ...state,
+      approvals: isRepair ? { ...state.approvals, repairApproved: false } : { ...state.approvals, patchApproved: false },
+      agents: resolveWaitingAgents(state, "failed", `Patch apply failed: ${message}`),
       events: [
         ...state.events,
         makeEvent(state, {
@@ -88,11 +91,11 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
           diffRef: findDiffRef(state, selected.candidateId) ?? writeArtifact(state, "diffs", selected.unifiedDiff, "diff"),
           undoSnapshotIds: [],
           applied: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: message
         })
       ]
-    };
-    return { state: next, message: error instanceof Error ? error.message : String(error) };
+    }, `Patch apply failed for ${selected.candidateId}: ${message}`);
+    return { state: next, message };
   }
 }
 
@@ -309,6 +312,21 @@ function withAbortSummary(state: AgentGraphState, reason: string): AgentGraphSta
       evidence: [reason],
       risksRemaining: [reason],
       suggestedCommitMessage: "chore: no cockpit-approved change"
+    }
+  };
+}
+
+function withFailureSummary(state: AgentGraphState, reason: string): AgentGraphState {
+  return {
+    ...state,
+    finalSummary: {
+      task: state.goal,
+      result: "failed",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: [reason],
+      risksRemaining: [reason],
+      suggestedCommitMessage: "chore: resolve cockpit patch conflict"
     }
   };
 }
