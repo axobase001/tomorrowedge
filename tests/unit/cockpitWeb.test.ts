@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
+import { roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
@@ -81,6 +82,16 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("data-testid=\"keymgr-tab-roles\"");
     expect(html).toContain("Role Assign");
+  });
+
+  it("offers configured external agents as GUI role providers", () => {
+    expect(roleProviderOptions(["openrouter"], [{
+      id: "codex",
+      provider: "external:codex",
+      name: "Codex",
+      roles: ["reviewer"],
+      capabilities: ["review"]
+    }], "auto")).toEqual(["auto", "openrouter", "external:codex"]);
   });
 
   it("renders shared session source and fixture metadata", () => {
@@ -189,6 +200,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           keySource: "missing",
           authRequired: true
         }],
+        externalAgents: [],
         roleAssignments: [
           { role: "planner", provider: "openrouter", model: "moonshotai/kimi-k2:free" },
           { role: "reviewer", provider: "deepseek", model: "deepseek-chat" }

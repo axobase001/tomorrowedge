@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
-import { loadConfig } from "../../src/config/configLoader.js";
+import { loadConfig, writeConfig } from "../../src/config/configLoader.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
@@ -493,6 +493,53 @@ describe("local cockpit server", () => {
       expect(config.agents.coder_a).toMatchObject({ provider: "deepseek", model: "deepseek-chat" });
     } finally {
       delete process.env.TEST_ROLE_PANEL_OPENROUTER;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("exposes configured external agents for GUI role assignment", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-external-roles-"));
+    const config = loadConfig(cwd);
+    await writeConfig(cwd, {
+      ...config,
+      external_agents: {
+        ...config.external_agents,
+        codex: {
+          ...config.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: ["mock-mcp-server"],
+          autoStart: true
+        }
+      }
+    });
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { externalAgents: Array<{ id: string; provider: string; name: string }> };
+
+      expect(status.externalAgents).toContainEqual(expect.objectContaining({
+        id: "codex",
+        provider: "external:codex",
+        name: "Codex"
+      }));
+
+      const response = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assignments: [
+            { role: "reviewer", provider: "external:codex", model: "auto" }
+          ]
+        })
+      });
+      const payload = await response.json() as { roleAssignments: Array<{ role: string; provider: string; model: string }> };
+      const saved = loadConfig(cwd);
+
+      expect(response.status).toBe(200);
+      expect(payload.roleAssignments.find((assignment) => assignment.role === "reviewer")).toMatchObject({ provider: "external:codex", model: "auto" });
+      expect(saved.agents.reviewer).toMatchObject({ provider: "external:codex", model: "auto" });
+    } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }

@@ -33,11 +33,20 @@ export type CockpitRoleAssignment = {
   reason?: string;
 };
 
+export type CockpitExternalAgentOption = {
+  id: string;
+  provider: string;
+  name: string;
+  roles: string[];
+  capabilities: string[];
+};
+
 export type CockpitSetupStatus = {
   needsSetup: boolean;
   recommendedProvider: string;
   configPath: string;
   providers: CockpitProviderReadiness[];
+  externalAgents: CockpitExternalAgentOption[];
   roleAssignments: CockpitRoleAssignment[];
   selectedProvider?: string;
   selectedModel?: string;
