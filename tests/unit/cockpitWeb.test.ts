@@ -135,6 +135,12 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("filters=patch, pending");
   });
 
+  it("renders route reasons in the detail drawer", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("planner -&gt; fixture/fixture-scripted because test");
+  });
+
   it("renders capability dashboard readiness in the detail drawer", () => {
     const html = renderApp(sampleViewModel());
 
