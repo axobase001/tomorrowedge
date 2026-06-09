@@ -7,6 +7,7 @@ import { App } from "../../src/cockpit-web/src/App.js";
 import { roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
+import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 
@@ -53,6 +54,26 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("data-testid=\"composer-input\"");
     expect(html).toContain("data-testid=\"composer-mode\"");
     expect(html).toContain("partial");
+  });
+
+  it("enables repair loops for full-mode GUI runs", () => {
+    expect(buildCockpitRunRequest({ goal: "fix failing test", accessMode: "full", setupReady: true })).toMatchObject({
+      accessMode: "full",
+      fixtureMode: false,
+      livePatch: true,
+      liveAdvisory: true,
+      repairOnFail: true,
+      approveRepair: true,
+      to: "core"
+    });
+  });
+
+  it("keeps partial GUI runs supervised without auto repair approval", () => {
+    expect(buildCockpitRunRequest({ goal: "fix failing test", accessMode: "partial", setupReady: true })).toMatchObject({
+      accessMode: "partial",
+      repairOnFail: false,
+      approveRepair: false
+    });
   });
 
   it("renders the first-run setup wizard with provider and model controls", () => {
