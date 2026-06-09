@@ -418,6 +418,17 @@ export type MemoryRetrievalEvent = BaseEvent & {
   summary: string;
 };
 
+export type MemoryPolicyEvent = BaseEvent & {
+  type: "memory_policy";
+  retrievalStage: "premortem" | "repair_context";
+  policyMode: "balanced" | "exploit_memory" | "explore_alternative" | "random_control";
+  action: "exploit" | "bypass";
+  selectedBefore: number;
+  selectedAfter: number;
+  bypassedMemoryIds: string[];
+  reason: string;
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -460,7 +471,8 @@ export type TomorrowEdgeEvent =
   | FallbackToNativeEvent
   | TraceCompletenessEvent
   | AgentCacheEvent
-  | MemoryRetrievalEvent;
+  | MemoryRetrievalEvent
+  | MemoryPolicyEvent;
 
 export type EventArtifact = {
   ref: string;

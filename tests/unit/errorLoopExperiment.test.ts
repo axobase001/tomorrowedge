@@ -14,28 +14,34 @@ describe("error-loop experiment export", () => {
         repetitions: 1,
         outputDir: "bundle"
       });
-      const manifest = JSON.parse(await readFile(result.manifestPath, "utf8")) as { schemaVersion: string; files: Record<string, string> };
+      const manifest = JSON.parse(await readFile(result.manifestPath, "utf8")) as { schemaVersion: string; memoryPolicy: string; files: Record<string, string> };
       const metrics = JSON.parse(await readFile(result.metricsPath, "utf8")) as typeof result.metrics;
-      const trialRows = (await readFile(result.trialsPath, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { memoryUpdateStatus: string; schemaVersion: string; predictionTotal: number });
+      const trialRows = (await readFile(result.trialsPath, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { memoryUpdateStatus: string; schemaVersion: string; predictionTotal: number; memoryPolicyExploit: number; memoryPolicyBypass: number });
       const memoryRows = (await readFile(result.memoryRecordsPath, "utf8")).trim().split(/\r?\n/).filter(Boolean);
       const retrievalRows = (await readFile(result.retrievalDecisionsPath, "utf8")).trim().split(/\r?\n/).filter(Boolean);
       const report = await readFile(result.reportPath, "utf8");
 
       expect(manifest.schemaVersion).toBe("error-loop-manifest/v1");
+      expect(manifest.memoryPolicy).toBe("balanced");
       expect(manifest.files.metrics).toBe("metrics.json");
       expect(metrics.trials).toBe(2);
       expect(metrics.memoryWritten).toBe(1);
       expect(metrics.memoryOccurrences).toBe(1);
       expect(metrics.memorySkipped.skipped_ablation).toBe(1);
+      expect(metrics.memoryPolicyExploit + metrics.memoryPolicyBypass).toBeGreaterThan(0);
       expect(metrics).toHaveProperty("predictionAccuracy");
       expect(metrics.suspectedNegativeTransfer).toBeGreaterThanOrEqual(0);
       expect(trialRows.map((row) => row.schemaVersion)).toEqual(["error-loop-trial/v1", "error-loop-trial/v1"]);
       expect(trialRows.map((row) => row.memoryUpdateStatus)).toContain("written");
       expect(trialRows.map((row) => row.memoryUpdateStatus)).toContain("skipped_ablation");
       expect(trialRows.every((row) => typeof row.predictionTotal === "number")).toBe(true);
+      expect(trialRows.every((row) => typeof row.memoryPolicyExploit === "number")).toBe(true);
+      expect(trialRows.every((row) => typeof row.memoryPolicyBypass === "number")).toBe(true);
       expect(memoryRows.length).toBe(1);
       expect(retrievalRows.length).toBe(2);
       expect(report).toContain("Memory Update Status");
+      expect(report).toContain("Memory policy");
+      expect(report).toContain("Policy exploit/bypass");
       expect(report).toContain("Prediction accuracy");
       expect(report).toContain("Suspected negative transfer");
     } finally {

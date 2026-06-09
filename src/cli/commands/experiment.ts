@@ -1,4 +1,5 @@
 import { runErrorLoopExperiment, type ErrorLoopAblation } from "../../core/eval/errorLoopExperiment.js";
+import type { MemoryRetrievalPolicyMode } from "../../core/memory/retrievalPolicy.js";
 
 export type ErrorLoopExperimentCliOptions = {
   tasks?: string;
@@ -6,6 +7,7 @@ export type ErrorLoopExperimentCliOptions = {
   ablation?: string;
   outputDir?: string;
   seed?: string;
+  memoryPolicy?: string;
   json?: boolean;
 };
 
@@ -15,7 +17,8 @@ export async function experimentErrorLoopCommand(cwd: string, options: ErrorLoop
     repetitions: parsePositiveInt(options.repetitions, 1),
     ablations: parseAblations(options.ablation),
     outputDir: options.outputDir,
-    seed: options.seed
+    seed: options.seed,
+    memoryPolicy: parseMemoryPolicy(options.memoryPolicy)
   });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -29,9 +32,9 @@ function renderExperimentSummary(result: Awaited<ReturnType<typeof runErrorLoopE
     `Error-loop experiment: ${result.id}`,
     `Output: ${result.outputDir}`,
     "",
-    "| Trials | Completed | Failures | Memory written | Retrieval decisions |",
-    "| ---: | ---: | ---: | ---: | ---: |",
-    `| ${result.metrics.trials} | ${result.metrics.completed} | ${result.metrics.failures} | ${result.metrics.memoryWritten} | ${result.metrics.retrievalDecisions} |`,
+    "| Trials | Completed | Failures | Memory written | Retrieval decisions | Policy exploit/bypass |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: |",
+    `| ${result.metrics.trials} | ${result.metrics.completed} | ${result.metrics.failures} | ${result.metrics.memoryWritten} | ${result.metrics.retrievalDecisions} | ${result.metrics.memoryPolicyExploit}/${result.metrics.memoryPolicyBypass} |`,
     "",
     `Report: ${result.reportPath}`,
     `Manifest: ${result.manifestPath}`
@@ -55,4 +58,11 @@ function parseAblations(value: string | undefined): ErrorLoopAblation[] | undefi
     .split(",")
     .map((item) => item.trim())
     .filter((item): item is ErrorLoopAblation => item === "memory_on" || item === "memory_off");
+}
+
+function parseMemoryPolicy(value: string | undefined): MemoryRetrievalPolicyMode | undefined {
+  if (!value) return undefined;
+  return ["balanced", "exploit_memory", "explore_alternative", "random_control"].includes(value)
+    ? value as MemoryRetrievalPolicyMode
+    : undefined;
 }

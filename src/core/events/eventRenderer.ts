@@ -94,6 +94,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.cache} cache ${event.status}: ${event.keyHint}`;
     case "memory_retrieval":
       return `${event.retrievalStage} selected=${event.selectedMemoryIds.length} rejected=${event.rejectedCount} constraints=${event.constraintCount}: ${event.summary}`;
+    case "memory_policy":
+      return `${event.retrievalStage} ${event.policyMode} ${event.action}: ${event.selectedAfter}/${event.selectedBefore} selected - ${event.reason}`;
   }
 }
 

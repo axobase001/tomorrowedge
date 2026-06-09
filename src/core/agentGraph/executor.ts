@@ -73,6 +73,7 @@ import {
 } from "../memory/failureMemoryInfluence.js";
 import { explainFailureMemories } from "../memory/taskMemory.js";
 import { decideRepairPolicy, type RepairPolicyDecision } from "../errorLoop/repairPolicy.js";
+import { applyMemoryRetrievalPolicy, type MemoryRetrievalPolicyDecision } from "../memory/retrievalPolicy.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -439,7 +440,13 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
 async function runFailureMemoryPremortem(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { config, cwd, goal, ledger } = runtime;
   if (!state.plan || !failureMemoryEnabled(config, "failure_premortem")) return;
-  const explanation = await explainFailureMemories(cwd, goal, { limit: config.strategy_memory.max_records });
+  const policyResult = applyMemoryRetrievalPolicy(
+    await explainFailureMemories(cwd, goal, { limit: config.strategy_memory.max_records }),
+    config.strategy_memory.policy,
+    runtime.ledger.sessionId
+  );
+  recordMemoryPolicyDecision(ledger, "premortem", "planner", policyResult.decision);
+  const explanation = policyResult.explanation;
   const premortem = buildFailureMemoryPremortem(goal, explanation);
   state.failureMemory = state.failureMemory ?? emptyFailureMemoryInfluence();
   state.failureMemory.premortem = premortem;
@@ -1551,12 +1558,33 @@ async function maybeBuildRepairMemoryContext(runtime: OfflineGraphRuntime, state
   const plan = state.plan;
   if (!plan || !failureMemoryEnabled(config, "repair_context")) return undefined;
   const query = buildRepairMemoryQuery(plan, failedRun, state.changedFiles);
-  const explanation = await explainFailureMemories(cwd, query, { limit: config.strategy_memory.max_records });
+  const policyResult = applyMemoryRetrievalPolicy(
+    await explainFailureMemories(cwd, query, { limit: config.strategy_memory.max_records }),
+    config.strategy_memory.policy,
+    runtime.ledger.sessionId
+  );
+  recordMemoryPolicyDecision(ledger, "repair_context", "repairer", policyResult.decision);
+  const explanation = policyResult.explanation;
   const context = buildRepairMemoryContext(query, explanation);
   state.failureMemory = state.failureMemory ?? emptyFailureMemoryInfluence();
   state.failureMemory.repairContext = context;
   recordMemoryRetrieval(state, ledger, "repair_context", "repairer", context, `repair context selected ${context.selectedMemoryIds.length} memories`);
   return context;
+}
+
+function recordMemoryPolicyDecision(ledger: EventLedger, stage: "premortem" | "repair_context", role: AgentRole, decision: MemoryRetrievalPolicyDecision): void {
+  ledger.append({
+    type: "memory_policy",
+    phase: "memory",
+    role,
+    retrievalStage: stage,
+    policyMode: decision.mode,
+    action: decision.action,
+    selectedBefore: decision.selectedBefore,
+    selectedAfter: decision.selectedAfter,
+    bypassedMemoryIds: decision.bypassedMemoryIds,
+    reason: decision.reason
+  });
 }
 
 function recordMemoryRetrieval(

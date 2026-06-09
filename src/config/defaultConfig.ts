@@ -40,6 +40,7 @@ export const defaultConfig: TomorrowEdgeConfig = {
   strategy_memory: {
     enabled: false,
     max_records: 20,
+    policy: "balanced",
     prefer_successful_routes: true,
     suggest_test_command: true,
     failure_premortem: true,

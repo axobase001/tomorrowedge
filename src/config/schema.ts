@@ -124,6 +124,7 @@ export const configSchema = z.object({
   strategy_memory: z.object({
     enabled: z.boolean().default(false),
     max_records: z.number().int().min(1).max(200).default(20),
+    policy: z.enum(["balanced", "exploit_memory", "explore_alternative", "random_control"]).default("balanced"),
     prefer_successful_routes: z.boolean().default(true),
     suggest_test_command: z.boolean().default(true),
     failure_premortem: z.boolean().default(true),
@@ -133,6 +134,7 @@ export const configSchema = z.object({
   }).default({
     enabled: false,
     max_records: 20,
+    policy: "balanced",
     prefer_successful_routes: true,
     suggest_test_command: true,
     failure_premortem: true,

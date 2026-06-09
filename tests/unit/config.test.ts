@@ -28,6 +28,30 @@ describe("config loader", () => {
     expect(config.providers.openai_compatible.base_url).toBe("https://api.openai.com/v1");
     expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
     expect(config.providers.kimi.model).toBe("kimi-k2.6");
+    expect(config.strategy_memory.policy).toBe("balanced");
+  });
+
+  it("accepts failure-memory retrieval policy configuration", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-memory-policy-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "strategy_memory:",
+          "  enabled: true",
+          "  policy: explore_alternative"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const config = loadConfig(cwd);
+
+      expect(config.strategy_memory.enabled).toBe(true);
+      expect(config.strategy_memory.policy).toBe("explore_alternative");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("fills known provider base URLs for older configs with blank endpoints", async () => {

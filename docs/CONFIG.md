@@ -300,6 +300,7 @@ tedge memory compact --limit 50
 strategy_memory:
   enabled: false
   max_records: 20
+  policy: balanced
   prefer_successful_routes: true
   suggest_test_command: true
   failure_premortem: true
@@ -319,3 +320,16 @@ influence the workflow as explicit, auditable retrieval context:
 
 All four failure-memory switches are ablation knobs. Turning one off removes
 that injection point without deleting stored memories.
+
+`policy` controls the exploration/exploitation decision after retrieval:
+
+- `balanced`: default; use high-confidence memories and bypass likely negative
+  transfer.
+- `exploit_memory`: force selected memories into the workflow.
+- `explore_alternative`: record matching memories but bypass them for an
+  alternate path.
+- `random_control`: deterministic exploit/bypass control assignment.
+
+Every policy decision is written as a `memory_policy` trace event. The
+error-loop experiment accepts the same value through
+`tedge experiment error-loop --memory-policy <mode>`.

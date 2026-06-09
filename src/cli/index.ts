@@ -207,10 +207,11 @@ experiment
   .option("--tasks <list>", "semicolon-separated task list")
   .option("--repetitions <n>", "number of repetitions per task and ablation", "1")
   .option("--ablation <modes>", "comma-separated modes: memory_on,memory_off", "memory_on")
+  .option("--memory-policy <mode>", "failure-memory retrieval policy: balanced,exploit_memory,explore_alternative,random_control")
   .option("--output-dir <path>", "output directory for the reproducibility bundle")
   .option("--seed <seed>", "recorded deterministic seed label")
   .option("--json", "print machine-readable result metadata")
-  .action((options: { tasks?: string; repetitions?: string; ablation?: string; outputDir?: string; seed?: string; json?: boolean }) => experimentErrorLoopCommand(cwd, options));
+  .action((options: { tasks?: string; repetitions?: string; ablation?: string; memoryPolicy?: string; outputDir?: string; seed?: string; json?: boolean }) => experimentErrorLoopCommand(cwd, options));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));
