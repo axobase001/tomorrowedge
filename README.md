@@ -840,6 +840,13 @@ counts. Retrieval rejects stale or low-confidence memories before scoring, and
 `tedge memory explain` shows rejected memories with reasons such as TTL expiry
 or project-scope changes.
 
+When `strategy_memory.enabled` is turned on, retrieved failure memories can
+enter the workflow as explicit `memory_retrieval` events: planner pre-mortem
+constraints, coder-visible anti-patterns/verifier checks, reviewer/judge memory
+guards, and repair-context corrections after a failed validation run. These
+injection points can be ablated independently with `failure_premortem`,
+`coder_constraints`, `review_guard`, and `repair_context`.
+
 ```bash
 tedge memory failures
 tedge memory failures --include-stale

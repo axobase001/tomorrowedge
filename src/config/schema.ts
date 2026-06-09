@@ -125,12 +125,20 @@ export const configSchema = z.object({
     enabled: z.boolean().default(false),
     max_records: z.number().int().min(1).max(200).default(20),
     prefer_successful_routes: z.boolean().default(true),
-    suggest_test_command: z.boolean().default(true)
+    suggest_test_command: z.boolean().default(true),
+    failure_premortem: z.boolean().default(true),
+    coder_constraints: z.boolean().default(true),
+    review_guard: z.boolean().default(true),
+    repair_context: z.boolean().default(true)
   }).default({
     enabled: false,
     max_records: 20,
     prefer_successful_routes: true,
-    suggest_test_command: true
+    suggest_test_command: true,
+    failure_premortem: true,
+    coder_constraints: true,
+    review_guard: true,
+    repair_context: true
   }),
   privacy: z.object({
     mode: z.enum(["normal", "privacy", "local"]).default("normal"),

@@ -359,6 +359,16 @@ export type AgentCacheEvent = BaseEvent & {
   keyHint: string;
 };
 
+export type MemoryRetrievalEvent = BaseEvent & {
+  type: "memory_retrieval";
+  retrievalStage: "premortem" | "coder_constraints" | "review_guard" | "repair_context";
+  selectedMemoryIds: string[];
+  rejectedCount: number;
+  constraintCount: number;
+  artifactRef?: string;
+  summary: string;
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -397,7 +407,8 @@ export type TomorrowEdgeEvent =
   | WorkflowStopReasonEvent
   | FallbackToNativeEvent
   | TraceCompletenessEvent
-  | AgentCacheEvent;
+  | AgentCacheEvent
+  | MemoryRetrievalEvent;
 
 export type EventArtifact = {
   ref: string;

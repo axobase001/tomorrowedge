@@ -26,6 +26,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Failure-memory v2 lifecycle metadata, including stable failure signatures,
   project/dependency scope, first/last seen timestamps, source session IDs,
   recurrence counts, stale detection, and retrieval rejection reasons.
+- Failure-memory workflow influence: planner pre-mortems, coder-visible memory
+  constraints, reviewer/judge memory guards, and repair-context correction
+  retrieval, all recorded as `memory_retrieval` events.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 
@@ -50,6 +53,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Failure-memory retrieval now rejects stale or low-confidence records before
   scoring, reducing negative transfer from old project state or irrelevant
   memories.
+- `strategy_memory` now has independent ablation switches for
+  `failure_premortem`, `coder_constraints`, `review_guard`, and
+  `repair_context`.
 
 ## [1.2.14] - 2026-06-09
 

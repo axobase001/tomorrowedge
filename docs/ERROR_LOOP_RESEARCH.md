@@ -74,6 +74,17 @@ stale records as rejected evidence with a reason such as `memory TTL expired` or
 Use `tedge memory failures --include-stale` or
 `tedge memory show <id> --include-stale` when auditing lifecycle decisions.
 
+When strategy memory is enabled, retrieval can influence four workflow points:
+
+- planner pre-mortem: known traps, avoid rules, and extra checks
+- coder constraints: compact anti-patterns and verifier requirements
+- reviewer/judge guard: candidate assessments against retrieved failure memory
+- repair context: correction strategies retrieved after failed validation
+
+Each influence point emits a `memory_retrieval` event with selected memory ids,
+rejected count, constraint count, and an artifact ref. Experiments should ablate
+these switches separately before claiming memory improves outcomes.
+
 ## Current Failure Classes
 
 - `coding_error`

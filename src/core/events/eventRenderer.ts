@@ -86,6 +86,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}`;
     case "agent_cache":
       return `${event.cache} cache ${event.status}: ${event.keyHint}`;
+    case "memory_retrieval":
+      return `${event.retrievalStage} selected=${event.selectedMemoryIds.length} rejected=${event.rejectedCount} constraints=${event.constraintCount}: ${event.summary}`;
   }
 }
 
@@ -115,6 +117,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
   if ("previewRef" in event && event.previewRef) refs.push(event.previewRef);
   if ("packetRef" in event && event.packetRef) refs.push(event.packetRef);
+  if ("artifactRef" in event && event.artifactRef) refs.push(event.artifactRef);
   return refs;
 }
 

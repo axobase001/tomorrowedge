@@ -20,6 +20,7 @@ import type { BudgetRuntimeState } from "../budget/budgetGate.js";
 import type { RoleGraph } from "../orchestration/roleGraph.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import type { TaskGovernanceDecision } from "../goal/taskGovernance.js";
+import type { FailureMemoryInfluenceState } from "../memory/failureMemoryInfluence.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -44,6 +45,7 @@ export type AgentGraphState = {
   workflowKind?: WorkflowKind;
   taskGovernance?: TaskGovernanceDecision;
   roleGraph?: RoleGraph;
+  failureMemory?: FailureMemoryInfluenceState;
   budgetRuntime: BudgetRuntimeState;
   budgetStatus?: ModelBudgetStatus;
   budgetStatuses: ModelBudgetStatus[];

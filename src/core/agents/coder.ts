@@ -3,6 +3,7 @@ import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import type { ContextSelection } from "../context/fileSelector.js";
+import type { MemoryDerivedConstraint } from "../memory/failureMemoryInfluence.js";
 import { BaseAgent } from "./baseAgent.js";
 
 type CoderInput = {
@@ -12,6 +13,7 @@ type CoderInput = {
   fixtureMode?: boolean;
   fixtureFailingPatch?: boolean;
   visualSpec?: StructuredVisualSpec;
+  memoryConstraints?: MemoryDerivedConstraint[];
 };
 
 export class CoderAgent extends BaseAgent<CoderInput, PatchCandidate> {
@@ -19,10 +21,10 @@ export class CoderAgent extends BaseAgent<CoderInput, PatchCandidate> {
 
   async run(input: CoderInput): Promise<PatchCandidate> {
     if (input.fixtureMode && input.contextSelection.selectedFiles.some((file) => file.path === "index.js")) {
-      return createFixtureCandidate(input.variant, input.plan, Boolean(input.fixtureFailingPatch));
+      return applyMemoryConstraints(createFixtureCandidate(input.variant, input.plan, Boolean(input.fixtureFailingPatch)), input.memoryConstraints ?? []);
     }
     const visualSummary = input.visualSpec ? ` Visual handoff: ${input.visualSpec.summary}` : "";
-    return {
+    return applyMemoryConstraints({
       candidateId: makeId(`candidate_${input.variant}`),
       agentId: `coder_${input.variant}`,
       approach: input.variant === "a" ? "minimal_patch" : "alternative",
@@ -35,7 +37,7 @@ export class CoderAgent extends BaseAgent<CoderInput, PatchCandidate> {
         ...(input.visualSpec ? ["Visual spec is preserved as a structured handoff for live patch generation or human review."] : [])
       ],
       estimatedRisk: input.plan.riskLevel
-    };
+    }, input.memoryConstraints ?? []);
   }
 }
 
@@ -75,4 +77,23 @@ function createFixtureCandidate(variant: "a" | "b", plan: Plan, failingPatch: bo
     knownTradeoffs: ["Fixture patch is intentionally minimal."],
     estimatedRisk: "low"
   };
+}
+
+function applyMemoryConstraints(candidate: PatchCandidate, constraints: MemoryDerivedConstraint[]): PatchCandidate {
+  if (!constraints.length) return candidate;
+  return {
+    ...candidate,
+    testPlan: uniqueStrings([
+      ...candidate.testPlan,
+      ...constraints.filter((constraint) => constraint.kind === "test_command" && constraint.command).map((constraint) => constraint.command!)
+    ]),
+    knownTradeoffs: uniqueStrings([
+      ...candidate.knownTradeoffs,
+      ...constraints.slice(0, 6).map((constraint) => `Memory constraint ${constraint.memoryId}: ${constraint.text}`)
+    ])
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
