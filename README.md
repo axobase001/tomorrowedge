@@ -834,8 +834,15 @@ failure class, correction strategy, confidence, recurrence, and artifact refs.
 The records are intended for supervision and retrieval, not for hidden
 validator leakage or raw log storage.
 
+Repeated matching failures are merged by stable failure signature and project
+scope, with first/last seen timestamps, source session IDs, and recurrence
+counts. Retrieval rejects stale or low-confidence memories before scoring, and
+`tedge memory explain` shows rejected memories with reasons such as TTL expiry
+or project-scope changes.
+
 ```bash
 tedge memory failures
+tedge memory failures --include-stale
 tedge memory show <failure-id>
 tedge memory explain "repair this validation failure"
 tedge memory failures --json
@@ -853,7 +860,8 @@ tedge experiment error-loop --tasks "fix failing test" --ablation memory_on,memo
 The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,
 `retrieval_decisions.jsonl`, `metrics.json`, and `report.md`, with explicit
 `memoryUpdateStatus` values such as `written`, `skipped_no_failure`, and
-`skipped_ablation`.
+`skipped_ablation`. Metrics separate new memory writes from observed recurrence
+and suspected negative transfer.
 
 ## Conversation Targets
 

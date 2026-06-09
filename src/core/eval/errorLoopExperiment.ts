@@ -50,8 +50,10 @@ export type ErrorLoopMetrics = {
   failures: number;
   completed: number;
   memoryWritten: number;
+  memoryOccurrences: number;
   memorySkipped: Record<MemoryUpdateReason, number>;
   retrievalDecisions: number;
+  suspectedNegativeTransfer: number;
   averageTraceCompleteness?: number;
 };
 
@@ -198,9 +200,9 @@ memory and retrieval behavior. It is not a live provider benchmark.
 
 ## Metrics
 
-| Trials | Completed | Failures | Memory written | Retrieval decisions | Avg trace |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.retrievalDecisions} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
+| Trials | Completed | Failures | Memory written | Occurrences | Retrieval decisions | Suspected negative transfer | Avg trace |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
 
 ## Memory Update Status
 
@@ -238,10 +240,16 @@ async function runTrial(input: {
 
   if (input.ablation === "memory_on") {
     const before = await readFailureMemories(trialCwd, 200);
+    const beforeById = new Map(before.map((record) => [record.id, record]));
     sessionPath = await saveSession(trialCwd, state);
     const after = await readFailureMemories(trialCwd, 200);
-    memoryRecords = after.filter((record) => !before.some((item) => item.id === record.id));
-    memoryUpdateStatus = memoryStatusFor(failure, memoryRecords);
+    const newRecords = after.filter((record) => !beforeById.has(record.id));
+    const updatedRecords = after.filter((record) => {
+      const previous = beforeById.get(record.id);
+      return previous && record.recurrenceCount > previous.recurrenceCount;
+    });
+    memoryRecords = newRecords.length ? newRecords : updatedRecords;
+    memoryUpdateStatus = memoryStatusFor(failure, newRecords, updatedRecords);
   } else {
     await writeFile(sessionPath, `${JSON.stringify(minimalSessionExport(state), null, 2)}\n`, "utf8");
     memoryUpdateStatus = "skipped_ablation";
@@ -283,9 +291,10 @@ async function runTrial(input: {
   };
 }
 
-function memoryStatusFor(failure: boolean, records: FailureMemoryRecord[]): MemoryUpdateReason {
+function memoryStatusFor(failure: boolean, newRecords: FailureMemoryRecord[], updatedRecords: FailureMemoryRecord[]): MemoryUpdateReason {
   if (!failure) return "skipped_no_failure";
-  if (records.length) return "written";
+  if (newRecords.length) return "written";
+  if (updatedRecords.length) return "skipped_duplicate";
   return "skipped_low_confidence";
 }
 
@@ -301,8 +310,10 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     failures: trials.filter((trial) => trial.result !== "completed").length,
     completed: trials.filter((trial) => trial.result === "completed").length,
     memoryWritten: trials.filter((trial) => trial.memoryUpdateStatus === "written").length,
+    memoryOccurrences: trials.reduce((sum, trial) => sum + trial.memoryRecordIds.length, 0),
     memorySkipped,
     retrievalDecisions,
+    suspectedNegativeTransfer: trials.filter((trial) => trial.retrievalSelected > 0 && trial.result !== "completed").length,
     averageTraceCompleteness: traceScores.length ? traceScores.reduce((sum, score) => sum + score, 0) / traceScores.length : undefined
   };
 }

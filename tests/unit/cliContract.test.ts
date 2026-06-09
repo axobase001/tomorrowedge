@@ -58,7 +58,7 @@ describe("CLI contract", () => {
   }, 15_000);
 
   it("keeps memory subcommand options local to the subcommand", async () => {
-    const failures = await execa("tsx", ["src/cli/index.ts", "memory", "failures", "--limit", "1", "--json"], {
+    const failures = await execa("tsx", ["src/cli/index.ts", "memory", "failures", "--limit", "1", "--include-stale", "--json"], {
       cwd: process.cwd(),
       preferLocal: true
     });
@@ -89,11 +89,12 @@ describe("CLI contract", () => {
         cwd: process.cwd(),
         preferLocal: true
       });
-      const payload = JSON.parse(result.stdout) as { schemaVersion: string; metrics: { trials: number; memoryWritten: number }; reportPath: string };
+      const payload = JSON.parse(result.stdout) as { schemaVersion: string; metrics: { trials: number; memoryWritten: number; memoryOccurrences: number }; reportPath: string };
 
       expect(payload.schemaVersion).toBe("error-loop-experiment/v1");
       expect(payload.metrics.trials).toBe(2);
       expect(payload.metrics.memoryWritten).toBe(1);
+      expect(payload.metrics.memoryOccurrences).toBe(1);
       expect(payload.reportPath).toContain(outputRoot);
     } finally {
       await rm(outputRoot, { recursive: true, force: true });

@@ -23,6 +23,9 @@ Changelog: newest changes first, grouped by release and by change type.
   Markdown report.
 - Error-loop research caveats and falsification criteria in
   `docs/ERROR_LOOP_RESEARCH.md`.
+- Failure-memory v2 lifecycle metadata, including stable failure signatures,
+  project/dependency scope, first/last seen timestamps, source session IDs,
+  recurrence counts, stale detection, and retrieval rejection reasons.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 
@@ -41,6 +44,12 @@ Changelog: newest changes first, grouped by release and by change type.
 - Error-loop experiment exports now report explicit `memoryUpdateStatus`
   reasons such as `written`, `skipped_no_failure`, and `skipped_ablation`
   instead of implying learning whenever a workflow fails.
+- Repeated matching failure memories are merged instead of appended as duplicate
+  rows; error-loop metrics now separate new memory writes from recurrence
+  observations and suspected negative transfer.
+- Failure-memory retrieval now rejects stale or low-confidence records before
+  scoring, reducing negative transfer from old project state or irrelevant
+  memories.
 
 ## [1.2.14] - 2026-06-09
 

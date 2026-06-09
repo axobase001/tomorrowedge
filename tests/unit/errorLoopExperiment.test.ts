@@ -25,13 +25,16 @@ describe("error-loop experiment export", () => {
       expect(manifest.files.metrics).toBe("metrics.json");
       expect(metrics.trials).toBe(2);
       expect(metrics.memoryWritten).toBe(1);
+      expect(metrics.memoryOccurrences).toBe(1);
       expect(metrics.memorySkipped.skipped_ablation).toBe(1);
+      expect(metrics.suspectedNegativeTransfer).toBeGreaterThanOrEqual(0);
       expect(trialRows.map((row) => row.schemaVersion)).toEqual(["error-loop-trial/v1", "error-loop-trial/v1"]);
       expect(trialRows.map((row) => row.memoryUpdateStatus)).toContain("written");
       expect(trialRows.map((row) => row.memoryUpdateStatus)).toContain("skipped_ablation");
       expect(memoryRows.length).toBe(1);
       expect(retrievalRows.length).toBe(2);
       expect(report).toContain("Memory Update Status");
+      expect(report).toContain("Suspected negative transfer");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

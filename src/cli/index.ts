@@ -185,10 +185,10 @@ const memory = program
   .option("--strategy", "show opt-in strategy memory routing and test-command hints")
   .option("--json", "print machine-readable JSON")
   .action((options: { limit?: string; strategy?: boolean; json?: boolean }) => memoryCommand(cwd, options));
-const memoryFailures = memory.command("failures").description("List structured failure memories").option("--limit <n>", "number of entries", "20").option("--json", "print machine-readable JSON");
-memoryFailures.action(() => memoryFailuresCommand(cwd, memoryFailures.opts() as { limit?: string; json?: boolean }));
-const memoryShow = memory.command("show").description("Show one failure memory by id or goal fingerprint").argument("<id>", "failure memory id or goal fingerprint").option("--json", "print machine-readable JSON");
-memoryShow.action((id: string) => memoryShowCommand(cwd, id, memoryShow.opts() as { json?: boolean }));
+const memoryFailures = memory.command("failures").description("List structured failure memories").option("--limit <n>", "number of entries", "20").option("--include-stale", "include stale failure memories rejected by lifecycle policy").option("--json", "print machine-readable JSON");
+memoryFailures.action(() => memoryFailuresCommand(cwd, memoryFailures.opts() as { limit?: string; json?: boolean; includeStale?: boolean }));
+const memoryShow = memory.command("show").description("Show one failure memory by id or goal fingerprint").argument("<id>", "failure memory id or goal fingerprint").option("--include-stale", "allow showing stale failure memories").option("--json", "print machine-readable JSON");
+memoryShow.action((id: string) => memoryShowCommand(cwd, id, memoryShow.opts() as { json?: boolean; includeStale?: boolean }));
 const memoryExplain = memory.command("explain").description("Explain which failure memories apply to a task").argument("<task>", "task goal or natural-language problem").option("--limit <n>", "number of selected memories", "5").option("--json", "print machine-readable JSON");
 memoryExplain.action((task: string) => memoryExplainCommand(cwd, task, memoryExplain.opts() as { limit?: string; json?: boolean }));
 
