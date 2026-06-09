@@ -49,3 +49,4 @@ function hasCriticalConcern(review: ReviewReport["reviews"][number]): boolean {
 function blockingRegressionConcerns(review: ReviewReport["reviews"][number]): string[] {
   return review.regressionConcerns.filter((concern) => !concern.startsWith("Candidate touches "));
 }
+// TODO: Add debateRounds to JudgeAgent.run() input
