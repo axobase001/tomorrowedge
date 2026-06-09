@@ -12,9 +12,13 @@ tedge experiment error-loop --ablation memory_on,memory_off
 ```
 
 Each failure record keeps a task fingerprint, a short redacted goal preview,
-a failure class, a correction strategy, confidence, recurrence count, and
-artifact refs. It intentionally avoids raw stdout, stderr, diffs, provider
-payloads, and secrets.
+a failure class, a correction strategy, confidence, recurrence count, artifact
+refs, project scope, source session IDs, and first/last seen timestamps. It
+intentionally avoids raw stdout, stderr, diffs, provider payloads, and secrets.
+
+Repeated matching failures are merged by stable failure signature and project
+scope. This preserves recurrence evidence without letting a hot loop flood the
+memory file with duplicate rows.
 
 ## Deterministic Export Bundle
 
@@ -41,6 +45,34 @@ or repair success from actual memory writes:
 Reports must not claim the system learned from a failure unless
 `memoryUpdateStatus` is `written`, or unless a skipped reason is explicitly
 audited.
+
+`metrics.json` also separates:
+
+- `memoryWritten`: new memory records created
+- `memoryOccurrences`: selected or updated failure records observed in trials
+- `suspectedNegativeTransfer`: trials where retrieved memory was available but
+  the workflow still did not complete
+
+These fields are intentionally conservative. They support audit and ablation;
+they do not prove causal improvement.
+
+## Lifecycle and Retrieval Guards
+
+Failure memories use a v2 lifecycle envelope:
+
+- `failureSignature`: stable hash of failure class, task/risk shape, verifier,
+  touched files, and redacted error signature
+- `memoryScope`: project fingerprint plus dependency-lock hash when available
+- `firstSeen` / `lastSeen`: recurrence window
+- `recurrenceCount`: number of merged observations
+- `sourceSessionIds`: sessions that produced the evidence
+- `stale` / `staleReason`: computed read-time lifecycle status
+
+Retrieval excludes stale memories by default. `tedge memory explain` still lists
+stale records as rejected evidence with a reason such as `memory TTL expired` or
+`project scope changed`, so negative transfer decisions remain inspectable.
+Use `tedge memory failures --include-stale` or
+`tedge memory show <id> --include-stale` when auditing lifecycle decisions.
 
 ## Current Failure Classes
 

@@ -9,6 +9,7 @@ import {
 } from "../../core/memory/taskMemory.js";
 
 type MemoryOptions = { limit?: string; strategy?: boolean; json?: boolean };
+type FailureMemoryOptions = { limit?: string; json?: boolean; includeStale?: boolean };
 
 export async function memoryCommand(cwd: string, options: MemoryOptions = {}): Promise<void> {
   const limit = options.limit ? Number(options.limit) : 20;
@@ -51,9 +52,9 @@ export async function memoryCommand(cwd: string, options: MemoryOptions = {}): P
   }
 }
 
-export async function memoryFailuresCommand(cwd: string, options: { limit?: string; json?: boolean } = {}): Promise<void> {
+export async function memoryFailuresCommand(cwd: string, options: FailureMemoryOptions = {}): Promise<void> {
   const limit = options.limit ? Number(options.limit) : 20;
-  const records = await readFailureMemories(cwd, Number.isFinite(limit) ? limit : 20);
+  const records = await readFailureMemories(cwd, Number.isFinite(limit) ? limit : 20, { includeStale: options.includeStale });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);
     return;
@@ -62,14 +63,14 @@ export async function memoryFailuresCommand(cwd: string, options: { limit?: stri
     process.stdout.write("No failure memory found.\n");
     return;
   }
-  process.stdout.write("id\tcreatedAt\tclass\tconfidence\ttask\tevidence\tcorrection\n");
+  process.stdout.write("id\tcreatedAt\tclass\tconfidence\toccurrences\tfixed\tstale\ttask\tevidence\tcorrection\n");
   for (const record of records) {
     process.stdout.write(renderFailureRow(record));
   }
 }
 
-export async function memoryShowCommand(cwd: string, id: string, options: { json?: boolean } = {}): Promise<void> {
-  const record = await showFailureMemory(cwd, id);
+export async function memoryShowCommand(cwd: string, id: string, options: { json?: boolean; includeStale?: boolean } = {}): Promise<void> {
+  const record = await showFailureMemory(cwd, id, { includeStale: options.includeStale });
   if (!record) {
     process.stderr.write(`Failure memory not found: ${id}\n`);
     process.exitCode = 1;
@@ -98,6 +99,9 @@ function renderFailureRow(record: FailureMemoryRecord): string {
     record.createdAt,
     record.failureClass,
     record.confidence.toFixed(2),
+    record.recurrenceCount,
+    record.fixedCount,
+    record.stale ? record.staleReason ?? "stale" : "-",
     record.goalPreview ?? record.goalFingerprint,
     record.evidenceRefs.length ? record.evidenceRefs.length : "-",
     record.correction
@@ -115,6 +119,11 @@ function renderFailureDetail(record: FailureMemoryRecord): string {
     `failureClass: ${record.failureClass}`,
     `confidence: ${record.confidence.toFixed(2)}`,
     `recurrence: ${record.recurrence}`,
+    `recurrenceCount: ${record.recurrenceCount}`,
+    `fixedCount: ${record.fixedCount}`,
+    `schemaVersion: ${record.schemaVersion}`,
+    `failureSignature: ${record.failureSignature}`,
+    `stale: ${record.stale ? record.staleReason ?? "yes" : "no"}`,
     `judge: ${record.judgeDecision ?? "unknown"}`,
     `selectedCandidate: ${record.selectedCandidate ?? "-"}`,
     `verification: ${(record.verificationCommands ?? []).join(", ") || "-"}`,

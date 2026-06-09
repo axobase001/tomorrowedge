@@ -1,4 +1,5 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
@@ -11,9 +12,13 @@ export type TaskMemory = {
 };
 
 export type LearnedTaskMemory = {
+  schemaVersion?: "task-memory/v1" | "task-memory/v2";
   createdAt: string;
+  firstSeen?: string;
+  lastSeen?: string;
   goalFingerprint: string;
   goalPreview?: string;
+  memoryScope?: MemoryScope;
   taskType: string;
   riskLevel: string;
   routingMode: string;
@@ -27,9 +32,20 @@ export type LearnedTaskMemory = {
   result?: string;
   routeAssignments?: Array<{ role: AgentRole; provider: string; model: string }>;
   failureClass?: FailureClass;
+  failureSignature?: string;
   correction?: string;
   evidenceRefs?: string[];
   confidence?: number;
+  recurrenceCount?: number;
+  fixedCount?: number;
+  sourceSessionIds?: string[];
+};
+
+export type MemoryScope = {
+  projectFingerprint: string;
+  dependencyLockHash?: string;
+  fixtureFamily?: string;
+  experimentId?: string;
 };
 
 export type StrategyMemoryHints = {
@@ -51,11 +67,21 @@ export type FailureClass =
 
 export type FailureMemoryRecord = LearnedTaskMemory & {
   id: string;
+  schemaVersion: "task-memory/v1" | "task-memory/v2";
+  firstSeen: string;
+  lastSeen: string;
+  memoryScope?: MemoryScope;
   failureClass: FailureClass;
+  failureSignature: string;
   correction: string;
   evidenceRefs: string[];
   confidence: number;
   recurrence: number;
+  recurrenceCount: number;
+  fixedCount: number;
+  sourceSessionIds: string[];
+  stale: boolean;
+  staleReason?: string;
 };
 
 export type FailureMemoryExplanation = {
@@ -70,10 +96,15 @@ export const emptyTaskMemory: TaskMemory = {
 };
 
 export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphState): Promise<void> {
+  const now = new Date().toISOString();
   const record: LearnedTaskMemory = {
-    createdAt: new Date().toISOString(),
+    schemaVersion: "task-memory/v2",
+    createdAt: now,
+    firstSeen: now,
+    lastSeen: now,
     goalFingerprint: fingerprintGoal(state.goal),
     goalPreview: clip(redactText(state.goal), 180),
+    memoryScope: await buildMemoryScope(cwd),
     taskType: state.plan?.taskType ?? "unknown",
     riskLevel: state.plan?.riskLevel ?? "unknown",
     routingMode: state.routing.mode,
@@ -93,9 +124,17 @@ export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphStat
   };
   const failure = buildFailureMemoryFields(state, record);
   Object.assign(record, failure);
+  if (record.failureClass) {
+    record.failureSignature = buildFailureSignature(state, record);
+    record.recurrenceCount = 1;
+    record.fixedCount = state.finalSummary?.result === "completed" ? 1 : 0;
+    record.sourceSessionIds = [state.sessionId];
+  }
   const dir = path.join(cwd, ".tomorrowedge");
   await mkdir(dir, { recursive: true });
-  await appendFile(path.join(dir, "task-memory.jsonl"), `${JSON.stringify(record)}\n`, "utf8");
+  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+  const merged = mergeLearnedMemory(records, record);
+  await writeTaskMemoryFile(cwd, merged);
 }
 
 export async function buildStrategyMemoryHints(cwd: string, options: { limit?: number } = {}): Promise<StrategyMemoryHints> {
@@ -126,41 +165,54 @@ function mostCommon(values: string[]): string | undefined {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
-export async function readLearnedTaskMemory(cwd: string, limit = 20): Promise<LearnedTaskMemory[]> {
+export async function readLearnedTaskMemory(cwd: string, limit = 20, options: { newestFirst?: boolean; includeStale?: boolean } = {}): Promise<LearnedTaskMemory[]> {
   const filePath = path.join(cwd, ".tomorrowedge", "task-memory.jsonl");
   const content = await readFile(filePath, "utf8").catch(() => "");
-  return content
+  const records = content
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as LearnedTaskMemory)
-    .slice(-limit)
-    .reverse();
+    .map((line) => JSON.parse(line) as LearnedTaskMemory);
+  const filtered = options.includeStale ? records : records.filter((record) => !staleStatus(record, cwd).stale);
+  const selected = filtered.slice(-limit);
+  return options.newestFirst === false ? selected : selected.reverse();
 }
 
-export async function readFailureMemories(cwd: string, limit = 20): Promise<FailureMemoryRecord[]> {
-  const records = await readLearnedTaskMemory(cwd, Math.max(limit * 4, limit));
+export async function readFailureMemories(cwd: string, limit = 20, options: { includeStale?: boolean } = {}): Promise<FailureMemoryRecord[]> {
+  const records = await readLearnedTaskMemory(cwd, Math.max(limit * 4, limit), { includeStale: true });
   const failures = records
     .filter((record) => Boolean(record.failureClass) || record.result === "failed" || record.result === "partially_completed" || record.result === "aborted")
-    .map((record) => normalizeFailureRecord(record));
+    .map((record) => normalizeFailureRecord(record, cwd))
+    .filter((record) => options.includeStale || !record.stale);
   const recurrence = new Map<string, number>();
   for (const record of failures) {
-    const key = `${record.taskType}:${record.failureClass}`;
+    const key = record.failureSignature || `${record.taskType}:${record.failureClass}`;
     recurrence.set(key, (recurrence.get(key) ?? 0) + 1);
   }
-  return failures.map((record) => ({ ...record, recurrence: recurrence.get(`${record.taskType}:${record.failureClass}`) ?? 1 })).slice(0, limit);
+  return failures.map((record) => ({
+    ...record,
+    recurrence: record.recurrenceCount ?? recurrence.get(record.failureSignature || `${record.taskType}:${record.failureClass}`) ?? 1
+  })).slice(0, limit);
 }
 
-export async function showFailureMemory(cwd: string, id: string): Promise<FailureMemoryRecord | undefined> {
-  const records = await readFailureMemories(cwd, 200);
+export async function showFailureMemory(cwd: string, id: string, options: { includeStale?: boolean } = {}): Promise<FailureMemoryRecord | undefined> {
+  const records = await readFailureMemories(cwd, 200, { includeStale: options.includeStale });
   return records.find((record) => record.id === id || record.goalFingerprint === id);
 }
 
 export async function explainFailureMemories(cwd: string, task: string, options: { limit?: number } = {}): Promise<FailureMemoryExplanation> {
-  const records = await readFailureMemories(cwd, Math.max(options.limit ?? 5, 20));
+  const records = await readFailureMemories(cwd, Math.max(options.limit ?? 5, 20), { includeStale: true });
   const taskSignals = tokenize(task);
   const selected: Array<FailureMemoryRecord & { score: number; matchedSignals: string[] }> = [];
   const rejected: Array<{ id: string; reason: string }> = [];
   for (const record of records) {
+    if (record.stale) {
+      rejected.push({ id: record.id, reason: `stale: ${record.staleReason ?? "lifecycle policy"}` });
+      continue;
+    }
+    if (record.confidence < 0.55) {
+      rejected.push({ id: record.id, reason: "low confidence" });
+      continue;
+    }
     const recordSignals = tokenize([
       record.goalPreview,
       record.taskType,
@@ -209,23 +261,42 @@ function buildFailureMemoryFields(state: AgentGraphState, record: LearnedTaskMem
   };
 }
 
-function normalizeFailureRecord(record: LearnedTaskMemory): FailureMemoryRecord {
+function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): FailureMemoryRecord {
   const failureClass = record.failureClass ?? classifyLegacyFailure(record);
   const evidenceRefs = record.evidenceRefs ?? [];
+  const firstSeen = record.firstSeen ?? record.createdAt;
+  const lastSeen = record.lastSeen ?? record.createdAt;
+  const lifecycle = staleStatus(record, cwd);
+  const fallbackSignature = hashText([
+    failureClass,
+    record.taskType,
+    record.riskLevel,
+    (record.verificationCommands ?? []).join(","),
+    (record.selectedCandidate ?? "")
+  ].join("|"));
   return {
     ...record,
+    schemaVersion: record.schemaVersion ?? "task-memory/v1",
     id: failureMemoryId(record),
+    firstSeen,
+    lastSeen,
     failureClass,
+    failureSignature: record.failureSignature ?? fallbackSignature,
     correction: record.correction ?? correctionForFailure(failureClass, undefined, record),
     evidenceRefs,
     confidence: record.confidence ?? confidenceForFailure(failureClass, evidenceRefs),
-    recurrence: 1
+    recurrence: record.recurrenceCount ?? 1,
+    recurrenceCount: record.recurrenceCount ?? 1,
+    fixedCount: record.fixedCount ?? (record.result === "completed" ? 1 : 0),
+    sourceSessionIds: record.sourceSessionIds ?? [],
+    stale: lifecycle.stale,
+    staleReason: lifecycle.reason
   };
 }
 
 function failureMemoryId(record: LearnedTaskMemory): string {
   const stamp = record.createdAt.replace(/[-:.TZ]/g, "").slice(0, 14) || "unknown";
-  return `${stamp}-${record.goalFingerprint}`;
+  return record.failureSignature ? `${record.failureSignature.slice(0, 12)}-${record.goalFingerprint}` : `${stamp}-${record.goalFingerprint}`;
 }
 
 function classifyFailure(state: AgentGraphState, record: LearnedTaskMemory): FailureClass {
@@ -299,6 +370,96 @@ function collectEvidenceRefs(state: AgentGraphState): string[] {
   return [...new Set(refs.map((ref) => redactText(ref)).filter(Boolean))].slice(0, 12);
 }
 
+function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemory): LearnedTaskMemory[] {
+  if (!next.failureClass || !next.failureSignature) return [...records, next];
+  const index = records.findIndex((record) =>
+    record.failureSignature === next.failureSignature &&
+    sameMemoryScope(record.memoryScope, next.memoryScope)
+  );
+  if (index < 0) return [...records, next];
+  const current = records[index]!;
+  const merged: LearnedTaskMemory = {
+    ...current,
+    ...next,
+    createdAt: current.createdAt,
+    firstSeen: current.firstSeen ?? current.createdAt,
+    lastSeen: next.lastSeen ?? next.createdAt,
+    recurrenceCount: (current.recurrenceCount ?? 1) + 1,
+    fixedCount: (current.fixedCount ?? (current.result === "completed" ? 1 : 0)) + (next.result === "completed" ? 1 : 0),
+    sourceSessionIds: unique([...(current.sourceSessionIds ?? []), ...(next.sourceSessionIds ?? [])]),
+    evidenceRefs: unique([...(current.evidenceRefs ?? []), ...(next.evidenceRefs ?? [])]).slice(0, 12),
+    confidence: Math.max(current.confidence ?? 0, next.confidence ?? 0)
+  };
+  return records.map((record, recordIndex) => recordIndex === index ? merged : record);
+}
+
+async function writeTaskMemoryFile(cwd: string, records: LearnedTaskMemory[]): Promise<void> {
+  const dir = path.join(cwd, ".tomorrowedge");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "task-memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+}
+
+async function buildMemoryScope(cwd: string): Promise<MemoryScope> {
+  return {
+    projectFingerprint: hashText(path.resolve(cwd).toLowerCase()),
+    dependencyLockHash: await dependencyLockHash(cwd),
+    fixtureFamily: "native-fixture"
+  };
+}
+
+async function dependencyLockHash(cwd: string): Promise<string | undefined> {
+  const lockFiles = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb"];
+  for (const file of lockFiles) {
+    const content = await readFile(path.join(cwd, file)).catch(() => undefined);
+    if (content) return hashText(`${file}:${content.toString("utf8")}`);
+  }
+  return undefined;
+}
+
+function staleStatus(record: LearnedTaskMemory, cwd: string): { stale: boolean; reason?: string } {
+  if (record.schemaVersion && record.schemaVersion !== "task-memory/v1" && record.schemaVersion !== "task-memory/v2") {
+    return { stale: true, reason: `unsupported schema ${record.schemaVersion}` };
+  }
+  const projectFingerprint = hashText(path.resolve(cwd).toLowerCase());
+  if (record.memoryScope?.projectFingerprint && record.memoryScope.projectFingerprint !== projectFingerprint) {
+    return { stale: true, reason: "project scope changed" };
+  }
+  const lastSeenTime = Date.parse(record.lastSeen ?? record.createdAt);
+  const ttlMs = Number(process.env.TOMORROWEDGE_MEMORY_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000;
+  if (Number.isFinite(lastSeenTime) && ttlMs > 0 && Date.now() - lastSeenTime > ttlMs) {
+    return { stale: true, reason: "memory TTL expired" };
+  }
+  return { stale: false };
+}
+
+function buildFailureSignature(state: AgentGraphState, record: LearnedTaskMemory): string {
+  const failedRun = state.runResults.find((run) => !run.success && !run.skipped);
+  const errorSignature = clip(redactText([failedRun?.stderr, failedRun?.stdout].filter(Boolean).join("\n")), 220)
+    .replace(/\d+/g, "#")
+    .toLowerCase();
+  const files = unique([
+    ...state.changedFiles,
+    ...state.candidates.flatMap((candidate) => candidate.filesChanged),
+    ...state.repairCandidates.flatMap((candidate) => candidate.filesChanged)
+  ]).sort().join(",");
+  return hashText([
+    record.failureClass,
+    record.taskType,
+    record.riskLevel,
+    record.verificationCommands.join(","),
+    failedRun?.command ?? "",
+    files,
+    errorSignature
+  ].join("|"));
+}
+
+function sameMemoryScope(a: MemoryScope | undefined, b: MemoryScope | undefined): boolean {
+  return (a?.projectFingerprint ?? "") === (b?.projectFingerprint ?? "")
+    && (a?.dependencyLockHash ?? "") === (b?.dependencyLockHash ?? "")
+    && (a?.fixtureFamily ?? "") === (b?.fixtureFamily ?? "")
+    && (a?.experimentId ?? "") === (b?.experimentId ?? "");
+}
+
 function confidenceForFailure(failureClass: FailureClass, evidenceRefs: string[]): number {
   const base: Record<FailureClass, number> = {
     coding_error: 0.62,
@@ -328,6 +489,14 @@ function tokenize(value: string): Set<string> {
       .map((item) => item.trim())
       .filter((item) => item.length >= 2 && !stopWords.has(item))
   );
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 const stopWords = new Set(["the", "and", "for", "with", "from", "this", "that", "task", "code", "file", "test", "fix", "add", "run"]);
