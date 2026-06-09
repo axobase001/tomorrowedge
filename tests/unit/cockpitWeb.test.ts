@@ -6,8 +6,11 @@ import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
+import { buildCockpitViewModel } from "../../src/cockpit/viewModel.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
+import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 
 describe("cockpit web React surface", () => {
   it("renders the geometric brand mark instead of the legacy text tile", () => {
@@ -133,6 +136,34 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Approval history");
     expect(html).toContain("patch:fixture_candidate_a");
     expect(html).toContain("filters=patch, pending");
+  });
+
+  it("keeps pending patch authorization out of rejected approval history", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true, accessMode: "partial" });
+    const viewModel = buildCockpitViewModel(cwd, state, { source: "saved" });
+
+    expect(viewModel.currentApproval).toMatchObject({
+      kind: "patch",
+      status: "waiting"
+    });
+    expect(viewModel.approvalHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "waiting",
+          status: "waiting",
+          blocksProgress: true
+        })
+      ])
+    );
+    expect(viewModel.approvalHistory).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "rejected",
+          summary: expect.stringContaining("approval required")
+        })
+      ])
+    );
   });
 
   it("renders capability dashboard readiness in the detail drawer", () => {

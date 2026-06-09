@@ -191,6 +191,7 @@ function buildApprovalHistory(state: AgentGraphState | undefined, currentApprova
   const items: CockpitApprovalHistoryItem[] = [];
   for (const event of state?.events ?? []) {
     if (event.type === "patch_apply") {
+      if (isPendingPatchAuthorization(event)) continue;
       const undone = event.candidateId === "undo_latest_patch" || event.error === "undo_latest_patch";
       const rejected = !event.applied && !undone;
       items.push({
@@ -273,6 +274,10 @@ function buildApprovalHistory(state: AgentGraphState | undefined, currentApprova
     });
   }
   return items.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function isPendingPatchAuthorization(event: Extract<TomorrowEdgeEvent, { type: "patch_apply" }>): boolean {
+  return !event.applied && /approval required/i.test(event.error ?? "");
 }
 
 function blockingSummary(approval: CockpitApproval): string {
