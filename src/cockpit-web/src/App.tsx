@@ -5,7 +5,7 @@ import { TopBar } from "./components/TopBar.js";
 import { TaskListPanel } from "./components/TaskListPanel.js";
 import { WorkflowPanel } from "./components/WorkflowPanel.js";
 import { TelemetryPanel } from "./components/TelemetryPanel.js";
-import { ComposerPanel } from "./components/ComposerPanel.js";
+import { ComposerPanel, type ComposerTarget } from "./components/ComposerPanel.js";
 import { SetupWizard } from "./components/SetupWizard.js";
 import { KeyRoleManager } from "./components/KeyRoleManager.js";
 import { BottomTraceSheet } from "./components/BottomTraceSheet.js";
@@ -19,6 +19,7 @@ export type AppProps = {
   selectedSession: string;
   goal: string;
   accessMode: AccessMode;
+  conversationTarget: ComposerTarget;
   busy: boolean;
   statusMessage?: string;
   setupStatus?: CockpitSetupStatus;
@@ -32,6 +33,7 @@ export type AppProps = {
   t: Translator;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
+  onConversationTargetChange: (target: ComposerTarget) => void;
   onLanguageChange: (language: GuiLanguage) => void;
   onConfigureSetup: (request: CockpitSetupRequest) => void;
   onSaveProviderKey: (request: CockpitProviderKeyRequest) => void;
@@ -56,6 +58,7 @@ export function App({
   selectedSession,
   goal,
   accessMode,
+  conversationTarget,
   busy,
   statusMessage,
   setupStatus,
@@ -69,6 +72,7 @@ export function App({
   t,
   onGoalChange,
   onAccessModeChange,
+  onConversationTargetChange,
   onLanguageChange,
   onConfigureSetup,
   onSaveProviderKey,
@@ -95,7 +99,7 @@ export function App({
         <TelemetryPanel telemetry={viewModel.telemetry} t={t} />
       </section>
       <BottomTraceSheet trace={viewModel.trace} t={t} />
-      <ComposerPanel goal={goal} accessMode={accessMode} busy={busy} statusMessage={statusMessage} t={t} onGoalChange={onGoalChange} onAccessModeChange={onAccessModeChange} onSubmit={onRun} />
+      <ComposerPanel goal={goal} accessMode={accessMode} conversationTarget={conversationTarget} busy={busy} statusMessage={statusMessage} t={t} onGoalChange={onGoalChange} onAccessModeChange={onAccessModeChange} onConversationTargetChange={onConversationTargetChange} onSubmit={onRun} />
       <DetailDrawer viewModel={viewModel} open={drawerOpen} t={t} onClose={onCloseDrawer} />
       {keyManagerOpen ? (
         <KeyRoleManager

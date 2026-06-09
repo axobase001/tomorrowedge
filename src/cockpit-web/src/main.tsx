@@ -23,6 +23,7 @@ import {
   type CockpitSetupRequest,
   type CockpitSetupStatus
 } from "./api.js";
+import type { ComposerTarget } from "./components/ComposerPanel.js";
 import { createTranslator, normalizeLanguage, type GuiLanguage } from "./i18n.js";
 
 const emptyViewModel: CockpitViewModel = {
@@ -79,6 +80,7 @@ function CockpitWebRoot() {
   const [selectedSession, setSelectedSession] = useState("latest");
   const [goal, setGoal] = useState("");
   const [accessMode, setAccessMode] = useState<AccessMode>("partial");
+  const [conversationTarget, setConversationTarget] = useState<ComposerTarget>("core");
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
@@ -220,7 +222,7 @@ function CockpitWebRoot() {
         livePatch: useLiveModels,
         liveAdvisory: useLiveModels,
         liveVision: false,
-        to: "core"
+        to: conversationTarget
       }, apiOptions);
       updateSelectedSession(payload.sessionId);
       setStatusMessage(t("status.workflowRunning"));
@@ -229,7 +231,7 @@ function CockpitWebRoot() {
       setBusy(false);
       setStatusMessage(t("status.runFailed", { message: errorMessage(error) }));
     }
-  }, [accessMode, apiOptions, busy, connectLive, goal, setupStatus, t, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, goal, setupStatus, t, updateSelectedSession]);
 
   const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
     if (setupBusy) return;
@@ -351,6 +353,7 @@ function CockpitWebRoot() {
     setViewModel(emptyViewModel);
     setGoal("");
     setAccessMode("partial");
+    setConversationTarget("core");
     setStatusMessage(t("status.readyNewTask"));
   }, [closeLiveSource, t, updateSelectedSession]);
 
@@ -361,6 +364,7 @@ function CockpitWebRoot() {
       selectedSession={selectedSession}
       goal={goal}
       accessMode={accessMode}
+      conversationTarget={conversationTarget}
       busy={busy}
       statusMessage={statusMessage}
       setupStatus={setupStatus}
@@ -374,6 +378,7 @@ function CockpitWebRoot() {
       t={t}
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
+      onConversationTargetChange={setConversationTarget}
       onLanguageChange={updateLanguage}
       onConfigureSetup={configureSetup}
       onSaveProviderKey={saveProviderKey}

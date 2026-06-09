@@ -48,9 +48,11 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("run a smoke task");
     expect(html).toContain("Workflow running...");
-    expect(html).toContain("target: core");
     expect(html).toContain("data-testid=\"composer-input\"");
     expect(html).toContain("data-testid=\"composer-mode\"");
+    expect(html).toContain("data-testid=\"composer-target\"");
+    expect(html).toContain("<option value=\"reviewer\">reviewer</option>");
+    expect(html).toContain("<option value=\"debate\">debate</option>");
     expect(html).toContain("partial");
   });
 
@@ -164,6 +166,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       selectedSession: "session_test",
       goal: overrides.goal ?? "",
       accessMode: "partial",
+      conversationTarget: "core",
       busy: false,
       statusMessage: overrides.statusMessage,
       setupStatus: {
@@ -202,6 +205,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       t,
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
+      onConversationTargetChange: () => undefined,
       onLanguageChange: () => undefined,
       onConfigureSetup: () => undefined,
       onSaveProviderKey: () => undefined,
