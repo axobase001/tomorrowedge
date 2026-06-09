@@ -25,6 +25,10 @@ Changelog: newest changes first, grouped by release and by change type.
 - Cockpit E2E smoke now treats GUI `data-testid` attributes as an explicit
   contract across setup, key management, composer, workflow, telemetry,
   approval, trace, and drawer surfaces.
+- `runOfflineGraph` now delegates to named workflow phases for routing intent,
+  core, vision, planning, exploration, candidate generation, review/judge,
+  advisory, patch application, and verification/repair instead of keeping the
+  full orchestration inside one long entrypoint.
 
 ## [1.2.14] - 2026-06-09
 

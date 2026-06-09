@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import path from "node:path";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
@@ -16,6 +16,30 @@ describe("offline agent graph", () => {
       delete process.env.OPENROUTER_API_KEY;
     } else {
       process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+    }
+  });
+
+  it("keeps the executor entrypoint as a named phase pipeline", async () => {
+    const source = await readFile(path.join(process.cwd(), "src", "core", "agentGraph", "executor.ts"), "utf8");
+    const entrypoint = source.slice(source.indexOf("export async function runOfflineGraph"), source.indexOf("function createOfflineGraphRuntime"));
+    const lines = entrypoint.split(/\r?\n/).filter((line) => line.trim()).length;
+
+    expect(lines).toBeLessThanOrEqual(35);
+    for (const phase of [
+      "recordStartupPhase",
+      "runRoutingIntentPhase",
+      "runExternalCorePhase",
+      "runVisionPhase",
+      "runPlanningPhase",
+      "runExplorationPhase",
+      "runCandidatePhase",
+      "runReviewAndJudgePhase",
+      "runLiveAdvisoryPhase",
+      "runPatchApplicationPhase",
+      "runVerificationAndRepairPhase"
+    ]) {
+      expect(entrypoint).toContain(phase);
+      expect(source).toContain(`function ${phase}`);
     }
   });
 
