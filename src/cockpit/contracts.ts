@@ -46,6 +46,19 @@ export type CockpitRouteSummary = {
   reason: string;
 };
 
+export type CockpitRoleGraphSummary = {
+  workflowKind: string;
+  stopConditions: string[];
+  nodes: Array<{
+    id: string;
+    role: AgentRole;
+    required: boolean;
+    dependencies: string[];
+    canFallback: boolean;
+    canSkip: boolean;
+  }>;
+};
+
 export type CockpitTelemetry = {
   plannerModel?: string;
   coderModel?: string;
@@ -156,6 +169,7 @@ export type CockpitViewModel = {
   workflow: CockpitWorkflowStep[];
   agents: CockpitAgentSummary[];
   routes: CockpitRouteSummary[];
+  roleGraph?: CockpitRoleGraphSummary;
   telemetry: CockpitTelemetry;
   approvals: CockpitApproval[];
   approvalHistory: CockpitApprovalHistoryItem[];

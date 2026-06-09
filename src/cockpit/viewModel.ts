@@ -51,6 +51,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
       elapsedMs: agent.elapsedMs
     })),
     routes,
+    roleGraph: buildRoleGraphSummary(state),
     telemetry: buildTelemetry(state, routes, currentApproval),
     approvals,
     approvalHistory,
@@ -134,6 +135,22 @@ function buildRoutes(state?: AgentGraphState): CockpitRouteSummary[] {
     model: assignment.model,
     reason: assignment.reason
   }));
+}
+
+function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleGraph"] {
+  if (!state?.roleGraph) return undefined;
+  return {
+    workflowKind: state.roleGraph.workflowKind,
+    stopConditions: state.roleGraph.stopConditions,
+    nodes: state.roleGraph.nodes.map((node) => ({
+      id: node.id,
+      role: node.role,
+      required: node.required,
+      dependencies: node.dependencies,
+      canFallback: node.canFallback,
+      canSkip: node.canSkip
+    }))
+  };
 }
 
 function isFixtureSession(state?: AgentGraphState): boolean {

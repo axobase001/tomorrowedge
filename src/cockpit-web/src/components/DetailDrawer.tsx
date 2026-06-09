@@ -36,6 +36,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <pre>{viewModel.main.diff || t("drawer.noDiff")}</pre>
       <h3>{t("drawer.routes")}</h3>
       <pre>{viewModel.routes.map((route) => `${route.role} -> ${route.provider}/${route.model}`).join("\n") || "-"}</pre>
+      <h3>{t("drawer.roleGraph")}</h3>
+      <pre>{renderRoleGraph(viewModel)}</pre>
       <h3>{t("drawer.artifacts")}</h3>
       <pre>{viewModel.artifacts.map((artifact) => artifact.ref).join("\n") || "-"}</pre>
       <h3>{t("drawer.rawEvents")}</h3>
@@ -43,4 +45,20 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
     </aside>
     </>
   );
+}
+
+function renderRoleGraph(viewModel: CockpitViewModel): string {
+  const graph = viewModel.roleGraph;
+  if (!graph) return "-";
+  const nodes = graph.nodes.map((node) => [
+    `${node.id} (${node.role}) ${node.required ? "required" : "optional"}`,
+    `deps=${node.dependencies.join(", ") || "-"}`,
+    `fallback=${node.canFallback ? "yes" : "no"}`,
+    `skip=${node.canSkip ? "yes" : "no"}`
+  ].join(" | "));
+  return [
+    `workflow=${graph.workflowKind}`,
+    ...nodes,
+    `stop=${graph.stopConditions.join(", ") || "-"}`
+  ].join("\n");
 }

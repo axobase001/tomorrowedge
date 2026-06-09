@@ -143,6 +143,16 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("[available]");
   });
 
+  it("renders the recorded role graph in the detail drawer", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("Role graph");
+    expect(html).toContain("workflow=debate_patch");
+    expect(html).toContain("coder_b (coder_b) optional");
+    expect(html).toContain("deps=explorer");
+    expect(html).toContain("stop=judge_abort, no_patch_candidate");
+  });
+
   it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
     const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
     const fallback = renderCockpitHtml();
@@ -252,6 +262,20 @@ function sampleViewModel(): CockpitViewModel {
     ],
     agents: [],
     routes: [{ role: "planner", provider: "fixture", model: "fixture-scripted", reason: "test" }],
+    roleGraph: {
+      workflowKind: "debate_patch",
+      nodes: [
+        { id: "planner", role: "planner", required: true, dependencies: [], canFallback: true, canSkip: false },
+        { id: "explorer", role: "explorer", required: true, dependencies: ["planner"], canFallback: true, canSkip: false },
+        { id: "coder_a", role: "coder_a", required: true, dependencies: ["explorer"], canFallback: true, canSkip: false },
+        { id: "coder_b", role: "coder_b", required: false, dependencies: ["explorer"], canFallback: true, canSkip: true },
+        { id: "reviewer", role: "reviewer", required: false, dependencies: ["coder_a", "coder_b"], canFallback: true, canSkip: false },
+        { id: "judge", role: "judge", required: true, dependencies: ["reviewer"], canFallback: true, canSkip: false },
+        { id: "runner", role: "runner", required: true, dependencies: ["judge"], canFallback: false, canSkip: false },
+        { id: "summarizer", role: "summarizer", required: true, dependencies: ["runner"], canFallback: true, canSkip: false }
+      ],
+      stopConditions: ["judge_abort", "no_patch_candidate"]
+    },
     telemetry: {
       providerSummary: "fixture",
       inputTokens: 0,
