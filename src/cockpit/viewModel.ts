@@ -151,8 +151,24 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   const waiting = state.agents.some((agent) => agent.status === "waiting_for_user");
   if (state.finalSummary && state.finalSummary.result !== "partially_completed" && !waiting) return [];
   const approvals: CockpitApproval[] = [];
-  const selected = selectedCandidate(state);
+  const pendingRepair = pendingRepairCandidate(state);
   const latestRun = state.runResults.at(-1);
+  if (pendingRepair) {
+    approvals.push({
+      id: `patch:${pendingRepair.candidateId}`,
+      kind: "repair",
+      title: "Waiting for repair approval",
+      status: "waiting",
+      candidateId: pendingRepair.candidateId,
+      filesChanged: pendingRepair.filesChanged,
+      riskLevel: pendingRepair.estimatedRisk,
+      testStatus: latestRun ? latestRun.success ? "passed" : "failed" : "not_run",
+      summary: pendingRepair.summary,
+      diff: pendingRepair.unifiedDiff
+    });
+    return approvals;
+  }
+  const selected = selectedCandidate(state);
   if (selected && hasActionablePatchCandidate(selected) && (!state.changedFiles.length || waiting)) {
     approvals.push({
       id: `patch:${selected.candidateId}`,
@@ -167,7 +183,7 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
       diff: selected.unifiedDiff
     });
   }
-  if (state.changedFiles.length && !state.runResults.length) {
+  if (state.changedFiles.length && !state.approvals.shellApproved) {
     approvals.push({
       id: "shell:test",
       kind: "shell",
@@ -180,6 +196,15 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
     });
   }
   return approvals;
+}
+
+function pendingRepairCandidate(state: AgentGraphState) {
+  if (state.approvals.repairApproved) return undefined;
+  const waitingForRepair = state.agents.some((agent) =>
+    agent.status === "waiting_for_user" && (agent.id === "approval_repair" || /repair|approval required/i.test(agent.summary))
+  );
+  if (!waitingForRepair) return undefined;
+  return [...state.repairCandidates].reverse().find(hasActionablePatchCandidate);
 }
 
 function hasActionablePatchCandidate(candidate: ReturnType<typeof selectedCandidate>): boolean {

@@ -196,6 +196,45 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("executes pending repair approvals through the Node cockpit", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-repair-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, {
+      fixtureMode: true,
+      approvePatch: true,
+      approveShell: true,
+      fixtureFailingPatch: true,
+      repairOnFail: true
+    });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const before = await readFile(path.join(cwd, "index.js"), "utf8");
+      const vm = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { currentApproval?: { id: string; kind: string }; status: string };
+
+      expect(before).toContain("return a * b");
+      expect(vm.status).toBe("waiting_approval");
+      expect(vm.currentApproval).toMatchObject({ id: "patch:fixture_repair_candidate", kind: "repair" });
+
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
+      });
+      const payload = await response.json() as { status: string; viewModel: { currentApproval?: { kind: string }; main: { filesChanged: string[] } } };
+      const after = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(response.status).toBe(200);
+      expect(payload.status).toBe("applied");
+      expect(after).toContain("return a + b");
+      expect(payload.viewModel.currentApproval?.kind).toBe("shell");
+      expect(payload.viewModel.main.filesChanged).toContain("index.js");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects stale patch approval ids before applying a patch", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-patch-"));
     await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });

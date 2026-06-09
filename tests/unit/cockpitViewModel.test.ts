@@ -176,6 +176,59 @@ describe("cockpit view model", () => {
     expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["shell", "pending"]);
   });
 
+  it("surfaces pending repair approval after failed verification", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      changedFiles: ["index.js"],
+      runResults: [{
+        command: "npm test",
+        exitCode: 1,
+        stdout: "",
+        stderr: "AssertionError",
+        durationMs: 12,
+        success: false
+      }],
+      repairCandidates: [{
+        candidateId: "repair_candidate",
+        agentId: "repairer",
+        approach: "repair",
+        summary: "Replace the failed patch with addition.",
+        filesChanged: ["index.js"],
+        unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@\n-return a * b\n+return a + b\n",
+        testPlan: ["npm test"],
+        knownTradeoffs: [],
+        estimatedRisk: "low"
+      }],
+      agents: [{
+        id: "approval_repair",
+        role: "runner",
+        provider: "local_tool",
+        model: "approval_gate",
+        status: "waiting_for_user",
+        summary: "Patch application blocked: approval required."
+      }],
+      approvals: { patchApproved: true, shellApproved: true, repairApproved: false },
+      finalSummary: {
+        task: "fix failing test",
+        result: "failed",
+        changedFiles: ["index.js"],
+        testsRun: ["npm test"],
+        evidence: ["Command failed: npm test"],
+        risksRemaining: [],
+        suggestedCommitMessage: "fix: update index"
+      }
+    }));
+
+    expect(vm.status).toBe("waiting_approval");
+    expect(vm.statusText).toBe("Waiting approval");
+    expect(vm.tasks[0]?.status).toBe("waiting");
+    expect(vm.currentApproval?.id).toBe("patch:repair_candidate");
+    expect(vm.currentApproval?.kind).toBe("repair");
+    expect(vm.main.title).toBe("Waiting for repair approval");
+    expect(vm.main.diff).toContain("return a + b");
+    expect(vm.telemetry.patchWaiting).toBe(true);
+    expect(vm.approvalHistory.at(-1)?.approvalId).toBe("patch:repair_candidate");
+  });
+
   it("keeps a completed workflow done when no approval is pending", () => {
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
       changedFiles: ["index.js"],
