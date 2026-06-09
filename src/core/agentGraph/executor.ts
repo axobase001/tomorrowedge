@@ -356,7 +356,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const judge = new JudgeAgent();
   const externalJudge = externalProfileForRole(router, externalAgents, "judge");
   state.judge = await runAgentState(state, ledger, router, "judge", async () => {
-    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
+    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds });
     const result = await invokeExternalRole({
       cwd,
       profile: externalJudge,
@@ -367,7 +367,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     });
     const judgment = normalizeExternalJudgment(result.payload);
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
-    return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
+    return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds });
   }, externalJudge ? "external" : undefined);
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");

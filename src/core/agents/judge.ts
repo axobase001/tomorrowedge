@@ -1,13 +1,18 @@
+import type { DebateRound } from "../../schemas/debate.js";
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }, JudgeDecision> {
+export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }, JudgeDecision> {
   readonly role = "judge";
 
-  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[] }): Promise<JudgeDecision> {
+  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }): Promise<JudgeDecision> {
+    // Phase 1: debateRounds is logged but not yet used for decision-making
+    const debateSuffix = input.debateRounds?.length
+      ? ` Debate rounds considered=${input.debateRounds.length}.`
+      : "";
     const acceptable = input.review.reviews
       .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
       .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
@@ -32,7 +37,7 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
     return {
       selectedCandidateId: acceptable.candidateId,
       decision: "select",
-      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}`,
+      reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}${debateSuffix}`,
       confidence: 0.78
     };
   }
@@ -49,4 +54,3 @@ function hasCriticalConcern(review: ReviewReport["reviews"][number]): boolean {
 function blockingRegressionConcerns(review: ReviewReport["reviews"][number]): string[] {
   return review.regressionConcerns.filter((concern) => !concern.startsWith("Candidate touches "));
 }
-// TODO: Add debateRounds to JudgeAgent.run() input
