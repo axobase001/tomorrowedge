@@ -313,6 +313,13 @@ export type FallbackToNativeEvent = BaseEvent & {
   reason: string;
 };
 
+export type RoleBudgetExceededEvent = BaseEvent & {
+  type: "role_budget_exceeded";
+  budget: number;
+  spent: number;
+  estimatedCost: number;
+};
+
 export type TraceCompletenessEvent = BaseEvent & {
   type: "trace_completeness";
   score: number;
@@ -353,6 +360,7 @@ export type TomorrowEdgeEvent =
   | BudgetDecisionEvent
   | WorkflowStopReasonEvent
   | FallbackToNativeEvent
+  | RoleBudgetExceededEvent
   | TraceCompletenessEvent;
 
 export type EventArtifact = {
