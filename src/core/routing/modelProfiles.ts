@@ -28,6 +28,8 @@ export type ModelProfile = {
   defaultRoles?: AgentRole[];
 };
 
+const staticProfileProviderIds = new Set(["mock", "fixture", "openrouter", "mimo", "openai_compatible", "deepseek", "kimi", "anthropic", "gemini", "ollama"]);
+
 export const editableDefaultProfiles: ModelProfile[] = [
   {
     provider: "mock",
@@ -154,6 +156,20 @@ export function profilesFromConfig(config: TomorrowEdgeConfig): ModelProfile[] {
       defaultRoles: ["explorer", "coder_a", "repairer", "summarizer"]
     });
   }
+  for (const [provider, providerConfig] of Object.entries(config.providers)) {
+    if (staticProfileProviderIds.has(provider) || !providerConfig.enabled || !providerConfig.base_url) continue;
+    profiles.push({
+      provider,
+      model: configuredModel(config, provider, providerModelEnvName(provider), "configured-model"),
+      label: `Custom OpenAI-compatible model (${provider})`,
+      strengths: ["planning", "coding", "review", "reasoning"],
+      inputPricePerMTok: 0.15,
+      outputPricePerMTok: 0.6,
+      contextWindow: 128000,
+      latencyClass: "medium",
+      defaultRoles: ["planner", "coder_a", "reviewer", "repairer"]
+    });
+  }
   return [...profiles, ...editableDefaultProfiles];
 }
 
@@ -162,4 +178,9 @@ function configuredModel(config: TomorrowEdgeConfig, provider: string, envName: 
   if (fromConfig) return fromConfig;
   const fromEnv = process.env[envName]?.trim();
   return fromEnv || fallback;
+}
+
+function providerModelEnvName(provider: string): string {
+  const prefix = provider.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  return `${prefix}_MODEL`;
 }

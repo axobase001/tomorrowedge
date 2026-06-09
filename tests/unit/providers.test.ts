@@ -41,6 +41,28 @@ describe("provider registry", () => {
     expect(models?.[0]?.id).toBe("anthropic/claude-opus-4.1");
   });
 
+  it("registers custom OpenAI-compatible gateway providers from config", async () => {
+    vi.stubEnv("ONEAPI_GATEWAY_KEY", "test-key");
+    const registry = createProviderRegistry({
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        oneapi_gateway: {
+          enabled: true,
+          api_key_env: "ONEAPI_GATEWAY_KEY",
+          base_url: "https://oneapi.example/v1",
+          model: "gpt-4o-mini",
+          api_format: "openai_chat",
+          auth_header: "bearer",
+          extra_headers: {}
+        }
+      }
+    });
+
+    expect(registry.get("oneapi_gateway")).toBeTruthy();
+    await expect(registry.get("oneapi_gateway")?.listModels()).resolves.toMatchObject([{ id: "gpt-4o-mini" }]);
+  });
+
   it("reads OLLAMA_BASE_URL after local env loading instead of defaultConfig module import", () => {
     vi.stubEnv("OLLAMA_BASE_URL", "http://localhost:18080");
     const registry = createProviderRegistry(defaultConfig);

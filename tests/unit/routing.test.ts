@@ -83,6 +83,31 @@ describe("routing policies", () => {
     expect(router.assignmentFor("reviewer")).toMatchObject({ provider: "openrouter", model: "anthropic/claude-opus-4.1" });
   });
 
+  it("routes user-configured roles to custom OpenAI-compatible gateway providers", () => {
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        oneapi_gateway: {
+          enabled: true,
+          api_key_env: "ONEAPI_GATEWAY_KEY",
+          base_url: "https://oneapi.example/v1",
+          model: "gpt-4o-mini",
+          api_format: "openai_chat",
+          auth_header: "bearer",
+          extra_headers: {}
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "oneapi_gateway", model: "gpt-4o-mini" }
+      }
+    };
+    const router = new ModelRouter(config);
+
+    expect(router.assignmentFor("planner")).toMatchObject({ provider: "oneapi_gateway", model: "gpt-4o-mini" });
+  });
+
   it("keeps privacy/local routing local even when a role override points to cloud", () => {
     const config: TomorrowEdgeConfig = {
       ...defaultConfig,

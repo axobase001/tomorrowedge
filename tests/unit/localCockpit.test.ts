@@ -461,6 +461,49 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("creates custom OpenAI-compatible gateway providers from the GUI key manager", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-custom-gateway-key-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/oneapi-gateway?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          baseUrl: "https://oneapi.example/v1/",
+          apiKeyEnv: "ONEAPI_GATEWAY_KEY",
+          apiKey: "test-oneapi-key"
+        })
+      });
+      const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; baseUrl: string; keyConfigured: boolean; keySource: string }> };
+      const config = loadConfig(cwd);
+      const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
+      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+
+      expect(response.status).toBe(200);
+      expect(afterSave.selectedProvider).toBe("oneapi_gateway");
+      expect(afterSave.providers.find((provider) => provider.id === "oneapi_gateway")).toMatchObject({
+        baseUrl: "https://oneapi.example/v1",
+        keyConfigured: true,
+        keySource: "local_env"
+      });
+      expect(config.providers.oneapi_gateway).toMatchObject({
+        enabled: true,
+        base_url: "https://oneapi.example/v1",
+        model: "gpt-4o-mini",
+        api_key_env: "ONEAPI_GATEWAY_KEY",
+        api_format: "openai_chat",
+        auth_header: "bearer"
+      });
+      expect(configText).not.toContain("test-oneapi-key");
+      expect(localEnv).toContain('ONEAPI_GATEWAY_KEY="test-oneapi-key"');
+    } finally {
+      delete process.env.ONEAPI_GATEWAY_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("saves GUI role assignments into provider/model agent routing", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-roles-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

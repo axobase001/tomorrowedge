@@ -27,10 +27,12 @@ export function SetupWizard({
   const recommended = setupStatus?.recommendedProvider ?? "openrouter";
   const initialProvider = setupStatus?.selectedProvider ?? recommended;
   const [provider, setProvider] = useState(initialProvider);
-  const selectedProvider = providers.find((item) => item.id === provider) ?? providers[0];
+  const normalizedProvider = normalizeProviderId(provider);
+  const selectedProvider = providers.find((item) => item.id === normalizedProvider);
+  const initialProviderDefaults = selectedProvider ?? providers[0];
   const [model, setModel] = useState(setupStatus?.selectedModel ?? suggestedModelFor(provider));
-  const [baseUrl, setBaseUrl] = useState(selectedProvider?.baseUrl ?? defaultBaseUrlFor(provider));
-  const [apiKeyEnv, setApiKeyEnv] = useState(selectedProvider?.apiKeyEnv ?? defaultEnvFor(provider));
+  const [baseUrl, setBaseUrl] = useState(initialProviderDefaults?.baseUrl ?? defaultBaseUrlFor(provider));
+  const [apiKeyEnv, setApiKeyEnv] = useState(initialProviderDefaults?.apiKeyEnv ?? defaultEnvFor(provider));
   const [apiKey, setApiKey] = useState("");
   const [bindRoles, setBindRoles] = useState(true);
 
@@ -39,13 +41,14 @@ export function SetupWizard({
   }, [initialProvider]);
 
   useEffect(() => {
-    const nextProvider = providers.find((item) => item.id === provider);
-    setModel((current) => current || nextProvider?.model || suggestedModelFor(provider));
-    setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(provider));
-    setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(provider));
+    const providerId = normalizeProviderId(provider);
+    const nextProvider = providers.find((item) => item.id === providerId);
+    setModel((current) => current || nextProvider?.model || suggestedModelFor(providerId));
+    setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(providerId));
+    setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(providerId));
   }, [provider, providers]);
 
-  const canSubmit = Boolean(provider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !busy;
+  const canSubmit = Boolean(normalizedProvider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !busy;
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
@@ -64,11 +67,12 @@ export function SetupWizard({
         <div className="te-setup-grid">
           <label>
             <span>{t("setup.provider")}</span>
-            <select value={provider} onChange={(event) => setProvider(event.target.value)} data-testid="setup-provider">
+            <input value={provider} list="setup-provider-options" onChange={(event) => setProvider(event.target.value)} data-testid="setup-provider" />
+            <datalist id="setup-provider-options">
               {providers.map((item) => (
-                <option key={item.id} value={item.id}>{item.id === recommended ? `${item.id} (${t("setup.recommended")})` : item.id}</option>
+                <option key={item.id} value={item.id} label={item.id === recommended ? `${item.id} (${t("setup.recommended")})` : item.id} />
               ))}
-            </select>
+            </datalist>
           </label>
           <label>
             <span>{t("setup.model")}</span>
@@ -92,10 +96,10 @@ export function SetupWizard({
           <span>{t("setup.bindRoles")}</span>
         </label>
         <div className="te-setup-actions">
-          <button type="button" onClick={() => onConfigure({ provider, model, baseUrl, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
+          <button type="button" onClick={() => onConfigure({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
             {t("setup.save")}
           </button>
-          <button type="button" className="te-quiet-button" onClick={() => onTest(provider)} disabled={busy || !provider} data-testid="setup-test">
+          <button type="button" className="te-quiet-button" onClick={() => onTest(normalizedProvider)} disabled={busy || !normalizedProvider || !selectedProvider} data-testid="setup-test">
             {t("setup.test")}
           </button>
           <span className="te-chip">{t("setup.routingAfter")}</span>
@@ -112,6 +116,8 @@ export function SetupWizard({
 }
 
 function defaultEnvFor(provider: string): string {
+  const providerId = normalizeProviderId(provider);
+  if (!providerId) return "";
   const lookup: Record<string, string> = {
     openrouter: "OPENROUTER_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
@@ -121,10 +127,12 @@ function defaultEnvFor(provider: string): string {
     gemini: "GEMINI_API_KEY",
     openai_compatible: "OPENAI_API_KEY"
   };
-  return lookup[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+  const prefix = providerId.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  return lookup[providerId] ?? (/^[A-Z_]/.test(prefix) ? `${prefix}_API_KEY` : `PROVIDER_${prefix}_API_KEY`);
 }
 
 function defaultBaseUrlFor(provider: string): string {
+  const providerId = normalizeProviderId(provider);
   const lookup: Record<string, string> = {
     openrouter: "https://openrouter.ai/api/v1",
     deepseek: "https://api.deepseek.com",
@@ -134,10 +142,11 @@ function defaultBaseUrlFor(provider: string): string {
     gemini: "https://generativelanguage.googleapis.com/v1beta",
     openai_compatible: "https://api.openai.com/v1"
   };
-  return lookup[provider] ?? "";
+  return lookup[providerId] ?? "";
 }
 
 function suggestedModelFor(provider: string): string {
+  const providerId = normalizeProviderId(provider);
   const lookup: Record<string, string> = {
     openrouter: "moonshotai/kimi-k2:free",
     deepseek: "deepseek-chat",
@@ -146,5 +155,9 @@ function suggestedModelFor(provider: string): string {
     anthropic: "claude-opus-4.1",
     gemini: "gemini-2.5-pro"
   };
-  return lookup[provider] ?? "";
+  return lookup[providerId] ?? "";
+}
+
+function normalizeProviderId(provider: string): string {
+  return provider.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
 }
