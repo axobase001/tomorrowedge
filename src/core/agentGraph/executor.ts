@@ -220,6 +220,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ));
       if (budgetStatus.status !== "blocked") {
         const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), "live");
+        recordRoleBudget(state, ledger, "vision", config);
         state.modelNotes.push(liveVision.note);
         state.usageSummary = summarizeModelUsage(state.modelNotes);
         recordModelNoteEvents(ledger, [liveVision.note], state.usageSummary);
@@ -265,6 +266,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
     return plan ?? planner.run({ goal: plannerGoal });
   }, externalPlanner ? "external" : undefined);
+  recordRoleBudget(state, ledger, "planner", config);
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
@@ -341,6 +343,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (!review) recordExternalNormalizeFallback(ledger, "reviewer", externalReviewer, "review", "native reviewer");
     return review ?? reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
   }, externalReviewer ? "external" : undefined);
+  recordRoleBudget(state, ledger, "reviewer", config);
   const reviewJson = JSON.stringify(state.review, null, 2);
   const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
   recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
@@ -371,6 +374,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
     return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
   }, externalJudge ? "external" : undefined);
+  recordRoleBudget(state, ledger, "judge", config);
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
   recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
@@ -840,6 +844,40 @@ function workflowStopReason(state: AgentGraphState): string {
   if (latestRun?.success && state.repairCandidates.length) return "repair applied and verification passed";
   if (state.changedFiles.length) return "selected patch applied and workflow finalized";
   return "no patch applied; workflow finalized after review and judge";
+}
+
+/** Per-role budget cap from config. Roles not explicitly listed use "other". */
+function roleBudgetFor(role: AgentRole, config: TomorrowEdgeConfig): number {
+  const b = config.agent_budget;
+  if (role === "vision") return b.vision;
+  if (role === "planner") return b.planner;
+  if (role === "coder_a" || role === "coder_b" || role === "repairer") return b.coder;
+  if (role === "reviewer") return b.reviewer;
+  if (role === "judge") return b.judge;
+  return b.other;
+}
+
+/** Cumulative USD spent by a given role in this session. */
+function spentByRole(state: AgentGraphState, role: AgentRole): number {
+  return state.modelNotes
+    .filter((n) => n.role === role && n.estimatedCostUsd !== undefined)
+    .reduce((sum, n) => sum + (n.estimatedCostUsd ?? 0), 0);
+}
+
+/** Record a role_budget_exceeded event if the given role has spent more than its cap. */
+function recordRoleBudget(state: AgentGraphState, ledger: EventLedger, role: AgentRole, config: TomorrowEdgeConfig): void {
+  const spent = spentByRole(state, role);
+  const budget = roleBudgetFor(role, config);
+  if (spent > budget) {
+    ledger.append({
+      type: "role_budget_exceeded",
+      phase: phaseForRole(role),
+      role,
+      budget,
+      spent: Math.round(spent * 1_000_000) / 1_000_000,
+      estimatedCost: spent
+    });
+  }
 }
 
 async function runAgentState<T>(state: AgentGraphState, ledger: EventLedger, router: ModelRouter, role: AgentRole, fn: () => Promise<T>, agentKind?: AgentRunState["agentKind"]): Promise<T> {
