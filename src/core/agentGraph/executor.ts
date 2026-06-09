@@ -281,11 +281,23 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const coder = new CoderAgent();
-  state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options }));
-  recordPatchCandidateEvent(state, ledger, "coder_a", state.candidates[state.candidates.length - 1]);
+  const coderVariants: Array<{ role: "coder_a" | "coder_b"; variant: "a" | "b" }> = [
+    { role: "coder_a", variant: "a" },
+  ];
   if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options }));
-    recordPatchCandidateEvent(state, ledger, "coder_b", state.candidates[state.candidates.length - 1]);
+    coderVariants.push({ role: "coder_b", variant: "b" });
+  }
+  const coderResults = await Promise.allSettled(
+    coderVariants.map(({ role, variant }) =>
+      runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role, variant, options })
+    )
+  );
+  for (let i = 0; i < coderResults.length; i++) {
+    const result = coderResults[i];
+    if (result.status === "fulfilled") {
+      state.candidates.push(result.value);
+      recordPatchCandidateEvent(state, ledger, result.value.agentId as AgentRole, result.value);
+    }
   }
 
   if (options.livePatch && access.cloudAllowed) {
