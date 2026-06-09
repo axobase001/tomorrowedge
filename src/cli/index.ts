@@ -206,7 +206,7 @@ experiment
   .description("Run a deterministic no-key error-loop experiment and export manifest, trials, memory, retrieval, metrics, and report files")
   .option("--tasks <list>", "semicolon-separated task list")
   .option("--repetitions <n>", "number of repetitions per task and ablation", "1")
-  .option("--ablation <modes>", "comma-separated modes: memory_on,memory_off", "memory_on")
+  .option("--ablation <modes>", "comma-separated modes: memory_on,memory_off,write_only,retrieve_only,success_memory_only,failure_memory_only,random_memory_control", "memory_on")
   .option("--memory-policy <mode>", "failure-memory retrieval policy: balanced,exploit_memory,explore_alternative,random_control")
   .option("--output-dir <path>", "output directory for the reproducibility bundle")
   .option("--seed <seed>", "recorded deterministic seed label")

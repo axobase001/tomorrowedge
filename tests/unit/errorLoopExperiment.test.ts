@@ -64,4 +64,34 @@ describe("error-loop experiment export", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("supports explicit memory ablation matrix modes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-error-loop-ablation-matrix-"));
+    try {
+      const ablations = ["memory_off", "write_only", "retrieve_only", "success_memory_only", "failure_memory_only", "random_memory_control"] as const;
+      const result = await runErrorLoopExperiment(cwd, {
+        tasks: ["fix failing test"],
+        ablations: [...ablations],
+        repetitions: 1,
+        outputDir: "matrix"
+      });
+      const manifest = JSON.parse(await readFile(result.manifestPath, "utf8")) as {
+        ablations: string[];
+        ablationSettings: Record<string, { strategyMemoryEnabled: boolean; failureMemoryWriteEnabled: boolean; injectFailureCorrections: boolean; memoryPolicyOverride?: string }>;
+      };
+      const retrievalRows = (await readFile(result.retrievalDecisionsPath, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { ablation: string; memoryPolicy: string });
+
+      expect(manifest.ablations).toEqual([...ablations]);
+      expect(manifest.ablationSettings.memory_off).toMatchObject({ strategyMemoryEnabled: false, failureMemoryWriteEnabled: false });
+      expect(manifest.ablationSettings.write_only).toMatchObject({ strategyMemoryEnabled: false, failureMemoryWriteEnabled: true });
+      expect(manifest.ablationSettings.success_memory_only).toMatchObject({ strategyMemoryEnabled: true, failureMemoryWriteEnabled: false, injectFailureCorrections: false });
+      expect(manifest.ablationSettings.failure_memory_only).toMatchObject({ strategyMemoryEnabled: true, failureMemoryWriteEnabled: true, injectFailureCorrections: true });
+      expect(manifest.ablationSettings.random_memory_control?.memoryPolicyOverride).toBe("random_control");
+      expect(result.trials.find((trial) => trial.ablation === "memory_off")?.memoryUpdateStatus).toBe("skipped_ablation");
+      expect(result.trials.find((trial) => trial.ablation === "write_only")?.memoryUpdateStatus).not.toBe("skipped_ablation");
+      expect(retrievalRows.find((row) => row.ablation === "random_memory_control")?.memoryPolicy).toBe("random_control");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
