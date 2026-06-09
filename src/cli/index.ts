@@ -14,7 +14,7 @@ import { prefsCommand } from "./commands/prefs.js";
 import { drillCommand } from "./commands/drill.js";
 import { benchmarkCommand } from "./commands/benchmark.js";
 import { workflowCommand } from "./commands/workflow.js";
-import { memoryCommand, memoryExplainCommand, memoryFailuresCommand, memoryShowCommand } from "./commands/memory.js";
+import { memoryCommand, memoryCompactCommand, memoryDeleteCommand, memoryExplainCommand, memoryExportCommand, memoryFailuresCommand, memoryPreviewCommand, memoryShowCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
@@ -191,6 +191,14 @@ const memoryShow = memory.command("show").description("Show one failure memory b
 memoryShow.action((id: string) => memoryShowCommand(cwd, id, memoryShow.opts() as { json?: boolean; includeStale?: boolean }));
 const memoryExplain = memory.command("explain").description("Explain which failure memories apply to a task").argument("<task>", "task goal or natural-language problem").option("--limit <n>", "number of selected memories", "5").option("--json", "print machine-readable JSON");
 memoryExplain.action((task: string) => memoryExplainCommand(cwd, task, memoryExplain.opts() as { limit?: string; json?: boolean }));
+const memoryPreview = memory.command("preview").description("Preview the failure memory record that would be stored for a saved session").argument("<session-id>", "session id").option("--json", "print machine-readable JSON");
+memoryPreview.action((sessionId: string) => memoryPreviewCommand(cwd, sessionId, memoryPreview.opts() as { json?: boolean }));
+const memoryExport = memory.command("export").description("Export failure memories as JSON").option("--output <file>", "write JSON to a file instead of stdout").option("--include-stale", "include stale records rejected by lifecycle policy");
+memoryExport.action(() => memoryExportCommand(cwd, memoryExport.opts() as { output?: string; includeStale?: boolean }));
+const memoryDelete = memory.command("delete").description("Delete one failure memory by id or goal fingerprint").argument("<id>", "failure memory id or goal fingerprint");
+memoryDelete.action((id: string) => memoryDeleteCommand(cwd, id));
+const memoryCompact = memory.command("compact").description("Remove stale failure memories and optionally cap retained records").option("--keep-stale", "keep stale records while applying the limit").option("--limit <n>", "maximum retained records").option("--json", "print machine-readable JSON");
+memoryCompact.action(() => memoryCompactCommand(cwd, memoryCompact.opts() as { keepStale?: boolean; limit?: string; json?: boolean }));
 
 const experiment = program.command("experiment").description("Run deterministic workflow experiments and export reproducible bundles");
 experiment

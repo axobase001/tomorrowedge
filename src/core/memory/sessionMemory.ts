@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
-import { appendLearnedTaskMemory } from "./taskMemory.js";
+import { appendLearnedTaskMemory, type FailureMemoryPolicyInput } from "./taskMemory.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { redactSessionRecord } from "../../safety/providerRedaction.js";
 import { log } from "../../utils/logger.js";
@@ -20,7 +20,11 @@ export type LatestSessionPointer = {
   goal?: string;
 };
 
-export async function saveSession(cwd: string, state: AgentGraphState): Promise<string> {
+export type SaveSessionOptions = {
+  failureMemory?: FailureMemoryPolicyInput;
+};
+
+export async function saveSession(cwd: string, state: AgentGraphState, options: SaveSessionOptions = {}): Promise<string> {
   const sessionId = state.sessionId;
   const safeState = redactSessionRecord(state);
   const record: SessionRecord = redactSessionRecord({
@@ -43,7 +47,7 @@ export async function saveSession(cwd: string, state: AgentGraphState): Promise<
     await mkdir(path.dirname(artifactPath), { recursive: true });
     await writeFile(artifactPath, artifact.content, "utf8");
   }
-  await appendLearnedTaskMemory(cwd, safeState);
+  await appendLearnedTaskMemory(cwd, safeState, { failureMemory: options.failureMemory });
   await writeLatestSessionPointer(cwd, safeState);
   return filePath;
 }

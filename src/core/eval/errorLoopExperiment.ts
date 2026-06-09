@@ -230,6 +230,13 @@ async function runTrial(input: {
     strategy_memory: {
       ...defaultConfig.strategy_memory,
       enabled: input.ablation === "memory_on"
+    },
+    failure_memory: {
+      ...defaultConfig.failure_memory,
+      enabled: input.ablation === "memory_on",
+      storage_scope: "experiment" as const,
+      redaction: "artifact_refs" as const,
+      retention_days: 30
     }
   };
   const state = await runOfflineGraph(trialCwd, input.task, config, { fixtureMode: true, provider: "fixture" });
@@ -241,7 +248,7 @@ async function runTrial(input: {
   if (input.ablation === "memory_on") {
     const before = await readFailureMemories(trialCwd, 200);
     const beforeById = new Map(before.map((record) => [record.id, record]));
-    sessionPath = await saveSession(trialCwd, state);
+    sessionPath = await saveSession(trialCwd, state, { failureMemory: { ...config.failure_memory, experimentId: path.basename(input.outputDir) } });
     const after = await readFailureMemories(trialCwd, 200);
     const newRecords = after.filter((record) => !beforeById.has(record.id));
     const updatedRecords = after.filter((record) => {

@@ -82,7 +82,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
   }
   const state = await backend.runGraph(workspace.executionCwd, effectiveGoal, backendInput.options);
-  const sessionPath = await saveSession(targetCwd, state);
+  const sessionPath = await saveSession(targetCwd, state, { failureMemory: config.failure_memory });
   if (options.headless) {
     const headlessPayload = {
       sessionPath,

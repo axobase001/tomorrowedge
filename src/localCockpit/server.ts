@@ -265,14 +265,14 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const backend = createOrchestrationBackend(config);
       void runCockpitBackend(backend, workspace.executionCwd, goal, options)
         .then(async (state) => {
-          await saveSession(cwd, state);
+          await saveSession(cwd, state, { failureMemory: config.failure_memory });
           cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
         })
         .catch(async (error) => {
           const message = error instanceof Error ? error.message : String(error);
           const failedState = markLiveRunFailed(liveState, message);
           try {
-            await saveSession(cwd, failedState);
+            await saveSession(cwd, failedState, { failureMemory: config.failure_memory });
           } catch (saveError) {
             log("warn", `Failed to save failed live cockpit session ${sessionId}: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
             // The live cockpit should still expose the in-memory failure snapshot.
@@ -293,7 +293,8 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       validateApprovalIntent(cwd, session.state, parsedIntent);
       const intent = recordApprovalIntent(parsedIntent);
       const result = await executeCockpitApprovalAction(cwd, session.state, intent);
-      await saveSession(cwd, result.state);
+      const { config } = await resolveRuntimeConfig(cwd);
+      await saveSession(cwd, result.state, { failureMemory: config.failure_memory });
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
       return sendJson(response, 200, {
         status: "applied",

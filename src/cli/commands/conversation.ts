@@ -18,7 +18,7 @@ export async function targetsCommand(cwd: string): Promise<void> {
 export async function askCommand(cwd: string, message: string, options: { to?: string; headless?: boolean } = {}): Promise<void> {
   const config = loadConfig(cwd);
   const state = createConversationSession({ message, target: options.to, config });
-  const sessionPath = await saveSession(cwd, state);
+  const sessionPath = await saveSession(cwd, state, { failureMemory: config.failure_memory });
   if (options.headless) {
     process.stdout.write(JSON.stringify({ sessionPath, conversationTarget: state.conversationTarget, summary: state.finalSummary }, null, 2) + "\n");
     return;
