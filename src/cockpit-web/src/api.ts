@@ -208,8 +208,7 @@ export function cockpitLiveEventsUrl(sessionId: string, options: CockpitApiOptio
 
 function apiUrl(path: string, options: CockpitApiOptions): string {
   const base = options.apiBase?.replace(/\/$/, "") ?? "";
-  const separator = path.includes("?") ? "&" : "?";
-  return `${base}${path}${options.nonce ? `${separator}nonce=${encodeURIComponent(options.nonce)}` : ""}`;
+  return `${base}${path}`;
 }
 
 function apiHeaders(options: CockpitApiOptions, extra: Record<string, string> = {}): Record<string, string> {

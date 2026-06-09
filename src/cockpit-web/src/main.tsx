@@ -485,9 +485,10 @@ function writeLanguage(language: GuiLanguage): void {
 
 function readApiOptions(): CockpitApiOptions {
   const params = new URLSearchParams(window.location.search);
+  const runtime = (window as unknown as { __TOMORROWEDGE_COCKPIT__?: { nonce?: string; apiBase?: string } }).__TOMORROWEDGE_COCKPIT__;
   return {
-    nonce: params.get("nonce") ?? "",
-    apiBase: params.get("api") ?? undefined
+    nonce: runtime?.nonce ?? "",
+    apiBase: runtime?.apiBase ?? params.get("api") ?? undefined
   };
 }
 

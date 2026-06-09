@@ -5,6 +5,7 @@ export type ProviderConnectionResult = {
   status: "ok" | "failed" | "skipped";
   httpStatus?: number;
   url?: string;
+  testedModel?: string;
   detail: string;
 };
 
@@ -26,24 +27,23 @@ export async function testProviderConnection(id: string, provider: ProviderConfi
   if (provider.auth_header !== "none" && !key) {
     return { id, status: "failed", detail: `missing env ${provider.api_key_env ?? "API key"}` };
   }
-  const url = providerCatalogUrl(id, provider.base_url);
+  if (!provider.model) return { id, status: "failed", detail: "model missing" };
+  if (id === "ollama" && provider.model === "local-auto") {
+    return { id, status: "skipped", detail: "select a concrete Ollama model before running a selected-model smoke test" };
+  }
+  const smoke = providerSmokeRequest(id, provider, key);
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        ...providerHeaders(id, provider.auth_header, key),
-        ...(provider.extra_headers ?? {})
-      }
-    });
+    const response = await fetch(smoke.url, smoke.init);
     return {
       id,
       status: response.status >= 200 && response.status < 300 ? "ok" : "failed",
       httpStatus: response.status,
-      url,
-      detail: response.ok ? "HTTP 2xx from model catalog endpoint" : trimDetail(await response.text().catch(() => ""))
+      url: smoke.url,
+      testedModel: provider.model,
+      detail: response.ok ? `HTTP 2xx from selected model smoke endpoint (${provider.model})` : trimDetail(await response.text().catch(() => ""))
     };
   } catch (error) {
-    return { id, status: "failed", url, detail: error instanceof Error ? error.message : String(error) };
+    return { id, status: "failed", url: smoke.url, testedModel: provider.model, detail: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -53,9 +53,70 @@ function authHeaders(authHeader: ProviderAuthHeader, key?: string): Record<strin
   return { Authorization: `Bearer ${key}` };
 }
 
-function providerCatalogUrl(id: string, baseUrl: string): string {
-  const base = baseUrl.replace(/\/$/, "");
-  return `${base}/models`;
+function providerSmokeRequest(id: string, provider: ProviderConfig, key?: string): { url: string; init: RequestInit } {
+  const base = provider.base_url.replace(/\/$/, "");
+  const commonHeaders = {
+    "Content-Type": "application/json",
+    ...providerHeaders(id, provider.auth_header, key),
+    ...(provider.extra_headers ?? {})
+  };
+  if (id === "anthropic") {
+    return {
+      url: `${base}/messages`,
+      init: {
+        method: "POST",
+        headers: commonHeaders,
+        body: JSON.stringify({
+          model: provider.model,
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }]
+        })
+      }
+    };
+  }
+  if (id === "gemini") {
+    const model = provider.model.replace(/^models\//, "");
+    return {
+      url: `${base}/models/${encodeURIComponent(model)}:generateContent`,
+      init: {
+        method: "POST",
+        headers: commonHeaders,
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 1, temperature: 0 }
+        })
+      }
+    };
+  }
+  if (id === "ollama") {
+    return {
+      url: `${base}/api/generate`,
+      init: {
+        method: "POST",
+        headers: commonHeaders,
+        body: JSON.stringify({
+          model: provider.model === "local-auto" ? "" : provider.model,
+          prompt: "ping",
+          stream: false,
+          options: { num_predict: 1, temperature: 0 }
+        })
+      }
+    };
+  }
+  const tokenField = provider.api_format === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
+  return {
+    url: `${base}/chat/completions`,
+    init: {
+      method: "POST",
+      headers: commonHeaders,
+      body: JSON.stringify({
+        model: provider.model,
+        messages: [{ role: "user", content: "ping" }],
+        temperature: 0,
+        [tokenField]: 1
+      })
+    }
+  };
 }
 
 function providerHeaders(id: string, authHeader: ProviderAuthHeader, key?: string): Record<string, string> {

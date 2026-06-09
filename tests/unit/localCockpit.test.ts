@@ -22,13 +22,19 @@ describe("local cockpit server", () => {
     const server = await startLocalCockpitServer(cwd, { port: 0, webRoot: false });
     try {
       const health = await fetch(`${server.url}/health`).then((response) => response.json()) as { ok: boolean };
-      const html = await fetch(server.url).then((response) => response.text());
+      const shell = await fetch(server.url);
+      const html = await shell.text();
       const icon = await fetch(`${server.url}/icon.svg`).then((response) => response.text());
       const manifest = await fetch(`${server.url}/manifest.webmanifest`).then((response) => response.json()) as { name: string; icons: Array<{ src: string }> };
       const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
+      const cookieSessions = await fetch(`${server.url}/api/sessions`, { headers: { cookie: shell.headers.get("set-cookie") ?? "" } }).then((response) => response.json()) as unknown[];
 
+      expect(server.openUrl).toBe(server.url);
+      expect(server.openUrl).not.toContain("nonce=");
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).toContain("__TOMORROWEDGE_COCKPIT__");
+      expect(html).not.toContain('searchParams.get("nonce")');
       expect(html).toContain('href="/icon.svg"');
       expect(html).toContain('href="/manifest.webmanifest"');
       expect(html).toContain("mark-top");
@@ -46,6 +52,7 @@ describe("local cockpit server", () => {
       expect(html).toContain("event.isComposing");
       expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
+      expect(cookieSessions).toEqual([]);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
@@ -677,6 +684,41 @@ describe("local cockpit server", () => {
       expect(models).toContainEqual(expect.objectContaining({ id: "deepseek-chat", source: "static" }));
     } finally {
       await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("discovers configured non-OpenRouter provider models before static fallback", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-dynamic-models-"));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      expect(String(input)).toBe("https://api.deepseek.example/v1/models");
+      return new Response(JSON.stringify({
+        data: [
+          { id: "deepseek-live-a", name: "DeepSeek Live A" },
+          { id: "deepseek-live-b", name: "DeepSeek Live B" }
+        ]
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      await writeConfig(cwd, {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          deepseek: {
+            ...defaultConfig.providers.deepseek,
+            enabled: true,
+            base_url: "https://api.deepseek.example/v1",
+            auth_header: "none"
+          }
+        }
+      });
+      const models = await listCockpitProviderModels(cwd, "deepseek", 5);
+
+      expect(models).toContainEqual(expect.objectContaining({ id: "deepseek-live-a", source: "catalog" }));
+      expect(models).not.toContainEqual(expect.objectContaining({ id: "deepseek-chat", source: "static" }));
+    } finally {
+      globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });
     }
   });

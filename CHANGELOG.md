@@ -16,6 +16,9 @@ workflow usability, session management, and stronger debate orchestration.
 
 - OpenRouter model canonicalization for GUI/setup/role saves, including display
   labels such as `MoonshotAI: Kimi K2.6 (free)` and stale Kimi K2 defaults.
+- Dynamic model discovery for OpenAI-compatible provider families beyond
+  OpenRouter, including DeepSeek, Kimi, MiMo, Anthropic, Gemini, Ollama, and
+  custom gateways, with static fallback suggestions when catalog calls fail.
 - Clickable artifact links in the GUI detail drawer and task-goal labels in the
   saved-session selector.
 - Local cockpit session rename/delete API and GUI controls.
@@ -40,10 +43,22 @@ workflow usability, session management, and stronger debate orchestration.
 
 - OpenRouter free-model display labels are no longer stored as invalid model IDs
   that later fall back to mock execution.
+- Provider connection tests now smoke-test the selected configured model instead
+  of only checking catalog access.
 - Missing sessions now return `404` from local cockpit session routes instead of
   bubbling into generic server failures.
 - Flat legacy session records are deleted as files rather than deleting the
   entire sessions directory.
+- Local cockpit and desktop launch URLs no longer include the per-process nonce
+  in the browser address bar; generated clients use runtime config plus
+  cookie/header auth, with query nonce kept only for old-link compatibility.
+- Role-specific strong-agent budgets now still debit the global strong-agent
+  pool, preventing reviewer/judge/planner calls from bypassing the task budget.
+- Parallel candidate execution now normalizes candidate-stage agent state before
+  review, so asynchronous coder completion order cannot reorder the workflow.
+- Document-only deliverables such as `.md`/`.html` files no longer default to a
+  full repository `npm test` verification run that can mislabel a successful
+  document patch as failed.
 
 ## [1.2.13] - 2026-06-09
 
@@ -459,7 +474,7 @@ fixture demo, or unavailable API state.
 ### Added
 
 - `npm run e2e:cockpit`, which starts the compiled `tedge client --no-open
-  --port 0` entrypoint, parses the nonce URL, opens Chromium through
+  --port 0` entrypoint, opens the local cockpit URL, opens Chromium through
   Playwright, submits a fixture task, waits for approval state, opens the
   detail drawer, and checks responsive layouts at 1440, 1180, 768, and 390px.
 - CI coverage for the cockpit e2e smoke on the Node 20 lane, including Chromium

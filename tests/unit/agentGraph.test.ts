@@ -53,6 +53,9 @@ describe("offline agent graph", () => {
     expect(coderB?.status).toBe("success");
     expect(Math.abs(Date.parse(coderA!.startedAt!) - Date.parse(coderB!.startedAt!))).toBeLessThan(50);
     expect(state.candidates.map((candidate) => candidate.agentId).slice(0, 2)).toEqual(["coder_a", "coder_b"]);
+    expect(state.agents.map((agent) => agent.role)).toEqual(expect.arrayContaining(["coder_a", "coder_b", "reviewer"]));
+    expect(state.agents.findIndex((agent) => agent.role === "coder_a")).toBeLessThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
+    expect(state.agents.findIndex((agent) => agent.role === "reviewer")).toBeGreaterThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
   });
 
   it("reuses planner and explorer results while invalidating explorer on repo changes", async () => {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
+import { fetchProviderModelCatalog } from "../providers/modelCatalog.js";
 import { canonicalizeOpenRouterModelId, fetchOpenRouterCatalog, recommendFreeOpenRouterModels } from "../providers/openrouterCatalog.js";
 import { log } from "../utils/logger.js";
 
@@ -200,18 +201,37 @@ export async function listCockpitProviderModels(cwd: string, providerIdValue: st
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(providerIdValue);
   const provider = providerConfigForSetup(config, providerId);
-  if (providerId !== "openrouter") return staticModelOptionsFor(providerId);
   const localEnv = readLocalEnvMap(cwd);
   const apiKey = provider.api_key_env ? process.env[provider.api_key_env] ?? localEnv.get(provider.api_key_env) : undefined;
-  const catalog = await fetchOpenRouterCatalog(provider, apiKey);
-  return recommendFreeOpenRouterModels(catalog, { limit: Math.max(1, Math.min(limit, 50)), preferKimi: true }).map((model) => ({
-    id: model.id,
-    label: `${model.name ?? model.id}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}`,
-    source: "catalog",
-    isFree: model.isFree,
-    isLowCost: model.isLowCost,
-    tags: model.tags
-  }));
+  if (providerId !== "openrouter") {
+    try {
+      const catalog = await fetchProviderModelCatalog(providerId, provider, apiKey);
+      const normalized = catalog.slice(0, Math.max(1, Math.min(limit, 50))).map((model) => ({
+        id: model.id,
+        label: model.label ?? model.id,
+        source: "catalog" as const,
+        tags: model.tags
+      }));
+      if (normalized.length) return normalized;
+    } catch (error) {
+      log("warn", `Falling back to static ${providerId} models: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return staticModelOptionsFor(providerId);
+  }
+  try {
+    const catalog = await fetchOpenRouterCatalog(provider, apiKey);
+    return recommendFreeOpenRouterModels(catalog, { limit: Math.max(1, Math.min(limit, 50)), preferKimi: true }).map((model) => ({
+      id: model.id,
+      label: `${model.name ?? model.id}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}`,
+      source: "catalog",
+      isFree: model.isFree,
+      isLowCost: model.isLowCost,
+      tags: model.tags
+    }));
+  } catch (error) {
+    log("warn", `Falling back to static OpenRouter models: ${error instanceof Error ? error.message : String(error)}`);
+    return staticModelOptionsFor(providerId);
+  }
 }
 
 export async function deleteCockpitProviderKey(cwd: string, providerIdValue: string): Promise<CockpitSetupStatus> {
@@ -353,6 +373,7 @@ function staticModelOptionsFor(providerId: string): CockpitProviderModelOption[]
     mimo: ["mimo-v2.5-pro"],
     anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
     gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
+    ollama: ["llama3.2", "qwen2.5-coder", "deepseek-r1"],
     openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
   };
   return (options[providerId] ?? []).map((id) => ({

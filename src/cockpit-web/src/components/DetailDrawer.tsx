@@ -55,9 +55,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
 }
 
 function artifactHref(sessionId: string | undefined, ref: string): string {
-  const nonce = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("nonce") : "";
-  const query = nonce ? `?nonce=${encodeURIComponent(nonce)}` : "";
-  return `/api/sessions/${encodeURIComponent(sessionId ?? "latest")}/artifacts/${encodeURIComponent(ref)}${query}`;
+  return `/api/sessions/${encodeURIComponent(sessionId ?? "latest")}/artifacts/${encodeURIComponent(ref)}`;
 }
 
 function formatRoleGraph(viewModel: CockpitViewModel): string {

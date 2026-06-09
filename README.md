@@ -47,7 +47,7 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 当前版本：`1.2.14`。
 
-- `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
+- `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, model discovery now refreshes common non-OpenRouter providers, provider tests smoke-test the selected model, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, local cockpit URLs no longer expose nonce tokens in the address bar, strong-agent role budgets now also debit the global strong-agent pool, parallel candidate state is normalized before review, document-only deliverables avoid irrelevant repository test runs, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
 - `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
 - `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
 - `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
@@ -66,7 +66,7 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 - `1.1.9` GUI detail drawer now includes a capability dashboard backed by a product registry for workflow ledger, provider routing, evidence/budget/cost telemetry, MCP external agents, orchestration adapters, and GUI readiness.
 - `1.1.8` GUI detail drawer now includes an approval-history timeline with approvalId, actor/source, blocked-progress reason, diff/output refs, undo snapshots, and patch/shell/pending/completed filter tags.
 - `1.1.7` GUI session source badges now distinguish live session, saved snapshot, fixture demo, and API unavailable states, with connection, fixture, and stale snapshot markers.
-- `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开 nonce URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
+- `1.1.6` 新增正式 GUI cockpit E2E smoke：CI 会启动编译后的 `tedge client --no-open --port 0`，用 Playwright 打开本地 cockpit URL，提交 fixture 任务，等待 approval，打开 drawer，并检查 1440/1180/768/390px 无横向溢出；失败时上传截图、trace 和脱敏 server log。
 
 - `1.1.5` 是 GitHub issue 队列加固版：合并 local cockpit API 安全校验、React GUI client 接入、desktop launcher 生命周期测试、package zip/pack smoke、README promise map，并补上 CLI contract 测试与 benchmark demo 警告。
 
@@ -566,7 +566,7 @@ distinguishes live sessions, saved snapshots, fixture demos, and API-unavailable
 states, and the GUI top bar shows connection, fixture, and stale snapshot badges.
 
 `1.1.6` adds the first real GUI cockpit E2E smoke. CI starts the compiled
-`tedge client --no-open --port 0` entrypoint, opens the nonce URL with
+`tedge client --no-open --port 0` entrypoint, opens the local cockpit URL with
 Playwright, submits a fixture task, waits for approval, opens the drawer, and
 checks 1440/1180/768/390px layouts for horizontal overflow. Failures upload
 screenshots, trace zips, and redacted server logs.

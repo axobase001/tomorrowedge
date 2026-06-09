@@ -65,7 +65,7 @@ export async function startLocalCockpitServer(cwd: string, options: LocalCockpit
   return {
     server,
     url,
-    openUrl: `${url}/?nonce=${encodeURIComponent(nonce)}`,
+    openUrl: url,
     nonce,
     requestedPort,
     port,
@@ -116,7 +116,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/cockpit")) {
-      return sendCockpitShell(response, webRoot);
+      return sendCockpitShell(response, nonce, webRoot);
     }
     if (request.method === "GET" && url.pathname.startsWith("/assets/")) {
       const sent = await sendCockpitAsset(response, url.pathname, webRoot);
@@ -673,20 +673,32 @@ async function resolveMutableSessionId(cwd: string, sessionId: string): Promise<
   return session.sessionId;
 }
 
-async function sendCockpitShell(response: ServerResponse, webRoot?: string | false): Promise<void> {
+async function sendCockpitShell(response: ServerResponse, nonce: string, webRoot?: string | false): Promise<void> {
   const root = await resolveCockpitWebRoot(webRoot);
   if (root) {
     const indexPath = safeStaticFilePath(root, "index.html");
     if (indexPath) {
       try {
-        return send(response, 200, await readFile(indexPath, "utf8"), "text/html; charset=utf-8");
+        return sendCockpitHtml(response, await readFile(indexPath, "utf8"), nonce);
       } catch (error) {
         log("warn", `Falling back to embedded cockpit HTML because built index could not be read: ${error instanceof Error ? error.message : String(error)}`);
         // Fall back to the embedded client when a stale build directory is missing index.html.
       }
     }
   }
-  return send(response, 200, renderCockpitHtml(), "text/html; charset=utf-8");
+  return sendCockpitHtml(response, renderCockpitHtml(nonce), nonce);
+}
+
+function sendCockpitHtml(response: ServerResponse, html: string, nonce: string): void {
+  const runtimeScript = `<script>window.__TOMORROWEDGE_COCKPIT__=${JSON.stringify({ nonce })};</script>`;
+  const body = html.includes("</head>") ? html.replace("</head>", `${runtimeScript}</head>`) : `${runtimeScript}${html}`;
+  response.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "set-cookie": `tomorrowedge_nonce=${encodeURIComponent(nonce)}; Path=/api; SameSite=Strict; HttpOnly`
+  });
+  response.end(body);
 }
 
 async function sendCockpitAsset(response: ServerResponse, pathname: string, webRoot?: string | false): Promise<boolean> {

@@ -1,4 +1,4 @@
-﻿export function renderCockpitHtml(): string {
+﻿export function renderCockpitHtml(nonce = ""): string {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -104,7 +104,7 @@
     </div>
     <div id="drawer-content"></div>
   </aside>
-  <script>${cockpitJs()}</script>
+  <script>${cockpitJs(nonce)}</script>
 </body>
 </html>`;
 }
@@ -661,11 +661,10 @@ textarea {
   }
 }`;
 }
-
-function cockpitJs(): string {
+function cockpitJs(nonce = ""): string {
   return `
 const el = (id) => document.getElementById(id);
-const nonce = new URLSearchParams(location.search).get("nonce") || "";
+const nonce = window.__TOMORROWEDGE_COCKPIT__?.nonce || ${JSON.stringify(nonce)};
 let selectedSession = "latest";
 let currentVm = null;
 let liveSource = null;
@@ -910,8 +909,7 @@ async function fetchJson(url) {
   return response.json();
 }
 function withToken(url) {
-  if (!nonce || !url.startsWith("/api/")) return url;
-  return url + (url.includes("?") ? "&" : "?") + "nonce=" + encodeURIComponent(nonce);
+  return url;
 }
 function apiHeaders(extra = {}) {
   return nonce ? { ...extra, "x-tomorrowedge-token": nonce } : extra;

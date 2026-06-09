@@ -19,6 +19,7 @@ export type BudgetGateDecision = {
   assignment: RouteAssignment;
   fallbackAssignment?: RouteAssignment;
   scope: "global_strong_pool" | "per_role" | "efficient";
+  consumesGlobal: boolean;
   estimatedCostUsd?: number;
   remainingCalls?: number;
 };
@@ -28,6 +29,7 @@ export type BudgetReservation = {
   role: AgentRole;
   phase: EventPhase;
   scope: BudgetGateDecision["scope"];
+  consumesGlobal: boolean;
   committed: boolean;
   released: boolean;
 };
@@ -76,6 +78,7 @@ export function evaluateRoleInvocation(input: {
       reason: decision.reason,
       assignment: input.assignment,
       scope: decision.scope,
+      consumesGlobal: decision.consumesGlobal,
       estimatedCostUsd: decision.estimatedCostUsd,
       remainingCalls: decision.remainingCalls
     };
@@ -88,6 +91,7 @@ export function evaluateRoleInvocation(input: {
     assignment: input.assignment,
     fallbackAssignment: input.canFallback ? nativeFallbackAssignment(input.role, input.assignment) : undefined,
     scope: decision.scope,
+    consumesGlobal: decision.consumesGlobal,
     estimatedCostUsd: decision.estimatedCostUsd,
     remainingCalls: decision.remainingCalls
   };
@@ -99,6 +103,7 @@ export function reserveRoleCall(runtime: BudgetRuntimeState, decision: BudgetGat
     role: decision.role,
     phase: decision.phase,
     scope: decision.scope,
+    consumesGlobal: decision.consumesGlobal,
     committed: false,
     released: false
   };
@@ -111,7 +116,8 @@ export function commitRoleCall(runtime: BudgetRuntimeState, reservation: BudgetR
   reservation.committed = true;
   if (reservation.scope === "per_role") {
     runtime.roleCallsUsed[reservation.role] = (runtime.roleCallsUsed[reservation.role] ?? 0) + 1;
-  } else if (reservation.scope === "global_strong_pool") {
+  }
+  if (reservation.consumesGlobal || reservation.scope === "global_strong_pool") {
     runtime.strongAgentCallsUsed += 1;
   }
 }

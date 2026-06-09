@@ -21,8 +21,15 @@ describe("adaptive planning and governance policies", () => {
     expect(feature.steps.length).toBeGreaterThan(4);
   });
 
-  it("supports independent per-role budget limits", () => {
-    const allowed = allocateStrongAgentCall("reviewer", 99, defaultStrongAgentBudget, {
+  it("does not run repository test commands for document-only deliverables", () => {
+    const plan = parseGoalToPlan("create assignments/ramsey-six-people/proof.md and assignments/ramsey-six-people/proof.html");
+
+    expect(plan.taskType).toBe("feature");
+    expect(plan.verificationCommands).toEqual([]);
+  });
+
+  it("supports per-role budget limits while the global strong pool has room", () => {
+    const allowed = allocateStrongAgentCall("reviewer", 1, { ...defaultStrongAgentBudget, maxCallsPerTask: 100 }, {
       estimatedCostUsd: 0.4,
       roleBudget: { maxCostPerCallUsd: 0.5, maxCallsPerTask: 2 },
       roleUsedCalls: 1

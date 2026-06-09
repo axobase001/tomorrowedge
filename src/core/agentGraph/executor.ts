@@ -421,7 +421,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       });
       ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
+  const candidateAgentStartIndex = state.agents.length;
   const candidateResults = await Promise.allSettled(candidateJobs.map((job) => job.run()));
+  normalizeCandidateAgentOrder(state, candidateAgentStartIndex, candidateJobs.map((job) => job.label));
   for (const [index, result] of candidateResults.entries()) {
     const label = candidateJobs[index]?.label ?? "candidate";
     if (result.status === "rejected") {
@@ -1064,6 +1066,23 @@ async function maybeRunGovernedReadOnlyAdvisory(input: {
   input.state.modelNotes.push(...advisoryNotes);
   input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
   recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
+}
+
+function normalizeCandidateAgentOrder(state: AgentGraphState, startIndex: number, labels: string[]): void {
+  const roleOrder = new Map<AgentRole, number>();
+  for (const [index, label] of labels.entries()) {
+    if (label === "coder_a" || label === "coder_b") roleOrder.set(label, index);
+  }
+  if (!roleOrder.size || startIndex >= state.agents.length) return;
+  const before = state.agents.slice(0, startIndex);
+  const candidateStage = state.agents.slice(startIndex);
+  candidateStage.sort((left, right) => {
+    const leftOrder = roleOrder.get(left.role) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = roleOrder.get(right.role) ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+    return left.id.localeCompare(right.id);
+  });
+  state.agents = [...before, ...candidateStage];
 }
 
 async function maybeRunPreJudgeModelDebate(input: {

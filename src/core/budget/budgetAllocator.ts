@@ -9,6 +9,7 @@ export type BudgetDecision = {
   estimatedCostUsd?: number;
   escalationSignals: string[];
   scope: "global_strong_pool" | "per_role" | "efficient";
+  consumesGlobal: boolean;
 };
 
 export type StrongAgentAllocationInput = {
@@ -22,11 +23,27 @@ export type StrongAgentAllocationInput = {
 };
 
 export function allocateStrongAgentCall(role: AgentRole, usedCalls: number, config: StrongAgentBudgetConfig = defaultStrongAgentBudget, input: StrongAgentAllocationInput = {}): BudgetDecision {
+  const escalationSignals = (input.escalationSignals ?? []).filter((signal) => config.escalateOn.includes(signal));
+  const consumesReserve = config.reserveForRoles.includes(role) || isStrongAgentRole(role) || escalationSignals.length > 0;
   if (input.roleBudget) {
     const roleUsedCalls = input.roleUsedCalls ?? 0;
     const maxCalls = input.roleBudget.maxCallsPerTask ?? Number.POSITIVE_INFINITY;
     const maxCost = input.roleBudget.maxCostPerCallUsd;
-    const remainingCalls = Number.isFinite(maxCalls) ? Math.max(0, maxCalls - roleUsedCalls) : Number.MAX_SAFE_INTEGER;
+    const roleRemainingCalls = Number.isFinite(maxCalls) ? Math.max(0, maxCalls - roleUsedCalls) : Number.MAX_SAFE_INTEGER;
+    const globalRemainingCalls = consumesReserve ? Math.max(0, config.maxCallsPerTask - usedCalls) : Number.MAX_SAFE_INTEGER;
+    const remainingCalls = Math.min(roleRemainingCalls, globalRemainingCalls);
+    if (consumesReserve && input.estimatedCostUsd !== undefined && input.estimatedCostUsd > config.maxCostUsd) {
+      return {
+        role,
+        allowed: false,
+        reason: `Strong-agent estimated cost $${input.estimatedCostUsd.toFixed(6)} exceeds strong_agents.max_cost_usd $${config.maxCostUsd.toFixed(6)}.`,
+        remainingCalls,
+        estimatedCostUsd: input.estimatedCostUsd,
+        escalationSignals,
+        scope: "per_role",
+        consumesGlobal: true
+      };
+    }
     if (maxCost !== undefined && input.estimatedCostUsd !== undefined && input.estimatedCostUsd > maxCost) {
       return {
         role,
@@ -34,24 +51,50 @@ export function allocateStrongAgentCall(role: AgentRole, usedCalls: number, conf
         reason: `Role ${role} estimated cost $${input.estimatedCostUsd.toFixed(6)} exceeds agents.${role}.budget.max_cost_per_call_usd $${maxCost.toFixed(6)}.`,
         remainingCalls,
         estimatedCostUsd: input.estimatedCostUsd,
-        escalationSignals: [],
-        scope: "per_role"
+        escalationSignals,
+        scope: "per_role",
+        consumesGlobal: consumesReserve
+      };
+    }
+    if (consumesReserve && globalRemainingCalls <= 0) {
+      return {
+        role,
+        allowed: false,
+        reason: `Strong-agent call budget exhausted before ${role}.`,
+        remainingCalls,
+        estimatedCostUsd: input.estimatedCostUsd,
+        escalationSignals,
+        scope: "per_role",
+        consumesGlobal: true
+      };
+    }
+    if (roleRemainingCalls <= 0) {
+      return {
+        role,
+        allowed: false,
+        reason: `Role-specific call budget exhausted before ${role}.`,
+        remainingCalls,
+        estimatedCostUsd: input.estimatedCostUsd,
+        escalationSignals,
+        scope: "per_role",
+        consumesGlobal: consumesReserve
       };
     }
     return {
       role,
-      allowed: remainingCalls > 0,
-      reason: remainingCalls > 0 ? `Role-specific budget allows ${role}; remaining role calls=${remainingCalls}.` : `Role-specific call budget exhausted before ${role}.`,
+      allowed: true,
+      reason: consumesReserve
+        ? `Role-specific budget allows ${role}; remaining role calls=${roleRemainingCalls}; global strong-agent remaining=${globalRemainingCalls}.`
+        : `Role-specific budget allows ${role}; remaining role calls=${roleRemainingCalls}.`,
       remainingCalls,
       estimatedCostUsd: input.estimatedCostUsd,
-      escalationSignals: [],
-      scope: "per_role"
+      escalationSignals,
+      scope: "per_role",
+      consumesGlobal: consumesReserve
     };
   }
-  const escalationSignals = (input.escalationSignals ?? []).filter((signal) => config.escalateOn.includes(signal));
-  const consumesReserve = config.reserveForRoles.includes(role) || isStrongAgentRole(role) || escalationSignals.length > 0;
   if (!consumesReserve) {
-    return { role, allowed: true, reason: "Efficient execution role does not consume strong-agent reserve.", remainingCalls: Math.max(0, config.maxCallsPerTask - usedCalls), estimatedCostUsd: input.estimatedCostUsd, escalationSignals, scope: "efficient" };
+    return { role, allowed: true, reason: "Efficient execution role does not consume strong-agent reserve.", remainingCalls: Math.max(0, config.maxCallsPerTask - usedCalls), estimatedCostUsd: input.estimatedCostUsd, escalationSignals, scope: "efficient", consumesGlobal: false };
   }
   if (input.estimatedCostUsd !== undefined && input.estimatedCostUsd > config.maxCostUsd) {
     return {
@@ -61,7 +104,8 @@ export function allocateStrongAgentCall(role: AgentRole, usedCalls: number, conf
       remainingCalls: Math.max(0, config.maxCallsPerTask - usedCalls),
       estimatedCostUsd: input.estimatedCostUsd,
       escalationSignals,
-      scope: "global_strong_pool"
+      scope: "global_strong_pool",
+      consumesGlobal: true
     };
   }
   const remainingCalls = Math.max(0, config.maxCallsPerTask - usedCalls);
@@ -72,6 +116,7 @@ export function allocateStrongAgentCall(role: AgentRole, usedCalls: number, conf
     remainingCalls,
     estimatedCostUsd: input.estimatedCostUsd,
     escalationSignals,
-    scope: "global_strong_pool"
+    scope: "global_strong_pool",
+    consumesGlobal: true
   };
 }
