@@ -1,7 +1,7 @@
 ﻿import path from "node:path";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitErrorLoopTimelineItem, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { buildCapabilityDashboard } from "./capabilityRegistry.js";
 import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
@@ -57,6 +57,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     approvalHistory,
     capabilities: buildCapabilityDashboard(state),
     memoryInfluence: buildMemoryInfluence(state),
+    errorLoopTimeline: buildErrorLoopTimeline(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -155,6 +156,112 @@ function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleG
     })),
     stopConditions: state.roleGraph.stopConditions
   };
+}
+
+function buildErrorLoopTimeline(state?: AgentGraphState): CockpitViewModel["errorLoopTimeline"] {
+  const relevantEvents = (state?.events ?? []).filter((event) => isErrorLoopEvent(event));
+  if (!relevantEvents.length) return undefined;
+  const items: CockpitErrorLoopTimelineItem[] = relevantEvents.map((event, index) => errorLoopItem(event, index));
+  const shellItems = items.filter((item) => item.kind === "verification");
+  return {
+    candidateAttempts: items.filter((item) => item.kind === "candidate").length,
+    failedVerifications: shellItems.filter((item) => item.status === "failed").length,
+    passedVerifications: shellItems.filter((item) => item.status === "passed").length,
+    repairAttempts: items.filter((item) => item.kind === "repair").length,
+    memoryRetrievals: items.filter((item) => item.kind === "memory").length,
+    stopReason: [...items].reverse().find((item) => item.kind === "stop")?.summary,
+    items
+  };
+}
+
+function isErrorLoopEvent(event: TomorrowEdgeEvent): boolean {
+  return event.type === "patch_candidate"
+    || event.type === "patch_apply"
+    || event.type === "shell_run"
+    || event.type === "repair_attempt"
+    || event.type === "memory_retrieval"
+    || event.type === "workflow_stop_reason";
+}
+
+function errorLoopItem(event: TomorrowEdgeEvent, index: number): CockpitErrorLoopTimelineItem {
+  const base = {
+    id: `${index}:${event.id}`,
+    timestamp: event.timestamp,
+    filesChanged: [] as string[],
+    artifactRefs: [] as string[],
+    memoryIds: [] as string[]
+  };
+  if (event.type === "patch_candidate") {
+    return {
+      ...base,
+      kind: "candidate",
+      status: "proposed",
+      title: event.approach === "repair" ? "Repair candidate proposed" : "Patch candidate proposed",
+      summary: event.summary,
+      candidateId: event.candidateId,
+      filesChanged: event.filesChanged,
+      artifactRefs: compactRefs([event.diffRef])
+    };
+  }
+  if (event.type === "patch_apply") {
+    return {
+      ...base,
+      kind: "patch_apply",
+      status: event.applied ? "applied" : "blocked",
+      title: event.phase === "repair" ? "Repair patch application" : "Patch application",
+      summary: event.error ?? `${event.filesChanged.length} file(s) changed`,
+      candidateId: event.candidateId,
+      filesChanged: event.filesChanged,
+      artifactRefs: compactRefs([event.diffRef])
+    };
+  }
+  if (event.type === "shell_run") {
+    return {
+      ...base,
+      kind: "verification",
+      status: event.success ? "passed" : event.success === false ? "failed" : "blocked",
+      title: event.success ? "Verification passed" : event.success === false ? "Verification failed" : "Verification blocked",
+      summary: event.error ?? `exit=${event.exitCode ?? "not recorded"}`,
+      command: event.command,
+      artifactRefs: compactRefs([event.stdoutRef, event.stderrRef]),
+      exitCode: event.exitCode,
+      durationMs: event.durationMs
+    };
+  }
+  if (event.type === "repair_attempt") {
+    return {
+      ...base,
+      kind: "repair",
+      status: event.applied === false ? "blocked" : "proposed",
+      title: event.applied === false ? "Repair attempt blocked" : "Repair attempt proposed",
+      summary: event.error ?? `${event.filesChanged.length} file(s) changed`,
+      candidateId: event.candidateId,
+      filesChanged: event.filesChanged,
+      artifactRefs: compactRefs([event.diffRef])
+    };
+  }
+  if (event.type === "memory_retrieval") {
+    return {
+      ...base,
+      kind: "memory",
+      status: event.selectedMemoryIds.length ? "used" : "blocked",
+      title: `Failure memory ${event.retrievalStage}`,
+      summary: event.summary,
+      artifactRefs: compactRefs([event.artifactRef]),
+      memoryIds: event.selectedMemoryIds
+    };
+  }
+  return {
+    ...base,
+    kind: "stop",
+    status: "stopped",
+    title: "Workflow stopped",
+    summary: event.type === "workflow_stop_reason" ? event.reason : eventSummary(event)
+  };
+}
+
+function compactRefs(refs: Array<string | undefined>): string[] {
+  return refs.filter((ref): ref is string => Boolean(ref));
 }
 
 function buildMemoryInfluence(state?: AgentGraphState): CockpitViewModel["memoryInfluence"] {

@@ -40,6 +40,27 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
           </section>
         )) : <span>-</span>}
       </div>
+      <h3>{t("drawer.errorLoopTimeline")}</h3>
+      <div className="te-error-loop-list" data-testid="drawer-error-loop-timeline">
+        {viewModel.errorLoopTimeline?.items.length ? (
+          <>
+            <p className="te-error-loop-summary">
+              candidates={viewModel.errorLoopTimeline.candidateAttempts} failures={viewModel.errorLoopTimeline.failedVerifications} repairs={viewModel.errorLoopTimeline.repairAttempts} memory={viewModel.errorLoopTimeline.memoryRetrievals}
+            </p>
+            {viewModel.errorLoopTimeline.items.map((item) => (
+              <section key={item.id} className={`te-error-loop-item ${item.status}`}>
+                <div><strong>{item.title}</strong> <span>{item.status}</span> <span>{item.kind}</span></div>
+                <p>{item.summary}</p>
+                {item.command ? <p>command={item.command}{item.exitCode === undefined ? "" : ` exit=${item.exitCode}`}</p> : null}
+                {item.candidateId ? <p>candidate={item.candidateId}</p> : null}
+                {item.filesChanged.length ? <p>files={item.filesChanged.join(", ")}</p> : null}
+                {item.memoryIds.length ? <p>memory={item.memoryIds.join(", ")}</p> : null}
+                {item.artifactRefs.length ? <p>artifacts={item.artifactRefs.join(", ")}</p> : null}
+              </section>
+            ))}
+          </>
+        ) : <span>-</span>}
+      </div>
       <h3>{t("drawer.capabilityDashboard")}</h3>
       <pre>{viewModel.capabilities.map((capability) => [
         `${capability.label} [${capability.status}]`,

@@ -848,6 +848,9 @@ injection points can be ablated independently with `failure_premortem`,
 `coder_constraints`, `review_guard`, and `repair_context`.
 The GUI detail drawer shows these as memory-influence cards with retrieved ids,
 role injection point, decision impact, violations/alignment, and artifact links.
+It also reconstructs an error-loop timeline from the shared event ledger,
+showing candidate attempts, patch application, failed/passed verification,
+repair attempts, memory retrieval, artifact refs, and the workflow stop reason.
 
 ```bash
 tedge memory failures

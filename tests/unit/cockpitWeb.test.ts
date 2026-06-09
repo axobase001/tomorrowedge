@@ -325,6 +325,50 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("href=\"/api/sessions/session_test/artifacts/artifacts%2Fmemory%2Fmemory_1.json\"");
   });
 
+  it("renders error-loop timeline cards in the detail drawer", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      errorLoopTimeline: {
+        candidateAttempts: 1,
+        failedVerifications: 1,
+        passedVerifications: 1,
+        repairAttempts: 1,
+        memoryRetrievals: 1,
+        stopReason: "repair applied and verification passed",
+        items: [{
+          id: "shell_failed",
+          timestamp: "2026-06-07T00:00:00.000Z",
+          kind: "verification",
+          status: "failed",
+          title: "Verification failed",
+          summary: "exit=1",
+          command: "npm test",
+          filesChanged: [],
+          artifactRefs: ["artifacts/stderr/failed.txt"],
+          exitCode: 1,
+          durationMs: 22,
+          memoryIds: []
+        }, {
+          id: "repair_memory",
+          timestamp: "2026-06-07T00:00:01.000Z",
+          kind: "memory",
+          status: "used",
+          title: "Failure memory repair_context",
+          summary: "repair context selected 1 memory",
+          filesChanged: [],
+          artifactRefs: ["artifacts/memory/repair_context.json"],
+          memoryIds: ["mem_validation"]
+        }]
+      }
+    });
+
+    expect(html).toContain("Error-loop timeline");
+    expect(html).toContain("data-testid=\"drawer-error-loop-timeline\"");
+    expect(html).toContain("Verification failed");
+    expect(html).toContain("mem_validation");
+    expect(html).toContain("artifacts/memory/repair_context.json");
+  });
+
   it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
     const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
     const fallback = renderCockpitHtml();

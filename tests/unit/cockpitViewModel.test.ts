@@ -6,6 +6,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { buildCockpitViewModel } from "../../src/cockpit/viewModel.js";
 import { buildAccessPolicy } from "../../src/core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../../src/core/agentGraph/state.js";
+import type { TomorrowEdgeEvent } from "../../src/core/events/eventTypes.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 
 describe("cockpit view model", () => {
@@ -105,6 +106,90 @@ describe("cockpit view model", () => {
     expect(vm.memoryInfluence?.rejectedCount).toBe(1);
     expect(vm.memoryInfluence?.cards[0]?.score).toBe(8);
     expect(vm.memoryInfluence?.cards.some((card) => card.stage === "review_guard" && card.alignment.length)).toBe(true);
+  });
+
+  it("projects verification failure, repair, and memory retrieval into an error-loop timeline", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      events: [
+        eventBase("event_candidate", "patch_candidate", {
+          phase: "coding",
+          role: "coder_a",
+          candidateId: "candidate_a",
+          approach: "minimal_patch",
+          summary: "Initial patch candidate.",
+          filesChanged: ["index.js"],
+          diffRef: "artifacts/diffs/candidate_a.patch",
+          estimatedRisk: "low"
+        }),
+        eventBase("event_apply", "patch_apply", {
+          phase: "patch",
+          role: "runner",
+          provider: "local_tool",
+          model: "patch",
+          candidateId: "candidate_a",
+          filesChanged: ["index.js"],
+          diffRef: "artifacts/diffs/candidate_a.patch",
+          undoSnapshotIds: ["undo_1"],
+          applied: true
+        }),
+        eventBase("event_shell_failed", "shell_run", {
+          phase: "shell",
+          role: "runner",
+          provider: "local_tool",
+          model: "shell",
+          command: "npm test",
+          cwd: process.cwd(),
+          exitCode: 1,
+          stdoutRef: "artifacts/stdout/failed.txt",
+          stderrRef: "artifacts/stderr/failed.txt",
+          durationMs: 22,
+          success: false
+        }),
+        eventBase("event_repair_memory", "memory_retrieval", {
+          phase: "repair",
+          role: "repairer",
+          retrievalStage: "repair_context",
+          selectedMemoryIds: ["mem_validation"],
+          rejectedCount: 0,
+          constraintCount: 1,
+          artifactRef: "artifacts/memory/repair_context.json",
+          summary: "repair context selected 1 memory"
+        }),
+        eventBase("event_repair", "repair_attempt", {
+          phase: "repair",
+          role: "repairer",
+          candidateId: "repair_candidate_a",
+          filesChanged: ["index.js"],
+          diffRef: "artifacts/diffs/repair.patch"
+        }),
+        eventBase("event_shell_passed", "shell_run", {
+          phase: "shell",
+          role: "runner",
+          provider: "local_tool",
+          model: "shell",
+          command: "npm test",
+          cwd: process.cwd(),
+          exitCode: 0,
+          stdoutRef: "artifacts/stdout/passed.txt",
+          stderrRef: "artifacts/stderr/passed.txt",
+          durationMs: 18,
+          success: true
+        }),
+        eventBase("event_stop", "workflow_stop_reason", {
+          phase: "summary",
+          reason: "repair applied and verification passed",
+          result: "completed"
+        })
+      ]
+    }));
+
+    expect(vm.errorLoopTimeline?.failedVerifications).toBe(1);
+    expect(vm.errorLoopTimeline?.passedVerifications).toBe(1);
+    expect(vm.errorLoopTimeline?.repairAttempts).toBe(1);
+    expect(vm.errorLoopTimeline?.memoryRetrievals).toBe(1);
+    expect(vm.errorLoopTimeline?.stopReason).toBe("repair applied and verification passed");
+    expect(vm.errorLoopTimeline?.items.map((item) => item.kind)).toEqual(["candidate", "patch_apply", "verification", "memory", "repair", "verification", "stop"]);
+    expect(vm.errorLoopTimeline?.items.find((item) => item.kind === "memory")?.memoryIds).toEqual(["mem_validation"]);
   });
 
   it("switches the main view to approval when a candidate waits for authorization", async () => {
@@ -338,6 +423,17 @@ describe("cockpit view model", () => {
     expect(vm.main.testStatus).toBe("passed");
   });
 });
+
+function eventBase<T extends TomorrowEdgeEvent["type"]>(id: string, type: T, fields: Omit<Extract<TomorrowEdgeEvent, { type: T }>, "id" | "timestamp" | "sessionId" | "mode" | "type">): Extract<TomorrowEdgeEvent, { type: T }> {
+  return {
+    id,
+    timestamp: "2026-06-07T00:00:00.000Z",
+    sessionId: "session_invariant",
+    mode: "partial",
+    type,
+    ...fields
+  } as Extract<TomorrowEdgeEvent, { type: T }>;
+}
 
 function sampleCockpitState(overrides: Partial<AgentGraphState> = {}): AgentGraphState {
   return {
