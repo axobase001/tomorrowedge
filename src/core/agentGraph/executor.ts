@@ -51,10 +51,27 @@ import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
 import { canFallbackWhenBudgetBlocked, commitRoleCall, createBudgetRuntimeState, evaluateRoleInvocation, releaseRoleCall, reserveRoleCall, type BudgetGateDecision } from "../budget/budgetGate.js";
 import type { RouteAssignment } from "../routing/policies.js";
-import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
+import type { EventPhase, TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { buildRoleGraph } from "../orchestration/roleGraph.js";
 import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
 import { getCachedContextSelection, getCachedPlan, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
+import {
+  applyCoderConstraintsToCandidate,
+  applyMemoryAssessmentsToJudge,
+  applyMemoryAssessmentsToReview,
+  applyPremortemToPlan,
+  applyRepairMemoryContextToCandidate,
+  buildCandidateMemoryAssessments,
+  buildFailureMemoryPremortem,
+  buildRepairMemoryContext,
+  buildRepairMemoryQuery,
+  coderConstraintsFromPremortem,
+  emptyFailureMemoryInfluence,
+  type CandidateMemoryAssessment,
+  type FailureMemoryPremortem,
+  type RepairMemoryContext
+} from "../memory/failureMemoryInfluence.js";
+import { explainFailureMemories } from "../memory/taskMemory.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -156,6 +173,7 @@ function createInitialGraphState(runtime: OfflineGraphRuntime): AgentGraphState 
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    failureMemory: emptyFailureMemoryInfluence(),
     budgetRuntime: createBudgetRuntimeState(),
     budgetStatuses: [],
     changedFiles: [],
@@ -399,6 +417,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
   }
+  await runFailureMemoryPremortem(runtime, state);
   const plan = state.plan;
   if (!plan) throw new Error("Planning phase completed without a plan.");
   state.workflowKind = workflowKindFromPlan(plan);
@@ -414,6 +433,22 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     }
   }
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(plan, null, 2), "json") });
+}
+
+async function runFailureMemoryPremortem(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  const { config, cwd, goal, ledger } = runtime;
+  if (!state.plan || !failureMemoryEnabled(config, "failure_premortem")) return;
+  const explanation = await explainFailureMemories(cwd, goal, { limit: config.strategy_memory.max_records });
+  const premortem = buildFailureMemoryPremortem(goal, explanation);
+  state.failureMemory = state.failureMemory ?? emptyFailureMemoryInfluence();
+  state.failureMemory.premortem = premortem;
+  if (premortem.constraints.length) {
+    state.plan = applyPremortemToPlan(state.plan, premortem);
+  }
+  if (failureMemoryEnabled(config, "coder_constraints")) {
+    state.failureMemory.coderConstraints = coderConstraintsFromPremortem(premortem);
+  }
+  recordMemoryRetrieval(state, ledger, "premortem", "planner", premortem, `pre-mortem selected ${premortem.selectedMemoryIds.length} memories`);
 }
 
 async function runExplorationPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
@@ -444,6 +479,13 @@ async function runExplorationPhase(runtime: OfflineGraphRuntime, state: AgentGra
 async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { access, config, cwd, externalAgents, goal, ledger, options, router } = runtime;
   const coder = new CoderAgent();
+  if (state.failureMemory?.coderConstraints.length) {
+    recordMemoryRetrieval(state, ledger, "coder_constraints", "coder_a", {
+      selectedMemoryIds: uniqueStrings(state.failureMemory.coderConstraints.map((constraint) => constraint.memoryId)),
+      rejected: [],
+      constraints: state.failureMemory.coderConstraints
+    }, `coder-visible memory constraints=${state.failureMemory.coderConstraints.length}`);
+  }
   const candidateJobs: Array<{ label: string; run: () => Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> }> = [
     {
       label: "coder_a",
@@ -530,6 +572,18 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
   const { access, config, cwd, externalAgents, goal, ledger, options, router } = runtime;
   const reviewer = new ReviewerAgent();
   const externalReviewer = externalProfileForRole(router, externalAgents, "reviewer");
+  const memoryAssessments = failureMemoryEnabled(config, "review_guard")
+    ? buildCandidateMemoryAssessments(state.candidates, state.failureMemory?.coderConstraints ?? [])
+    : [];
+  if (memoryAssessments.length) {
+    state.failureMemory = state.failureMemory ?? emptyFailureMemoryInfluence();
+    state.failureMemory.reviewAssessments = memoryAssessments;
+    recordMemoryRetrieval(state, ledger, "review_guard", "reviewer", {
+      selectedMemoryIds: uniqueStrings(memoryAssessments.flatMap((assessment) => assessment.memoryIds)),
+      rejected: [],
+      constraints: memoryAssessments
+    }, `review memory assessments=${memoryAssessments.length}`);
+  }
   state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
     if (!externalReviewer) return reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
     const result = await invokeExternalRole({
@@ -537,7 +591,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
       profile: externalReviewer,
       role: "reviewer",
       prompt: "Review the current patch candidates and return a TomorrowEdge review report.",
-      context: { candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview },
+      context: { candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview, memoryAssessments },
       ledger
     });
     const review = normalizeExternalReview(result.payload);
@@ -549,6 +603,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
     budgetFallback: () => reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview }),
     budgetFallbackLabel: "native reviewer"
   } : "offline");
+  state.review = applyMemoryAssessmentsToReview(state.review, memoryAssessments);
   const reviewJson = JSON.stringify(state.review, null, 2);
   const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
   recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
@@ -573,7 +628,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
       profile: externalJudge,
       role: "judge",
       prompt: "Judge the reviewed candidates and return a TomorrowEdge judge decision.",
-      context: { candidates: state.candidates, review: state.review, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds },
+      context: { candidates: state.candidates, review: state.review, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds, memoryAssessments },
       ledger
     });
     const judgment = normalizeExternalJudgment(result.payload);
@@ -585,6 +640,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
     budgetFallback: () => judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds }),
     budgetFallbackLabel: "native judge"
   } : "offline");
+  state.judge = applyMemoryAssessmentsToJudge(state.judge, memoryAssessments);
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
   recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
@@ -711,23 +767,25 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         repairAttempts += 1;
         const repairer = new RepairerAgent();
         const externalRepairer = externalProfileForRole(router, externalAgents, "repairer");
+        const repairMemoryContext = await maybeBuildRepairMemoryContext(runtime, state, result);
         const repairCandidate = await runAgentState(state, ledger, router, "repairer", async () => {
-          if (!externalRepairer) return repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          if (!externalRepairer) return repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode), memoryContext: repairMemoryContext });
           const externalResult = await invokeExternalRole({
             cwd,
             profile: externalRepairer,
             role: "repairer",
             prompt: "Repair the failed test run and return a TomorrowEdge patch candidate.",
-            context: { plan, failedRun: result, appliedFiles: state.changedFiles },
+            context: { plan, failedRun: result, appliedFiles: state.changedFiles, memoryContext: repairMemoryContext },
             ledger
           });
           const patch = normalizeExternalPatch(externalResult.payload, "repairer", "repair");
           if (!patch) recordExternalNormalizeFallback(ledger, "repairer", externalRepairer, "patch candidate", "native repairer");
-          return patch ?? repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) });
+          const candidate = patch ?? await repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode), memoryContext: repairMemoryContext });
+          return applyRepairMemoryContextToCandidate(candidate, repairMemoryContext);
         }, externalRepairer ? {
           agentKind: "external",
           config,
-          budgetFallback: () => repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode) }),
+          budgetFallback: () => repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode), memoryContext: repairMemoryContext }),
           budgetFallbackLabel: "native repairer"
         } : "offline");
         state.repairCandidates.push(repairCandidate);
@@ -787,13 +845,15 @@ async function runCoderCandidate(input: {
   config: TomorrowEdgeConfig;
 }): Promise<PatchCandidate> {
   const externalCoder = externalProfileForRole(input.router, input.externalAgents, input.role);
+  const memoryConstraints = input.state.failureMemory?.coderConstraints ?? [];
   const fallback = () => input.coder.run({
       plan: input.state.plan!,
       contextSelection: input.state.contextSelection!,
       variant: input.variant,
       fixtureMode: input.options.provider === "fixture" || input.options.fixtureMode,
       fixtureFailingPatch: input.options.fixtureFailingPatch,
-      visualSpec: input.state.visualSpec
+      visualSpec: input.state.visualSpec,
+      memoryConstraints
     });
   return runAgentState(input.state, input.ledger, input.router, input.role, async () => {
     if (!externalCoder) return fallback();
@@ -806,13 +866,15 @@ async function runCoderCandidate(input: {
         plan: input.state.plan,
         contextSelection: input.state.contextSelection,
         visualSpec: input.state.visualSpec,
-        variant: input.variant
+        variant: input.variant,
+        memoryConstraints
       },
       ledger: input.ledger
     });
     const patch = normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative");
     if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
-    return patch ?? fallback();
+    const candidate = patch ?? await fallback();
+    return applyCoderConstraintsToCandidate(candidate, memoryConstraints);
   }, externalCoder ? {
     agentKind: "external",
     config: input.config,
@@ -947,7 +1009,10 @@ function normalizeCandidateReview(value: unknown): ReviewReport["reviews"][numbe
     regressionConcerns: stringArray(object.regressionConcerns),
     redTeamFindings: [],
     recommendation,
-    notes: stringArray(object.notes)
+    notes: stringArray(object.notes),
+    memoryViolations: stringArray(object.memoryViolations),
+    memoryAlignment: stringArray(object.memoryAlignment),
+    memoryIds: stringArray(object.memoryIds)
   };
 }
 
@@ -1452,6 +1517,55 @@ function updateCapabilityStep(state: AgentGraphState, role: AgentRole, status: "
     ...state.capabilityRoute,
     steps: state.capabilityRoute.steps.map((step) => (step.role === role ? { ...step, status, summary } : step))
   };
+}
+
+async function maybeBuildRepairMemoryContext(runtime: OfflineGraphRuntime, state: AgentGraphState, failedRun: RunResult): Promise<RepairMemoryContext | undefined> {
+  const { config, cwd, ledger } = runtime;
+  const plan = state.plan;
+  if (!plan || !failureMemoryEnabled(config, "repair_context")) return undefined;
+  const query = buildRepairMemoryQuery(plan, failedRun, state.changedFiles);
+  const explanation = await explainFailureMemories(cwd, query, { limit: config.strategy_memory.max_records });
+  const context = buildRepairMemoryContext(query, explanation);
+  state.failureMemory = state.failureMemory ?? emptyFailureMemoryInfluence();
+  state.failureMemory.repairContext = context;
+  recordMemoryRetrieval(state, ledger, "repair_context", "repairer", context, `repair context selected ${context.selectedMemoryIds.length} memories`);
+  return context;
+}
+
+function recordMemoryRetrieval(
+  state: AgentGraphState,
+  ledger: EventLedger,
+  stage: "premortem" | "coder_constraints" | "review_guard" | "repair_context",
+  role: AgentRole,
+  payload: FailureMemoryPremortem | RepairMemoryContext | { selectedMemoryIds: string[]; rejected: unknown[]; constraints: unknown[] } | { selectedMemoryIds: string[]; rejected?: unknown[]; constraints: CandidateMemoryAssessment[] },
+  summary: string
+): void {
+  const selectedMemoryIds = "selectedMemoryIds" in payload ? payload.selectedMemoryIds : [];
+  const rejected = "rejected" in payload && Array.isArray(payload.rejected) ? payload.rejected : [];
+  const constraints = "constraints" in payload && Array.isArray(payload.constraints) ? payload.constraints : [];
+  const artifactRef = ledger.writeArtifact("memory", JSON.stringify(payload, null, 2), "json");
+  ledger.append({
+    type: "memory_retrieval",
+    phase: memoryRetrievalPhase(stage),
+    role,
+    retrievalStage: stage,
+    selectedMemoryIds,
+    rejectedCount: rejected.length,
+    constraintCount: constraints.length,
+    artifactRef,
+    summary
+  });
+}
+
+function memoryRetrievalPhase(stage: "premortem" | "coder_constraints" | "review_guard" | "repair_context"): EventPhase {
+  if (stage === "premortem") return "planning";
+  if (stage === "coder_constraints") return "coding";
+  if (stage === "review_guard") return "review";
+  return "repair";
+}
+
+function failureMemoryEnabled(config: TomorrowEdgeConfig, feature: "failure_premortem" | "coder_constraints" | "review_guard" | "repair_context"): boolean {
+  return Boolean(config.strategy_memory.enabled && config.strategy_memory[feature]);
 }
 
 function uniqueStrings(values: string[]): string[] {

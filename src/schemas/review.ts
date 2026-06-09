@@ -17,6 +17,9 @@ export type CandidateReview = {
   redTeamFindings: RedTeamFinding[];
   recommendation: "accept" | "accept_with_minor_change" | "revise" | "reject";
   notes: string[];
+  memoryViolations?: string[];
+  memoryAlignment?: string[];
+  memoryIds?: string[];
 };
 
 export type ReviewReport = {

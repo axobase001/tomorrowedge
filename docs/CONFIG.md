@@ -268,3 +268,27 @@ Local learned task memory is stored in `.tomorrowedge/task-memory.jsonl` after
 sessions are saved. It records compact metadata only: task type, risk level,
 routing mode, verification commands, visual page type, judge decision, and
 result. It does not store file contents or long model outputs.
+
+```yaml
+strategy_memory:
+  enabled: false
+  max_records: 20
+  prefer_successful_routes: true
+  suggest_test_command: true
+  failure_premortem: true
+  coder_constraints: true
+  review_guard: true
+  repair_context: true
+```
+
+When `strategy_memory.enabled` is true, completed sessions can still suggest
+successful role routes and test commands. Failed or partial sessions can also
+influence the workflow as explicit, auditable retrieval context:
+
+- `failure_premortem`: planner pre-mortem constraints, known traps, and extra checks
+- `coder_constraints`: memory-derived anti-patterns and verifier requirements shown to coders
+- `review_guard`: reviewer/judge checks against retrieved failure memories
+- `repair_context`: correction strategies retrieved after a validation failure
+
+All four failure-memory switches are ablation knobs. Turning one off removes
+that injection point without deleting stored memories.

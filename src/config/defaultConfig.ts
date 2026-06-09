@@ -41,7 +41,11 @@ export const defaultConfig: TomorrowEdgeConfig = {
     enabled: false,
     max_records: 20,
     prefer_successful_routes: true,
-    suggest_test_command: true
+    suggest_test_command: true,
+    failure_premortem: true,
+    coder_constraints: true,
+    review_guard: true,
+    repair_context: true
   },
   privacy: {
     mode: "normal",
