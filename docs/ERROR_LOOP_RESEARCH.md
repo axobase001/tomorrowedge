@@ -9,6 +9,7 @@ tedge memory failures
 tedge memory show <failure-id>
 tedge memory explain "task description"
 tedge experiment error-loop --ablation memory_on,memory_off
+tedge experiment error-loop --ablation memory_off,success_memory_only,failure_memory_only,random_memory_control
 ```
 
 Each failure record keeps a task fingerprint, a short redacted goal preview,
@@ -50,6 +51,24 @@ or repair success from actual memory writes:
 Reports must not claim the system learned from a failure unless
 `memoryUpdateStatus` is `written`, or unless a skipped reason is explicitly
 audited.
+
+The harness supports explicit ablation arms:
+
+- `memory_on`: write, retrieve, and inject failure memory plus success-memory
+  route/test hints.
+- `memory_off`: disable strategy and failure-memory behavior.
+- `write_only`: write failure records but do not retrieve or inject them.
+- `retrieve_only`: retrieve/inject existing failure records but do not write new
+  failure records.
+- `success_memory_only`: keep success-memory route/test hints while disabling
+  failure correction injection and failure writes.
+- `failure_memory_only`: write, retrieve, and inject failure memories while
+  disabling success-memory route/test hints.
+- `random_memory_control`: failure-memory loop with deterministic
+  `random_control` retrieval policy.
+
+`manifest.json` records `ablationSettings` for every arm, so hidden defaults do
+not silently mix write, retrieval, and injection modes.
 
 Normal project runs do not write failure-memory records by default. The
 experiment harness opts in with `failure_memory.enabled: true` and marks records

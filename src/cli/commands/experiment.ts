@@ -1,4 +1,4 @@
-import { runErrorLoopExperiment, type ErrorLoopAblation } from "../../core/eval/errorLoopExperiment.js";
+import { isErrorLoopAblation, runErrorLoopExperiment, type ErrorLoopAblation } from "../../core/eval/errorLoopExperiment.js";
 import type { MemoryRetrievalPolicyMode } from "../../core/memory/retrievalPolicy.js";
 
 export type ErrorLoopExperimentCliOptions = {
@@ -57,7 +57,7 @@ function parseAblations(value: string | undefined): ErrorLoopAblation[] | undefi
   return value
     .split(",")
     .map((item) => item.trim())
-    .filter((item): item is ErrorLoopAblation => item === "memory_on" || item === "memory_off");
+    .filter(isErrorLoopAblation);
 }
 
 function parseMemoryPolicy(value: string | undefined): MemoryRetrievalPolicyMode | undefined {

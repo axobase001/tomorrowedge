@@ -54,6 +54,9 @@ Changelog: newest changes first, grouped by release and by change type.
   recovery attempts, repeated same-class error rate, validation pass rate,
   transfer pass-rate placeholder, cost/time to recovery, retrieval precision,
   harmful retrieval rate, and repair success after retrieval.
+- Error-loop ablation matrix modes for `memory_off`, `write_only`,
+  `retrieve_only`, `success_memory_only`, `failure_memory_only`, and
+  `random_memory_control`, with per-mode settings recorded in the manifest.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

@@ -9,7 +9,14 @@ import { saveSession } from "../memory/sessionMemory.js";
 import { explainFailureMemories, readFailureMemories, type FailureMemoryExplanation, type FailureMemoryRecord } from "../memory/taskMemory.js";
 import type { MemoryRetrievalPolicyMode } from "../memory/retrievalPolicy.js";
 
-export type ErrorLoopAblation = "memory_on" | "memory_off";
+export type ErrorLoopAblation =
+  | "memory_on"
+  | "memory_off"
+  | "write_only"
+  | "retrieve_only"
+  | "success_memory_only"
+  | "failure_memory_only"
+  | "random_memory_control";
 export type MemoryUpdateReason =
   | "written"
   | "skipped_no_failure"
@@ -113,6 +120,15 @@ type RetrievalDecisionRow = {
   rejected: FailureMemoryExplanation["rejected"];
 };
 
+type AblationSettings = {
+  strategyMemoryEnabled: boolean;
+  failureMemoryWriteEnabled: boolean;
+  preferSuccessfulRoutes: boolean;
+  suggestTestCommand: boolean;
+  injectFailureCorrections: boolean;
+  memoryPolicyOverride?: MemoryRetrievalPolicyMode;
+};
+
 const defaultTasks = [
   "fix failing test",
   "repair npm test validation failure in index.js"
@@ -170,6 +186,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
     tasks: tasks.map((task) => redactText(task)),
     repetitions,
     ablations,
+    ablationSettings: Object.fromEntries(ablations.map((ablation) => [ablation, ablationSettings(ablation)])),
     memoryPolicy,
     redaction: {
       applied: true,
@@ -275,16 +292,23 @@ async function runTrial(input: {
 }): Promise<{ trial: ErrorLoopTrial; memoryRecords: FailureMemoryRecord[]; retrievalDecision: RetrievalDecisionRow }> {
   const trialCwd = path.join(input.outputDir, "workspaces", input.trialId);
   await mkdir(trialCwd, { recursive: true });
+  const settings = ablationSettings(input.ablation);
   const config = {
     ...defaultConfig,
     strategy_memory: {
       ...defaultConfig.strategy_memory,
-      enabled: input.ablation === "memory_on",
-      policy: input.memoryPolicy
+      enabled: settings.strategyMemoryEnabled,
+      policy: settings.memoryPolicyOverride ?? input.memoryPolicy,
+      prefer_successful_routes: settings.preferSuccessfulRoutes,
+      suggest_test_command: settings.suggestTestCommand,
+      failure_premortem: settings.injectFailureCorrections,
+      coder_constraints: settings.injectFailureCorrections,
+      review_guard: settings.injectFailureCorrections,
+      repair_context: settings.injectFailureCorrections
     },
     failure_memory: {
       ...defaultConfig.failure_memory,
-      enabled: input.ablation === "memory_on",
+      enabled: settings.failureMemoryWriteEnabled,
       storage_scope: "experiment" as const,
       redaction: "artifact_refs" as const,
       retention_days: 30
@@ -296,7 +320,7 @@ async function runTrial(input: {
   let memoryRecords: FailureMemoryRecord[] = [];
   let memoryUpdateStatus: MemoryUpdateReason = "skipped_no_failure";
 
-  if (input.ablation === "memory_on") {
+  if (settings.failureMemoryWriteEnabled) {
     const before = await readFailureMemories(trialCwd, 200);
     const beforeById = new Map(before.map((record) => [record.id, record]));
     sessionPath = await saveSession(trialCwd, state, { failureMemory: { ...config.failure_memory, experimentId: path.basename(input.outputDir) } });
@@ -313,7 +337,7 @@ async function runTrial(input: {
     memoryUpdateStatus = "skipped_ablation";
   }
 
-  const retrieval = input.ablation === "memory_on"
+  const retrieval = settings.strategyMemoryEnabled
     ? await explainFailureMemories(trialCwd, input.task, { limit: 5 })
     : { task: redactText(input.task), selected: [], rejected: [] };
   const retrievalDecision: RetrievalDecisionRow = {
@@ -321,7 +345,7 @@ async function runTrial(input: {
     trialId: input.trialId,
     task: redactText(input.task),
     ablation: input.ablation,
-    memoryPolicy: input.memoryPolicy,
+    memoryPolicy: settings.memoryPolicyOverride ?? input.memoryPolicy,
     selected: retrieval.selected,
     rejected: retrieval.rejected
   };
@@ -508,7 +532,81 @@ function normalizeTasks(tasks: string[] | undefined): string[] {
 
 function normalizeAblations(value: ErrorLoopAblation[] | undefined): ErrorLoopAblation[] {
   const raw = value?.length ? value : ["memory_on"];
-  return [...new Set(raw.filter((item): item is ErrorLoopAblation => item === "memory_on" || item === "memory_off"))];
+  return [...new Set(raw.filter(isErrorLoopAblation))];
+}
+
+export function isErrorLoopAblation(value: string): value is ErrorLoopAblation {
+  return [
+    "memory_on",
+    "memory_off",
+    "write_only",
+    "retrieve_only",
+    "success_memory_only",
+    "failure_memory_only",
+    "random_memory_control"
+  ].includes(value);
+}
+
+function ablationSettings(ablation: ErrorLoopAblation): AblationSettings {
+  switch (ablation) {
+    case "memory_on":
+      return {
+        strategyMemoryEnabled: true,
+        failureMemoryWriteEnabled: true,
+        preferSuccessfulRoutes: true,
+        suggestTestCommand: true,
+        injectFailureCorrections: true
+      };
+    case "memory_off":
+      return {
+        strategyMemoryEnabled: false,
+        failureMemoryWriteEnabled: false,
+        preferSuccessfulRoutes: false,
+        suggestTestCommand: false,
+        injectFailureCorrections: false
+      };
+    case "write_only":
+      return {
+        strategyMemoryEnabled: false,
+        failureMemoryWriteEnabled: true,
+        preferSuccessfulRoutes: false,
+        suggestTestCommand: false,
+        injectFailureCorrections: false
+      };
+    case "retrieve_only":
+      return {
+        strategyMemoryEnabled: true,
+        failureMemoryWriteEnabled: false,
+        preferSuccessfulRoutes: false,
+        suggestTestCommand: false,
+        injectFailureCorrections: true
+      };
+    case "success_memory_only":
+      return {
+        strategyMemoryEnabled: true,
+        failureMemoryWriteEnabled: false,
+        preferSuccessfulRoutes: true,
+        suggestTestCommand: true,
+        injectFailureCorrections: false
+      };
+    case "failure_memory_only":
+      return {
+        strategyMemoryEnabled: true,
+        failureMemoryWriteEnabled: true,
+        preferSuccessfulRoutes: false,
+        suggestTestCommand: false,
+        injectFailureCorrections: true
+      };
+    case "random_memory_control":
+      return {
+        strategyMemoryEnabled: true,
+        failureMemoryWriteEnabled: true,
+        preferSuccessfulRoutes: false,
+        suggestTestCommand: false,
+        injectFailureCorrections: true,
+        memoryPolicyOverride: "random_control"
+      };
+  }
 }
 
 function clampPositiveInt(value: number, min: number, max: number): number {
