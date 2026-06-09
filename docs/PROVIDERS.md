@@ -1,6 +1,8 @@
 # Providers
 
-API keys are never hardcoded. Use environment variables:
+API keys are never hardcoded. Use environment variables, or paste keys through
+the GUI `Keys` panel so TomorrowEdge stores them in `.tomorrowedge/secrets.enc`
+while keeping only `api_key_env` in config:
 
 ```bash
 OPENAI_API_KEY=
@@ -27,8 +29,10 @@ DEEPSEEK_OUTPUT_PRICE_PER_MTOK=
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-The CLI automatically loads a local `.env` file from the current workspace.
-`.env` is ignored by git and must not be committed.
+The CLI automatically loads a local `.env` file and legacy
+`.tomorrowedge/local.env` file from the current workspace before loading
+`.tomorrowedge/secrets.enc`. `.env` and `.tomorrowedge/` are ignored by git and
+must not be committed.
 
 Recommended onboarding path:
 

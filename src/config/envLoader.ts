@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { loadEncryptedSecretsIntoEnv } from "../core/secrets/secretManager.js";
 
 export function loadLocalEnv(cwd: string): void {
   for (const envPath of [path.join(cwd, ".env"), path.join(cwd, ".tomorrowedge", "local.env")]) {
     loadEnvFile(envPath);
   }
+  loadEncryptedSecretsIntoEnv(cwd);
 }
 
 function loadEnvFile(envPath: string): void {

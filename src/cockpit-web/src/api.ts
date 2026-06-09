@@ -21,7 +21,7 @@ export type CockpitProviderReadiness = {
   baseUrl: string;
   apiKeyEnv?: string;
   keyConfigured: boolean;
-  keySource: "env" | "local_env" | "not_required" | "missing";
+  keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
 };

@@ -515,7 +515,7 @@ describe("local cockpit server", () => {
       });
       const after = await response.json() as { needsSetup: boolean; selectedProvider?: string; selectedModel?: string; providers: Array<{ id: string; keyConfigured: boolean }> };
       const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
-      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+      const secretsFile = await readFile(path.join(cwd, ".tomorrowedge", "secrets.enc"), "utf8");
 
       expect(response.status).toBe(200);
       expect(after.needsSetup).toBe(false);
@@ -524,7 +524,8 @@ describe("local cockpit server", () => {
       expect(after.providers.find((provider) => provider.id === "openrouter")?.keyConfigured).toBe(true);
       expect(configText).toContain("api_key_env: TEST_OPENROUTER_KEY");
       expect(configText).not.toContain("test-openrouter-key-value");
-      expect(localEnv).toContain('TEST_OPENROUTER_KEY="test-openrouter-key-value"');
+      expect(secretsFile).toContain("encrypted_file");
+      expect(secretsFile).not.toContain("test-openrouter-key-value");
     } finally {
       delete process.env.TEST_OPENROUTER_KEY;
       await server.close();
@@ -532,7 +533,7 @@ describe("local cockpit server", () => {
     }
   });
 
-  it("manages provider keys through local env indirection without writing secrets to config", async () => {
+  it("manages provider keys through encrypted storage without writing secrets to config", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-keys-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
@@ -547,31 +548,32 @@ describe("local cockpit server", () => {
       });
       const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; keyConfigured: boolean; keySource: string; maskedKey?: string }> };
       const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
-      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+      const secretsFile = await readFile(path.join(cwd, ".tomorrowedge", "secrets.enc"), "utf8");
 
       expect(response.status).toBe(200);
       expect(afterSave.selectedProvider).toBe("openrouter");
       expect(afterSave.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
         keyConfigured: true,
-        keySource: "local_env",
+        keySource: "encrypted_file",
         maskedKey: "test****-key"
       });
       expect(configText).toContain("api_key_env: TEST_KEY_PANEL_OPENROUTER");
       expect(configText).toContain("model: moonshotai/kimi-k2.6:free");
       expect(configText).not.toContain("moonshotai/kimi-k2:free");
       expect(configText).not.toContain("test-panel-openrouter-key");
-      expect(localEnv).toContain('TEST_KEY_PANEL_OPENROUTER="test-panel-openrouter-key"');
+      expect(secretsFile).toContain("encrypted_file");
+      expect(secretsFile).not.toContain("test-panel-openrouter-key");
 
       const deleteResponse = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, { method: "DELETE" });
       const afterDelete = await deleteResponse.json() as { providers: Array<{ id: string; enabled: boolean; keyConfigured: boolean }> };
-      const localEnvAfterDelete = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+      const secretsFileAfterDelete = await readOptionalFile(path.join(cwd, ".tomorrowedge", "secrets.enc"));
 
       expect(deleteResponse.status).toBe(200);
       expect(afterDelete.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
         enabled: false,
         keyConfigured: false
       });
-      expect(localEnvAfterDelete).not.toContain("TEST_KEY_PANEL_OPENROUTER");
+      expect(secretsFileAfterDelete).toBe("");
     } finally {
       delete process.env.TEST_KEY_PANEL_OPENROUTER;
       await server.close();
@@ -632,7 +634,7 @@ describe("local cockpit server", () => {
       });
       const payload = await second.json() as { providers: Array<{ id: string; model: string; keyConfigured: boolean }> };
       const config = loadConfig(cwd);
-      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+      const secretsFile = await readFile(path.join(cwd, ".tomorrowedge", "secrets.enc"), "utf8");
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
@@ -641,7 +643,7 @@ describe("local cockpit server", () => {
         keyConfigured: true
       });
       expect(config.providers.openrouter.model).toBe("qwen/qwen3-coder:free");
-      expect(localEnv).toContain('TEST_MODEL_ONLY_OPENROUTER="test-model-only-key"');
+      expect(secretsFile).not.toContain("test-model-only-key");
     } finally {
       delete process.env.TEST_MODEL_ONLY_OPENROUTER;
       await server.close();
@@ -796,14 +798,14 @@ describe("local cockpit server", () => {
       const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; baseUrl: string; keyConfigured: boolean; keySource: string }> };
       const config = loadConfig(cwd);
       const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
-      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+      const secretsFile = await readFile(path.join(cwd, ".tomorrowedge", "secrets.enc"), "utf8");
 
       expect(response.status).toBe(200);
       expect(afterSave.selectedProvider).toBe("oneapi_gateway");
       expect(afterSave.providers.find((provider) => provider.id === "oneapi_gateway")).toMatchObject({
         baseUrl: "https://oneapi.example/v1",
         keyConfigured: true,
-        keySource: "local_env"
+        keySource: "encrypted_file"
       });
       expect(config.providers.oneapi_gateway).toMatchObject({
         enabled: true,
@@ -814,7 +816,7 @@ describe("local cockpit server", () => {
         auth_header: "bearer"
       });
       expect(configText).not.toContain("test-oneapi-key");
-      expect(localEnv).toContain('ONEAPI_GATEWAY_KEY="test-oneapi-key"');
+      expect(secretsFile).not.toContain("test-oneapi-key");
     } finally {
       delete process.env.ONEAPI_GATEWAY_KEY;
       await server.close();
@@ -1192,4 +1194,13 @@ async function waitForLatestSession(url: string, nonce: string): Promise<{ state
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("Timed out waiting for latest cockpit session.");
+}
+
+async function readOptionalFile(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw error;
+  }
 }

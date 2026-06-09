@@ -711,11 +711,14 @@ npm run client
 `tedge client` serves the built React cockpit by default and falls back to the
 embedded HTML client only when `dist/cockpit-web` is unavailable.
 On first launch, the GUI setup wizard asks for a provider, one model id, and an
-API-key env var or optional local key. OpenRouter is the recommended starting
-point because one key can reach multiple model families, but role-routing
-presets such as cheap-first or strong-review are optional and can be tuned
-later. The natural-language composer includes a mode dropdown beside the input
-so each task can run as `restricted`, `partial`, or `full`.
+API-key env var plus an optional key value. Keys pasted through the GUI are
+stored in `.tomorrowedge/secrets.enc`; config keeps only env-var indirection,
+and legacy `.env` / `.tomorrowedge/local.env` keys remain readable. OpenRouter
+is the recommended starting point because one key can reach multiple model
+families, but role-routing presets such as cheap-first or strong-review are
+optional and can be tuned later. The natural-language composer includes a mode
+dropdown beside the input so each task can run as `restricted`, `partial`, or
+`full`.
 
 Optional desktop window:
 
