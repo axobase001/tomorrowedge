@@ -637,6 +637,96 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("treats explicitly routed no-auth local providers as GUI-ready", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-local-ready-"));
+    const config = loadConfig(cwd);
+    const agents = Object.fromEntries(Object.keys(config.agents).map((role) => [role, {
+      provider: "ollama",
+      model: "local-auto",
+      reason: "Test local provider route"
+    }]));
+    await writeConfig(cwd, {
+      ...config,
+      providers: {
+        ...config.providers,
+        ollama: {
+          enabled: true,
+          base_url: "http://localhost:11434",
+          model: "local-auto",
+          api_format: "openai_chat",
+          auth_header: "none",
+          extra_headers: {}
+        }
+      },
+      agents
+    });
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+        needsSetup: boolean;
+        selectedProvider?: string;
+        selectedModel?: string;
+        providers: Array<{ id: string; keyConfigured: boolean; keySource: string; authRequired: boolean }>;
+      };
+
+      expect(status.needsSetup).toBe(false);
+      expect(status.selectedProvider).toBe("ollama");
+      expect(status.selectedModel).toBe("local-auto");
+      expect(status.providers.find((provider) => provider.id === "ollama")).toMatchObject({
+        keyConfigured: true,
+        keySource: "not_required",
+        authRequired: false
+      });
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("treats explicitly routed external agents as GUI-ready", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-external-ready-"));
+    const config = loadConfig(cwd);
+    const agents = Object.fromEntries(Object.keys(config.agents).map((role) => [role, {
+      provider: "external:codex",
+      model: "auto",
+      reason: "Test external agent route"
+    }]));
+    await writeConfig(cwd, {
+      ...config,
+      external_agents: {
+        ...config.external_agents,
+        codex: {
+          ...config.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: ["mock-mcp-server"],
+          autoStart: true
+        }
+      },
+      agents
+    });
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+        needsSetup: boolean;
+        selectedProvider?: string;
+        selectedModel?: string;
+        externalAgents: Array<{ id: string; provider: string }>;
+      };
+
+      expect(status.needsSetup).toBe(false);
+      expect(status.selectedProvider).toBe("external:codex");
+      expect(status.selectedModel).toBe("auto");
+      expect(status.externalAgents).toContainEqual(expect.objectContaining({
+        id: "codex",
+        provider: "external:codex"
+      }));
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("saves GUI role assignments into provider/model agent routing", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-roles-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

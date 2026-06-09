@@ -79,23 +79,30 @@ export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const config = loadConfig(cwd);
   const localEnv = readLocalEnvMap(cwd);
   const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider, localEnv));
-  const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model);
+  const roleAssignments = Object.entries(config.agents).map(([role, agent]) => ({
+    role,
+    provider: agent.provider,
+    model: agent.model,
+    reason: agent.reason
+  }));
+  const assignedProviders = new Set(roleAssignments.map((assignment) => assignment.provider));
+  const configuredLive = providers.find((provider) => provider.enabled && provider.authRequired && provider.keyConfigured && provider.model)
+    ?? providers.find((provider) => provider.enabled && !provider.authRequired && provider.keyConfigured && provider.model && assignedProviders.has(provider.id));
   const configuredAuthProvider = providers.find((provider) => provider.enabled && provider.authRequired && provider.model);
+  const configuredExternal = externalAgentOptions(config).find((agent) => assignedProviders.has(agent.provider));
   const selected = configuredLive ?? configuredAuthProvider;
+  const selectedExternalAssignment = configuredExternal
+    ? roleAssignments.find((assignment) => assignment.provider === configuredExternal.provider)
+    : undefined;
   return {
-    needsSetup: !configuredLive,
+    needsSetup: !configuredLive && !configuredExternal,
     recommendedProvider: config.model_discovery.recommended_provider,
     configPath: path.join(cwd, ".tomorrowedge", "config.yaml"),
     providers,
     externalAgents: externalAgentOptions(config),
-    roleAssignments: Object.entries(config.agents).map(([role, agent]) => ({
-      role,
-      provider: agent.provider,
-      model: agent.model,
-      reason: agent.reason
-    })),
-    selectedProvider: selected?.id,
-    selectedModel: selected?.model
+    roleAssignments,
+    selectedProvider: selected?.id ?? configuredExternal?.provider,
+    selectedModel: selected?.model ?? selectedExternalAssignment?.model
   };
 }
 
