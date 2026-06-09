@@ -49,6 +49,17 @@ export type ErrorLoopTrial = {
   predictionAccuracy: number | null;
   memoryPolicyExploit: number;
   memoryPolicyBypass: number;
+  firstFailureIndex: number | null;
+  recoveryAttemptsAfterFirstFailure: number;
+  validationPassed: boolean;
+  validationFailed: boolean;
+  repeatedSameClassError: boolean;
+  repairSuccessAfterRetrieval: boolean;
+  estimatedCostUsd: number | null;
+  timeToRecoveryMs: number | null;
+  transferTask: boolean;
+  transferTaskPassed: boolean | null;
+  hiddenValidationPassed: boolean | null;
 };
 
 export type ErrorLoopMetrics = {
@@ -64,6 +75,16 @@ export type ErrorLoopMetrics = {
   predictionAccuracy: number | null;
   memoryPolicyExploit: number;
   memoryPolicyBypass: number;
+  recoveryAttemptsAfterFirstFailureTotal: number;
+  averageRecoveryAttemptsAfterFirstFailure: number | null;
+  repeatedSameClassErrorRate: number | null;
+  validationPassRate: number;
+  transferTaskPassRate: number | null;
+  averageCostToRecoveryUsd: number | null;
+  averageTimeToRecoveryMs: number | null;
+  memoryRetrievalPrecision: number | null;
+  harmfulRetrievalRate: number | null;
+  repairSuccessAfterRetrievalRate: number | null;
   averageTraceCompleteness?: number;
 };
 
@@ -220,15 +241,27 @@ memory and retrieval behavior. It is not a live provider benchmark.
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.memoryPolicyExploit}/${input.metrics.memoryPolicyBypass} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.predictionAccuracy === null ? "-" : `${(input.metrics.predictionAccuracy * 100).toFixed(1)}%`} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
 
+## Primary Hypothesis Metrics
+
+| Recovery attempts | Repeated same-class error rate | Validation pass rate | Transfer pass rate | Avg cost to recovery | Avg time to recovery |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| ${input.metrics.recoveryAttemptsAfterFirstFailureTotal} total / ${formatNullable(input.metrics.averageRecoveryAttemptsAfterFirstFailure)} avg | ${formatPercent(input.metrics.repeatedSameClassErrorRate)} | ${formatPercent(input.metrics.validationPassRate)} | ${formatPercent(input.metrics.transferTaskPassRate)} | ${formatUsd(input.metrics.averageCostToRecoveryUsd)} | ${formatMs(input.metrics.averageTimeToRecoveryMs)} |
+
+## Secondary Hypothesis Metrics
+
+| Retrieval precision | Harmful retrieval rate | Repair success after retrieval |
+| ---: | ---: | ---: |
+| ${formatPercent(input.metrics.memoryRetrievalPrecision)} | ${formatPercent(input.metrics.harmfulRetrievalRate)} | ${formatPercent(input.metrics.repairSuccessAfterRetrievalRate)} |
+
 ## Memory Update Status
 
 ${skippedRows}
 
 ## Trials
 
-| Trial | Ablation | Result | Memory update | Retrieval | Policy | Prediction | Failure class |
-| --- | --- | --- | --- | ---: | ---: | ---: | --- |
-${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
+| Trial | Ablation | Result | Memory update | Retrieval | Policy | Recovery | Validation | Prediction | Failure class |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
+${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.recoveryAttemptsAfterFirstFailure} | ${trial.validationPassed ? "passed" : trial.validationFailed ? "failed" : "not_run"} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
 `;
 }
 
@@ -295,6 +328,7 @@ async function runTrial(input: {
   const [firstFailure] = memoryRecords;
   const prediction = predictionStats(state);
   const policyStats = memoryPolicyStats(state);
+  const outcome = trialOutcomeStats(state, firstFailure);
   return {
     trial: {
       schemaVersion: "error-loop-trial/v1",
@@ -317,7 +351,18 @@ async function runTrial(input: {
       predictionTotal: prediction.total,
       predictionAccuracy: prediction.total ? prediction.matched / prediction.total : null,
       memoryPolicyExploit: policyStats.exploit,
-      memoryPolicyBypass: policyStats.bypass
+      memoryPolicyBypass: policyStats.bypass,
+      firstFailureIndex: outcome.firstFailureIndex,
+      recoveryAttemptsAfterFirstFailure: outcome.recoveryAttemptsAfterFirstFailure,
+      validationPassed: outcome.validationPassed,
+      validationFailed: outcome.validationFailed,
+      repeatedSameClassError: outcome.repeatedSameClassError,
+      repairSuccessAfterRetrieval: outcome.repairSuccessAfterRetrieval,
+      estimatedCostUsd: state.usageSummary.estimatedCostUsd ?? null,
+      timeToRecoveryMs: outcome.timeToRecoveryMs,
+      transferTask: false,
+      transferTaskPassed: null,
+      hiddenValidationPassed: null
     },
     memoryRecords,
     retrievalDecision
@@ -341,6 +386,15 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
   const predictionTotal = trials.reduce((sum, trial) => sum + trial.predictionTotal, 0);
   const memoryPolicyExploit = trials.reduce((sum, trial) => sum + trial.memoryPolicyExploit, 0);
   const memoryPolicyBypass = trials.reduce((sum, trial) => sum + trial.memoryPolicyBypass, 0);
+  const recoveryAttemptsAfterFirstFailureTotal = trials.reduce((sum, trial) => sum + trial.recoveryAttemptsAfterFirstFailure, 0);
+  const failedTrials = trials.filter((trial) => trial.validationFailed);
+  const retrievalTrials = trials.filter((trial) => trial.retrievalSelected > 0);
+  const repairRetrievalTrials = retrievalTrials.filter((trial) => trial.recoveryAttemptsAfterFirstFailure > 0);
+  const completedCosts = trials.filter((trial) => trial.result === "completed" && trial.estimatedCostUsd !== null).map((trial) => trial.estimatedCostUsd!);
+  const recoveryTimes = trials.map((trial) => trial.timeToRecoveryMs).filter((value): value is number => value !== null);
+  const retrievalSelected = trials.reduce((sum, trial) => sum + trial.retrievalSelected, 0);
+  const retrievalRejected = trials.reduce((sum, trial) => sum + trial.retrievalRejected, 0);
+  const transferTrials = trials.filter((trial) => trial.transferTask);
   return {
     schemaVersion: "error-loop-metrics/v1",
     trials: trials.length,
@@ -354,7 +408,49 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     predictionAccuracy: predictionTotal ? predictionMatched / predictionTotal : null,
     memoryPolicyExploit,
     memoryPolicyBypass,
+    recoveryAttemptsAfterFirstFailureTotal,
+    averageRecoveryAttemptsAfterFirstFailure: failedTrials.length ? recoveryAttemptsAfterFirstFailureTotal / failedTrials.length : null,
+    repeatedSameClassErrorRate: failedTrials.length ? failedTrials.filter((trial) => trial.repeatedSameClassError).length / failedTrials.length : null,
+    validationPassRate: trials.length ? trials.filter((trial) => trial.validationPassed).length / trials.length : 0,
+    transferTaskPassRate: transferTrials.length ? transferTrials.filter((trial) => trial.transferTaskPassed).length / transferTrials.length : null,
+    averageCostToRecoveryUsd: averageOrNull(completedCosts),
+    averageTimeToRecoveryMs: averageOrNull(recoveryTimes),
+    memoryRetrievalPrecision: retrievalSelected + retrievalRejected ? retrievalSelected / (retrievalSelected + retrievalRejected) : null,
+    harmfulRetrievalRate: retrievalTrials.length ? retrievalTrials.filter((trial) => trial.result !== "completed").length / retrievalTrials.length : null,
+    repairSuccessAfterRetrievalRate: repairRetrievalTrials.length ? repairRetrievalTrials.filter((trial) => trial.repairSuccessAfterRetrieval).length / repairRetrievalTrials.length : null,
     averageTraceCompleteness: traceScores.length ? traceScores.reduce((sum, score) => sum + score, 0) / traceScores.length : undefined
+  };
+}
+
+function trialOutcomeStats(state: AgentGraphState, firstFailure: FailureMemoryRecord | undefined): {
+  firstFailureIndex: number | null;
+  recoveryAttemptsAfterFirstFailure: number;
+  validationPassed: boolean;
+  validationFailed: boolean;
+  repeatedSameClassError: boolean;
+  repairSuccessAfterRetrieval: boolean;
+  timeToRecoveryMs: number | null;
+} {
+  const firstFailureIndex = state.runResults.findIndex((run) => !run.success && !run.skipped);
+  const validationPassed = state.runResults.some((run) => run.success && !run.skipped);
+  const validationFailed = firstFailureIndex >= 0;
+  const runsAfterFailure = firstFailureIndex >= 0 ? state.runResults.slice(firstFailureIndex + 1) : [];
+  const recoveryIndex = runsAfterFailure.findIndex((run) => run.success && !run.skipped);
+  const recoveryWindow = recoveryIndex >= 0 ? runsAfterFailure.slice(0, recoveryIndex + 1) : [];
+  const repairContextUsed = state.events.some((event) =>
+    event.type === "memory_retrieval" &&
+    event.retrievalStage === "repair_context" &&
+    event.selectedMemoryIds.length > 0
+  );
+  const repeatedPolicy = state.events.some((event) => event.type === "repair_policy" && event.occurrence > 1);
+  return {
+    firstFailureIndex: firstFailureIndex >= 0 ? firstFailureIndex : null,
+    recoveryAttemptsAfterFirstFailure: runsAfterFailure.length,
+    validationPassed,
+    validationFailed,
+    repeatedSameClassError: repeatedPolicy || (firstFailure?.recurrenceCount ?? 0) > 1,
+    repairSuccessAfterRetrieval: repairContextUsed && recoveryIndex >= 0,
+    timeToRecoveryMs: recoveryWindow.length ? recoveryWindow.reduce((sum, run) => sum + run.durationMs, 0) : null
   };
 }
 
@@ -372,6 +468,26 @@ function predictionStats(state: AgentGraphState): { matched: number; total: numb
     matched: observations.filter((event) => event.matched).length,
     total: observations.length
   };
+}
+
+function averageOrNull(values: number[]): number | null {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function formatNullable(value: number | null): string {
+  return value === null ? "-" : value.toFixed(2);
+}
+
+function formatPercent(value: number | null): string {
+  return value === null ? "-" : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatUsd(value: number | null): string {
+  return value === null ? "-" : `$${value.toFixed(6)}`;
+}
+
+function formatMs(value: number | null): string {
+  return value === null ? "-" : `${Math.round(value)}ms`;
 }
 
 function emptySkippedCounts(): Record<MemoryUpdateReason, number> {
