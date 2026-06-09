@@ -567,6 +567,41 @@ input, textarea, select {
   padding: 0 8px;
   font: 12px var(--te-mono);
 }
+
+/* Sticky header — close button always visible */
+.te-keymgr-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--te-surface);
+  border-bottom: 1px solid var(--te-border);
+}
+
+/* Config preview editor */
+.te-keymgr-preview {
+  margin-top: 14px;
+}
+.te-keymgr-preview p {
+  margin: 0 0 6px;
+  color: var(--te-muted);
+  font-size: 11px;
+}
+.te-keymgr-preview-editor {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--te-border);
+  border-radius: 5px;
+  background: var(--te-alt);
+  color: var(--te-text);
+  font: 12px/1.6 var(--te-mono);
+  resize: vertical;
+}
+.te-keymgr-preview-editor:focus {
+  border-color: var(--te-deep-blue);
+  outline: none;
+}
+
 .te-setup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

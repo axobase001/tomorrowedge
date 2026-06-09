@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TomorrowEdge Contribution Report — v1.2.1</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --red: #E03C31;
+    --blue: #1D4289;
+    --yellow: #FFD100;
+    --black: #1A1A1A;
+    --white: #F8F8F6;
+    --grey: #E6E4E0;
+    --dark-grey: #4A4A4A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Mono', 'Cascadia Mono', 'JetBrains Mono', monospace;
+    background: var(--white);
+    color: var(--black);
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+  }
+
+  /* ─── Geometric Background Shapes ─── */
+  .bg-shapes { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-shapes .circle {
+    position: absolute; border-radius: 50%; opacity: 0.06;
+  }
+  .bg-shapes .circle.red    { background: var(--red);    width: 600px; height: 600px; top: -200px; right: -150px; }
+  .bg-shapes .circle.blue   { background: var(--blue);   width: 400px; height: 400px; bottom: 20%; left: -100px; }
+  .bg-shapes .circle.yellow { background: var(--yellow); width: 300px; height: 300px; top: 50%; right: 10%; }
+  .bg-shapes .rect {
+    position: absolute; opacity: 0.04;
+  }
+  .bg-shapes .rect.red   { background: var(--red);    width: 200px; height: 80px; top: 30%; left: 5%; transform: rotate(-15deg); }
+  .bg-shapes .rect.blue  { background: var(--blue);   width: 120px; height: 300px; bottom: 10%; right: 8%; transform: rotate(12deg); }
+  .bg-shapes .rect.yellow{ background: var(--yellow); width: 250px; height: 60px; top: 60%; left: 60%; transform: rotate(-8deg); }
+
+  /* ─── Layout ─── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 48px; position: relative; z-index: 1; }
+
+  /* ─── Header ─── */
+  header {
+    padding: 80px 0 60px;
+    border-bottom: 4px solid var(--black);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+  }
+  header .title-block { }
+  header .title-overline {
+    font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--dark-grey); margin-bottom: 12px;
+    position: relative; padding-left: 40px;
+  }
+  header .title-overline::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    width: 28px; height: 3px; background: var(--red);
+  }
+  header h1 {
+    font-size: clamp(36px, 6vw, 64px); font-weight: 700;
+    line-height: 1.05; letter-spacing: -0.02em;
+    max-width: 700px;
+  }
+  header h1 .accent { color: var(--red); }
+  header .meta-block {
+    text-align: right; font-size: 13px; color: var(--dark-grey);
+    border-left: 3px solid var(--blue); padding-left: 24px;
+  }
+  header .meta-block .date { font-size: 18px; font-weight: 700; color: var(--black); margin-bottom: 4px; }
+  header .meta-block .version {
+    display: inline-block; background: var(--black); color: var(--white);
+    padding: 4px 12px; font-size: 12px; letter-spacing: 0.1em; margin-top: 8px;
+  }
+
+  /* ─── Hero Stats ─── */
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin: 60px 0;
+    border: 3px solid var(--black);
+  }
+  .hero-stat {
+    padding: 40px 28px; text-align: center; position: relative; overflow: hidden;
+    border-right: 2px solid var(--grey);
+  }
+  .hero-stat:last-child { border-right: none; }
+  .hero-stat .geom {
+    position: absolute; opacity: 0.12; pointer-events: none;
+  }
+  .hero-stat .geom.circle   { border-radius: 50%; }
+  .hero-stat .geom.triangle { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+  .hero-stat .geom.square   {  }
+
+  .hero-stat:nth-child(1) { background: color-mix(in srgb, var(--red) 6%, transparent); }
+  .hero-stat:nth-child(1) .geom { width: 120px; height: 120px; background: var(--red); right: -30px; bottom: -30px; }
+  .hero-stat:nth-child(2) { background: color-mix(in srgb, var(--blue) 6%, transparent); }
+  .hero-stat:nth-child(2) .geom { width: 100px; height: 100px; background: var(--blue); left: -20px; top: -20px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+  .hero-stat:nth-child(3) { background: color-mix(in srgb, var(--yellow) 8%, transparent); }
+  .hero-stat:nth-child(3) .geom { width: 90px; height: 90px; background: var(--yellow); right: 20px; top: 15px; }
+  .hero-stat:nth-child(4) { background: color-mix(in srgb, var(--black) 4%, transparent); }
+  .hero-stat:nth-child(4) .geom { width: 140px; height: 3px; background: var(--red); left: -40px; bottom: 30px; transform: rotate(-30deg); }
+
+  .hero-stat .number {
+    font-size: clamp(48px, 8vw, 80px); font-weight: 700;
+    line-height: 1; position: relative; z-index: 1;
+  }
+  .hero-stat:nth-child(1) .number { color: var(--red); }
+  .hero-stat:nth-child(2) .number { color: var(--blue); }
+  .hero-stat:nth-child(3) .number { color: #C8A600; }
+  .hero-stat:nth-child(4) .number { color: var(--black); }
+
+  .hero-stat .label {
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--dark-grey); margin-top: 8px; position: relative; z-index: 1;
+  }
+
+  /* ─── Section Titles ─── */
+  .section-title {
+    font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--dark-grey); margin: 80px 0 32px;
+    padding-bottom: 16px; border-bottom: 2px solid var(--black);
+    display: flex; align-items: center; gap: 16px;
+  }
+  .section-title::before {
+    content: ''; width: 16px; height: 16px; display: inline-block;
+  }
+  .section-title.prs::before { background: var(--red); }
+  .section-title.issues::before { background: var(--blue); }
+  .section-title.files::before { background: var(--yellow); }
+  .section-title.auto::before { background: var(--black); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+
+  /* ─── Tables ─── */
+  .table-wrapper { overflow-x: auto; margin-bottom: 48px; border: 2px solid var(--black); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 16px 20px; font-size: 11px;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    background: var(--black); color: var(--white);
+    border-bottom: 3px solid var(--black);
+    position: relative;
+  }
+  thead th::after {
+    content: ''; position: absolute; bottom: -3px; left: 0; height: 3px; width: 100%;
+  }
+  thead th:nth-child(1)::after { background: var(--red); width: 60%; }
+  thead th:nth-child(4)::after { background: var(--blue); width: 50%; }
+  thead th:nth-child(5)::after { background: var(--yellow); width: 40%; }
+
+  tbody td { padding: 14px 20px; border-bottom: 1px solid var(--grey); }
+  tbody tr:nth-child(even) { background: rgba(0,0,0,0.02); }
+  tbody tr:hover { background: color-mix(in srgb, var(--yellow) 8%, transparent); }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; font-size: 11px;
+    letter-spacing: 0.06em; border: 1.5px solid var(--black);
+  }
+  .badge.bug      { background: color-mix(in srgb, var(--red) 15%, transparent); }
+  .badge.feat     { background: color-mix(in srgb, var(--blue) 15%, transparent); }
+  .badge.opt      { background: color-mix(in srgb, var(--yellow) 20%, transparent); }
+  .badge.a11y     { background: color-mix(in srgb, var(--blue) 10%, transparent); }
+  .badge.auto     { background: var(--black); color: var(--white); }
+
+  .status-dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; }
+  .status-dot.merged  { background: #2F9D68; }
+  .status-dot.open    { background: var(--yellow); border: 2px solid #C8A600; }
+
+  .tag { display: inline-block; padding: 2px 8px; font-size: 10px; letter-spacing: 0.08em; border: 1px solid var(--dark-grey); }
+  .tag.enhancement { border-color: var(--blue); color: var(--blue); }
+  .tag.bug-tag     { border-color: var(--red); color: var(--red); }
+
+  /* ─── File Categories ─── */
+  .file-categories {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0; margin-bottom: 48px; border: 2px solid var(--black);
+  }
+  .file-cat {
+    padding: 28px 24px; border-right: 1px solid var(--grey);
+    border-bottom: 1px solid var(--grey); position: relative;
+  }
+  .file-cat:nth-child(5) { border-right: none; }
+  .file-cat .cat-number {
+    font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 8px;
+  }
+  .file-cat:nth-child(1) .cat-number { color: var(--red); }
+  .file-cat:nth-child(2) .cat-number { color: var(--blue); }
+  .file-cat:nth-child(3) .cat-number { color: #C8A600; }
+  .file-cat:nth-child(4) .cat-number { color: var(--dark-grey); }
+  .file-cat:nth-child(5) .cat-number { color: var(--black); }
+
+  .file-cat .cat-label {
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dark-grey);
+    margin-bottom: 6px;
+  }
+  .file-cat .cat-files {
+    font-size: 11px; color: var(--dark-grey); line-height: 1.7;
+  }
+
+  /* ─── Automation Section ─── */
+  .automation-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; margin-bottom: 48px; border: 2px solid var(--black);
+  }
+  .automation-card {
+    padding: 36px 32px; border-right: 1px solid var(--grey); position: relative; overflow: hidden;
+  }
+  .automation-card:last-child { border-right: none; }
+  .automation-card .card-geom {
+    position: absolute; opacity: 0.08; pointer-events: none;
+  }
+  .automation-card:nth-child(1) .card-geom {
+    width: 160px; height: 160px; background: var(--red); border-radius: 50%;
+    right: -50px; top: -50px;
+  }
+  .automation-card:nth-child(2) .card-geom {
+    width: 200px; height: 3px; background: var(--blue); left: -30px; bottom: 40px;
+    transform: rotate(-25deg);
+    box-shadow: 0 40px 0 var(--blue), 0 80px 0 var(--blue);
+  }
+  .automation-card h3 {
+    font-size: 16px; margin-bottom: 8px; position: relative; z-index: 1;
+  }
+  .automation-card p {
+    font-size: 12px; color: var(--dark-grey); line-height: 1.7; position: relative; z-index: 1;
+  }
+  .automation-card .checks {
+    margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1;
+  }
+  .automation-card .check-item {
+    font-size: 11px; padding: 4px 10px; border: 1px solid var(--dark-grey);
+  }
+  .automation-card .check-item.pass { border-color: #2F9D68; color: #2F9D68; }
+
+  /* ─── Footer ─── */
+  footer {
+    margin-top: 80px; padding: 48px 0;
+    border-top: 4px solid var(--black);
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 20px;
+  }
+  footer .footer-line {
+    font-size: 11px; color: var(--dark-grey); letter-spacing: 0.08em;
+  }
+  footer .footer-geom {
+    display: flex; gap: 12px;
+  }
+  footer .footer-geom span {
+    width: 20px; height: 20px; display: inline-block;
+  }
+  footer .footer-geom span:nth-child(1) { background: var(--red); border-radius: 50%; }
+  footer .footer-geom span:nth-child(2) { background: var(--blue); }
+  footer .footer-geom span:nth-child(3) { background: var(--yellow); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .container { padding: 0 24px; }
+    header { grid-template-columns: 1fr; padding: 48px 0 36px; }
+    header .meta-block { text-align: left; border-left: none; border-top: 3px solid var(--blue); padding: 16px 0 0; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .hero-stat:nth-child(2) { border-right: none; }
+    .automation-grid { grid-template-columns: 1fr; }
+    .automation-card:first-child { border-right: none; border-bottom: 1px solid var(--grey); }
+    .file-categories { grid-template-columns: 1fr 1fr; }
+    .file-cat:nth-child(odd) { border-right: 1px solid var(--grey); }
+    .file-cat:nth-child(even) { border-right: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-shapes" aria-hidden="true">
+  <div class="circle red"></div><div class="circle blue"></div><div class="circle yellow"></div>
+  <div class="rect red"></div><div class="rect blue"></div><div class="rect yellow"></div>
+</div>
+
+<div class="container">
+
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div class="title-block">
+      <div class="title-overline">Contribution Report</div>
+      <h1>TomorrowEdge<br><span class="accent">版本贡献报告</span></h1>
+    </div>
+    <div class="meta-block">
+      <div class="date">2026-06-08</div>
+      <div>Contributor</div>
+      <div style="font-weight:700;font-size:16px;color:var(--black)">Forktomorrow</div>
+      <div class="version">v1.2.1</div>
+    </div>
+  </header>
+
+  <!-- ═══ HERO STATS ═══ -->
+  <section class="hero-stats">
+    <div class="hero-stat">
+      <div class="geom circle"></div>
+      <div class="number">11</div>
+      <div class="label">PR 提交</div>
+    </div>
+    <div class="hero-stat">
+      <div class="geom triangle"></div>
+      <div class="number">7</div>
+      <div class="label">Issue 创建</div>
+    </div>
+    <div class="hero-stat">
+      <div class="geom square"></div>
+      <div class="number">15</div>
+      <div class="label">文件修改</div>
+    </div>
+    <div class="hero-stat">
+      <div class="geom"></div>
+      <div class="number">1</div>
+      <div class="label">PR 已合入</div>
+    </div>
+  </section>
+
+  <!-- ═══ PR TABLE ═══ -->
+  <div class="section-title prs">Pull Requests</div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Branch</th><th>Files</th><th>Type</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700">#265</td>
+          <td style="font-size:12px">fix/cockpit-live-mode-and-ux</td>
+          <td style="font-weight:700">8</td>
+          <td><span class="badge bug">🐛 Bug 修复</span></td>
+          <td><span class="status-dot merged"></span>🟢 MERGED</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#269</td><td style="font-size:12px">fix/demo-task-labels-and-error-logging</td><td style="font-weight:700">4</td>
+          <td><span class="badge bug">🐛 Bug 修复</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#271</td><td style="font-size:12px">feat/config-agent-provider-validation</td><td style="font-weight:700">1</td>
+          <td><span class="badge feat">✨ 功能</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#272</td><td style="font-size:12px">feat/mock-output-labels-clean</td><td style="font-weight:700">3</td>
+          <td><span class="badge opt">🏷️ 优化</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#273</td><td style="font-size:12px">feat/workflow-progress-indicator</td><td style="font-weight:700">1</td>
+          <td><span class="badge feat">✨ 功能</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#274</td><td style="font-size:12px">feat/composer-empty-validation</td><td style="font-weight:700">1</td>
+          <td><span class="badge feat">✨ 功能</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#275</td><td style="font-size:12px">fix/aria-labels</td><td style="font-weight:700">3</td>
+          <td><span class="badge a11y">♿ 无障碍</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#276</td><td style="font-size:12px">feat/telemetry-routing-display</td><td style="font-weight:700">1</td>
+          <td><span class="badge feat">✨ 功能</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#280</td><td style="font-size:12px">feat/ci-automated-checks</td><td style="font-weight:700">1</td>
+          <td><span class="badge auto">🤖 自动化</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#283</td><td style="font-size:12px">feat/auto-release-watcher</td><td style="font-weight:700">2</td>
+          <td><span class="badge auto">🤖 自动化</span></td>
+          <td><span class="status-dot open"></span>🟡 OPEN</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ ISSUE TABLE ═══ -->
+  <div class="section-title issues">Issues</div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Title</th><th>Label</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700">#267</td><td>Demo 任务应标注 [Demo] 前缀，避免与真实任务混淆</td>
+          <td><span class="tag enhancement">enhancement</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#268</td><td>3 处 catch 块静默吞错，需加 console.error</td>
+          <td><span class="tag bug-tag">bug</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#270</td><td>E2E 测试缺失 + data-testid 不一致</td>
+          <td><span class="tag enhancement">enhancement</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#278</td><td>CockpitRunRequest 类型缺失 live 字段</td>
+          <td><span class="tag bug-tag">bug</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#279</td><td>GUI fixtureMode=true 硬编码</td>
+          <td><span class="tag bug-tag">bug</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#281</td><td>20 个静默 catch 块需修复</td>
+          <td><span class="tag bug-tag">bug</span></td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">#282</td><td>28 个 data-testid 未被 E2E 覆盖</td>
+          <td><span class="tag enhancement">enhancement</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ FILE CATEGORIES ═══ -->
+  <div class="section-title files">Changed Files · 文件变更分布</div>
+  <div class="file-categories">
+    <div class="file-cat">
+      <div class="cat-label">GUI 组件层</div>
+      <div class="cat-number">8</div>
+      <div class="cat-files">
+        ComposerPanel<br>WorkflowPanel<br>TelemetryPanel<br>TopBar<br>TaskListPanel<br>main.tsx<br>DetailDrawer<br>tokens.css
+      </div>
+    </div>
+    <div class="file-cat">
+      <div class="cat-label">Agent 层</div>
+      <div class="cat-number">3</div>
+      <div class="cat-files">
+        coder.ts<br>repairer.ts<br>reviewer.ts
+      </div>
+    </div>
+    <div class="file-cat">
+      <div class="cat-label">服务端</div>
+      <div class="cat-number">5</div>
+      <div class="cat-files">
+        server.ts<br>configLoader.ts<br>contracts.ts<br>viewModel.ts<br>tui/App.tsx
+      </div>
+    </div>
+    <div class="file-cat">
+      <div class="cat-label">Provider / MCP</div>
+      <div class="cat-number">4</div>
+      <div class="cat-files">
+        ollama.ts<br>externalAgentProcess.ts<br>externalRoleInvoker.ts<br>externalAgentDiagnostics.ts
+      </div>
+    </div>
+    <div class="file-cat">
+      <div class="cat-label">脚本</div>
+      <div class="cat-number">2</div>
+      <div class="cat-files">
+        ci-detective.sh<br>auto-release-guardian.sh
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AUTOMATION ═══ -->
+  <div class="section-title auto">Automation System · 自动化检测体系</div>
+  <div class="automation-grid">
+    <div class="automation-card">
+      <div class="card-geom"></div>
+      <h3>🔍 CI Detective</h3>
+      <p>6 项自动检查：testid 一致性、Mock 标签、fixtureMode 守卫、API 契约、静默 catch、打包体积。每次 push 自动运行。</p>
+      <div class="checks">
+        <span class="check-item pass">✓ testid 100%</span>
+        <span class="check-item pass">✓ mock 标签</span>
+        <span class="check-item pass">✓ fixtureMode</span>
+        <span class="check-item pass">✓ API 契约</span>
+      </div>
+    </div>
+    <div class="automation-card">
+      <div class="card-geom"></div>
+      <h3>🛡️ Auto-Release Guardian</h3>
+      <p>新版本发布时自动拉取 → 运行 CI Detective → 生成报告 → 可选自动创建 GitHub Issue。支持 --dry-run 和 --create-issues 两种模式。</p>
+      <div class="checks">
+        <span class="check-item" style="border-color:var(--black)">dry-run</span>
+        <span class="check-item" style="border-color:var(--black)">auto-issue</span>
+        <span class="check-item pass">✓ markdown report</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer>
+    <div class="footer-line">
+      Generated by Auto-Release Guardian · 2026-06-08<br>
+      Powered by Claude Code + DeepSeek<br>
+      Repository: axobase001/tomorrowedge
+    </div>
+    <div class="footer-geom" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

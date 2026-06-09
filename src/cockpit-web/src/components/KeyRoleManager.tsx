@@ -42,6 +42,17 @@ export function KeyRoleManager({
   const [apiKeyEnv, setApiKeyEnv] = useState(selectedProvider?.apiKeyEnv ?? defaultEnvFor(provider));
   const [apiKey, setApiKey] = useState("");
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const configPreview = useMemo(() => {
+    const lines = ["agents:"];
+    for (const a of assignments) {
+      lines.push(`  ${a.role}:`);
+      lines.push(`    provider: ${a.provider}`);
+      lines.push(`    model: ${a.model}`);
+    }
+    return lines.join("\n");
+  }, [assignments]);
 
   useEffect(() => {
     setProvider(initialProvider);
@@ -63,7 +74,7 @@ export function KeyRoleManager({
   return (
     <div className="te-keymgr-backdrop" data-testid="key-role-manager">
       <section className="te-keymgr-card">
-        <header>
+        <header className="te-keymgr-header">
           <div>
             <span className="te-chip te-chip-blue">{t("keymgr.badge")}</span>
             <h2>{t("keymgr.title")}</h2>
@@ -135,7 +146,25 @@ export function KeyRoleManager({
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={busy || !assignments.length} onClick={() => onSaveRoleAssignments(assignments)} data-testid="keymgr-save-roles">{t("keymgr.saveRoles")}</button>
+              <button type="button" className="te-quiet-button" onClick={() => setShowPreview((current) => !current)} data-testid="keymgr-preview-toggle">{showPreview ? t("keymgr.hidePreview") : t("keymgr.showPreview")}</button>
             </div>
+            {showPreview && (
+              <div className="te-keymgr-preview" data-testid="keymgr-preview">
+                <p>{t("keymgr.previewHint")}</p>
+                <textarea
+                  className="te-keymgr-preview-editor"
+                  value={configPreview}
+                  onChange={(event) => {
+                    // Parse edited YAML back to assignments
+                    const parsed = parseConfigPreview(event.target.value);
+                    if (parsed.length) setAssignments(parsed);
+                  }}
+                  rows={Math.max(6, assignments.length * 3 + 1)}
+                  spellCheck={false}
+                  data-testid="keymgr-preview-editor"
+                />
+              </div>
+            )}
           </section>
         )}
         {message ? <p className="te-setup-message" data-testid="keymgr-message">{message}</p> : null}
@@ -185,4 +214,29 @@ function suggestedModelFor(provider: string): string {
 
 function labelProvider(provider: string): string {
   return provider.replace(/_/g, " ");
+}
+
+function parseConfigPreview(text: string): CockpitRoleAssignment[] {
+  const result: CockpitRoleAssignment[] = [];
+  const lines = text.split("\n");
+  let currentRole = "";
+  for (const line of lines) {
+    const roleMatch = /^\s{2}(\w+):\s*$/.exec(line);
+    if (roleMatch) { currentRole = roleMatch[1]; continue; }
+    if (!currentRole) continue;
+    const providerMatch = /^\s{4}provider:\s*(\S+)/.exec(line);
+    if (providerMatch) {
+      const existing = result.find((a) => a.role === currentRole);
+      if (existing) existing.provider = providerMatch[1];
+      else result.push({ role: currentRole, provider: providerMatch[1], model: "auto" });
+      continue;
+    }
+    const modelMatch = /^\s{4}model:\s*(\S+)/.exec(line);
+    if (modelMatch) {
+      const existing = result.find((a) => a.role === currentRole);
+      if (existing) existing.model = modelMatch[1];
+      else result.push({ role: currentRole, provider: "auto", model: modelMatch[1] });
+    }
+  }
+  return result;
 }
