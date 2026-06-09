@@ -1,176 +1,78 @@
-# ADR: Encrypted API Key Storage
+# ADR: Encrypted Provider Secret Storage
 
-**Status:** proposed  
-**Date:** 2026-06-08  
-**Author:** ScourgeStorm1
+**Status:** implemented for encrypted local files; OS keychain remains planned
+**Date:** 2026-06-10
 
 ## Context
 
-v1.2.0 introduced a first-run SetupWizard that writes API keys to `.tomorrowedge/local.env`
-(plaintext). While `.tomorrowedge/` is git-ignored, storing API keys as plaintext on disk
-poses risks: accidental backup leakage, terminal history exposure, and visibility to any
-process running under the same user account.
+Early GUI setup wrote provider API keys to `.tomorrowedge/local.env`. The config
+file only stored `api_key_env`, so raw keys stayed out of YAML, but the GUI write
+path still created plaintext secrets on disk.
 
-TomorrowEdge needs a secure credential storage mechanism that:
-
-- Protects API keys at rest on disk
-- Integrates seamlessly with the existing provider layer (no breaking changes)
-- Works across Windows, macOS, and Linux without mandatory native dependencies
-- Provides a GUI for users to manage keys without editing `.env` files by hand
+TomorrowEdge needs provider setup that keeps onboarding simple while reducing
+accidental plaintext exposure. Existing `.env` and `.tomorrowedge/local.env`
+loading must remain backward compatible for users who already manage secrets
+outside the cockpit.
 
 ## Decision
 
-Implement a **layered SecretManager** with two backends:
+The GUI setup and Keys panel now write pasted provider keys to:
 
-### Primary: OS keychain (keytar)
-
-Use the operating system's native credential store (macOS Keychain, Windows Credential
-Manager, Linux Secret Service) via the `keytar` library. This is the same approach used by
-VS Code's `SecretStorage`.
-
-### Fallback: AES-256-CBC encrypted file
-
-When keytar is unavailable (native module not installed), fall back to an encrypted file
-at `~/.tomorrowedge/secrets.enc`.
-
-**Encryption details:**
-
-| Parameter | Value |
-|-----------|-------|
-| Algorithm | AES-256-CBC |
-| Key derivation | scrypt (N=16384, r=8, p=1, keylen=32) |
-| IV | Random 16 bytes per write |
-| Format | `iv:encryptedData` (both hex) |
-| Salt | Composite of service name + paths (bound to machine) |
-
-### Storage schema
-
-```json
-{
-  "deepseek": "sk-xxx",
-  "openai": "sk-yyy",
-  "anthropic": "sk-zzz"
-}
+```text
+.tomorrowedge/secrets.enc
 ```
 
-Provider names map to `{PROVIDER}_API_KEY` environment variables at startup:
-`"deepseek"` → `DEEPSEEK_API_KEY`.
+The file is an authenticated encrypted JSON envelope:
 
-### Priority when loading
+| Field | Value |
+| --- | --- |
+| Cipher | `aes-256-gcm` |
+| KDF | `scrypt` |
+| Salt | random per write |
+| IV | random per write |
+| Auth tag | stored separately |
+| File mode | `0600` where the platform honors it |
 
-```
-shell env vars (highest, never overwritten)
-  ↓
-.env / .tomorrowedge/local.env
-  ↓
-~/.tomorrowedge/secrets.enc (lowest, only used if no other source set)
-```
+The encryption key is derived from `TOMORROWEDGE_SECRET_PASSPHRASE` when it is
+set. Otherwise it is derived from local machine/user/project identity. That
+fallback protects against casual copy/leakage of the encrypted file, but it is
+not a replacement for a native OS credential store.
 
-### Relationship with v1.2.0 setup/key flow
+## Load Priority
 
-v1.2.0's SetupWizard writes keys to `local.env`. This ADR does not remove that path —
-it adds an **additional** secure storage option. The GUI Keys panel (`SecretPanel`)
-writes to `secrets.enc`; SetupWizard continues to write to `local.env`. At startup, both
-are loaded, with shell/env vars taking precedence.
+Provider keys are loaded in this order:
 
-### Masking
-
-Keys are never logged in full. The `maskKey()` function renders `sk-1234567890abcdef` as
-`sk-12****cdef` in UI and logs.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        GUI Layer (SecretPanel)                       │
-│  🔑 Keys button → add/edit/delete → PUT/DELETE /api/secrets/:prov   │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                    Server Routes (server.ts)                         │
-│  GET  /api/secrets          → listSecrets()                         │
-│  PUT  /api/secrets/:prov    → saveSecret(provider, apiKey)          │
-│  DELETE /api/secrets/:prov  → deleteSecret(provider)                │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                    SecretManager (secretManager.ts)                  │
-│                                                                     │
-│  saveSecret()                                                       │
-│    ├── keytar (OS keychain)     ← primary (macOS/Linux)             │
-│    └── AES-256-CBC encrypted    ← fallback (all platforms)          │
-│         ~/.tomorrowedge/secrets.enc                                 │
-│                                                                     │
-│  getSecret()                                                        │
-│    ├── keytar first, file fallback                                  │
-│    └── returns plaintext for immediate use                          │
-│                                                                     │
-│  listSecrets(): returns { provider, configured, maskedKey }[]       │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                     (persisted on disk)
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│               Startup Integration (envLoader.ts)                     │
-│                                                                     │
-│  loadConfig() → loadLocalEnv() → loadSecretsIntoEnv()               │
-│    │                                                                 │
-│    │  decrypt secrets.enc → {"deepseek":"sk-xxx", ...}              │
-│    │  map provider → uppercase env var name                         │
-│    │  inject into process.env (only if not already set)             │
-│    │                                                                 │
-│    ▼                                                                 │
-│  process.env receives DEEPSEEK_API_KEY / OPENAI_API_KEY entries     │
-│  using values loaded from secure storage                            │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                   Provider Layer (registry.ts)                       │
-│                                                                     │
-│  providerKey(config, "deepseek") → process.env.DEEPSEEK_API_KEY     │
-│  providerKey(config, "openai")   → process.env.OPENAI_API_KEY       │
-│                                                                     │
-│  No changes to existing provider code required.                     │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                        External LLM APIs                             │
-│                                                                     │
-│  deepseek.ts  → Authorization: Bearer sk-xxx → DeepSeek API         │
-│  anthropic.ts → x-api-key: sk-yyy            → Anthropic API        │
-│  openaiCompatible.ts → Authorization: Bearer sk-zzz → OpenAI API    │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+shell environment variables
+.env
+.tomorrowedge/local.env
+.tomorrowedge/secrets.enc
 ```
 
-### Module map
+Later layers never overwrite values already present in `process.env`. This keeps
+existing shell and CI configurations authoritative.
 
-| Module | File | Role |
-|--------|------|------|
-| SecretPanel | `src/cockpit-web/src/components/SecretPanel.tsx` | GUI for CRUD operations |
-| Secrets API | `src/cockpit-web/src/api.ts` | Frontend fetch functions |
-| Server routes | `src/localCockpit/server.ts` | Nonce-protected REST endpoints |
-| SecretManager | `src/core/secretManager.ts` | AES-256 encryption, keytar fallback, masking |
-| Env loader | `src/config/envLoader.ts` | Startup decryption → `process.env` |
-| Provider registry | `src/providers/registry.ts` | `providerKey()` reads from `process.env` |
+## Runtime Contract
 
-## Consequences
+- Config continues to store only provider metadata and `api_key_env`.
+- Provider code still reads keys through `process.env`.
+- GUI status can report `env`, `local_env`, `encrypted_file`, `not_required`, or
+  `missing`.
+- Removing a provider key deletes the encrypted record and also removes the
+  matching legacy `local.env` entry when present.
+- Raw keys are never returned to the browser after saving; status uses masked
+  values only.
 
-### Positive
+## OS Keychain Status
 
-- API keys are never stored as plaintext on disk
-- No changes required to existing provider code (keys injected into `process.env`)
-- Graceful degradation: missing/corrupted file → empty config, no crash
-- Cross-platform: keytar where available, encrypted file everywhere
+Native keychain storage is still a future enhancement. A production-grade
+cross-platform implementation should use Windows Credential Manager, macOS
+Keychain, and Linux Secret Service, with the encrypted file as fallback. The
+current implementation intentionally avoids mandatory native dependencies so the
+release package, CI, and Windows local setup stay reliable.
 
-### Negative
+## Validation
 
-- After decryption, keys exist in `process.env` as plaintext (same as all Node.js apps)
-- scrypt salt is derived from deterministic inputs (file paths), not a random secret
-  — acceptable for local-only threat model, but not for multi-user server deployments
-- Dual storage (local.env + secrets.enc) may confuse users about which source is active
-
-### Risks
-
-- If `~/.tomorrowedge/secrets.enc` is deleted, keys are lost (user must re-enter them)
-- If the scrypt derivation inputs change (username/home path changes), existing file
-  cannot be decrypted — treated as corrupted, returns empty config
+- `tests/unit/secretManager.test.ts`
+- `tests/unit/localCockpit.test.ts`
+- `npm run secrets:scan`

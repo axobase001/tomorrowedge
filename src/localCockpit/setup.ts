@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
+import { deleteProviderSecret, getProviderSecret, maskSecret, readProviderSecrets, saveProviderSecret, type ProviderSecretMap } from "../core/secrets/secretManager.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
 import { fetchProviderModelCatalog } from "../providers/modelCatalog.js";
 import { canonicalizeOpenRouterModelId, fetchOpenRouterCatalog, recommendFreeOpenRouterModels } from "../providers/openrouterCatalog.js";
@@ -15,7 +16,7 @@ export type CockpitProviderReadiness = {
   baseUrl: string;
   apiKeyEnv?: string;
   keyConfigured: boolean;
-  keySource: "env" | "local_env" | "not_required" | "missing";
+  keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
 };
@@ -89,7 +90,8 @@ const defaultEnvNames: Record<string, string> = {
 export function getCockpitSetupStatus(cwd: string): CockpitSetupStatus {
   const config = loadConfig(cwd);
   const localEnv = readLocalEnvMap(cwd);
-  const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider, localEnv));
+  const encryptedSecrets = readProviderSecrets(cwd);
+  const providers = Object.entries(config.providers).map(([id, provider]) => providerReadiness(id, provider, localEnv, encryptedSecrets));
   const roleAssignments = Object.entries(config.agents).map(([role, agent]) => ({
     role,
     provider: agent.provider,
@@ -140,7 +142,7 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
   const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
   if (requiresAuth(currentProvider) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   if (request.apiKey?.trim() && apiKeyEnv) {
-    await writeLocalEnvValue(cwd, apiKeyEnv, request.apiKey.trim());
+    await saveProviderSecret(cwd, providerId, request.apiKey.trim(), apiKeyEnv);
     process.env[apiKeyEnv] = request.apiKey.trim();
   }
   const nextProvider: ProviderConfig = {
@@ -174,11 +176,11 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
   if (apiKey) {
-    await writeLocalEnvValue(cwd, apiKeyEnv, apiKey);
+    await saveProviderSecret(cwd, providerId, apiKey, apiKeyEnv);
     process.env[apiKeyEnv] = apiKey;
   } else if (requiresAuth(currentProvider)) {
     const localEnv = readLocalEnvMap(cwd);
-    const existingKey = process.env[apiKeyEnv] ?? localEnv.get(apiKeyEnv);
+    const existingKey = process.env[apiKeyEnv] ?? localEnv.get(apiKeyEnv) ?? getProviderSecret(cwd, providerId)?.apiKey;
     if (!existingKey) throw new Error("API key is required unless an existing key is configured for this env var.");
   }
   await writeConfig(cwd, {
@@ -240,9 +242,15 @@ export async function deleteCockpitProviderKey(cwd: string, providerIdValue: str
   const provider = config.providers[providerId];
   if (!provider) throw new Error(`Unknown provider: ${providerId}`);
   const apiKeyEnv = provider.api_key_env ?? defaultEnvNameFor(providerId);
+  const removedCredential = await deleteProviderSecret(cwd, providerId);
   if (apiKeyEnv) {
     const previous = await removeLocalEnvValue(cwd, apiKeyEnv);
-    if (previous !== undefined && process.env[apiKeyEnv] === previous) delete process.env[apiKeyEnv];
+    if (
+      (previous !== undefined && process.env[apiKeyEnv] === previous) ||
+      (removedCredential?.apiKey && process.env[apiKeyEnv] === removedCredential.apiKey)
+    ) {
+      delete process.env[apiKeyEnv];
+    }
   }
   await writeConfig(cwd, {
     ...config,
@@ -289,12 +297,26 @@ export async function testCockpitProvider(cwd: string, providerId: string): Prom
   return testProviderConnection(normalized, provider);
 }
 
-function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<string, string>): CockpitProviderReadiness {
+function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<string, string>, encryptedSecrets: ProviderSecretMap): CockpitProviderReadiness {
   const authRequired = requiresAuth(provider);
   const envName = provider.api_key_env;
   const envValue = envName ? process.env[envName] : undefined;
   const localValue = envName ? localEnv.get(envName) : undefined;
-  const keyValue = envValue ?? localValue;
+  const encryptedValue = encryptedSecrets.get(id)?.apiKey;
+  const keyValue = envValue ?? localValue ?? encryptedValue;
+  const keySource = !authRequired
+    ? "not_required"
+    : localValue && (!envValue || envValue === localValue)
+      ? "local_env"
+      : encryptedValue && (!envValue || envValue === encryptedValue)
+        ? "encrypted_file"
+        : envValue
+          ? "env"
+          : localValue
+            ? "local_env"
+            : encryptedValue
+              ? "encrypted_file"
+              : "missing";
   return {
     id,
     enabled: provider.enabled,
@@ -302,8 +324,8 @@ function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<s
     baseUrl: provider.base_url,
     apiKeyEnv: envName,
     keyConfigured: !authRequired || Boolean(keyValue),
-    keySource: !authRequired ? "not_required" : localValue ? "local_env" : envValue ? "env" : "missing",
-    maskedKey: keyValue ? maskKey(keyValue) : undefined,
+    keySource,
+    maskedKey: keyValue ? maskSecret(keyValue) : undefined,
     authRequired
   };
 }
@@ -453,11 +475,6 @@ function unquoteLocalEnvValue(value: string): string {
   }
   if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);
   return trimmed;
-}
-
-function maskKey(value: string): string {
-  if (value.length <= 8) return `${value.slice(0, 4)}****`;
-  return `${value.slice(0, 4)}****${value.slice(-4)}`;
 }
 
 function bindAllRoles(config: TomorrowEdgeConfig, provider: string, model: string): TomorrowEdgeConfig["agents"] {

@@ -33,6 +33,11 @@ After adding an API key, use `tedge models --connection-test` to verify that
 enabled provider endpoints return HTTP 2xx from `/models` before running any
 chat completion smoke test.
 
+Keys entered through the GUI setup wizard or `Keys` panel are written to the
+encrypted `.tomorrowedge/secrets.enc` store. Shell environment variables,
+`.env`, and legacy `.tomorrowedge/local.env` remain supported and take priority
+when already set.
+
 `tedge init` never overwrites an existing config. Use `tedge init --force` only
 when you intentionally want to replace the current config with defaults.
 

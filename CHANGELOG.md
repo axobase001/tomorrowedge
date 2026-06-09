@@ -9,6 +9,9 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ### Added
 
+- Authenticated encrypted local provider secret storage for GUI setup and the
+  `Keys` panel, backed by `.tomorrowedge/secrets.enc` while preserving
+  env-var based provider configuration.
 - Structured failure memory records for failed or partial saved sessions,
   including failure class, correction strategy, confidence, recurrence, and
   artifact refs without raw bulky artifact content.
@@ -29,6 +32,9 @@ Changelog: newest changes first, grouped by release and by change type.
   core, vision, planning, exploration, candidate generation, review/judge,
   advisory, patch application, and verification/repair instead of keeping the
   full orchestration inside one long entrypoint.
+- GUI provider setup no longer writes newly pasted API keys to plaintext
+  `.tomorrowedge/local.env`; that path remains read-compatible for existing
+  installations.
 
 ## [1.2.14] - 2026-06-09
 
