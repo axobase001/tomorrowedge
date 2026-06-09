@@ -63,8 +63,9 @@ async function assertInstalledClientServesCockpit(installDir: string): Promise<v
     stdio: ["ignore", "pipe", "pipe"]
   });
   try {
-    const output = await waitForOutput(child, /TomorrowEdge GUI client: (http:\/\/127\.0\.0\.1:\d+\/\?nonce=[^\s]+)/);
-    const url = output.match(/TomorrowEdge GUI client: (http:\/\/127\.0\.0\.1:\d+\/\?nonce=[^\s]+)/)?.[1];
+    const cockpitUrlPattern = /TomorrowEdge GUI client:\s+(http:\/\/127\.0\.0\.1:\d+(?:\/\?nonce=[^\s]+)?)/;
+    const output = await waitForOutput(child, cockpitUrlPattern);
+    const url = output.match(cockpitUrlPattern)?.[1];
     if (!url) throw new Error(`Installed client did not print a cockpit URL. Output:\n${output}`);
     const html = await fetch(url).then((response) => response.text());
     const assetPath = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];

@@ -7,6 +7,12 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.15] - 2026-06-10
+
+1.2.15 turns the latest issue sweep into a release: failure-memory retrieval now
+has explicit exploration/exploitation policy controls, scoped correction
+lessons, falsifiable error-loop metrics, and an auditable ablation matrix.
+
 ### Added
 
 - Authenticated encrypted local provider secret storage for GUI setup and the
