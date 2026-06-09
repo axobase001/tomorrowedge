@@ -20,6 +20,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Detail drawer RoleGraph section with workflow kind, role dependencies,
   required/optional nodes, fallback/skip flags, and stop conditions.
 - GUI support for adding custom OpenAI-compatible gateway providers.
+- GUI key manager model recommendations via a local `/api/setup/models`
+  endpoint, including OpenRouter free/low-cost catalog refresh and static
+  fallback suggestions for common providers.
 
 ### Changed
 
@@ -33,6 +36,9 @@ Changelog: newest changes first, grouped by release and by change type.
   current project directory.
 - Live patch and advisory provider calls now emit invocation-time
   `budget_decision` events in addition to routing-time `budget_preview` events.
+- Existing configured provider keys can now be reused while saving only model,
+  base URL, or env-var metadata changes; entering a new key remains explicit
+  secret rotation.
 
 ### Fixed
 
@@ -46,6 +52,11 @@ Changelog: newest changes first, grouped by release and by change type.
   as escaping the workspace root.
 - Obvious mojibake additions and malformed generated HTML closing tags are
   blocked before a patch is surfaced for approval.
+- GUI first-run readiness now recognizes explicitly routed no-auth local
+  providers such as Ollama and enabled external MCP agents, so configured local
+  or external runtimes no longer fall back to fixture mode.
+- The GUI key manager no longer leaks a model typed for one provider into the
+  next selected provider.
 
 ## [1.2.12] - 2026-06-09
 

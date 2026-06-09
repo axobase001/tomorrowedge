@@ -47,7 +47,7 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 当前版本：`1.2.13`。
 
-- `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, and custom OpenAI-compatible gateways can be added from the GUI.
+- `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
 - `1.2.12` closes the high-priority orchestration and GUI trace issue batch: coder candidates and live patch generation now start in the same candidate-production stage, external MCP processes are reused during role calls, planner/explorer results can be cached, built-in workflow recipes are available, judge decisions consume debate evidence, repair approvals stay visible, and route drawers show routing reasons.
 - `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
 - `1.2.10` upgrades planner/routing/budget governance: planning can use a structured model-backed planner with native fallback, native plans are adaptive instead of fixed four-step templates, routes can update after planning, and per-role budget caps are now configurable.
@@ -483,8 +483,11 @@ isolated sample workspaces, live patch/advisory calls emit invocation-time
 read-only workflows, pending patch authorization is no longer shown as rejected
 history, patch failures leave waiting approval with a clear failure state,
 nested project-relative add-file paths are accepted, obvious mojibake/malformed
-HTML additions are blocked, the detail drawer shows the RoleGraph, and custom
-OpenAI-compatible gateways can be added from the GUI.
+HTML additions are blocked, the detail drawer shows the RoleGraph, configured
+no-auth local providers and external MCP agents no longer force fixture
+fallback, the key manager supports model-only provider saves and
+OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be
+added from the GUI.
 
 `1.2.12` closes the high-priority orchestration and GUI trace issue batch:
 coder candidates and live patch generation now start in the same
