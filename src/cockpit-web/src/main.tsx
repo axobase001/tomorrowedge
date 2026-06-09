@@ -24,6 +24,7 @@ import {
   type CockpitSetupStatus
 } from "./api.js";
 import { createTranslator, normalizeLanguage, type GuiLanguage } from "./i18n.js";
+import { buildCockpitRunRequest } from "./runRequest.js";
 
 const emptyViewModel: CockpitViewModel = {
   version: "1",
@@ -210,18 +211,11 @@ function CockpitWebRoot() {
       return;
     }
     setBusy(true);
-    const useLiveModels = Boolean(setupStatus && !setupStatus.needsSetup && accessMode !== "restricted");
+    const setupReady = Boolean(setupStatus && !setupStatus.needsSetup);
+    const useLiveModels = setupReady && accessMode !== "restricted";
     setStatusMessage(useLiveModels ? t("status.startingLive") : t("status.startingFixture"));
     try {
-      const payload = await startCockpitRun({
-        goal: goal.trim() || "fix failing test",
-        accessMode,
-        fixtureMode: !useLiveModels,
-        livePatch: useLiveModels,
-        liveAdvisory: useLiveModels,
-        liveVision: false,
-        to: "core"
-      }, apiOptions);
+      const payload = await startCockpitRun(buildCockpitRunRequest({ goal, accessMode, setupReady }), apiOptions);
       updateSelectedSession(payload.sessionId);
       setStatusMessage(t("status.workflowRunning"));
       connectLive(payload.sessionId);
