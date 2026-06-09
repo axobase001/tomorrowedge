@@ -8,6 +8,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { markLiveRunFailed, startLocalCockpitServer } from "../../src/localCockpit/server.js";
+import { listCockpitProviderModels } from "../../src/localCockpit/setup.js";
 
 describe("local cockpit server", () => {
   it("accepts port 0 in CLI port parsing for OS-assigned ports", () => {
@@ -560,6 +561,112 @@ describe("local cockpit server", () => {
     } finally {
       delete process.env.TEST_KEY_PANEL_DEEPSEEK;
       await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("saves provider model metadata without re-entering an already configured key", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-only-save-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const first = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "moonshotai/kimi-k2:free",
+          apiKeyEnv: "TEST_MODEL_ONLY_OPENROUTER",
+          apiKey: "test-model-only-key"
+        })
+      });
+      const second = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen/qwen3-coder:free",
+          baseUrl: "https://openrouter.ai/api/v1/",
+          apiKeyEnv: "TEST_MODEL_ONLY_OPENROUTER"
+        })
+      });
+      const payload = await second.json() as { providers: Array<{ id: string; model: string; keyConfigured: boolean }> };
+      const config = loadConfig(cwd);
+      const localEnv = await readFile(path.join(cwd, ".tomorrowedge", "local.env"), "utf8");
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(payload.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
+        model: "qwen/qwen3-coder:free",
+        keyConfigured: true
+      });
+      expect(config.providers.openrouter.model).toBe("qwen/qwen3-coder:free");
+      expect(localEnv).toContain('TEST_MODEL_ONLY_OPENROUTER="test-model-only-key"');
+    } finally {
+      delete process.env.TEST_MODEL_ONLY_OPENROUTER;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects model-only provider saves when no key is configured", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-only-missing-key-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen/qwen3-coder:free",
+          apiKeyEnv: "TEST_MODEL_ONLY_MISSING_OPENROUTER"
+        })
+      });
+      const payload = await response.json() as { error: string; message: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("setup_error");
+      expect(payload.message).toContain("API key is required");
+    } finally {
+      delete process.env.TEST_MODEL_ONLY_MISSING_OPENROUTER;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("lists provider model recommendations for the GUI key manager", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-list-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/models?provider=deepseek&nonce=${server.nonce}`);
+      const models = await response.json() as Array<{ id: string; source: string; isFree?: boolean }>;
+
+      expect(response.status).toBe(200);
+      expect(models).toContainEqual(expect.objectContaining({ id: "deepseek-chat", source: "static" }));
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes OpenRouter catalog recommendations for the GUI key manager", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-openrouter-models-"));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      data: [{
+        id: "qwen/qwen3-coder:free",
+        name: "Qwen3 Coder Free",
+        context_length: 262144,
+        pricing: { prompt: "0", completion: "0" },
+        architecture: { input_modalities: ["text"], output_modalities: ["text"] }
+      }]
+    }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+    try {
+      const models = await listCockpitProviderModels(cwd, "openrouter", 5);
+
+      expect(models).toContainEqual(expect.objectContaining({
+        id: "qwen/qwen3-coder:free",
+        source: "catalog",
+        isFree: true
+      }));
+    } finally {
+      globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });
     }
   });

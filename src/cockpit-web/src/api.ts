@@ -66,7 +66,16 @@ export type CockpitProviderKeyRequest = {
   model?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
-  apiKey: string;
+  apiKey?: string;
+};
+
+export type CockpitProviderModelOption = {
+  id: string;
+  label: string;
+  source: "catalog" | "static";
+  isFree?: boolean;
+  isLowCost?: boolean;
+  tags?: string[];
 };
 
 export type CockpitRoleAssignmentsRequest = {
@@ -140,6 +149,12 @@ export async function testCockpitSetupProvider(provider: string, options: Cockpi
   });
   if (!response.ok) throw new Error(await response.text());
   return response.json() as Promise<CockpitProviderConnectionResult>;
+}
+
+export async function listCockpitProviderModels(provider: string, options: CockpitApiOptions): Promise<CockpitProviderModelOption[]> {
+  const response = await fetch(apiUrl(`/api/setup/models?provider=${encodeURIComponent(provider)}`, options), { headers: apiHeaders(options) });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitProviderModelOption[]>;
 }
 
 export async function loadCockpitViewModel(sessionId: string, options: CockpitApiOptions): Promise<CockpitViewModel> {

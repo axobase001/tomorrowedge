@@ -31,6 +31,7 @@ import {
   configureCockpitProvider,
   deleteCockpitProviderKey,
   getCockpitSetupStatus,
+  listCockpitProviderModels,
   saveCockpitProviderKey,
   saveCockpitRoleAssignments,
   testCockpitProvider
@@ -175,6 +176,12 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const provider = typeof body.provider === "string" ? body.provider : "";
       if (!provider.trim()) throw new HttpError(400, "provider_required", "provider is required.");
       return sendJson(response, 200, await toSetupHttpResult(() => testCockpitProvider(cwd, provider)));
+    }
+    if (request.method === "GET" && url.pathname === "/api/setup/models") {
+      const provider = url.searchParams.get("provider") ?? "";
+      if (!provider.trim()) throw new HttpError(400, "provider_required", "provider is required.");
+      const limit = parseLimitParam(url.searchParams.get("limit"), 20);
+      return sendJson(response, 200, await toSetupHttpResult(() => listCockpitProviderModels(cwd, provider, limit)));
     }
     const sessionMatch = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && sessionMatch) {
@@ -542,8 +549,14 @@ function parseProviderKeyRequest(provider: string, value: Record<string, unknown
   const model = typeof value.model === "string" ? value.model.trim() : undefined;
   const baseUrl = typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined;
   const apiKeyEnv = typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined;
-  if (!apiKey.trim()) throw new HttpError(400, "api_key_required", "API key is required.");
   return { provider, model, baseUrl, apiKeyEnv, apiKey };
+}
+
+function parseLimitParam(value: string | null, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) throw new HttpError(400, "invalid_limit", "limit must be an integer from 1 to 50.");
+  return parsed;
 }
 
 function parseRoleAssignmentsRequest(value: Record<string, unknown>) {

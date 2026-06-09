@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
-import { roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
+import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
@@ -122,7 +122,50 @@ describe("cockpit web React surface", () => {
     expect(open).toContain("list=\"keymgr-provider-options\"");
     expect(open).toContain("data-testid=\"keymgr-base-url\"");
     expect(open).toContain("data-testid=\"keymgr-save-key\"");
+    expect(open).toContain("data-testid=\"keymgr-refresh-models\"");
+    expect(open).toContain("qwen/qwen3-coder:free");
     expect(open).toContain("data-testid=\"keymgr-tab-roles\"");
+  });
+
+  it("keeps provider model drafts isolated by provider defaults", () => {
+    const providers = [
+      { id: "openrouter", model: "moonshotai/kimi-k2:free", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY" },
+      { id: "deepseek", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", apiKeyEnv: "DEEPSEEK_API_KEY" }
+    ];
+
+    expect(providerFormDefaults("openrouter", providers)).toMatchObject({
+      model: "moonshotai/kimi-k2:free",
+      baseUrl: "https://openrouter.ai/api/v1"
+    });
+    expect(providerFormDefaults("deepseek", providers)).toMatchObject({
+      model: "deepseek-chat",
+      baseUrl: "https://api.deepseek.com"
+    });
+  });
+
+  it("allows model-only provider saves after a key is already configured", () => {
+    expect(canSaveProviderConfig({
+      provider: "openrouter",
+      model: "qwen/qwen3-coder:free",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      apiKey: "",
+      keyConfigured: true,
+      busy: false
+    })).toBe(true);
+    expect(canSaveProviderConfig({
+      provider: "openrouter",
+      model: "qwen/qwen3-coder:free",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      apiKey: "",
+      keyConfigured: false,
+      busy: false
+    })).toBe(false);
+  });
+
+  it("combines static and catalog model recommendations for the picker", () => {
+    expect(modelOptionIds("openrouter", "moonshotai/kimi-k2:free", [{ id: "qwen/qwen3-coder:free", label: "Qwen", source: "catalog" }])).toContain("qwen/qwen3-coder:free");
   });
 
   it("renders the role assignment tab entry in the key manager", () => {
@@ -291,6 +334,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onDeleteProviderKey: () => undefined,
       onSaveRoleAssignments: () => undefined,
       onTestSetup: () => undefined,
+      onListProviderModels: async () => [],
       onDismissSetup: () => undefined,
       onOpenKeyManager: () => undefined,
       onCloseKeyManager: () => undefined,
