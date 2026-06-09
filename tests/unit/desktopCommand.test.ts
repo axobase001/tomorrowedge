@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { bindDesktopShutdown, buildElectronLaunchConfig, desktopCommandWithDependencies, isWslgEnvironment, launchDesktopWindow } from "../../src/cli/commands/desktop.js";
+import { bindDesktopShutdown, buildElectronLaunchConfig, desktopCommandWithDependencies, isWslEnvironment, isWslgEnvironment, launchDesktopWindow } from "../../src/cli/commands/desktop.js";
 import type { LocalCockpitHandle } from "../../src/localCockpit/server.js";
 
 describe("desktop command", () => {
@@ -92,14 +92,21 @@ describe("desktop command", () => {
 
     expect(isWslgEnvironment(env)).toBe(true);
     expect(config.args).toEqual(expect.arrayContaining([
+      "--class=TomorrowEdge",
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-dev-shm-usage",
+      "--ozone-platform=x11",
       "--no-sandbox"
     ]));
     expect(toPosixPath(config.args.at(-1) ?? "")).toContain("desktop/electron-main.cjs");
     expect(config.env.TOMORROWEDGE_DESKTOP_WSLG).toBe("1");
     expect(config.env.LIBGL_ALWAYS_SOFTWARE).toBe("1");
+  });
+
+  it("detects WSL when common WSL variables are present", () => {
+    expect(isWslEnvironment({ WSL_INTEROP: "/run/WSL/1_interop" })).toBe(true);
+    expect(isWslEnvironment({ WSL_DISTRO_NAME: "Ubuntu-24.04" })).toBe(true);
   });
 });
 

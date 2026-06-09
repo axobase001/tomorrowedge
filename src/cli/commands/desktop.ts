@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { startLocalCockpitServer, type LocalCockpitHandle } from "../../localCockpit/server.js";
@@ -87,6 +88,11 @@ export async function launchDesktopWindow(runtime: DesktopRuntime, handle: Local
 }
 
 function launchElectron(url: string): ChildProcess {
+  if (isWslEnvironment()) {
+    const windowsElectron = launchWindowsElectronFromWsl(url);
+    if (windowsElectron) return windowsElectron;
+  }
+
   const require = createRequire(import.meta.url);
   let electronPath: string;
   try {
@@ -104,7 +110,7 @@ function launchElectron(url: string): ChildProcess {
 }
 
 export function buildElectronLaunchConfig(url: string, env: NodeJS.ProcessEnv = process.env): ElectronLaunchConfig {
-  const mainPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "desktop", "electron-main.cjs");
+  const mainPath = resolveElectronMainPath();
   const launchEnv: NodeJS.ProcessEnv = { ...env, TOMORROWEDGE_DESKTOP_URL: url };
   if (!isWslgEnvironment(env)) return { args: [mainPath], env: launchEnv };
 
@@ -112,14 +118,88 @@ export function buildElectronLaunchConfig(url: string, env: NodeJS.ProcessEnv = 
   launchEnv.LIBGL_ALWAYS_SOFTWARE = launchEnv.LIBGL_ALWAYS_SOFTWARE ?? "1";
   return {
     args: [
+      "--class=TomorrowEdge",
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-dev-shm-usage",
+      "--ozone-platform=x11",
       "--no-sandbox",
       mainPath
     ],
     env: launchEnv
   };
+}
+
+function launchWindowsElectronFromWsl(url: string): ChildProcess | undefined {
+  const launchConfig = buildWindowsElectronLaunchConfigFromWsl(url);
+  if (!launchConfig) return undefined;
+  return spawn(launchConfig.command, launchConfig.args, {
+    cwd: launchConfig.cwd,
+    detached: false,
+    stdio: "ignore",
+    windowsHide: true
+  });
+}
+
+export function buildWindowsElectronLaunchConfigFromWsl(url: string): { command: string; args: string[]; cwd: string } | undefined {
+  const nodePath = findWindowsNodeFromWsl();
+  const npxCliPath = findWindowsNpxCliFromWsl();
+  const mainPath = toWindowsPathFromWsl(resolveElectronMainPath());
+  if (!nodePath || !npxCliPath || !mainPath) return undefined;
+
+  return {
+    command: nodePath,
+    args: [
+      npxCliPath,
+      "--yes",
+      `electron@${resolveElectronPackageVersion()}`,
+      mainPath,
+      `--tomorrowedge-url=${url}`
+    ],
+    cwd: "/mnt/c/Windows/System32"
+  };
+}
+
+function resolveElectronMainPath(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "desktop", "electron-main.cjs");
+}
+
+function resolveElectronPackageVersion(): string {
+  const require = createRequire(import.meta.url);
+  try {
+    const pkg = require("electron/package.json") as { version?: string };
+    return pkg.version ?? "latest";
+  } catch {
+    return "latest";
+  }
+}
+
+function findWindowsNodeFromWsl(): string | undefined {
+  for (const command of [
+    "/mnt/c/Program Files/nodejs/node.exe",
+    "/mnt/c/Program Files (x86)/nodejs/node.exe"
+  ]) {
+    if (existsSync(command)) return command;
+  }
+  return undefined;
+}
+
+function findWindowsNpxCliFromWsl(): string | undefined {
+  for (const command of [
+    "/mnt/c/Program Files/nodejs/node_modules/npm/bin/npx-cli.js",
+    "/mnt/c/Program Files (x86)/nodejs/node_modules/npm/bin/npx-cli.js"
+  ]) {
+    if (!existsSync(command)) continue;
+    return toWindowsPathFromWsl(command);
+  }
+  return undefined;
+}
+
+function toWindowsPathFromWsl(value: string): string | undefined {
+  const result = spawnSync("wslpath", ["-w", value], { encoding: "utf8" });
+  if (result.status !== 0) return undefined;
+  const converted = result.stdout.trim();
+  return converted.length > 0 ? converted : undefined;
 }
 
 export function isWslgEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -129,6 +209,17 @@ export function isWslgEnvironment(env: NodeJS.ProcessEnv = process.env): boolean
   );
 }
 
+export function isWslEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.WSL_DISTRO_NAME || env.WSL_INTEROP || env.WSL2_GUI_APPS_ENABLED) return true;
+  if (process.platform !== "linux") return false;
+  try {
+    const release = readFileSync("/proc/sys/kernel/osrelease", "utf8").toLowerCase();
+    return release.includes("microsoft") || release.includes("wsl");
+  } catch {
+    return false;
+  }
+}
+
 function launchAppMode(url: string): ChildProcess {
   if (process.platform === "win32") {
     return spawn("cmd", ["/c", "start", "", "msedge", `--app=${url}`, "--new-window"], {
@@ -136,6 +227,17 @@ function launchAppMode(url: string): ChildProcess {
       stdio: "ignore",
       windowsHide: true
     });
+  }
+  if (isWslEnvironment()) {
+    const command = findWindowsBrowserFromWsl();
+    if (command) {
+      return spawn(command, [`--app=${url}`, "--new-window"], {
+        cwd: "/mnt/c/Windows/System32",
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+    }
   }
   if (process.platform === "darwin") {
     const appName = findMacBrowserApp();
@@ -159,6 +261,18 @@ function findLinuxBrowserCommand(): string | undefined {
   for (const command of ["google-chrome", "chromium", "chromium-browser", "microsoft-edge"]) {
     const result = spawnSync(command, ["--version"], { stdio: "ignore" });
     if (result.status === 0) return command;
+  }
+  return undefined;
+}
+
+function findWindowsBrowserFromWsl(): string | undefined {
+  for (const command of [
+    "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe",
+    "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+    "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe"
+  ]) {
+    if (existsSync(command)) return command;
   }
   return undefined;
 }
