@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { createProviderRegistry } from "../../src/providers/registry.js";
 import { OpenAICompatibleProvider } from "../../src/providers/openaiCompatible.js";
-import { recommendFreeOpenRouterModels } from "../../src/providers/openrouterCatalog.js";
+import { canonicalizeOpenRouterModelId, recommendFreeOpenRouterModels } from "../../src/providers/openrouterCatalog.js";
 import { testProviderConnection } from "../../src/providers/connectionTest.js";
 
 describe("provider registry", () => {
@@ -260,14 +260,33 @@ describe("provider registry", () => {
     expect(recommended[0]?.id).toBe("moonshotai/kimi-k2.6:free");
   });
 
-  it("tests provider connectivity with a lightweight /models request", async () => {
+  it("canonicalizes OpenRouter display labels and stale Kimi defaults before provider calls", () => {
+    const catalog = [{
+      id: "moonshotai/kimi-k2.6:free",
+      name: "MoonshotAI: Kimi K2.6 (free)",
+      contextWindow: 262144,
+      promptPrice: 0,
+      completionPrice: 0,
+      isFree: true,
+      isLowCost: false,
+      tags: ["kimi", "k2.6"]
+    }];
+
+    expect(canonicalizeOpenRouterModelId("MoonshotAI: Kimi K2.6 (free)", catalog)).toBe("moonshotai/kimi-k2.6:free");
+    expect(canonicalizeOpenRouterModelId("moonshotai/kimi-k2:free", catalog)).toBe("moonshotai/kimi-k2.6:free");
+    expect(canonicalizeOpenRouterModelId("MoonshotAI: Kimi K2.6 (free)")).toBe("moonshotai/kimi-k2.6:free");
+  });
+
+  it("tests provider connectivity with a selected-model smoke request", async () => {
     vi.stubEnv("OPENROUTER_TEST_KEY", "test-key");
     let observedUrl = "";
     let observedHeaders: Headers | undefined;
+    let observedBody = "";
     vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
       observedUrl = String(input);
       observedHeaders = new Headers(init?.headers);
-      return new Response(JSON.stringify({ data: [] }), {
+      observedBody = String(init?.body ?? "");
+      return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       });
@@ -283,10 +302,12 @@ describe("provider registry", () => {
       extra_headers: {}
     });
 
-    expect(observedUrl).toBe("https://openrouter.ai/api/v1/models");
+    expect(observedUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(observedHeaders?.get("Authorization")).toBe("Bearer test-key");
+    expect(observedBody).toContain("moonshotai/kimi-k2.6:free");
     expect(result.status).toBe("ok");
     expect(result.httpStatus).toBe(200);
+    expect(result.testedModel).toBe("moonshotai/kimi-k2.6:free");
   });
 
   it("does not attempt provider connectivity when the configured key env is missing", async () => {
@@ -311,13 +332,13 @@ describe("provider registry", () => {
     expect(result.detail).toContain("missing env");
   });
 
-  it("tests Anthropic and Gemini connectivity with native catalog headers", async () => {
+  it("tests Anthropic and Gemini connectivity with native selected-model smoke endpoints", async () => {
     vi.stubEnv("ANTHROPIC_TEST_KEY", "anthropic-test-key");
     vi.stubEnv("GEMINI_TEST_KEY", "gemini-test-key");
     const observed: Array<{ url: string; headers: Headers }> = [];
     vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
       observed.push({ url: String(input), headers: new Headers(init?.headers) });
-      return new Response(JSON.stringify({ data: [] }), {
+      return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       });
@@ -344,10 +365,10 @@ describe("provider registry", () => {
 
     expect(anthropic.status).toBe("ok");
     expect(gemini.status).toBe("ok");
-    expect(observed[0]?.url).toBe("https://api.anthropic.com/v1/models");
+    expect(observed[0]?.url).toBe("https://api.anthropic.com/v1/messages");
     expect(observed[0]?.headers.get("x-api-key")).toBe("anthropic-test-key");
     expect(observed[0]?.headers.get("anthropic-version")).toBe("2023-06-01");
-    expect(observed[1]?.url).toBe("https://generativelanguage.googleapis.com/v1beta/models");
+    expect(observed[1]?.url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent");
     expect(observed[1]?.headers.get("x-goog-api-key")).toBe("gemini-test-key");
   });
 });

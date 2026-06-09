@@ -66,7 +66,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
       role: event.role,
       summary: eventSummary(event)
     })),
-    rawEvents: state?.events ?? [],
+    rawEvents: compactRawEvents(state?.events ?? []),
     artifacts: (state?.eventArtifacts ?? []).map((artifact) => ({
       ref: artifact.ref,
       kind: artifact.ref.split(/[\\/]/)[1] ?? "artifact"
@@ -384,9 +384,7 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return {
       title: failed ? "Failure diagnosis" : "Workflow complete",
       subtitle: state.finalSummary.result,
-      body: failed
-        ? [...state.finalSummary.evidence, ...state.finalSummary.risksRemaining.map((risk) => `Suggestion: ${risk}`)].join("\n")
-        : state.finalSummary.evidence.join("\n"),
+      body: failed ? failureBody(state) : completedBody(state),
       filesChanged: state.changedFiles,
       testStatus: state.runResults.at(-1)?.success ? "passed" : state.runResults.length ? "failed" : "not_run"
     };
@@ -398,6 +396,72 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return { title: "Plan and route", subtitle: `${state.routing.mode} route`, body: state.plan.steps.map((item) => `- ${item.title}`).join("\n"), filesChanged: [] };
   }
   return { title: "Workflow running", subtitle: state.goal, body: "Collecting context and generating candidate changes.", filesChanged: [] };
+}
+
+function completedBody(state: AgentGraphState): string {
+  const summary = state.finalSummary;
+  if (!summary) return "";
+  const sections = [
+    `Task: ${summary.task}`,
+    summary.changedFiles.length ? `Changed files: ${summary.changedFiles.join(", ")}` : "Changed files: none",
+    summary.testsRun.length ? `Verification: ${summary.testsRun.join(", ")}` : "Verification: not run",
+    "",
+    "Result:",
+    ...summary.evidence.map((item) => formatEvidenceItem(item)),
+    summary.risksRemaining.length ? "" : undefined,
+    summary.risksRemaining.length ? "Remaining risk:" : undefined,
+    ...summary.risksRemaining.map((risk) => `- ${risk}`)
+  ].filter((item): item is string => item !== undefined);
+  return sections.join("\n");
+}
+
+function failureBody(state: AgentGraphState): string {
+  const summary = state.finalSummary;
+  const failedRun = [...state.runResults].reverse().find((result) => !result.success);
+  const failedShell = [...state.events].reverse().find((event) => event.type === "shell_run" && event.success === false);
+  const sections = [
+    `Task: ${summary?.task ?? state.goal}`,
+    failedRun ? `Root cause candidate: verification command failed (${failedRun.command}, exit=${failedRun.exitCode}).` : summary?.risksRemaining[0] ? `Root cause candidate: ${summary.risksRemaining[0]}` : "Root cause candidate: workflow stopped before a successful summary.",
+    failedShell && failedShell.type === "shell_run" && failedShell.error ? `Shell error: ${failedShell.error}` : undefined,
+    failedRun?.stdout ? `stdout:\n${clipText(failedRun.stdout, 900)}` : undefined,
+    failedRun?.stderr ? `stderr:\n${clipText(failedRun.stderr, 900)}` : undefined,
+    "",
+    "Evidence:",
+    ...(summary?.evidence.length ? summary.evidence.map((item) => formatEvidenceItem(item)) : ["- No summary evidence was recorded."]),
+    "",
+    "Next actions:",
+    ...(summary?.risksRemaining.length ? summary.risksRemaining.map((risk) => `- ${risk}`) : ["- Open Details for raw events and artifacts.", "- Re-run with live models or request re-review if the diagnosis is incomplete."])
+  ].filter((item): item is string => item !== undefined);
+  return sections.join("\n");
+}
+
+function formatEvidenceItem(item: string): string {
+  const trimmed = item.trim();
+  if (!trimmed) return "-";
+  if (/^(artifacts|summaries|stdout|stderr|diffs|reviews|judgments)\//.test(trimmed)) return `- Artifact: ${trimmed}`;
+  if (trimmed.includes("\n")) return trimmed;
+  return `- ${trimmed}`;
+}
+
+function clipText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n... omitted ${value.length - maxChars} character(s)`;
+}
+
+function compactRawEvents(events: TomorrowEdgeEvent[]): TomorrowEdgeEvent[] {
+  return events.map((event) => {
+    if (event.type !== "context_select") return event;
+    return {
+      ...event,
+      selectedFiles: sampleList(event.selectedFiles, 20),
+      excludedFiles: sampleList(event.excludedFiles, 20)
+    };
+  });
+}
+
+function sampleList(values: string[], limit: number): string[] {
+  if (values.length <= limit) return values;
+  return [...values.slice(0, limit), `... ${values.length - limit} more`];
 }
 function selectedCandidate(state?: AgentGraphState) {
   const pendingRepair = state?.repairCandidates.at(-1);

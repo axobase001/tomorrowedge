@@ -16,12 +16,12 @@ import { ModelRouter } from "../routing/router.js";
 import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
-import { buildAdvisoryPlans, runLiveAdvisory } from "../model/modelAdvisory.js";
+import { buildAdvisoryPlans, runLiveAdvisory, runLiveAdvisoryForRoles } from "../model/modelAdvisory.js";
 import { estimateCostUsd, preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
-import { buildDebateRounds } from "../debate/debateEngine.js";
+import { buildDebateRounds, buildModelDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
 import type { ModelBudgetStatus, ModelNote } from "../../schemas/modelNote.js";
@@ -72,6 +72,7 @@ export type OfflineGraphOptions = {
   testCommand?: string;
   imagePaths?: string[];
   conversationTarget?: string;
+  dryRun?: boolean;
   onEvent?: (event: TomorrowEdgeEvent) => void;
   sessionId?: string;
 };
@@ -420,7 +421,9 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       });
       ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
+  const candidateAgentStartIndex = state.agents.length;
   const candidateResults = await Promise.allSettled(candidateJobs.map((job) => job.run()));
+  normalizeCandidateAgentOrder(state, candidateAgentStartIndex, candidateJobs.map((job) => job.label));
   for (const [index, result] of candidateResults.entries()) {
     const label = candidateJobs[index]?.label ?? "candidate";
     if (result.status === "rejected") {
@@ -479,6 +482,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     recommendation: state.review.overallRecommendation
   });
   state.debateRounds = buildDebateRounds(state.candidates, state.review, config.debate.max_rounds);
+  await maybeRunPreJudgeModelDebate({ cwd, goal, config, router, ledger, state, access, options });
   ledger.append({ type: "evidence_update", phase: "review", role: "reviewer", evidence: [`debate rounds=${state.debateRounds.length}`] });
 
   const judge = new JudgeAgent();
@@ -553,7 +557,23 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
       ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
 
-  if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
+  if (options.dryRun && state.judge?.decision === "select" && state.judge.selectedCandidateId) {
+    const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
+    const diffRef = selected?.unifiedDiff ? ledger.writeArtifact("diffs", selected.unifiedDiff) : undefined;
+    ledger.append({
+      type: "patch_apply",
+      phase: "patch",
+      role: "runner",
+      provider: "local_tool",
+      model: "patch",
+      candidateId: state.judge.selectedCandidateId,
+      filesChanged: selected?.filesChanged ?? [],
+      diffRef,
+      undoSnapshotIds: [],
+      applied: false,
+      error: "dryRun=true; selected patch was recorded but not applied."
+    });
+  } else if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
     if (selected?.unifiedDiff) {
       const diffRef = ledger.writeArtifact("diffs", selected.unifiedDiff);
@@ -1046,6 +1066,78 @@ async function maybeRunGovernedReadOnlyAdvisory(input: {
   input.state.modelNotes.push(...advisoryNotes);
   input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
   recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
+}
+
+function normalizeCandidateAgentOrder(state: AgentGraphState, startIndex: number, labels: string[]): void {
+  const roleOrder = new Map<AgentRole, number>();
+  for (const [index, label] of labels.entries()) {
+    if (label === "coder_a" || label === "coder_b") roleOrder.set(label, index);
+  }
+  if (!roleOrder.size || startIndex >= state.agents.length) return;
+  const before = state.agents.slice(0, startIndex);
+  const candidateStage = state.agents.slice(startIndex);
+  candidateStage.sort((left, right) => {
+    const leftOrder = roleOrder.get(left.role) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = roleOrder.get(right.role) ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+    return left.id.localeCompare(right.id);
+  });
+  state.agents = [...before, ...candidateStage];
+}
+
+async function maybeRunPreJudgeModelDebate(input: {
+  cwd: string;
+  goal: string;
+  config: TomorrowEdgeConfig;
+  router: ModelRouter;
+  ledger: EventLedger;
+  state: AgentGraphState;
+  access: AgentGraphState["access"];
+  options: OfflineGraphOptions;
+}): Promise<void> {
+  if (!input.options.liveAdvisory || !input.access.cloudAllowed) return;
+  const advisoryInput = {
+    cwd: input.cwd,
+    goal: input.goal,
+    config: input.config,
+    router: input.router,
+    plan: input.state.plan,
+    candidates: input.state.candidates,
+    review: input.state.review,
+    visualSpec: input.state.visualSpec,
+    ledger: input.ledger,
+    governance: input.state.taskGovernance
+  };
+  const roles: AgentRole[] = ["reviewer", "judge"];
+  const advisoryPlans = buildAdvisoryPlans(advisoryInput).filter((plan) => roles.includes(plan.role));
+  if (!advisoryPlans.length) return;
+  const budgetStatus = setBudgetStatus(input.state, preflightBudget(
+    advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
+    input.config.routing.max_cost_usd
+  ));
+  recordLiveBudgetDecisions(input.ledger, "planning", advisoryPlans, budgetStatus);
+  if (budgetStatus.status === "blocked") {
+    input.ledger.append({
+      type: "evidence_update",
+      phase: "review",
+      role: "reviewer",
+      evidence: [`pre-judge model debate blocked by budget: ${budgetStatus.reason}`]
+    });
+    return;
+  }
+  const notes = await runLiveAdvisoryForRoles(advisoryInput, roles);
+  input.state.modelNotes.push(...notes);
+  input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
+  recordModelNoteEvents(input.ledger, notes, input.state.usageSummary);
+  const startRound = Math.max(1, ...input.state.debateRounds.map((round) => round.round + 1));
+  const modelRounds = buildModelDebateRounds(notes, input.state.candidates, startRound);
+  input.state.debateRounds.push(...modelRounds);
+  input.ledger.append({
+    type: "evidence_update",
+    phase: "review",
+    role: "reviewer",
+    evidence: [`pre-judge model debate rounds=${modelRounds.length}`]
+  });
 }
 
 type RunAgentStateOptions<T> = {

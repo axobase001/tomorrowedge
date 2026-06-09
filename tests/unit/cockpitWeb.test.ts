@@ -109,7 +109,7 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("list=\"setup-provider-options\"");
     expect(html).toContain("data-testid=\"setup-model\"");
     expect(html).toContain("data-testid=\"setup-base-url\"");
-    expect(html).toContain("moonshotai/kimi-k2:free");
+    expect(html).toContain("moonshotai/kimi-k2.6:free");
   });
 
   it("renders the API key and role manager from the topbar entry", () => {
@@ -129,12 +129,12 @@ describe("cockpit web React surface", () => {
 
   it("keeps provider model drafts isolated by provider defaults", () => {
     const providers = [
-      { id: "openrouter", model: "moonshotai/kimi-k2:free", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY" },
+      { id: "openrouter", model: "moonshotai/kimi-k2.6:free", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY" },
       { id: "deepseek", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", apiKeyEnv: "DEEPSEEK_API_KEY" }
     ];
 
     expect(providerFormDefaults("openrouter", providers)).toMatchObject({
-      model: "moonshotai/kimi-k2:free",
+      model: "moonshotai/kimi-k2.6:free",
       baseUrl: "https://openrouter.ai/api/v1"
     });
     expect(providerFormDefaults("deepseek", providers)).toMatchObject({
@@ -165,7 +165,7 @@ describe("cockpit web React surface", () => {
   });
 
   it("combines static and catalog model recommendations for the picker", () => {
-    expect(modelOptionIds("openrouter", "moonshotai/kimi-k2:free", [{ id: "qwen/qwen3-coder:free", label: "Qwen", source: "catalog" }])).toContain("qwen/qwen3-coder:free");
+    expect(modelOptionIds("openrouter", "moonshotai/kimi-k2.6:free", [{ id: "qwen/qwen3-coder:free", label: "Qwen", source: "catalog" }])).toContain("qwen/qwen3-coder:free");
   });
 
   it("renders the role assignment tab entry in the key manager", () => {
@@ -221,12 +221,32 @@ describe("cockpit web React surface", () => {
         selectedSession: "session_new",
         t: createTranslator("en"),
         onSelectSession: () => undefined,
-        onNewTask: () => undefined
+        onNewTask: () => undefined,
+        onRenameSession: () => undefined,
+        onDeleteSession: () => undefined
       })
     );
 
     expect(html).toContain('<option value="session_new" selected="">session_new</option>');
     expect(html).not.toContain('<option value="latest"');
+  });
+
+  it("labels saved sessions by task goal instead of opaque ids", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TaskListPanel, {
+        tasks: [],
+        sessions: [{ sessionId: "session_abc123", createdAt: "2026-06-07T00:00:00.000Z", eventCount: 1, artifactCount: 0, goal: "read the quantum folder and summarize structure", result: "completed" }],
+        selectedSession: "session_abc123",
+        t: createTranslator("en"),
+        onSelectSession: () => undefined,
+        onNewTask: () => undefined,
+        onRenameSession: () => undefined,
+        onDeleteSession: () => undefined
+      })
+    );
+
+    expect(html).toContain("read the quantum folder and summarize structure");
+    expect(html).toContain("completed");
   });
 
   it("renders approval history in the detail drawer", () => {
@@ -245,6 +265,16 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("planner -&gt; fixture/fixture-scripted");
     expect(html).toContain("because high-risk plan needs conservative review");
+  });
+
+  it("renders clickable artifact links in the detail drawer", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      artifacts: [{ ref: "artifacts/stdout/test.txt", kind: "stdout" }]
+    });
+
+    expect(html).toContain("data-testid=\"drawer-artifacts\"");
+    expect(html).toContain("href=\"/api/sessions/session_test/artifacts/artifacts%2Fstdout%2Ftest.txt\"");
   });
 
   it("renders the workflow role graph in the detail drawer", () => {
@@ -314,7 +344,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
         }],
         externalAgents: [],
         roleAssignments: [
-          { role: "planner", provider: "openrouter", model: "moonshotai/kimi-k2:free" },
+          { role: "planner", provider: "openrouter", model: "moonshotai/kimi-k2.6:free" },
           { role: "reviewer", provider: "deepseek", model: "deepseek-chat" }
         ]
       },
@@ -342,6 +372,8 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onRefresh: () => undefined,
       onNewTask: () => undefined,
       onSelectSession: () => undefined,
+      onRenameSession: () => undefined,
+      onDeleteSession: () => undefined,
       onApproval: () => undefined,
       onOpenDrawer: () => undefined,
       onCloseDrawer: () => undefined

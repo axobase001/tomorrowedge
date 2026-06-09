@@ -19,7 +19,7 @@ describe("budget gate", () => {
     expect(runtime.strongAgentCallsUsed).toBe(0);
   });
 
-  it("commits role-specific calls independently from the global strong pool", () => {
+  it("commits role-specific strong calls against both role and global pools", () => {
     const runtime = createBudgetRuntimeState();
     const config = {
       ...defaultConfig,
@@ -52,7 +52,45 @@ describe("budget gate", () => {
 
     expect(first.action).toBe("allow");
     expect(runtime.roleCallsUsed.reviewer).toBe(1);
-    expect(runtime.strongAgentCallsUsed).toBe(0);
+    expect(runtime.strongAgentCallsUsed).toBe(1);
     expect(second.action).toBe("block");
+  });
+
+  it("blocks role-budgeted strong calls when the global pool is exhausted", () => {
+    const runtime = createBudgetRuntimeState();
+    const config = {
+      ...defaultConfig,
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 1 },
+      agents: {
+        ...defaultConfig.agents,
+        reviewer: {
+          ...defaultConfig.agents.reviewer,
+          budget: { max_calls_per_task: 5 }
+        }
+      }
+    };
+    const first = evaluateRoleInvocation({
+      config,
+      runtime,
+      role: "reviewer",
+      phase: "review",
+      assignment: { role: "reviewer", provider: "openrouter", model: "openai/gpt-5.2", reason: "strong review" },
+      roleBudget: { maxCallsPerTask: 5 }
+    });
+    commitRoleCall(runtime, reserveRoleCall(runtime, first));
+    const second = evaluateRoleInvocation({
+      config,
+      runtime,
+      role: "reviewer",
+      phase: "review",
+      assignment: { role: "reviewer", provider: "openrouter", model: "openai/gpt-5.2", reason: "strong review" },
+      roleBudget: { maxCallsPerTask: 5 }
+    });
+
+    expect(first.action).toBe("allow");
+    expect(second.action).toBe("block");
+    expect(second.reason).toContain("Strong-agent call budget exhausted");
+    expect(runtime.roleCallsUsed.reviewer).toBe(1);
+    expect(runtime.strongAgentCallsUsed).toBe(1);
   });
 });

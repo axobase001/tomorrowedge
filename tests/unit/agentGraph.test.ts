@@ -53,6 +53,9 @@ describe("offline agent graph", () => {
     expect(coderB?.status).toBe("success");
     expect(Math.abs(Date.parse(coderA!.startedAt!) - Date.parse(coderB!.startedAt!))).toBeLessThan(50);
     expect(state.candidates.map((candidate) => candidate.agentId).slice(0, 2)).toEqual(["coder_a", "coder_b"]);
+    expect(state.agents.map((agent) => agent.role)).toEqual(expect.arrayContaining(["coder_a", "coder_b", "reviewer"]));
+    expect(state.agents.findIndex((agent) => agent.role === "coder_a")).toBeLessThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
+    expect(state.agents.findIndex((agent) => agent.role === "reviewer")).toBeGreaterThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
   });
 
   it("reuses planner and explorer results while invalidating explorer on repo changes", async () => {
@@ -246,8 +249,10 @@ describe("offline agent graph", () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { liveAdvisory: true });
 
-    expect(state.modelNotes.map((note) => note.kind)).toEqual(["plan_advice", "implementation_advice", "review_advice", "judge_advice"]);
+    expect(state.modelNotes.map((note) => note.kind)).toEqual(["review_advice", "judge_advice", "plan_advice", "implementation_advice", "review_advice", "judge_advice"]);
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
+    expect(state.debateRounds.some((round) => round.speaker === "reviewer" && round.evidence.some((item) => item.includes("direct model stance")))).toBe(true);
+    expect(state.debateRounds.some((round) => round.speaker === "judge" && round.evidence.some((item) => item.includes("direct model stance")))).toBe(true);
     expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
     expect(state.changedFiles).toEqual([]);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "planner" && event.status !== "blocked")).toBe(true);
@@ -294,6 +299,8 @@ describe("offline agent graph", () => {
     expect(state.routing.assignments.find((assignment) => assignment.role === "planner")?.provider).toBe("openrouter");
     expect(state.modelNotes.length).toBeGreaterThan(0);
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
+    expect(state.debateRounds.some((round) => round.speaker === "reviewer" && round.evidence.some((item) => item.includes("provider=mock/")))).toBe(true);
+    expect(state.debateRounds.some((round) => round.speaker === "judge" && round.evidence.some((item) => item.includes("provider=mock/")))).toBe(true);
     expect(state.modelNotes.every((note) => note.fallbackUsed)).toBe(true);
     expect(state.modelNotes.every((note) => note.fallbackFrom?.provider === "openrouter")).toBe(true);
     expect(state.events.some((event) => event.type === "provider_fallback")).toBe(true);

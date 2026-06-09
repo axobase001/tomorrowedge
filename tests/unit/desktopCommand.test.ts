@@ -34,7 +34,7 @@ describe("desktop command", () => {
       requestedPort: 18792,
       port: 18793,
       url: "http://127.0.0.1:18793",
-      openUrl: "http://127.0.0.1:18793/?nonce=test"
+      openUrl: "http://127.0.0.1:18793"
     });
 
     await desktopCommandWithDependencies(process.cwd(), { runtime: "app-mode", port: "18792" }, {
@@ -49,7 +49,7 @@ describe("desktop command", () => {
 
     expect(writes.join("")).toContain("Port 18792 is in use; using 18793 instead.");
     expect(writes.join("")).toContain("Runtime: app-mode");
-    expect(launchedUrl).toBe("http://127.0.0.1:18793/?nonce=test");
+    expect(launchedUrl).toBe("http://127.0.0.1:18793");
   });
 
   it("closes the server when an Electron-style child exits", async () => {
@@ -111,7 +111,7 @@ function fakeHandle(overrides: Partial<LocalCockpitHandle> = {}): LocalCockpitHa
   return {
     server: {} as LocalCockpitHandle["server"],
     url: "http://127.0.0.1:18792",
-    openUrl: "http://127.0.0.1:18792/?nonce=test",
+    openUrl: "http://127.0.0.1:18792",
     nonce: "test",
     requestedPort: 18792,
     port: 18792,

@@ -47,7 +47,7 @@ export async function desktopCommandWithDependencies(cwd: string, options: Deskt
   const host = options.host ?? "127.0.0.1";
   const handle = await dependencies.startServer(cwd, { port, host });
   if (!isLoopbackHost(host)) {
-    dependencies.write("Warning: desktop mode is bound to a non-loopback host. Keep the nonce URL private.\n");
+    dependencies.write("Warning: desktop mode is bound to a non-loopback host. Keep the local cockpit session private.\n");
   }
   if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
     dependencies.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);

@@ -41,6 +41,12 @@ export async function runLiveAdvisory(input: AdvisoryInput): Promise<ModelNote[]
   return Promise.all(plans.map((plan) => runRoleAdvice(input, plan)));
 }
 
+export async function runLiveAdvisoryForRoles(input: AdvisoryInput, roles: AgentRole[]): Promise<ModelNote[]> {
+  const allowed = new Set<AgentRole>(roles);
+  const plans = buildAdvisoryPlans(input).filter((plan) => allowed.has(plan.role));
+  return Promise.all(plans.map((plan) => runRoleAdvice(input, plan)));
+}
+
 export function buildAdvisoryPlans(input: AdvisoryInput): AdvisoryCallPlan[] {
   const governanceRequiresReview = Boolean(input.governance?.requiresReviewer || input.governance?.reasoningSensitivity === "medium" || input.governance?.reasoningSensitivity === "high");
   const governanceRequiresJudge = Boolean(input.governance?.requiresJudge || input.governance?.reasoningSensitivity === "high");

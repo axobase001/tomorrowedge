@@ -3,13 +3,34 @@ import type { IncomingMessage } from "node:http";
 import { log } from "../utils/logger.js";
 
 export function isAuthorizedCockpitRequest(request: IncomingMessage, url: URL, nonce: string): boolean {
-  const provided = request.headers["x-tomorrowedge-token"] ?? request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? url.searchParams.get("nonce") ?? "";
+  const provided = request.headers["x-tomorrowedge-token"]
+    ?? request.headers.authorization?.replace(/^Bearer\s+/i, "")
+    ?? nonceFromCookie(request)
+    ?? url.searchParams.get("nonce")
+    ?? "";
   const presented = Array.isArray(provided) ? provided[0] : provided;
   if (!presented) return false;
   const presentedBuffer = Buffer.from(presented, "utf8");
   const nonceBuffer = Buffer.from(nonce, "utf8");
   if (presentedBuffer.byteLength !== nonceBuffer.byteLength) return false;
   return timingSafeEqual(presentedBuffer, nonceBuffer);
+}
+
+function nonceFromCookie(request: IncomingMessage): string | undefined {
+  const cookie = request.headers.cookie;
+  if (!cookie || Array.isArray(cookie)) return undefined;
+  for (const part of cookie.split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    if (rawKey !== "tomorrowedge_nonce") continue;
+    const encoded = rawValue.join("=");
+    if (!encoded) return undefined;
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+  return undefined;
 }
 
 export function isAllowedBrowserOrigin(request: IncomingMessage): boolean {

@@ -7,7 +7,7 @@ export async function serveCommand(cwd: string, options: { port?: string; host?:
     process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
   }
   if (!isLoopbackHost(options.host ?? "127.0.0.1")) {
-    process.stdout.write("Warning: local cockpit is bound to a non-loopback host. Keep the nonce URL private and avoid exposing full-access workflows on shared networks.\n");
+    process.stdout.write("Warning: local cockpit is bound to a non-loopback host. Keep the local cockpit session private and avoid exposing full-access workflows on shared networks.\n");
   }
   process.stdout.write(`TomorrowEdge GUI client: ${handle.openUrl}\n`);
   process.stdout.write("Press Ctrl+C to stop.\n");

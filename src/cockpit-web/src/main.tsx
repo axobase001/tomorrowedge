@@ -7,11 +7,13 @@ import {
   applyCockpitApproval,
   cockpitLiveEventsUrl,
   configureCockpitSetup,
+  deleteCockpitSession,
   deleteCockpitProviderKey,
   listCockpitProviderModels,
   listCockpitSessions,
   loadCockpitSetupStatus,
   loadCockpitViewModel,
+  renameCockpitSession,
   saveCockpitProviderKey,
   saveCockpitRoleAssignments,
   startCockpitRun,
@@ -347,6 +349,35 @@ function CockpitWebRoot() {
     void loadSession(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
   }, [closeLiveSource, loadSession, updateSelectedSession]);
 
+  const renameSession = useCallback(async (sessionId: string, title: string) => {
+    if (busy) return;
+    try {
+      const payload = await renameCockpitSession(sessionId, title, apiOptions);
+      if (payload.viewModel) setViewModel(payload.viewModel);
+      setSessions(await listCockpitSessions(apiOptions));
+      setStatusMessage(t("status.sessionRenamed"));
+    } catch (error) {
+      setStatusMessage(t("status.sessionRenameFailed", { message: errorMessage(error) }));
+    }
+  }, [apiOptions, busy, t]);
+
+  const deleteSession = useCallback(async (sessionId: string) => {
+    if (busy) return;
+    try {
+      const nextSessions = await deleteCockpitSession(sessionId, apiOptions);
+      setSessions(nextSessions);
+      const nextSession = nextSessions[0]?.sessionId;
+      if (nextSession) await loadSession(nextSession);
+      else {
+        setViewModel(emptyViewModel);
+        updateSelectedSession("latest");
+      }
+      setStatusMessage(t("status.sessionDeleted"));
+    } catch (error) {
+      setStatusMessage(t("status.sessionDeleteFailed", { message: errorMessage(error) }));
+    }
+  }, [apiOptions, busy, loadSession, t, updateSelectedSession]);
+
   const newTask = useCallback(() => {
     closeLiveSource();
     updateSelectedSession("latest");
@@ -396,6 +427,8 @@ function CockpitWebRoot() {
       onRefresh={refresh}
       onNewTask={newTask}
       onSelectSession={selectSession}
+      onRenameSession={renameSession}
+      onDeleteSession={deleteSession}
       onApproval={approve}
       onOpenDrawer={() => setDrawerOpen(true)}
       onCloseDrawer={() => setDrawerOpen(false)}
@@ -452,9 +485,10 @@ function writeLanguage(language: GuiLanguage): void {
 
 function readApiOptions(): CockpitApiOptions {
   const params = new URLSearchParams(window.location.search);
+  const runtime = (window as unknown as { __TOMORROWEDGE_COCKPIT__?: { nonce?: string; apiBase?: string } }).__TOMORROWEDGE_COCKPIT__;
   return {
-    nonce: params.get("nonce") ?? "",
-    apiBase: params.get("api") ?? undefined
+    nonce: runtime?.nonce ?? "",
+    apiBase: runtime?.apiBase ?? params.get("api") ?? undefined
   };
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "1.2.13",
+  "version": "1.2.14",
   "description": "A local GUI client for full-access multi-model coding agents.",
   "type": "module",
   "bin": {

@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.2.13 README product promises. Use this
+Authoritative map for TomorrowEdge 1.2.14 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -31,6 +31,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | route-reasons | GUI detail drawer route rows include role, provider/model, and routing reason. | `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitWeb.test.ts` | #318 |
 | repair-approval-focus | Failed verification repair candidates remain visible as repair approval cards and browser approval applies the repair candidate. | `src/cockpit/viewModel.ts`, `src/cockpit/approvalExecutor.ts` | `tests/unit/cockpitViewModel.test.ts` | #320 |
 | external-mcp-process-reuse | Auto-started external MCP process clients are reused during role calls and released after workflow finalization. | `src/core/externalAgents/externalRoleInvoker.ts`, `src/core/externalAgents/externalAgentProcess.ts`, `src/core/agentGraph/executor.ts` | `tests/unit/externalAgentRunner.test.ts`, `tests/unit/agentGraph.test.ts` | #311 |
+| workflow-simulation-native | `tedge workflow` is a NativeBackend dry-run projection rather than a second orchestration engine. | `src/core/eval/workflowSimulation.ts`, `src/core/agentGraph/executor.ts`, `src/core/externalAgents/externalRoleInvoker.ts` | `tests/unit/workflowSimulation.test.ts`, `tests/unit/agentGraph.test.ts`, `npm run verify` | #309 |
 
 ## Desktop Entrypoint
 

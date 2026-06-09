@@ -4,7 +4,8 @@ import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
-import { fetchOpenRouterCatalog, recommendFreeOpenRouterModels } from "../providers/openrouterCatalog.js";
+import { fetchProviderModelCatalog } from "../providers/modelCatalog.js";
+import { canonicalizeOpenRouterModelId, fetchOpenRouterCatalog, recommendFreeOpenRouterModels } from "../providers/openrouterCatalog.js";
 import { log } from "../utils/logger.js";
 
 export type CockpitProviderReadiness = {
@@ -132,7 +133,7 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(request.provider);
   const currentProvider = providerConfigForSetup(config, providerId);
-  const model = request.model.trim();
+  const model = canonicalModelForProvider(providerId, request.model);
   if (!model) throw new Error("At least one model id is required.");
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
@@ -168,7 +169,7 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
   const apiKey = request.apiKey?.trim() ?? "";
   const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
   if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
-  const model = request.model?.trim() || currentProvider.model;
+  const model = canonicalModelForProvider(providerId, request.model ?? currentProvider.model);
   if (!model) throw new Error("At least one model id is required.");
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
@@ -200,18 +201,37 @@ export async function listCockpitProviderModels(cwd: string, providerIdValue: st
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(providerIdValue);
   const provider = providerConfigForSetup(config, providerId);
-  if (providerId !== "openrouter") return staticModelOptionsFor(providerId);
   const localEnv = readLocalEnvMap(cwd);
   const apiKey = provider.api_key_env ? process.env[provider.api_key_env] ?? localEnv.get(provider.api_key_env) : undefined;
-  const catalog = await fetchOpenRouterCatalog(provider, apiKey);
-  return recommendFreeOpenRouterModels(catalog, { limit: Math.max(1, Math.min(limit, 50)), preferKimi: true }).map((model) => ({
-    id: model.id,
-    label: `${model.name ?? model.id}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}`,
-    source: "catalog",
-    isFree: model.isFree,
-    isLowCost: model.isLowCost,
-    tags: model.tags
-  }));
+  if (providerId !== "openrouter") {
+    try {
+      const catalog = await fetchProviderModelCatalog(providerId, provider, apiKey);
+      const normalized = catalog.slice(0, Math.max(1, Math.min(limit, 50))).map((model) => ({
+        id: model.id,
+        label: model.label ?? model.id,
+        source: "catalog" as const,
+        tags: model.tags
+      }));
+      if (normalized.length) return normalized;
+    } catch (error) {
+      log("warn", `Falling back to static ${providerId} models: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return staticModelOptionsFor(providerId);
+  }
+  try {
+    const catalog = await fetchOpenRouterCatalog(provider, apiKey);
+    return recommendFreeOpenRouterModels(catalog, { limit: Math.max(1, Math.min(limit, 50)), preferKimi: true }).map((model) => ({
+      id: model.id,
+      label: `${model.name ?? model.id}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}`,
+      source: "catalog",
+      isFree: model.isFree,
+      isLowCost: model.isLowCost,
+      tags: model.tags
+    }));
+  } catch (error) {
+    log("warn", `Falling back to static OpenRouter models: ${error instanceof Error ? error.message : String(error)}`);
+    return staticModelOptionsFor(providerId);
+  }
 }
 
 export async function deleteCockpitProviderKey(cwd: string, providerIdValue: string): Promise<CockpitSetupStatus> {
@@ -243,7 +263,7 @@ export async function saveCockpitRoleAssignments(cwd: string, request: CockpitRo
   for (const assignment of request.assignments) {
     if (!Object.hasOwn(config.agents, assignment.role)) continue;
     const provider = assignment.provider.trim();
-    const model = assignment.model.trim();
+    const model = canonicalModelForProvider(provider, assignment.model);
     if (!provider || !model) throw new Error(`Role ${assignment.role} requires provider and model.`);
     if (provider.startsWith("external:") && !config.external_agents[provider.slice("external:".length)]) {
       throw new Error(`Role ${assignment.role} references unknown external agent: ${provider}`);
@@ -317,6 +337,12 @@ function normalizeProviderId(value: string): string {
   return normalized;
 }
 
+function canonicalModelForProvider(providerId: string, value: string): string {
+  const trimmed = value.trim();
+  if (providerId === "openrouter") return canonicalizeOpenRouterModelId(trimmed);
+  return trimmed;
+}
+
 function sanitizeEnvName(value?: string): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
@@ -341,12 +367,13 @@ function sanitizeBaseUrl(value?: string): string | undefined {
 
 function staticModelOptionsFor(providerId: string): CockpitProviderModelOption[] {
   const options: Record<string, string[]> = {
-    openrouter: ["moonshotai/kimi-k2:free", "qwen/qwen3-coder:free", "deepseek/deepseek-chat-v3-0324:free"],
+    openrouter: ["moonshotai/kimi-k2.6:free", "qwen/qwen3-coder:free", "deepseek/deepseek-chat-v3-0324:free"],
     deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
     kimi: ["kimi-k2-0711-preview", "kimi-latest"],
     mimo: ["mimo-v2.5-pro"],
     anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
     gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
+    ollama: ["llama3.2", "qwen2.5-coder", "deepseek-r1"],
     openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
   };
   return (options[providerId] ?? []).map((id) => ({

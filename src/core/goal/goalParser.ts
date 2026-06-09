@@ -88,11 +88,21 @@ function buildPlanSteps(taskType: TaskType, highRisk: boolean, goal: string): Pl
 
 function verificationCommandsFor(goal: string, taskType: TaskType): string[] {
   if (taskType === "analysis") return [];
+  if (isDocumentOnlyGoal(goal)) return [];
   if (/cargo|rust/i.test(goal)) return ["cargo test"];
   if (/go test|golang|\bgo\b/i.test(goal)) return ["go test ./..."];
   if (/pytest|python/i.test(goal)) return ["pytest"];
   if (/docs?|readme|changelog/i.test(goal) && taskType === "docs") return [];
   return ["npm test"];
+}
+
+function isDocumentOnlyGoal(goal: string): boolean {
+  const pathLikeMatches = Array.from(goal.matchAll(/(?:^|[\s"'`(\[<])([A-Za-z0-9_.:/\\-]+\.(md|markdown|html|htm|txt|rst|adoc|json|yaml|yml|ts|tsx|js|jsx|mjs|cjs|py|rs|go|java|kt|cpp|cxx|cc|c|h|hpp|cs|php|rb|swift|vue|svelte|css|scss|sql))(?:$|[\s"'`)\]>.,;:])/gi));
+  if (!pathLikeMatches.length) return false;
+  const docExtensions = new Set(["md", "markdown", "html", "htm", "txt", "rst", "adoc"]);
+  const codeExtensions = new Set(["json", "yaml", "yml", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "java", "kt", "cpp", "cxx", "cc", "c", "h", "hpp", "cs", "php", "rb", "swift", "vue", "svelte", "css", "scss", "sql"]);
+  const extensions = pathLikeMatches.map((match) => match[2].toLowerCase());
+  return extensions.every((extension) => docExtensions.has(extension)) && !extensions.some((extension) => codeExtensions.has(extension));
 }
 
 function extractConstraints(goal: string): string[] {

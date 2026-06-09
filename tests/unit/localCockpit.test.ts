@@ -22,13 +22,19 @@ describe("local cockpit server", () => {
     const server = await startLocalCockpitServer(cwd, { port: 0, webRoot: false });
     try {
       const health = await fetch(`${server.url}/health`).then((response) => response.json()) as { ok: boolean };
-      const html = await fetch(server.url).then((response) => response.text());
+      const shell = await fetch(server.url);
+      const html = await shell.text();
       const icon = await fetch(`${server.url}/icon.svg`).then((response) => response.text());
       const manifest = await fetch(`${server.url}/manifest.webmanifest`).then((response) => response.json()) as { name: string; icons: Array<{ src: string }> };
       const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
+      const cookieSessions = await fetch(`${server.url}/api/sessions`, { headers: { cookie: shell.headers.get("set-cookie") ?? "" } }).then((response) => response.json()) as unknown[];
 
+      expect(server.openUrl).toBe(server.url);
+      expect(server.openUrl).not.toContain("nonce=");
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).toContain("__TOMORROWEDGE_COCKPIT__");
+      expect(html).not.toContain('searchParams.get("nonce")');
       expect(html).toContain('href="/icon.svg"');
       expect(html).toContain('href="/manifest.webmanifest"');
       expect(html).toContain("mark-top");
@@ -46,6 +52,7 @@ describe("local cockpit server", () => {
       expect(html).toContain("event.isComposing");
       expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
+      expect(cookieSessions).toEqual([]);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
@@ -149,6 +156,39 @@ describe("local cockpit server", () => {
 
       expect(vm.workflow.map((step) => step.label)).toEqual(["Plan", "Route", "Edit", "Review", "Test", "Judge", "Approve"]);
       expect(vm.currentApproval?.kind).toBe("patch");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("renames and deletes saved sessions through the local cockpit API", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-session-manage-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const rename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "renamed smoke session" })
+      });
+      const renamed = await rename.json() as { goal: string; viewModel?: { goal: string } };
+      const afterRename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`).then((response) => response.json()) as { state: { goal: string } };
+
+      expect(rename.status).toBe(200);
+      expect(renamed.goal).toBe("renamed smoke session");
+      expect(renamed.viewModel?.goal).toBe("renamed smoke session");
+      expect(afterRename.state.goal).toBe("renamed smoke session");
+
+      const deleted = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, { method: "DELETE" });
+      const sessions = await deleted.json() as Array<{ sessionId: string }>;
+      const missing = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`);
+
+      expect(deleted.status).toBe(200);
+      expect(sessions.some((session) => session.sessionId === state.sessionId)).toBe(false);
+      expect(missing.status).toBe(404);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
@@ -467,7 +507,7 @@ describe("local cockpit server", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           provider: "openrouter",
-          model: "moonshotai/kimi-k2:free",
+          model: "MoonshotAI: Kimi K2.6 (free)",
           apiKeyEnv: "TEST_OPENROUTER_KEY",
           apiKey: "test-openrouter-key-value",
           bindRoles: true
@@ -480,7 +520,7 @@ describe("local cockpit server", () => {
       expect(response.status).toBe(200);
       expect(after.needsSetup).toBe(false);
       expect(after.selectedProvider).toBe("openrouter");
-      expect(after.selectedModel).toBe("moonshotai/kimi-k2:free");
+      expect(after.selectedModel).toBe("moonshotai/kimi-k2.6:free");
       expect(after.providers.find((provider) => provider.id === "openrouter")?.keyConfigured).toBe(true);
       expect(configText).toContain("api_key_env: TEST_OPENROUTER_KEY");
       expect(configText).not.toContain("test-openrouter-key-value");
@@ -517,6 +557,8 @@ describe("local cockpit server", () => {
         maskedKey: "test****-key"
       });
       expect(configText).toContain("api_key_env: TEST_KEY_PANEL_OPENROUTER");
+      expect(configText).toContain("model: moonshotai/kimi-k2.6:free");
+      expect(configText).not.toContain("moonshotai/kimi-k2:free");
       expect(configText).not.toContain("test-panel-openrouter-key");
       expect(localEnv).toContain('TEST_KEY_PANEL_OPENROUTER="test-panel-openrouter-key"');
 
@@ -574,7 +616,7 @@ describe("local cockpit server", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "moonshotai/kimi-k2:free",
+          model: "moonshotai/kimi-k2.6:free",
           apiKeyEnv: "TEST_MODEL_ONLY_OPENROUTER",
           apiKey: "test-model-only-key"
         })
@@ -642,6 +684,41 @@ describe("local cockpit server", () => {
       expect(models).toContainEqual(expect.objectContaining({ id: "deepseek-chat", source: "static" }));
     } finally {
       await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("discovers configured non-OpenRouter provider models before static fallback", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-dynamic-models-"));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      expect(String(input)).toBe("https://api.deepseek.example/v1/models");
+      return new Response(JSON.stringify({
+        data: [
+          { id: "deepseek-live-a", name: "DeepSeek Live A" },
+          { id: "deepseek-live-b", name: "DeepSeek Live B" }
+        ]
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      await writeConfig(cwd, {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          deepseek: {
+            ...defaultConfig.providers.deepseek,
+            enabled: true,
+            base_url: "https://api.deepseek.example/v1",
+            auth_header: "none"
+          }
+        }
+      });
+      const models = await listCockpitProviderModels(cwd, "deepseek", 5);
+
+      expect(models).toContainEqual(expect.objectContaining({ id: "deepseek-live-a", source: "catalog" }));
+      expect(models).not.toContainEqual(expect.objectContaining({ id: "deepseek-chat", source: "static" }));
+    } finally {
+      globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });
     }
   });
@@ -843,7 +920,7 @@ describe("local cockpit server", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "moonshotai/kimi-k2:free",
+          model: "moonshotai/kimi-k2.6:free",
           apiKeyEnv: "TEST_ROLE_PANEL_OPENROUTER",
           apiKey: "test-role-panel-key"
         })

@@ -7,6 +7,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { createConversationSession } from "../../src/core/conversation/conversationSession.js";
 import { computeTraceCompleteness } from "../../src/core/diagnostics/traceCompleteness.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
+import { renderVerboseEventLine } from "../../src/core/events/eventRenderer.js";
 import type { TomorrowEdgeEvent } from "../../src/core/events/eventTypes.js";
 
 describe("diagnostics command", () => {
@@ -49,6 +50,26 @@ describe("trace completeness rubric", () => {
     expect(score.missing).not.toContain("review recorded");
     expect(score.missing).not.toContain("judge decision recorded");
     expect(score.missing).not.toContain("shell run recorded");
+  });
+});
+
+describe("trace verbose rendering", () => {
+  it("summarizes huge context selection exclusion lists instead of printing every path", () => {
+    const excludedFiles = Array.from({ length: 1000 }, (_, index) => `.tomorrowedge/sessions/session_${index}/artifacts/stdout/run.txt`)
+      .concat(["node_modules/pkg/index.js", "dist/app.js"]);
+
+    const line = renderVerboseEventLine(event("context_select", {
+      phase: "explore",
+      selectedFiles: ["src/index.ts", "README.md"],
+      excludedFiles,
+      summary: "large repo"
+    }) as TomorrowEdgeEvent);
+
+    expect(line).toContain("selected 2 files");
+    expect(line).toContain("excluded=1002");
+    expect(line).toContain(".tomorrowedge/sessions/** x1000");
+    expect(line).not.toContain("session_999");
+    expect(line.length).toBeLessThan(500);
   });
 });
 

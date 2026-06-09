@@ -50,6 +50,8 @@ export type AppProps = {
   onRefresh: () => void;
   onNewTask: () => void;
   onSelectSession: (sessionId: string) => void;
+  onRenameSession: (sessionId: string, title: string) => void;
+  onDeleteSession: (sessionId: string) => void;
   onApproval: (action: CockpitApprovalIntent["action"]) => void;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
@@ -92,6 +94,8 @@ export function App({
   onRefresh,
   onNewTask,
   onSelectSession,
+  onRenameSession,
+  onDeleteSession,
   onApproval,
   onOpenDrawer,
   onCloseDrawer
@@ -100,7 +104,7 @@ export function App({
     <main className="te-shell" data-testid="cockpit-shell">
       <TopBar viewModel={viewModel} busy={busy} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
       <section className="te-grid" data-testid="cockpit-grid">
-        <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} t={t} onSelectSession={onSelectSession} onNewTask={onNewTask} />
+        <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} t={t} onSelectSession={onSelectSession} onNewTask={onNewTask} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <WorkflowPanel viewModel={viewModel} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
         <TelemetryPanel telemetry={viewModel.telemetry} t={t} />
       </section>

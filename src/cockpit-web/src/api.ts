@@ -163,6 +163,25 @@ export async function loadCockpitViewModel(sessionId: string, options: CockpitAp
   return response.json() as Promise<CockpitViewModel>;
 }
 
+export async function renameCockpitSession(sessionId: string, goal: string, options: CockpitApiOptions): Promise<{ sessionId: string; goal: string; viewModel?: CockpitViewModel }> {
+  const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}`, options), {
+    method: "PATCH",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify({ goal })
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<{ sessionId: string; goal: string; viewModel?: CockpitViewModel }>;
+}
+
+export async function deleteCockpitSession(sessionId: string, options: CockpitApiOptions): Promise<CockpitSessionSummary[]> {
+  const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}`, options), {
+    method: "DELETE",
+    headers: apiHeaders(options)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSessionSummary[]>;
+}
+
 export async function startCockpitRun(request: CockpitRunRequest, options: CockpitApiOptions): Promise<{ sessionId: string; status: string }> {
   const response = await fetch(apiUrl("/api/runs", options), {
     method: "POST",
@@ -189,8 +208,7 @@ export function cockpitLiveEventsUrl(sessionId: string, options: CockpitApiOptio
 
 function apiUrl(path: string, options: CockpitApiOptions): string {
   const base = options.apiBase?.replace(/\/$/, "") ?? "";
-  const separator = path.includes("?") ? "&" : "?";
-  return `${base}${path}${options.nonce ? `${separator}nonce=${encodeURIComponent(options.nonce)}` : ""}`;
+  return `${base}${path}`;
 }
 
 function apiHeaders(options: CockpitApiOptions, extra: Record<string, string> = {}): Record<string, string> {
