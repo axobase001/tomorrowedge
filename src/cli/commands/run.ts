@@ -12,6 +12,7 @@ import { createOrchestrationBackend } from "../../core/orchestration/registry.js
 import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
 import { getGitStatus } from "../../core/tools/gitTool.js";
 import { renderCockpit } from "../renderCockpit.js";
+import { getWorkflowRecipe, materializeRecipeGoal } from "../../core/recipes/recipeLoader.js";
 
 export type RunOptions = {
   headless?: boolean;
@@ -33,10 +34,15 @@ export type RunOptions = {
   image?: string[];
   to?: string;
   cwd?: string;
+  recipe?: string;
 };
 
 export async function runCommand(cwd: string, goal: string, options: RunOptions = {}): Promise<void> {
   const targetCwd = options.cwd ? path.resolve(cwd, options.cwd) : cwd;
+  const recipe = options.recipe ? getWorkflowRecipe(options.recipe) : undefined;
+  if (options.recipe && !recipe) throw new Error(`Unknown workflow recipe "${options.recipe}". Run "tedge recipes" to list available recipes.`);
+  const effectiveGoal = recipe ? materializeRecipeGoal(recipe, goal) : goal.trim();
+  if (!effectiveGoal) throw new Error("Task goal is required unless --recipe supplies a default goal.");
   const accessMode = parseAccessMode(options.accessMode);
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
   const loadedConfig = loadConfig(targetCwd);
@@ -44,7 +50,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const baseConfig = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
   const memoryHints = baseConfig.strategy_memory.enabled ? await buildStrategyMemoryHints(targetCwd, { limit: baseConfig.strategy_memory.max_records }) : undefined;
   const config = memoryHints ? applyStrategyMemory(baseConfig, memoryHints) : baseConfig;
-  const effectiveAccessMode = accessMode ?? prefs.accessMode ?? config.project.access_mode;
+  const effectiveAccessMode = accessMode ?? recipe?.accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {
     throw new Error("Use either --live or --offline, not both.");
@@ -56,7 +62,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const backend = createOrchestrationBackend(config);
   const backendInput = {
     cwd: workspace.executionCwd,
-    goal,
+    goal: effectiveGoal,
     options: {
       provider: options.provider,
       fixtureMode: isFixtureRun(options),
@@ -64,13 +70,13 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       approveShell: options.approveShell,
       approveRepair: options.approveRepair,
       accessMode: effectiveAccessMode,
-      repairOnFail: options.repairOnFail,
-      redTeamReview: options.redTeamReview,
-      liveAdvisory: liveOption(options.offline, options.live, autoLive, options.liveAdvisory ?? prefs.preferredLiveAdvisory),
-      livePatch: liveOption(options.offline, options.live, autoLive, options.livePatch ?? prefs.preferredLivePatch),
+      repairOnFail: options.repairOnFail ?? recipe?.options?.repairOnFail,
+      redTeamReview: options.redTeamReview ?? recipe?.options?.redTeamReview,
+      liveAdvisory: liveOption(options.offline, options.live, autoLive, options.liveAdvisory ?? recipe?.options?.liveAdvisory ?? prefs.preferredLiveAdvisory),
+      livePatch: liveOption(options.offline, options.live, autoLive, options.livePatch ?? recipe?.options?.livePatch ?? prefs.preferredLivePatch),
       liveVision: liveOption(options.offline, options.live, autoLive && imagePaths.length > 0, options.liveVision),
       fixtureFailingPatch: options.fixtureFailingPatch,
-      testCommand: options.testCommand ?? prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
+      testCommand: options.testCommand ?? recipe?.options?.testCommand ?? prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
       imagePaths,
       conversationTarget: options.to
     }
@@ -81,7 +87,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     }
     throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
   }
-  const state = await backend.runGraph(workspace.executionCwd, goal, backendInput.options);
+  const state = await backend.runGraph(workspace.executionCwd, effectiveGoal, backendInput.options);
   const sessionPath = await saveSession(targetCwd, state);
   if (options.headless) {
     const headlessPayload = {

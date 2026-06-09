@@ -34,7 +34,7 @@ import { resolveConversationTarget, targetPromptPrefix } from "../conversation/c
 import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../externalAgents/externalAgentRegistry.js";
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
-import { invokeExternalRole } from "../externalAgents/externalRoleInvoker.js";
+import { invokeExternalRole, releaseExternalAgentProcessPool } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
 import { createModelBackedPlan } from "../goal/modelPlanner.js";
 import { applyWorkflowIntentToPlan, classifyWorkflowIntent } from "../goal/workflowIntent.js";
@@ -53,6 +53,7 @@ import type { RouteAssignment } from "../routing/policies.js";
 import type { TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { buildRoleGraph } from "../orchestration/roleGraph.js";
 import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
+import { getCachedContextSelection, getCachedPlan, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -256,7 +257,11 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
   const externalPlanner = externalProfileForRole(router, externalAgents, "planner");
   const planFromExternalCore = Boolean(state.plan);
-  state.plan = state.plan ?? await runAgentState(state, ledger, router, "planner", async () => {
+  const cachedPlan = !state.plan && !externalPlanner ? getCachedPlan(cwd, plannerGoal) : undefined;
+  if (!state.plan && !externalPlanner) {
+    ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: cachedPlan ? "hit" : "miss", keyHint: plannerGoal.slice(0, 80) });
+  }
+  state.plan = state.plan ?? cachedPlan ?? await runAgentState(state, ledger, router, "planner", async () => {
     if (!externalPlanner) return planner.run({ goal: plannerGoal });
     const result = await invokeExternalRole({
       cwd,
@@ -275,7 +280,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     budgetFallback: () => planner.run({ goal: plannerGoal }),
     budgetFallbackLabel: "native planner"
   } : "offline");
-  if (!externalPlanner && !planFromExternalCore && state.plan && workflowIntent.requiresPatchWorkflow) {
+  if (!externalPlanner && !planFromExternalCore && !cachedPlan && state.plan && workflowIntent.requiresPatchWorkflow) {
     const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
     if (modelPlan.plan) {
       state.plan = {
@@ -303,6 +308,10 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
+  if (!externalPlanner) {
+    rememberPlan(cwd, plannerGoal, state.plan);
+    ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
+  }
   state.workflowKind = workflowKindFromPlan(state.plan);
   state.roleGraph = buildRoleGraph({ workflowKind: state.workflowKind, highRisk: state.plan.riskLevel === "high", debate: Boolean(state.plan.debateRecommended || config.debate.enabled) });
   const rerouteChanges = router.rerouteAfterPlan(state.plan, { hasImageInputs: imagePaths.length > 0 });
@@ -318,7 +327,13 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   ledger.append({ type: "evidence_update", phase: "planning", role: "planner", evidence: state.plan.steps.map((step) => step.title), evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json") });
 
   const explorer = new ExplorerAgent();
-  state.contextSelection = await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }), "offline");
+  const cachedContextSelection = await getCachedContextSelection(cwd, state.plan);
+  ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: cachedContextSelection ? "hit" : "miss", keyHint: `${state.plan.taskType}:${state.plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
+  state.contextSelection = cachedContextSelection ?? await runAgentState(state, ledger, router, "explorer", () => explorer.run({ plan: state.plan! }, { cwd, router }), "offline");
+  if (!cachedContextSelection) {
+    await rememberContextSelection(cwd, state.plan, state.contextSelection);
+    ledger.append({ type: "agent_cache", phase: "exploration", role: "explorer", cache: "explorer", status: "write", keyHint: `${state.plan.taskType}:${state.plan.expectedFiles?.join(",") ?? ""}`.slice(0, 80) });
+  }
   ledger.append({
     type: "context_select",
     phase: "exploration",
@@ -335,37 +350,48 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   }
 
   const coder = new CoderAgent();
-  state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options, config }));
-  recordPatchCandidateEvent(state, ledger, "coder_a", state.candidates[state.candidates.length - 1]);
-  if (config.debate.enabled && config.debate.max_candidates > 1) {
-    state.candidates.push(await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options, config }));
-    recordPatchCandidateEvent(state, ledger, "coder_b", state.candidates[state.candidates.length - 1]);
-  }
-
-  if (options.livePatch && access.cloudAllowed) {
-    const livePatchInput = {
-      cwd,
-      goal,
-      config,
-      router,
-      plan: state.plan!,
-      contextSelection: state.contextSelection!,
-      visualSpec: state.visualSpec,
-      ledger
-    };
-    const patchPlans = await buildLivePatchPlans(livePatchInput);
-    const budgetStatus = setBudgetStatus(state, preflightBudget(
-      patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-      config.routing.max_cost_usd
-    ));
-    if (budgetStatus.status !== "blocked") {
-      const livePatchResult = await runLivePatchCandidates(livePatchInput);
-      state.candidates.push(...livePatchResult.candidates);
-      for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
-      state.modelNotes.push(...livePatchResult.notes);
-      state.usageSummary = summarizeModelUsage(state.modelNotes);
-      recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
+  const candidateJobs: Array<{ label: string; run: () => Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> }> = [
+    {
+      label: "coder_a",
+      run: async () => ({
+        candidates: [await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options, config })],
+        notes: []
+      })
     }
+  ];
+  if (config.debate.enabled && config.debate.max_candidates > 1) {
+    candidateJobs.push({
+      label: "coder_b",
+      run: async () => ({
+        candidates: [await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_b", variant: "b", options, config })],
+        notes: []
+      })
+    });
+  }
+  if (options.livePatch && access.cloudAllowed) {
+    candidateJobs.push({
+      label: "livePatch",
+      run: async () => {
+        const livePatchInput = {
+          cwd,
+          goal,
+          config,
+          router,
+          plan: state.plan!,
+          contextSelection: state.contextSelection!,
+          visualSpec: state.visualSpec,
+          ledger
+        };
+        const patchPlans = await buildLivePatchPlans(livePatchInput);
+        const budgetStatus = setBudgetStatus(state, preflightBudget(
+          patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
+          config.routing.max_cost_usd
+        ));
+        if (budgetStatus.status === "blocked") return { candidates: [], notes: [] };
+        const livePatchResult = await runLivePatchCandidates(livePatchInput);
+        return { candidates: livePatchResult.candidates, notes: livePatchResult.notes };
+      }
+    });
   } else if (options.livePatch && !access.cloudAllowed) {
     const budgetStatus = setBudgetStatus(state, {
       status: "blocked",
@@ -375,6 +401,31 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
         reason: `Live patch generation blocked by access mode: ${access.mode}.`
       });
       ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
+  }
+  const candidateResults = await Promise.allSettled(candidateJobs.map((job) => job.run()));
+  for (const [index, result] of candidateResults.entries()) {
+    const label = candidateJobs[index]?.label ?? "candidate";
+    if (result.status === "rejected") {
+      ledger.append({
+        type: "agent_run",
+        phase: "coding",
+        role: label === "livePatch" ? "coder_a" : label as AgentRole,
+        provider: label === "livePatch" ? "live_patch" : router.assignmentFor(label as AgentRole).provider,
+        model: label === "livePatch" ? "candidate_generator" : router.assignmentFor(label as AgentRole).model,
+        agentKind: label === "livePatch" ? "live" : "offline",
+        status: "failure",
+        runId: `${label}_candidate_job`,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      });
+      continue;
+    }
+    state.candidates.push(...result.value.candidates);
+    for (const candidate of result.value.candidates) recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
+    if (result.value.notes.length) {
+      state.modelNotes.push(...result.value.notes);
+      state.usageSummary = summarizeModelUsage(state.modelNotes);
+      recordModelNoteEvents(ledger, result.value.notes, state.usageSummary);
+    }
   }
 
   const reviewer = new ReviewerAgent();
@@ -415,22 +466,22 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const judge = new JudgeAgent();
   const externalJudge = externalProfileForRole(router, externalAgents, "judge");
   state.judge = await runAgentState(state, ledger, router, "judge", async () => {
-    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
+    if (!externalJudge) return judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds });
     const result = await invokeExternalRole({
       cwd,
       profile: externalJudge,
       role: "judge",
       prompt: "Judge the reviewed candidates and return a TomorrowEdge judge decision.",
-      context: { candidates: state.candidates, review: state.review, evidencePackets: state.evidencePackets },
+      context: { candidates: state.candidates, review: state.review, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds },
       ledger
     });
     const judgment = normalizeExternalJudgment(result.payload);
     if (!judgment) recordExternalNormalizeFallback(ledger, "judge", externalJudge, "judgment", "native judge");
-    return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets });
+    return judgment ?? judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds });
   }, externalJudge ? {
     agentKind: "external",
     config,
-    budgetFallback: () => judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets }),
+    budgetFallback: () => judge.run({ candidates: state.candidates, review: state.review!, evidencePackets: state.evidencePackets, debateRounds: state.debateRounds }),
     budgetFallbackLabel: "native judge"
   } : "offline");
   const judgeJson = JSON.stringify(state.judge, null, 2);
@@ -846,6 +897,7 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
     };
   }
   appendFinalSummaryEvents(state, ledger);
+  await releaseExternalAgentProcessPool();
   return state;
 }
 
@@ -871,6 +923,7 @@ async function finalizeReadOnlyState(cwd: string, state: AgentGraphState, ledger
     suggestedCommitMessage: "chore: no code changes"
   };
   appendFinalSummaryEvents(state, ledger);
+  await releaseExternalAgentProcessPool();
   return state;
 }
 

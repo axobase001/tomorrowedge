@@ -24,6 +24,7 @@ import { exportCommand } from "./commands/export.js";
 import { githubReportCommand } from "./commands/githubReport.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
+import { recipesCommand } from "./commands/recipes.js";
 
 const program = new Command();
 const cwd = process.cwd();
@@ -47,7 +48,7 @@ program
 program
   .command("run")
   .description("Run a coding task through the offline agent graph by default")
-  .argument("<task>", "task goal")
+  .argument("[task]", "task goal")
   .option("--headless", "print JSON instead of launching an interactive cockpit")
   .option("--provider <provider>", "[deprecated] use --fixture-mode instead")
   .option("--fixture-mode", "use fixture provider for deterministic scripted responses")
@@ -65,10 +66,11 @@ program
   .option("--image <path>", "image/screenshot/diagram input; can be repeated", collectOption, [])
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
+  .option("--recipe <id>", "workflow recipe: review-only, bugfix-sprint, or security-audit")
   .option("--to <target>", "conversation target: core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core")
   .option("--cwd <path>", "run against another project directory")
   .option("--workdir <path>", "alias for --cwd")
-  .action((task: string, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task, { ...options, cwd: options.cwd ?? options.workdir }));
+  .action((task: string | undefined, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; recipe?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
 
@@ -89,6 +91,7 @@ program
   .action((options: { port?: string; host?: string; runtime?: string }) => desktopCommand(cwd, options));
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
+program.command("recipes").description("List built-in coding workflow recipes").action(() => recipesCommand());
 
 program.command("ask").description("Record a non-mutating directed natural-language message").argument("<message>", "message to route").option("--to <target>", "core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core").option("--headless", "print JSON instead of a compact summary").action((message: string, options: { to?: string; headless?: boolean }) => askCommand(cwd, message, options));
 

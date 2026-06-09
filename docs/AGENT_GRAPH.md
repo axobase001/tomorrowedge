@@ -22,9 +22,10 @@ defines workflow-kind-aware role graphs:
 - `high_risk_patch`: requires Reviewer and Judge before apply
 - `repair_loop`: Runner failure -> Repairer -> lightweight Review -> Runner
 
-The current native executor still runs mostly sequentially, but it now records
-the workflow kind and role graph so future scheduler work can move dependency
-handling out of the fixed pipeline without changing the event ledger contract.
+Since 1.2.12, candidate production can run Coder-A, Coder-B, and live patch
+generation in the same stage, then merge candidates in stable review order.
+Review, Judge, Runner, Repairer, and Summarizer still run through the ordered
+governance path so approval semantics and the event ledger remain predictable.
 
 Runner is a local tool, not an LLM agent. In `partial` mode it cannot execute
 without approval. In `full` mode patch, shell, and repair actions are

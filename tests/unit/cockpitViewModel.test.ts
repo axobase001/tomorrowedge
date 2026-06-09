@@ -176,6 +176,49 @@ describe("cockpit view model", () => {
     expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["shell", "pending"]);
   });
 
+  it("surfaces pending repair approval after failed verification", () => {
+    const repairDiff = "--- a/index.js\n+++ b/index.js\n@@\n-return a + b\n+return Number(a) + Number(b)\n";
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      changedFiles: ["index.js"],
+      approvals: { patchApproved: true, shellApproved: true, repairApproved: false },
+      agents: [{
+        id: "approval_repair",
+        role: "runner",
+        provider: "local_tool",
+        model: "approval_gate",
+        status: "waiting_for_user",
+        summary: "Repair approval required."
+      }],
+      runResults: [{
+        command: "npm test",
+        exitCode: 1,
+        stdout: "",
+        stderr: "expected numeric add",
+        durationMs: 20,
+        success: false
+      }],
+      repairCandidates: [{
+        candidateId: "repair_candidate_a",
+        agentId: "repairer",
+        approach: "repair",
+        summary: "Repair numeric coercion after failed verification.",
+        filesChanged: ["index.js"],
+        unifiedDiff: repairDiff,
+        testPlan: ["npm test"],
+        knownTradeoffs: [],
+        estimatedRisk: "low"
+      }]
+    }));
+
+    expect(vm.status).toBe("waiting_approval");
+    expect(vm.currentApproval?.kind).toBe("repair");
+    expect(vm.currentApproval?.candidateId).toBe("repair_candidate_a");
+    expect(vm.main.title).toBe("Waiting for repair approval");
+    expect(vm.main.diff).toBe(repairDiff);
+    expect(vm.approvalHistory.at(-1)?.approvalId).toBe("patch:repair_candidate_a");
+    expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["patch", "pending"]);
+  });
+
   it("keeps a completed workflow done when no approval is pending", () => {
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
       changedFiles: ["index.js"],

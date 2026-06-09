@@ -9,6 +9,7 @@ export type IndexedFile = {
   path: string;
   sizeBytes: number;
   risk: FileRisk;
+  mtimeMs: number;
 };
 
 export async function indexRepository(cwd: string): Promise<IndexedFile[]> {
@@ -24,14 +25,15 @@ export async function indexRepository(cwd: string): Promise<IndexedFile[]> {
   for (const file of files) {
     const normalized = normalizePath(file);
     if (matcher.ignores(normalized)) {
-      indexed.push({ path: normalized, sizeBytes: 0, risk: "ignored" });
+      indexed.push({ path: normalized, sizeBytes: 0, risk: "ignored", mtimeMs: 0 });
       continue;
     }
     const fileStat = await stat(path.join(cwd, file));
     indexed.push({
       path: normalized,
       sizeBytes: fileStat.size,
-      risk: classifyFileRisk(normalized, fileStat.size)
+      risk: classifyFileRisk(normalized, fileStat.size),
+      mtimeMs: fileStat.mtimeMs
     });
   }
   return indexed.sort((a, b) => a.path.localeCompare(b.path));

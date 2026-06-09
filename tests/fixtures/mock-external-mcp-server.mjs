@@ -1,3 +1,9 @@
+import { appendFileSync } from "node:fs";
+
+if (process.env.TEDGE_MOCK_MCP_SPAWN_LOG) {
+  appendFileSync(process.env.TEDGE_MOCK_MCP_SPAWN_LOG, `${process.pid}\n`, "utf8");
+}
+
 let buffer = "";
 
 process.stdin.setEncoding("utf8");

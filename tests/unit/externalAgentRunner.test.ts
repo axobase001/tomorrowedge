@@ -1,8 +1,11 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
 import { diagnoseExternalAgentProfile, resolveExternalAgentWorkingDirectory } from "../../src/core/externalAgents/externalAgentDiagnostics.js";
 import { buildExternalAgentEnv, isCodexCommand, probeExternalAgent } from "../../src/core/externalAgents/externalAgentProcess.js";
+import { externalAgentProcessPoolSize, invokeExternalRole, releaseExternalAgentProcessPool } from "../../src/core/externalAgents/externalRoleInvoker.js";
 import { runCommandExternalAgent } from "../../src/core/externalAgents/runners/commandExternalAgentRunner.js";
 import { runMockExternalAgent } from "../../src/core/externalAgents/runners/mockExternalAgentRunner.js";
 import type { ExternalAgentProfile } from "../../src/core/externalAgents/externalAgentTypes.js";
@@ -92,6 +95,32 @@ describe("external agent runners", () => {
     expect(diagnostic.resolvedCommand).toBe(process.execPath);
     expect(diagnostic.cwd).toBe(path.join(process.cwd(), "tests", "fixtures"));
     expect(resolveExternalAgentWorkingDirectory({ ...profileFor("relative"), cwd: "tests" }, process.cwd())).toBe(path.join(process.cwd(), "tests"));
+  });
+
+  it("reuses auto-started MCP process clients across role calls", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "tedge-mcp-pool-"));
+    const spawnLog = path.join(temp, "spawn.log");
+    const ledger = createEventLedger("full", "session_external_pool");
+    const profile = {
+      ...profileFor("codex_mcp_pool"),
+      command: process.execPath,
+      args: [path.join(process.cwd(), "tests", "fixtures", "mock-external-mcp-server.mjs")],
+      autoStart: true,
+      env: { TEDGE_MOCK_MCP_SPAWN_LOG: spawnLog }
+    };
+
+    try {
+      await invokeExternalRole({ cwd: process.cwd(), profile, role: "planner", prompt: "plan once", ledger });
+      await invokeExternalRole({ cwd: process.cwd(), profile, role: "reviewer", prompt: "review once", ledger });
+
+      expect(externalAgentProcessPoolSize()).toBe(1);
+      await releaseExternalAgentProcessPool();
+      expect(externalAgentProcessPoolSize()).toBe(0);
+      expect((await readFile(spawnLog, "utf8")).trim().split(/\r?\n/)).toHaveLength(1);
+    } finally {
+      await releaseExternalAgentProcessPool();
+      await rm(temp, { recursive: true, force: true });
+    }
   });
 
   it("fails probe before spawning when the configured command is missing", async () => {

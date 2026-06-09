@@ -13,6 +13,13 @@ export type ExternalRoleInvocation = {
   attempts: number;
 };
 
+type PooledExternalClient = {
+  client: ExternalAgentProcessClient;
+  started: Promise<void>;
+};
+
+const processClientPool = new Map<string, PooledExternalClient>();
+
 export async function invokeExternalRole(input: {
   cwd: string;
   profile: ExternalAgentProfile;
@@ -61,9 +68,9 @@ export async function invokeExternalRole(input: {
     requestRef
   });
 
-  const client = new ExternalAgentProcessClient(input.profile, input.cwd);
+  const pooled = await getPooledExternalClient(input.profile, input.cwd);
+  const client = pooled.client;
   try {
-    await client.start();
     const tools = await client.listTools();
     const toolName = input.toolName ?? chooseExternalTool(tools);
     const result = await client.callTool(toolName, {
@@ -106,6 +113,7 @@ export async function invokeExternalRole(input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await discardPooledExternalClient(pooled.key);
     input.ledger.append({
       type: "external_agent_call",
       phase: phaseForRole(input.role),
@@ -129,8 +137,53 @@ export async function invokeExternalRole(input: {
     });
     throw error;
   } finally {
-    await client.stop();
+    if (input.profile.command && input.profile.autoStart === false) await discardPooledExternalClient(pooled.key);
   }
+}
+
+export async function releaseExternalAgentProcessPool(): Promise<void> {
+  const clients = [...processClientPool.values()].map((entry) => entry.client);
+  processClientPool.clear();
+  await Promise.all(clients.map((client) => client.stop().catch(() => undefined)));
+}
+
+export function externalAgentProcessPoolSize(): number {
+  return processClientPool.size;
+}
+
+async function getPooledExternalClient(profile: ExternalAgentProfile, cwd: string): Promise<{ key: string; client: ExternalAgentProcessClient }> {
+  const key = processPoolKey(profile, cwd);
+  let entry = processClientPool.get(key);
+  if (!entry) {
+    const client = new ExternalAgentProcessClient(profile, cwd);
+    entry = { client, started: client.start() };
+    processClientPool.set(key, entry);
+  }
+  try {
+    await entry.started;
+    return { key, client: entry.client };
+  } catch (error) {
+    processClientPool.delete(key);
+    await entry.client.stop().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function discardPooledExternalClient(key: string): Promise<void> {
+  const entry = processClientPool.get(key);
+  if (!entry) return;
+  processClientPool.delete(key);
+  await entry.client.stop().catch(() => undefined);
+}
+
+function processPoolKey(profile: ExternalAgentProfile, cwd: string): string {
+  return JSON.stringify({
+    id: profile.id,
+    command: profile.command,
+    args: profile.args ?? [],
+    cwd: profile.cwd ?? cwd,
+    env: profile.env ?? {}
+  });
 }
 
 function buildTaskEnvelope(input: { ledger: EventLedger; role: AgentRole; prompt: string; context?: unknown; outputContract?: ExternalOutputContract }): ExternalTaskEnvelope {

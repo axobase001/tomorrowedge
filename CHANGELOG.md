@@ -7,6 +7,34 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.12] - 2026-06-09
+
+1.2.12 closes the high-priority orchestration and GUI trace issue batch.
+
+### Added
+
+- Built-in workflow recipes: `review-only`, `bugfix-sprint`, and
+  `security-audit`, plus `tedge recipes` and `tedge run --recipe <id>`.
+- Planner/explorer in-process result caching with `agent_cache` ledger events
+  and repository-fingerprint invalidation for explorer context.
+- Native judge decisions now consume debate rounds, and external judge context
+  receives the same debate evidence.
+
+### Changed
+
+- Coder-A, Coder-B, and live patch candidate generation now start in the same
+  candidate-production stage, then merge candidates in a stable review order.
+- Auto-started external MCP process clients are reused during workflow role
+  calls and released at workflow finalization.
+
+### Fixed
+
+- GUI detail drawer route rows now include routing reasons.
+- Failed-verification repair approvals now surface as repair approval cards and
+  browser approval applies the repair candidate instead of the stale patch.
+- External MCP process shutdown now waits for exit/close so Windows fixture
+  workspaces are not left locked.
+
 ## [1.2.11] - 2026-06-09
 
 1.2.11 hardens the native runtime governance loop.

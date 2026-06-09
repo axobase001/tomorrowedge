@@ -29,6 +29,25 @@ available provider instead of emitting `Provider unavailable` for the role.
 The command saves a Markdown report under `.tomorrowedge/workflows/`.
 It does not apply patches or run shell commands proposed by models.
 
+## Workflow Recipes
+
+`tedge recipes` lists built-in coding workflow recipes. Recipes are not generic
+personal-agent skills; they are narrow starting points for patch/test/review
+cockpit runs.
+
+```bash
+tedge recipes
+tedge run --recipe review-only
+tedge run --recipe bugfix-sprint "fix the failing auth test"
+tedge run --recipe security-audit "review the current login changes"
+```
+
+Available recipes:
+
+- `review-only`: inspect repository/diff state without applying patches.
+- `bugfix-sprint`: generate candidates, review, verify, and enable repair.
+- `security-audit`: run conservative red-team review and judge gating.
+
 `--rounds` accepts 1-5 debate rounds. Round 1 collects role-specific arguments.
 Later rounds are cross-examination rounds over the prior transcript:
 
