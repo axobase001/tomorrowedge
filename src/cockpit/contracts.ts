@@ -181,6 +181,32 @@ export type CockpitMemoryInfluenceSummary = {
   cards: CockpitMemoryInfluenceCard[];
 };
 
+export type CockpitErrorLoopTimelineItem = {
+  id: string;
+  timestamp: string;
+  kind: "candidate" | "patch_apply" | "verification" | "repair" | "memory" | "stop";
+  status: "proposed" | "applied" | "blocked" | "failed" | "passed" | "used" | "stopped";
+  title: string;
+  summary: string;
+  candidateId?: string;
+  command?: string;
+  filesChanged: string[];
+  artifactRefs: string[];
+  exitCode?: number;
+  durationMs?: number;
+  memoryIds: string[];
+};
+
+export type CockpitErrorLoopTimelineSummary = {
+  candidateAttempts: number;
+  failedVerifications: number;
+  passedVerifications: number;
+  repairAttempts: number;
+  memoryRetrievals: number;
+  stopReason?: string;
+  items: CockpitErrorLoopTimelineItem[];
+};
+
 export type CockpitViewModel = {
   version: "1";
   sessionId?: string;
@@ -200,6 +226,7 @@ export type CockpitViewModel = {
   approvalHistory: CockpitApprovalHistoryItem[];
   capabilities: CockpitCapabilitySummary[];
   memoryInfluence?: CockpitMemoryInfluenceSummary;
+  errorLoopTimeline?: CockpitErrorLoopTimelineSummary;
   currentApproval?: CockpitApproval;
   main: {
     title: string;

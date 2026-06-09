@@ -32,6 +32,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - GUI/detail drawer memory-influence cards that show retrieved memory ids,
   status, injected role, matched features, decision impact, violations,
   alignment, and artifact links.
+- GUI/detail drawer error-loop timeline that reconstructs candidate attempts,
+  patch applications, failed/passed verification, repair attempts, memory
+  retrieval, artifact refs, and stop reasons from the shared event ledger.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

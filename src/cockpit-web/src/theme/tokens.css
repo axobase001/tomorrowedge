@@ -486,6 +486,51 @@ input, textarea, select {
   overflow-wrap: anywhere;
   color: var(--te-deep-blue);
 }
+.te-error-loop-list {
+  display: grid;
+  gap: 7px;
+  margin: 6px 0 12px;
+}
+.te-error-loop-summary {
+  margin: 0;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-error-loop-item {
+  border-left: 3px solid var(--te-border-strong);
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: rgba(238, 245, 248, 0.42);
+}
+.te-error-loop-item.failed,
+.te-error-loop-item.blocked {
+  border-left-color: var(--te-danger);
+}
+.te-error-loop-item.passed,
+.te-error-loop-item.applied,
+.te-error-loop-item.used {
+  border-left-color: var(--te-success);
+}
+.te-error-loop-item div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.te-error-loop-item span {
+  padding: 1px 5px;
+  border: 1px solid var(--te-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-error-loop-item p {
+  margin: 4px 0 0;
+  color: var(--te-muted);
+  font: 11px/1.45 var(--te-mono);
+  overflow-wrap: anywhere;
+}
 
 .te-setup-backdrop,
 .te-keymgr-backdrop {
