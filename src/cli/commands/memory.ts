@@ -1,9 +1,23 @@
-import { buildStrategyMemoryHints, readLearnedTaskMemory } from "../../core/memory/taskMemory.js";
+import {
+  buildStrategyMemoryHints,
+  explainFailureMemories,
+  readFailureMemories,
+  readLearnedTaskMemory,
+  showFailureMemory,
+  type FailureMemoryExplanation,
+  type FailureMemoryRecord
+} from "../../core/memory/taskMemory.js";
 
-export async function memoryCommand(cwd: string, options: { limit?: string; strategy?: boolean } = {}): Promise<void> {
+type MemoryOptions = { limit?: string; strategy?: boolean; json?: boolean };
+
+export async function memoryCommand(cwd: string, options: MemoryOptions = {}): Promise<void> {
   const limit = options.limit ? Number(options.limit) : 20;
   if (options.strategy) {
     const hints = await buildStrategyMemoryHints(cwd, { limit: Number.isFinite(limit) ? limit : 20 });
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(hints, null, 2)}\n`);
+      return;
+    }
     process.stdout.write(`strategy memory records=${hints.sourceRecords}\n`);
     if (hints.preferredTestCommand) process.stdout.write(`test_command=${hints.preferredTestCommand}\n`);
     for (const route of hints.routeAssignments) {
@@ -13,6 +27,10 @@ export async function memoryCommand(cwd: string, options: { limit?: string; stra
     return;
   }
   const records = await readLearnedTaskMemory(cwd, Number.isFinite(limit) ? limit : 20);
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);
+    return;
+  }
   if (!records.length) {
     process.stdout.write("No learned task memory found.\n");
     return;
@@ -31,4 +49,93 @@ export async function memoryCommand(cwd: string, options: { limit?: string; stra
       ].filter(Boolean).join("\t") + "\n"
     );
   }
+}
+
+export async function memoryFailuresCommand(cwd: string, options: { limit?: string; json?: boolean } = {}): Promise<void> {
+  const limit = options.limit ? Number(options.limit) : 20;
+  const records = await readFailureMemories(cwd, Number.isFinite(limit) ? limit : 20);
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);
+    return;
+  }
+  if (!records.length) {
+    process.stdout.write("No failure memory found.\n");
+    return;
+  }
+  process.stdout.write("id\tcreatedAt\tclass\tconfidence\ttask\tevidence\tcorrection\n");
+  for (const record of records) {
+    process.stdout.write(renderFailureRow(record));
+  }
+}
+
+export async function memoryShowCommand(cwd: string, id: string, options: { json?: boolean } = {}): Promise<void> {
+  const record = await showFailureMemory(cwd, id);
+  if (!record) {
+    process.stderr.write(`Failure memory not found: ${id}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);
+    return;
+  }
+  process.stdout.write(renderFailureDetail(record));
+}
+
+export async function memoryExplainCommand(cwd: string, task: string, options: { limit?: string; json?: boolean } = {}): Promise<void> {
+  const limit = options.limit ? Number(options.limit) : 5;
+  const explanation = await explainFailureMemories(cwd, task, { limit: Number.isFinite(limit) ? limit : 5 });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(explanation, null, 2)}\n`);
+    return;
+  }
+  process.stdout.write(renderExplanation(explanation));
+}
+
+function renderFailureRow(record: FailureMemoryRecord): string {
+  return [
+    record.id,
+    record.createdAt,
+    record.failureClass,
+    record.confidence.toFixed(2),
+    record.goalPreview ?? record.goalFingerprint,
+    record.evidenceRefs.length ? record.evidenceRefs.length : "-",
+    record.correction
+  ].join("\t") + "\n";
+}
+
+function renderFailureDetail(record: FailureMemoryRecord): string {
+  return [
+    `id: ${record.id}`,
+    `createdAt: ${record.createdAt}`,
+    `task: ${record.goalPreview ?? record.goalFingerprint}`,
+    `taskType: ${record.taskType}`,
+    `risk: ${record.riskLevel}`,
+    `result: ${record.result ?? "unknown"}`,
+    `failureClass: ${record.failureClass}`,
+    `confidence: ${record.confidence.toFixed(2)}`,
+    `recurrence: ${record.recurrence}`,
+    `judge: ${record.judgeDecision ?? "unknown"}`,
+    `selectedCandidate: ${record.selectedCandidate ?? "-"}`,
+    `verification: ${(record.verificationCommands ?? []).join(", ") || "-"}`,
+    `correction: ${record.correction}`,
+    `evidenceRefs: ${record.evidenceRefs.length ? record.evidenceRefs.join(", ") : "-"}`
+  ].join("\n") + "\n";
+}
+
+function renderExplanation(explanation: FailureMemoryExplanation): string {
+  const lines = [`task: ${explanation.task}`, `selected=${explanation.selected.length} rejected=${explanation.rejected.length}`];
+  for (const record of explanation.selected) {
+    lines.push(
+      [
+        `${record.id}`,
+        `score=${record.score}`,
+        `class=${record.failureClass}`,
+        `signals=${record.matchedSignals.slice(0, 8).join(",") || "-"}`,
+        `correction=${record.correction}`
+      ].join("\t")
+    );
+  }
+  if (!explanation.selected.length) lines.push("No relevant failure memories selected.");
+  return `${lines.join("\n")}\n`;
 }

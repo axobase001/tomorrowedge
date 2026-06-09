@@ -53,4 +53,18 @@ describe("CLI contract", () => {
 
     expect(result.stdout).toContain(`Usage: tedge ${command}`);
   }, 15_000);
+
+  it("keeps memory subcommand options local to the subcommand", async () => {
+    const failures = await execa("tsx", ["src/cli/index.ts", "memory", "failures", "--limit", "1", "--json"], {
+      cwd: process.cwd(),
+      preferLocal: true
+    });
+    const explained = await execa("tsx", ["src/cli/index.ts", "memory", "explain", "fix npm test failure", "--limit", "1", "--json"], {
+      cwd: process.cwd(),
+      preferLocal: true
+    });
+
+    expect(() => JSON.parse(failures.stdout)).not.toThrow();
+    expect(() => JSON.parse(explained.stdout)).not.toThrow();
+  }, 15_000);
 });

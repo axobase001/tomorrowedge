@@ -68,25 +68,79 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await page.waitForSelector("text=命令", { timeout: 5_000 });
     await page.selectOption("[data-testid='language-selector']", "en");
     await page.waitForSelector("text=Command", { timeout: 5_000 });
+    await assertVisibleTestIds(page, [
+      "topbar",
+      "task-panel",
+      "workflow-panel",
+      "workflow-spine",
+      "main-view",
+      "telemetry-panel",
+      "trace-strip",
+      "composer",
+      "composer-input",
+      "composer-mode",
+      "composer-run-mode",
+      "composer-target",
+      "composer-validation-hint",
+      "composer-submit"
+    ], "initial cockpit contract");
+    await touchOptionalTestIds(page, ["task-card"]);
     const setupDismiss = page.locator("[data-testid='setup-dismiss-demo']");
-    if (await setupDismiss.isVisible().catch(() => false)) await setupDismiss.click();
+    if (await setupDismiss.isVisible().catch(() => false)) {
+      await assertVisibleTestIds(page, [
+        "setup-wizard",
+        "setup-provider",
+        "setup-model",
+        "setup-base-url",
+        "setup-env",
+        "setup-key",
+        "setup-save",
+        "setup-test"
+      ], "setup wizard contract");
+      await touchOptionalTestIds(page, ["setup-message", "setup-connection"]);
+      await setupDismiss.click();
+    }
     await page.click("[data-testid='topbar-keys']");
     await page.waitForSelector("[data-testid='key-role-manager']", { timeout: 5_000 });
+    await assertVisibleTestIds(page, [
+      "keymgr-tab-keys",
+      "keymgr-provider",
+      "keymgr-model",
+      "keymgr-base-url",
+      "keymgr-env",
+      "keymgr-key",
+      "keymgr-save-key",
+      "keymgr-refresh-models",
+      "keymgr-test-key",
+      "keymgr-delete-key"
+    ], "key manager key contract");
+    await touchOptionalTestIds(page, ["keymgr-message", "keymgr-connection", "keymgr-models-message"]);
     await page.click("[data-testid='keymgr-tab-roles']");
     await page.waitForSelector("[data-testid='keymgr-role-list']", { timeout: 5_000 });
+    await assertVisibleTestIds(page, ["keymgr-save-roles"], "key manager role contract");
     await page.click("[data-testid='keymgr-close']");
     await page.waitForSelector("[data-testid='key-role-manager']", { state: "detached", timeout: 5_000 });
     await page.fill("[data-testid='composer-input']", "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.");
     await page.press("[data-testid='composer-input']", "Enter");
     await page.waitForSelector("[data-testid='approval-card']", { timeout: 20_000 });
+    await assertAtLeastOneVisible(page, "task-card", "running task list");
+    await touchOptionalTestIds(page, ["composer-status"]);
+    await touchOptionalTestIds(page, ["workflow-current-agent"]);
     await page.waitForSelector("[data-testid='telemetry-routing']", { timeout: 10_000 });
     const routingText = await page.locator("[data-testid='telemetry-routing']").innerText();
     if (!/planner|coder|reviewer|judge/.test(routingText)) {
       throw new Error(`telemetry routing panel did not expose role routes: ${routingText}`);
     }
+    await assertVisibleTestIds(page, [
+      "approval-approve",
+      "approval-reject",
+      "approval-rereview",
+      "approval-open-drawer"
+    ], "approval contract");
     await assertNoHorizontalOverflow(page, "approval-main");
     await page.click("[data-testid='approval-open-drawer']");
     await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
+    await assertVisibleTestIds(page, ["drawer-backdrop", "detail-drawer", "detail-drawer-close", "drawer-artifacts"], "drawer contract");
     await waitForDrawerInViewport(page);
     await assertNoHorizontalOverflow(page, "drawer-open");
     await page.screenshot({ path: path.join(artifactDir, "waiting-approval.png"), fullPage: true });
@@ -102,6 +156,7 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await page.waitForSelector("[data-testid='detail-drawer']", { state: "detached", timeout: 5_000 });
     await page.click("[data-testid='open-drawer']");
     await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
+    await touchOptionalTestIds(page, ["close-drawer"]);
     await page.click("[data-testid='detail-drawer-close']");
     await page.waitForSelector("[data-testid='detail-drawer']", { state: "detached", timeout: 5_000 });
 
@@ -162,6 +217,31 @@ async function assertNoHorizontalOverflow(page: Page, label: string): Promise<vo
   const maxScrollWidth = Math.max(metrics.documentScrollWidth, metrics.bodyScrollWidth);
   if (maxScrollWidth > metrics.innerWidth + 1) {
     throw new Error(`${label} has horizontal overflow: scrollWidth=${maxScrollWidth}, innerWidth=${metrics.innerWidth}`);
+  }
+}
+
+async function assertVisibleTestIds(page: Page, ids: string[], label: string): Promise<void> {
+  const missing: string[] = [];
+  for (const id of ids) {
+    const visible = await page.locator(`[data-testid='${id}']`).first().isVisible().catch(() => false);
+    if (!visible) missing.push(id);
+  }
+  if (missing.length) {
+    throw new Error(`${label} missing visible data-testid(s): ${missing.join(", ")}`);
+  }
+}
+
+async function assertAtLeastOneVisible(page: Page, id: string, label: string): Promise<void> {
+  const count = await page.locator(`[data-testid='${id}']`).count();
+  for (let index = 0; index < count; index += 1) {
+    if (await page.locator(`[data-testid='${id}']`).nth(index).isVisible().catch(() => false)) return;
+  }
+  throw new Error(`${label} has no visible data-testid='${id}' element`);
+}
+
+async function touchOptionalTestIds(page: Page, ids: string[]): Promise<void> {
+  for (const id of ids) {
+    await page.locator(`[data-testid='${id}']`).count();
   }
 }
 
