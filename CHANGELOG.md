@@ -7,6 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-06-09
+
+1.2.9 extends provider compatibility fixes beyond DeepSeek.
+
+### Added
+
+- GUI first-run setup and the `Keys` panel now expose provider base URL fields
+  so OpenAI-compatible gateways, MiMo regional endpoints, and custom compatible
+  APIs can be configured without hand-editing YAML.
+
+### Changed
+
+- MiMo and generic OpenAI-compatible providers now ship with known default
+  endpoints instead of blank `base_url` values.
+- Older configs with blank `base_url` entries are normalized for DeepSeek, MiMo,
+  and generic OpenAI-compatible providers at load time.
+
+### Fixed
+
+- Custom base URLs submitted from the GUI are now persisted by the local cockpit
+  API instead of being dropped by request parsing.
+
 ## [1.2.8] - 2026-06-09
 
 1.2.8 fixes DeepSeek onboarding and connection testing from the GUI key manager.

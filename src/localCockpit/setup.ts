@@ -37,6 +37,7 @@ export type CockpitSetupStatus = {
 export type CockpitSetupRequest = {
   provider: string;
   model: string;
+  baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
   bindRoles?: boolean;
@@ -45,6 +46,7 @@ export type CockpitSetupRequest = {
 export type CockpitProviderKeyRequest = {
   provider: string;
   model?: string;
+  baseUrl?: string;
   apiKeyEnv?: string;
   apiKey: string;
 };
@@ -92,6 +94,7 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
   if (!config.providers[providerId]) throw new Error(`Unknown provider: ${providerId}`);
   const model = request.model.trim();
   if (!model) throw new Error("At least one model id is required.");
+  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? config.providers[providerId].base_url;
   const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? config.providers[providerId].api_key_env ?? defaultEnvNames[providerId];
   if (requiresAuth(config.providers[providerId]) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   if (request.apiKey?.trim() && apiKeyEnv) {
@@ -102,6 +105,7 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
     ...config.providers[providerId],
     enabled: true,
     model,
+    base_url: baseUrl,
     api_key_env: apiKeyEnv
   };
   const nextConfig: TomorrowEdgeConfig = {
@@ -126,6 +130,7 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
   if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   const model = request.model?.trim() || config.providers[providerId].model;
   if (!model) throw new Error("At least one model id is required.");
+  const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? config.providers[providerId].base_url;
   await writeLocalEnvValue(cwd, apiKeyEnv, apiKey);
   process.env[apiKeyEnv] = apiKey;
   await writeConfig(cwd, {
@@ -136,6 +141,7 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
         ...config.providers[providerId],
         enabled: true,
         model,
+        base_url: baseUrl,
         api_key_env: apiKeyEnv
       }
     }
@@ -229,6 +235,21 @@ function sanitizeEnvName(value?: string): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
   if (!/^[A-Z_][A-Z0-9_]*$/.test(trimmed)) throw new Error("Env var name must use uppercase letters, numbers, and underscores.");
+  return trimmed;
+}
+
+function sanitizeBaseUrl(value?: string): string | undefined {
+  const trimmed = value?.trim().replace(/\/+$/, "");
+  if (!trimmed) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Base URL must be an absolute http(s) URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Base URL must use http or https.");
+  }
   return trimmed;
 }
 

@@ -24,8 +24,9 @@ Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会�
 
 ## 当前版本
 
-当前版本：`1.2.8`。
+当前版本：`1.2.9`。
 
+- `1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start blank.
 - `1.2.8` fixes DeepSeek GUI key-manager onboarding by supplying the known default endpoint and migrating older blank `base_url` configs at load time.
 - `1.2.7` adds GUI language switching. The local client defaults to English and can switch to Chinese from the top bar, with the preference saved locally.
 - `1.2.6` adds a GUI `Keys` panel for simple provider API-key setup and per-role model assignment while keeping raw keys out of config.
@@ -425,7 +426,11 @@ Different models have different capabilities, prices, context lengths, latency p
 
 ## Current Version
 
-Current version: `1.2.8`.
+Current version: `1.2.9`.
+
+`1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel
+can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start
+blank.
 
 `1.2.8` fixes DeepSeek GUI key-manager onboarding by supplying the known
 default endpoint and migrating older blank `base_url` configs at load time.

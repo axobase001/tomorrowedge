@@ -476,6 +476,7 @@ function parseSetupRequest(value: Record<string, unknown>) {
   return {
     provider,
     model,
+    baseUrl: typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined,
     apiKeyEnv: typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined,
     apiKey: typeof value.apiKey === "string" ? value.apiKey : undefined,
     bindRoles: Boolean(value.bindRoles)
@@ -485,9 +486,10 @@ function parseSetupRequest(value: Record<string, unknown>) {
 function parseProviderKeyRequest(provider: string, value: Record<string, unknown>) {
   const apiKey = typeof value.apiKey === "string" ? value.apiKey : "";
   const model = typeof value.model === "string" ? value.model.trim() : undefined;
+  const baseUrl = typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined;
   const apiKeyEnv = typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined;
   if (!apiKey.trim()) throw new HttpError(400, "api_key_required", "API key is required.");
-  return { provider, model, apiKeyEnv, apiKey };
+  return { provider, model, baseUrl, apiKeyEnv, apiKey };
 }
 
 function parseRoleAssignmentsRequest(value: Record<string, unknown>) {

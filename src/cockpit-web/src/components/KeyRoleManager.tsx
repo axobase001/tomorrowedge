@@ -39,6 +39,7 @@ export function KeyRoleManager({
   const [provider, setProvider] = useState(initialProvider);
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers[0];
   const [model, setModel] = useState(setupStatus?.selectedModel ?? selectedProvider?.model ?? suggestedModelFor(provider));
+  const [baseUrl, setBaseUrl] = useState(selectedProvider?.baseUrl ?? defaultBaseUrlFor(provider));
   const [apiKeyEnv, setApiKeyEnv] = useState(selectedProvider?.apiKeyEnv ?? defaultEnvFor(provider));
   const [apiKey, setApiKey] = useState("");
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
@@ -54,10 +55,11 @@ export function KeyRoleManager({
   useEffect(() => {
     const nextProvider = providers.find((item) => item.id === provider);
     setModel((current) => current || nextProvider?.model || suggestedModelFor(provider));
+    setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(provider));
     setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(provider));
   }, [provider, providers]);
 
-  const canSaveKey = Boolean(provider && model.trim() && apiKeyEnv.trim() && apiKey.trim()) && !busy;
+  const canSaveKey = Boolean(provider && model.trim() && baseUrl.trim() && apiKeyEnv.trim() && apiKey.trim()) && !busy;
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
@@ -100,6 +102,10 @@ export function KeyRoleManager({
                 <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
               </label>
               <label>
+                <span>{t("keymgr.baseUrl")}</span>
+                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t("keymgr.baseUrlPlaceholder")} data-testid="keymgr-base-url" />
+              </label>
+              <label>
                 <span>{t("keymgr.apiKeyEnv")}</span>
                 <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} data-testid="keymgr-env" />
               </label>
@@ -110,7 +116,7 @@ export function KeyRoleManager({
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={!canSaveKey} onClick={() => {
-                onSaveProviderKey({ provider, model, apiKeyEnv, apiKey });
+                onSaveProviderKey({ provider, model, baseUrl, apiKeyEnv, apiKey });
                 setApiKey("");
               }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || !provider} onClick={() => onTestProvider(provider)} data-testid="keymgr-test-key">{t("keymgr.test")}</button>
@@ -169,6 +175,19 @@ function defaultEnvFor(provider: string): string {
     openai_compatible: "OPENAI_API_KEY"
   };
   return lookup[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+}
+
+function defaultBaseUrlFor(provider: string): string {
+  const lookup: Record<string, string> = {
+    openrouter: "https://openrouter.ai/api/v1",
+    deepseek: "https://api.deepseek.com",
+    kimi: "https://api.moonshot.ai/v1",
+    mimo: "https://token-plan-sgp.xiaomimimo.com/v1",
+    anthropic: "https://api.anthropic.com/v1",
+    gemini: "https://generativelanguage.googleapis.com/v1beta",
+    openai_compatible: "https://api.openai.com/v1"
+  };
+  return lookup[provider] ?? "";
 }
 
 function suggestedModelFor(provider: string): string {

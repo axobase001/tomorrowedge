@@ -29,6 +29,7 @@ export function SetupWizard({
   const [provider, setProvider] = useState(initialProvider);
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers[0];
   const [model, setModel] = useState(setupStatus?.selectedModel ?? suggestedModelFor(provider));
+  const [baseUrl, setBaseUrl] = useState(selectedProvider?.baseUrl ?? defaultBaseUrlFor(provider));
   const [apiKeyEnv, setApiKeyEnv] = useState(selectedProvider?.apiKeyEnv ?? defaultEnvFor(provider));
   const [apiKey, setApiKey] = useState("");
   const [bindRoles, setBindRoles] = useState(true);
@@ -40,10 +41,11 @@ export function SetupWizard({
   useEffect(() => {
     const nextProvider = providers.find((item) => item.id === provider);
     setModel((current) => current || nextProvider?.model || suggestedModelFor(provider));
+    setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(provider));
     setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(provider));
   }, [provider, providers]);
 
-  const canSubmit = Boolean(provider && model.trim() && apiKeyEnv.trim()) && !busy;
+  const canSubmit = Boolean(provider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !busy;
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
@@ -73,6 +75,10 @@ export function SetupWizard({
             <input value={model} onChange={(event) => setModel(event.target.value)} placeholder={t("setup.modelPlaceholder")} data-testid="setup-model" />
           </label>
           <label>
+            <span>{t("setup.baseUrl")}</span>
+            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t("setup.baseUrlPlaceholder")} data-testid="setup-base-url" />
+          </label>
+          <label>
             <span>{t("setup.apiKeyEnv")}</span>
             <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} placeholder="OPENROUTER_API_KEY" data-testid="setup-env" />
           </label>
@@ -86,7 +92,7 @@ export function SetupWizard({
           <span>{t("setup.bindRoles")}</span>
         </label>
         <div className="te-setup-actions">
-          <button type="button" onClick={() => onConfigure({ provider, model, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
+          <button type="button" onClick={() => onConfigure({ provider, model, baseUrl, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
             {t("setup.save")}
           </button>
           <button type="button" className="te-quiet-button" onClick={() => onTest(provider)} disabled={busy || !provider} data-testid="setup-test">
@@ -116,6 +122,19 @@ function defaultEnvFor(provider: string): string {
     openai_compatible: "OPENAI_API_KEY"
   };
   return lookup[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+}
+
+function defaultBaseUrlFor(provider: string): string {
+  const lookup: Record<string, string> = {
+    openrouter: "https://openrouter.ai/api/v1",
+    deepseek: "https://api.deepseek.com",
+    kimi: "https://api.moonshot.ai/v1",
+    mimo: "https://token-plan-sgp.xiaomimimo.com/v1",
+    anthropic: "https://api.anthropic.com/v1",
+    gemini: "https://generativelanguage.googleapis.com/v1beta",
+    openai_compatible: "https://api.openai.com/v1"
+  };
+  return lookup[provider] ?? "";
 }
 
 function suggestedModelFor(provider: string): string {

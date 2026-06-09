@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.2.8 README product promises. Use this
+Authoritative map for TomorrowEdge 1.2.9 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -24,6 +24,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | responsive-theme | React and fallback HTML cockpits support OS dark mode and avoid hard fallback min-width locks. | `src/cockpit-web/src/theme/tokens.css`, `src/localCockpit/html.ts` | `tests/unit/cockpitWeb.test.ts`, `npm run e2e:cockpit` | #249, #251, #253, #255 |
 | first-run-setup | First GUI launch can configure one provider/model through env-var indirection or local `.tomorrowedge/local.env` storage. | `src/localCockpit/setup.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/SetupWizard.tsx` | `tests/unit/localCockpit.test.ts`, `tests/unit/cockpitWeb.test.ts`, `npm run e2e:cockpit` | implemented |
 | deepseek-readiness | DeepSeek GUI key-manager setup remains testable after saving only key, env name, and model because the known endpoint is supplied even for older blank configs. | `src/config/defaultConfig.ts`, `src/config/configLoader.ts`, `src/localCockpit/setup.ts` | `tests/unit/config.test.ts`, `tests/unit/localCockpit.test.ts`, `tedge models --connection-test --provider deepseek` | implemented |
+| compatible-base-url | GUI setup and key management can persist provider base URLs for MiMo, generic OpenAI-compatible gateways, and custom compatible endpoints. | `src/config/defaultConfig.ts`, `src/config/configLoader.ts`, `src/localCockpit/setup.ts`, `src/localCockpit/server.ts`, `src/cockpit-web/src/components/SetupWizard.tsx`, `src/cockpit-web/src/components/KeyRoleManager.tsx` | `tests/unit/config.test.ts`, `tests/unit/localCockpit.test.ts`, `tests/unit/cockpitWeb.test.ts` | implemented |
 | composer-access-mode | The natural-language composer exposes `restricted`, `partial`, and `full` mode selection beside the input before task submission. | `src/cockpit-web/src/components/ComposerPanel.tsx`, `src/cockpit-web/src/main.tsx`, `src/localCockpit/server.ts` | `tests/unit/cockpitWeb.test.ts`, `tests/unit/localCockpit.test.ts` | implemented |
 
 ## Desktop Entrypoint

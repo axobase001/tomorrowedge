@@ -46,6 +46,7 @@ export type CockpitSetupStatus = {
 export type CockpitSetupRequest = {
   provider: string;
   model: string;
+  baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
   bindRoles?: boolean;
@@ -54,6 +55,7 @@ export type CockpitSetupRequest = {
 export type CockpitProviderKeyRequest = {
   provider: string;
   model?: string;
+  baseUrl?: string;
   apiKeyEnv?: string;
   apiKey: string;
 };

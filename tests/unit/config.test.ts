@@ -24,6 +24,8 @@ describe("config loader", () => {
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
     expect(config.providers.deepseek.base_url).toBe("https://api.deepseek.com");
+    expect(config.providers.mimo.base_url).toBe("https://token-plan-sgp.xiaomimimo.com/v1");
+    expect(config.providers.openai_compatible.base_url).toBe("https://api.openai.com/v1");
     expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
     expect(config.providers.kimi.model).toBe("kimi-k2.6");
   });
@@ -40,7 +42,17 @@ describe("config loader", () => {
           "    enabled: true",
           "    api_key_env: DEEPSEEK_API_KEY",
           "    base_url: \"\"",
-          "    model: deepseek-v4-pro"
+          "    model: deepseek-v4-pro",
+          "  mimo:",
+          "    enabled: true",
+          "    api_key_env: MIMO_API_KEY",
+          "    base_url: \"\"",
+          "    model: mimo-v2.5-pro",
+          "  openai_compatible:",
+          "    enabled: true",
+          "    api_key_env: OPENAI_API_KEY",
+          "    base_url: \"\"",
+          "    model: gpt-4o-mini"
         ].join("\n"),
         "utf8"
       );
@@ -49,6 +61,8 @@ describe("config loader", () => {
 
       expect(config.providers.deepseek.enabled).toBe(true);
       expect(config.providers.deepseek.base_url).toBe("https://api.deepseek.com");
+      expect(config.providers.mimo.base_url).toBe("https://token-plan-sgp.xiaomimimo.com/v1");
+      expect(config.providers.openai_compatible.base_url).toBe("https://api.openai.com/v1");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

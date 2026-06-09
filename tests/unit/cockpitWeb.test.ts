@@ -60,6 +60,7 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("First-run setup");
     expect(html).toContain("data-testid=\"setup-provider\"");
     expect(html).toContain("data-testid=\"setup-model\"");
+    expect(html).toContain("data-testid=\"setup-base-url\"");
     expect(html).toContain("moonshotai/kimi-k2:free");
   });
 
@@ -70,6 +71,7 @@ describe("cockpit web React surface", () => {
     expect(closed).toContain("data-testid=\"topbar-keys\"");
     expect(open).toContain("API keys and role routing");
     expect(open).toContain("data-testid=\"key-role-manager\"");
+    expect(open).toContain("data-testid=\"keymgr-base-url\"");
     expect(open).toContain("data-testid=\"keymgr-save-key\"");
     expect(open).toContain("data-testid=\"keymgr-tab-roles\"");
   });
