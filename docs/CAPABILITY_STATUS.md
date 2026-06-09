@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.2.10. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.2.11. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -9,7 +9,10 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Access modes and full-access trace | stable | Restricted, partial, and full modes are implemented with event-ledger visibility. |
 | Event ledger, artifacts, trace/export | stable | Sessions, events, artifact refs, markdown/json export, and trace diagnostics are implemented. |
 | Adaptive planner and post-plan role routing | stable | The planner can use a routed model for structured plans with native adaptive fallback. Plans have variable task-specific steps, and high-risk or specialized planner output can trigger post-plan rerouting for downstream roles. |
-| Strong-agent and per-role budget governance | stable | Global strong-agent reserves remain available, and individual roles can define independent call/cost caps through `agents.<role>.budget`. Budget decisions are recorded in the event ledger. |
+| Strong-agent and per-role budget audit | stable | Routing emits `budget_preview` events without consuming budget, and invocation-time `budget_decision` events record allow/fallback/block outcomes. |
+| Strong-agent and per-role budget enforcement | stable | Live and external role invocations pass through BudgetGate before execution. Blocked planner/reviewer/judge/coder roles use native fallback where available, and tests guard against blocked+success contradictions. |
+| Workflow-kind trace completeness | stable | Read-only workflows use a read-only rubric and no longer require patch, review, judge, apply, or shell events. Patch workflows retain patch/review/judge/apply/shell requirements. |
+| Workflow-kind role graph foundation | experimental | `RoleGraph` describes read-only, patch, debate patch, high-risk patch, and repair-loop role dependencies. The current native executor still executes mostly sequentially while consuming the graph for workflow classification and future scheduler hardening. |
 | Provider configuration and OpenAI-compatible adapters | stable | OpenRouter, DeepSeek, MiMo, Kimi, Anthropic, Gemini, Ollama, mock, fixture, and generic OpenAI-compatible config are available. GUI setup and key management expose provider base URLs for compatible gateways. Real usability depends on provider keys, quota, endpoint region, and model support. |
 | Provider smoke and connection checks | stable | `tedge models --provider`, `--connection-test`, `--real-smoke`, and `--smoke-suite` exist. Doctor reports static configuration, not guaranteed live chat quota. DeepSeek, MiMo, and generic OpenAI-compatible providers have known defaults, and older blank `base_url` configs are normalized at load time. |
 | Live advisory and live patch candidates | experimental | Non-mutating live outputs are supported. Empty or malformed live patch diffs are rejected and retried before being marked unavailable. |

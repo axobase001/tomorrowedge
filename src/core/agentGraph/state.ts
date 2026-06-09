@@ -16,6 +16,9 @@ import type { ConversationTarget } from "../../schemas/conversation.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import type { ProviderView } from "../contextProjection/providerView.js";
 import type { TraceCompleteness } from "../diagnostics/traceCompleteness.js";
+import type { BudgetRuntimeState } from "../budget/budgetGate.js";
+import type { RoleGraph } from "../orchestration/roleGraph.js";
+import type { WorkflowKind } from "../orchestration/workflowKind.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -37,6 +40,9 @@ export type AgentGraphState = {
   debateRounds: DebateRound[];
   modelNotes: ModelNote[];
   usageSummary: ModelUsageSummary;
+  workflowKind?: WorkflowKind;
+  roleGraph?: RoleGraph;
+  budgetRuntime: BudgetRuntimeState;
   budgetStatus?: ModelBudgetStatus;
   budgetStatuses: ModelBudgetStatus[];
   review?: ReviewReport;

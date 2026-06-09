@@ -45,8 +45,9 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 ## 当前版本
 
-当前版本：`1.2.10`。
+当前版本：`1.2.11`。
 
+- `1.2.11` hardens the native runtime governance loop: routing now emits budget previews without consuming budget, live/external role calls pass through an execution BudgetGate, blocked roles fall back or stop without blocked+success contradictions, read-only trace completeness uses a read-only rubric, and role graph foundations describe workflow-kind-aware orchestration.
 - `1.2.10` upgrades planner/routing/budget governance: planning can use a structured model-backed planner with native fallback, native plans are adaptive instead of fixed four-step templates, routes can update after planning, and per-role budget caps are now configurable.
 - `1.2.9` extends compatible API setup: GUI first-run setup and the `Keys` panel can save provider base URLs, and MiMo/OpenAI-compatible defaults no longer start blank.
 - `1.2.8` fixes DeepSeek GUI key-manager onboarding by supplying the known default endpoint and migrating older blank `base_url` configs at load time.
@@ -467,7 +468,13 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, rol
 
 ## Current Version
 
-Current version: `1.2.10`.
+Current version: `1.2.11`.
+
+`1.2.11` hardens the native runtime governance loop: routing now emits budget
+previews without consuming budget, live/external role calls pass through an
+execution BudgetGate, blocked roles fall back or stop without blocked+success
+contradictions, read-only trace completeness uses a read-only rubric, and role
+graph foundations describe workflow-kind-aware orchestration.
 
 `1.2.10` upgrades planner/routing/budget governance: planning can use a
 structured model-backed planner with native fallback, native plans are adaptive

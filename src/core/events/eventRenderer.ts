@@ -74,6 +74,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.evidencePhase} ${event.verificationStatus}: ${event.summary}`;
     case "budget_decision":
       return `${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "budget_preview":
+      return `preview ${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "workflow_stop_reason":
       return `${event.result}: ${event.reason}`;
     case "fallback_to_native":

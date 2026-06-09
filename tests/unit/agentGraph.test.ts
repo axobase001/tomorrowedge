@@ -33,7 +33,7 @@ describe("offline agent graph", () => {
     expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(false);
     expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
       "routing_decision",
-      "budget_decision",
+      "budget_preview",
       "artifact_projection",
       "context_projection",
       "evidence_packet",
@@ -90,7 +90,7 @@ describe("offline agent graph", () => {
     expect(state.candidates).toEqual([]);
   });
 
-  it("marks configured cloud/local model providers as live agent runs", async () => {
+  it("separates configured cloud route proposals from native offline execution", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
@@ -116,11 +116,13 @@ describe("offline agent graph", () => {
 
     const state = await runOfflineGraph(cwd, "fix failing test", config);
     const agentKinds = new Map(state.agents.map((agent) => [agent.role, agent.agentKind]));
-    expect(agentKinds.get("planner")).toBe("live");
-    expect(agentKinds.get("coder_a")).toBe("live");
-    expect(agentKinds.get("reviewer")).toBe("live");
-    expect(agentKinds.get("judge")).toBe("live");
-    expect(state.events.find((event) => event.type === "agent_run" && event.role === "planner")).toMatchObject({ agentKind: "live" });
+    const plannerRoute = state.routing.assignments.find((assignment) => assignment.role === "planner");
+    expect(plannerRoute).toMatchObject({ provider: "deepseek", model: "deepseek-v4-pro" });
+    expect(agentKinds.get("planner")).toBe("offline");
+    expect(agentKinds.get("coder_a")).toBe("offline");
+    expect(agentKinds.get("reviewer")).toBe("offline");
+    expect(agentKinds.get("judge")).toBe("offline");
+    expect(state.events.find((event) => event.type === "agent_run" && event.role === "planner")).toMatchObject({ agentKind: "offline" });
   });
 
   it("lets configured external MCP agents execute core-led workflow roles", async () => {

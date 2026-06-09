@@ -44,7 +44,7 @@ export type ModelCallEvent = BaseEvent & {
 export type AgentRunEvent = BaseEvent & {
   type: "agent_run";
   agentKind?: "offline" | "live" | "external";
-  status: "success" | "failure";
+  status: "success" | "failure" | "blocked";
   runId: string;
   responseRef?: string;
   error?: string;
@@ -159,6 +159,7 @@ export type WorkflowIntentEvent = BaseEvent & {
   type: "workflow_intent";
   intent: "inspect" | "patch" | "ask_user";
   requiresPatchWorkflow: boolean;
+  workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
   confidence: number;
   reason: string;
   fallbackUsed?: boolean;
@@ -310,6 +311,17 @@ export type BudgetDecisionEvent = BaseEvent & {
   strongAgentCallsRemaining?: number;
 };
 
+export type BudgetPreviewEvent = BaseEvent & {
+  type: "budget_preview";
+  status: "allowed" | "blocked" | "warn";
+  reason: string;
+  budgetScope?: "global_strong_pool" | "per_role" | "efficient";
+  maxCostUsd?: number;
+  estimatedCostUsd?: number;
+  strongAgentCallsUsed?: number;
+  strongAgentCallsRemaining?: number;
+};
+
 export type WorkflowStopReasonEvent = BaseEvent & {
   type: "workflow_stop_reason";
   reason: string;
@@ -327,6 +339,7 @@ export type TraceCompletenessEvent = BaseEvent & {
   type: "trace_completeness";
   score: number;
   missing: string[];
+  workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
 };
 
 export type TomorrowEdgeEvent =
@@ -361,6 +374,7 @@ export type TomorrowEdgeEvent =
   | ContextProjectionEvent
   | ArtifactProjectionEvent
   | EvidencePacketEvent
+  | BudgetPreviewEvent
   | BudgetDecisionEvent
   | WorkflowStopReasonEvent
   | FallbackToNativeEvent

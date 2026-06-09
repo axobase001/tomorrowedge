@@ -7,6 +7,37 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.11] - 2026-06-09
+
+1.2.11 hardens the native runtime governance loop.
+
+### Added
+
+- BudgetGate runtime layer with allow/fallback/block decisions immediately
+  before live or external role invocation.
+- `budget_preview` events so routing can show budget implications without
+  consuming budget.
+- WorkflowKind-aware trace completeness for `read_only`, `patch`,
+  `vision_patch`, `advisory`, and `ask_user` workflows.
+- RoleGraph foundation for workflow-kind-aware orchestration, including
+  read-only, patch, debate patch, high-risk patch, and repair-loop graphs.
+
+### Changed
+
+- Workflow intent is classified before model-backed patch planning.
+- Routing and post-plan rerouting now remain route proposals; actual budget
+  decisions are recorded only at invocation time.
+- Native/offline execution is distinguished from cloud/external route
+  proposals in agent run state.
+
+### Fixed
+
+- Budget-blocked external planner/reviewer/judge roles no longer call the
+  external agent and no longer produce blocked+success contradictions for the
+  same actual invocation.
+- Read-only workflows no longer lose trace-completeness score for intentionally
+  skipped patch, review, judge, apply, or shell events.
+
 ## [1.2.10] - 2026-06-09
 
 1.2.10 promotes the planner/routing/budget governance upgrade to a release.

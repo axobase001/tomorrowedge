@@ -21,6 +21,7 @@ import type { CockpitApprovalIntent } from "../cockpit/contracts.js";
 import { safeArtifactPath } from "../cockpit/artifacts.js";
 import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
+import { createBudgetRuntimeState } from "../core/budget/budgetGate.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import { log } from "../utils/logger.js";
@@ -330,6 +331,7 @@ function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeCo
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetRuntime: createBudgetRuntimeState(),
     budgetStatuses: [],
     changedFiles: [],
     runResults: [],

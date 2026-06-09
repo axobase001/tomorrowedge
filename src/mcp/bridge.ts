@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadConfig } from "../config/configLoader.js";
 import type { AccessMode, TomorrowEdgeConfig } from "../config/schema.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
+import { createBudgetRuntimeState } from "../core/budget/budgetGate.js";
 import { ModelRouter } from "../core/routing/router.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import { EventLedger } from "../core/events/eventLedger.js";
@@ -72,6 +73,7 @@ export class TomorrowEdgeMcpBridge {
       debateRounds: [],
       modelNotes: [],
       usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      budgetRuntime: createBudgetRuntimeState(),
       budgetStatuses: [],
       changedFiles: [],
       runResults: [],
