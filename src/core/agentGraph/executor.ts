@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole, AgentRunState } from "../../schemas/agentTask.js";
+import type { ContextSelection } from "../context/fileSelector.js";
 import { nowIso } from "../../utils/time.js";
 import { CoderAgent } from "../agents/coder.js";
 import { ExplorerAgent } from "../agents/explorer.js";
@@ -42,6 +43,7 @@ import { buildTestEvidence } from "../evidence/testEvidence.js";
 import { buildReviewEvidence } from "../evidence/reviewEvidence.js";
 import { buildJudgeEvidence } from "../evidence/judgeEvidence.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
+import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
@@ -288,39 +290,31 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     recordPatchCandidateEvent(state, ledger, "coder_b", state.candidates[state.candidates.length - 1]);
   }
 
-  if (options.livePatch && access.cloudAllowed) {
-    const livePatchInput = {
-      cwd,
-      goal,
-      config,
-      router,
-      plan: state.plan!,
-      contextSelection: state.contextSelection!,
-      visualSpec: state.visualSpec,
-      ledger
-    };
-    const patchPlans = await buildLivePatchPlans(livePatchInput);
-    const budgetStatus = setBudgetStatus(state, preflightBudget(
-      patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-      config.routing.max_cost_usd
-    ));
-    if (budgetStatus.status !== "blocked") {
-      const livePatchResult = await runLivePatchCandidates(livePatchInput);
+  // livePatch runs concurrently with coder — it only depends on plan + contextSelection
+  const livePatchPromise = (options.livePatch && access.cloudAllowed)
+    ? runLivePatchConcurrent({ cwd, goal, config, router, state, ledger, plan: state.plan!, contextSelection: state.contextSelection!, visualSpec: state.visualSpec })
+    : null;
+  if (options.livePatch && !access.cloudAllowed) {
+    const budgetStatus = setBudgetStatus(state, {
+      status: "blocked",
+      maxCostUsd: config.routing.max_cost_usd,
+      estimatedInputTokens: 0,
+      estimatedOutputTokens: 0,
+      reason: `Live patch generation blocked by access mode: ${access.mode}.`
+    });
+    ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
+  }
+
+  // Collect livePatch results (launched concurrently with coder above)
+  if (livePatchPromise) {
+    const livePatchResult = await livePatchPromise;
+    if (livePatchResult) {
       state.candidates.push(...livePatchResult.candidates);
       for (const candidate of livePatchResult.candidates) recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
       state.modelNotes.push(...livePatchResult.notes);
       state.usageSummary = summarizeModelUsage(state.modelNotes);
       recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
     }
-  } else if (options.livePatch && !access.cloudAllowed) {
-    const budgetStatus = setBudgetStatus(state, {
-      status: "blocked",
-      maxCostUsd: config.routing.max_cost_usd,
-      estimatedInputTokens: 0,
-      estimatedOutputTokens: 0,
-        reason: `Live patch generation blocked by access mode: ${access.mode}.`
-      });
-      ledger.append({ type: "autonomy_limit_reached", phase: "coding", status: "blocked_by_budget", reason: budgetStatus.reason });
   }
 
   const reviewer = new ReviewerAgent();
@@ -565,6 +559,41 @@ async function runCoderCandidate(input: {
     if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
     return patch ?? fallback();
   }, externalCoder ? "external" : undefined);
+}
+
+type LivePatchResult = {
+  candidates: PatchCandidate[];
+  notes: ModelNote[];
+};
+
+async function runLivePatchConcurrent(input: {
+  cwd: string;
+  goal: string;
+  config: TomorrowEdgeConfig;
+  router: ModelRouter;
+  state: AgentGraphState;
+  ledger: EventLedger;
+  plan: Plan;
+  contextSelection: ContextSelection;
+  visualSpec?: StructuredVisualSpec;
+}): Promise<LivePatchResult | null> {
+  const livePatchInput = {
+    cwd: input.cwd,
+    goal: input.goal,
+    config: input.config,
+    router: input.router,
+    plan: input.plan,
+    contextSelection: input.contextSelection,
+    visualSpec: input.visualSpec,
+    ledger: input.ledger
+  };
+  const patchPlans = await buildLivePatchPlans(livePatchInput);
+  const budgetStatus = setBudgetStatus(input.state, preflightBudget(
+    patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
+    input.config.routing.max_cost_usd
+  ));
+  if (budgetStatus.status === "blocked") return null;
+  return runLivePatchCandidates(livePatchInput);
 }
 
 function recordExternalNormalizeFallback(ledger: EventLedger, role: AgentRole, profile: ExternalAgentProfile, expected: string, fallback: string): void {
