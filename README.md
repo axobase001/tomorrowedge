@@ -4,23 +4,44 @@
 
 **中文** | [English](#english)
 
-明日边缘是一个 **local GUI client for full-access multi-model coding workflows**：面向 full-access 代码任务的本地驾驶舱，用来监督、调度、审查、授权多个 AI agents 协作完成软件工程任务。
+明日边缘是一个 **基于多模型的强模型治理与多 Agent 工作流编排的编排层 GUI 工具**。
+
+它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents 和人类授权组织成一个可监督、可审计、可回滚的软件工程工作流。
 
 ```text
 Full autonomy, full visibility.
 完全自治，完全可见。
 ```
 
-它不是聊天机器人，也不是某个模型的一层 CLI 壳。Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+当前 AI Coding 的核心问题不是模型不够强，而是编排不够好。强模型已经能写代码，但真实工程任务仍然会卡在上下文选择、角色分工、预算约束、风险审查、失败修复、证据留存和人类授权上。单模型 full-access agent 可以很猛，但也容易变成黑盒：它为什么改这个文件、为什么跑这个命令、为什么信这个 patch、为什么花掉这次强模型调用，用户往往看不清。
+
+TomorrowEdge 的目标是做这个中间编排层：**强模型负责高价值判断，高性价比模型负责大规模执行，本地模型保护隐私，人类授权关键动作。**
 
 Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会自动应用 patch、运行 shell、执行 repair loop，并继续迭代，不会每一步都打断用户确认。
 
-它与黑盒 full-access agent 的区别不是限制权限，而是可见性：每次模型调用、上下文选择、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 GUI client 中，并写入可回放事件账本。
+它与黑盒 full-access agent 的区别不是限制权限，而是治理和可见性：每次模型调用、上下文选择、路由理由、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 GUI client 中，并写入可回放事件账本。
 
 ## 为什么存在
 
 明日边缘存在的原因，是 AI coding 的未来不会是单模型的。
-不同模型有不同的能力、价格、上下文长度、延迟与隐私边界。模型厂有动力把用户留在自家模型栈里，但工程团队真正需要的是跨模型的最优组合：用强模型做高价值判断，用高性价比模型做大规模执行，用本地模型守住隐私，用人类授权关键动作。明日边缘就是这个中立编排层，把异构模型组织成一个可监督、可审计、可回滚的软件工程工作流。 OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么让多个模型在一个真实工程任务里分工、争辩、监督、交付”。
+
+不同模型有不同的能力、价格、上下文长度、延迟与隐私边界。模型厂有动力把用户留在自家模型栈里，但工程团队真正需要的是跨模型的最优组合：用强模型做架构判断、审查和裁决，用高性价比模型做探索、实现和重复劳动，用本地模型守住隐私，用外部 coding agents 承担关键角色，用人类授权真正重要的动作。
+
+TomorrowEdge 关注的不是“接入更多模型”本身，而是 **预算约束下的异构模型系统效率**：哪些步骤值得调用强模型，哪些步骤应该交给便宜模型，什么时候需要外部 agent，什么时候需要本地模型，什么时候必须让人类确认。它把这些选择变成可解释、可追踪、可复盘的工作流。
+
+OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么让多个模型和多个 agents 在一个真实工程任务里分工、争辩、监督、交付”。
+
+## 差异化
+
+| 对比对象 | 它们通常解决什么 | TomorrowEdge 解决什么 |
+| --- | --- | --- |
+| 单模型 coding CLI | 让一个模型直接读写代码 | 把任务拆成 planner / coder / reviewer / judge / repairer 等角色，并为每个角色选择合适模型 |
+| Codex / Claude Code | 给强 agent 完整工具权限 | 治理强 agent 的调用位置、预算、证据、审查和最终交付 |
+| OpenRouter | 路由模型请求 | 路由角色、能力、预算和工程工作流 |
+| LangGraph / CrewAI / AutoGen | 构建 agent framework | 把 native workflow 和现有 agent framework 纳入同一个可视化 cockpit |
+| 普通 GUI wrapper | 显示聊天和输出 | 显示路由理由、成本、风险、diff、测试、fallback、审批、trace 和 artifact |
+
+一句话：**OpenRouter routes requests. TomorrowEdge routes capabilities, roles, budgets, and engineering delivery.**
 
 ## 当前版本
 
@@ -150,21 +171,19 @@ tedge desktop --runtime electron
 
 ## 核心能力
 
-- 角色化 agent 图：Planner、Explorer、Coder-A/B、Reviewer、Judge、Runner、Repairer、Summarizer
-- 多模型路由：OpenRouter、DeepSeek、MiMo、Ollama、本地 mock/fixture、OpenAI-compatible 等
+- 强模型治理：把昂贵/强推理 agent 保留给 planner、reviewer、judge、失败升级和安全敏感变更
+- 预算约束路由：按角色、风险、能力、上下文长度、延迟、隐私和成本选择模型，而不是盲目调用最贵模型
+- 多 Agent 工作流编排：Planner、Explorer、Coder-A/B、Reviewer、Judge、Runner、Repairer、Summarizer 等角色协同完成工程任务
+- 异构模型系统效率：OpenRouter、DeepSeek、MiMo、Kimi、Anthropic、Gemini、Ollama、本地 mock/fixture、OpenAI-compatible 等可以在同一任务里分工
 - 能力拼接式路由：图片/截图/流程图先交给 Vision Agent，再把结构化规格交给 coding agent
+- MCP Agent Bridge：把 Claude Code / Codex 等外部 coding agents 绑定为 core/planner/reviewer/judge/coder/repairer，而不是替代它们
+- 可解释路由：记录 role -> model / external agent 的选择理由、fallback 原因、预算决策和风险信号
+- 证据化交付：reviewer/judge 消费 patch、测试、stdout/stderr、artifact refs 和 evidence packets，而不是只看一段模型回答
+- Full-access trace：每次模型调用、上下文选择、patch、shell、review、judge、repair 和 summary 都进入事件账本
 - 访问模式：`restricted`、`partial`、`full`
-- 非破坏性 live advisory：真实模型给计划/实现/评审/裁决建议，但不改文件
-- 非破坏性 live patch：真实模型生成候选 diff，但不会自动应用
-- provider fallback：主路由不可用时按计划 fallback，并在 `modelNotes` 里记录原因
-- 多模型 drill：Core/River 作为 planner/reviewer，比较不同模型完成同一任务的能力
-- Core-led workflow：任务拆分、多轮模型辩论、角色执行、Core 审核、报告落盘
-- MCP Agent Bridge：把 Claude Code / Codex 等外部 coding agents 绑定为 core/planner/reviewer/judge/coder/repairer
-- patch 安全：预览、敏感文件拦截、显式授权、undo snapshot
-- 产品化安全基线：shell guard、artifact 脱敏、crypto ID、patch 回滚、任务相关上下文选择
-- GUI client：任务队列、workflow 主焦点、审批动作、telemetry、details drawer、trace strip 和自然语言 command composer
+- GUI control plane：任务队列、workflow 主焦点、审批动作、telemetry、details drawer、trace strip、Key/Role 管理和自然语言 command composer
 - 可选桌面 app 窗口：`tedge desktop` 复用本地 GUI client，不复制运行时核心
-- 共享 cockpit ViewModel/API：便于 GUI client 和后续客户端复用同一运行态
+- 共享 cockpit ViewModel/API：让 GUI client、desktop shell、local cockpit API 和后续客户端复用同一运行态
 
 ## 常用命令
 
@@ -405,24 +424,45 @@ vision roles.
 
 ## English
 
-TomorrowEdge is a **local GUI client for full-access multi-model coding workflows**: a cockpit for supervising, routing, reviewing, authorizing, and auditing multiple AI agents working together on real software engineering tasks.
-TomorrowEdge is a **multi-model coding-agent cockpit with a local GUI client**.
+TomorrowEdge is a **GUI orchestration layer for multi-model strong-agent governance and multi-agent coding workflows**.
+
+It sits between model APIs, external coding agents, and real repositories. It is not trying to make one model win. It organizes strong models, cost-efficient models, local models, external agents, and human authorization into a supervised, auditable, reversible engineering workflow.
+
 TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks.
 
 ```text
 Full autonomy, full visibility.
 ```
 
-It is not a chatbot CLI and not a single-provider wrapper. Codex / Claude Code gives agents full access. TomorrowEdge gives full access a cockpit.
+The core problem in AI coding is no longer simply that models are not strong enough. The harder problem is orchestration: context selection, role assignment, budget discipline, risk review, repair loops, evidence capture, and human authorization. A single full-access agent can be powerful, but it can also become a black box: why this file, why this command, why this patch, why this strong-model call?
+
+TomorrowEdge is the orchestration layer for that problem: **strong models decide, efficient models execute, local models protect privacy, and humans authorize the actions that matter.**
 
 Full mode is autonomous execution with complete workspace tool access. TomorrowEdge will apply patches, run shell commands, execute repair loops, and continue iterating without per-step confirmation.
 
-The difference from black-box full-access agents is visibility: every model call, context selection, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the local GUI client and saved to a replayable event ledger.
+The difference from black-box full-access agents is governance and visibility: every model call, context selection, routing reason, patch, command, review, judge decision, fallback, cost update, and verification result is rendered in the local GUI client and saved to a replayable event ledger.
 
 ## Why It Exists
 
 TomorrowEdge exists because the future of AI coding will not be single-model.
-Different models have different capabilities, prices, context lengths, latency profiles, and privacy boundaries. Model vendors have incentives to keep users inside their own stacks, but engineering teams need the best cross-model composition: use strong models for high-value judgment, cost-efficient models for large-scale execution, local models for privacy, and humans for critical authorization. TomorrowEdge is that neutral orchestration layer. It organizes heterogeneous models into a supervised, auditable, reversible software engineering workflow. OpenRouter solves "how to call multiple models"; TomorrowEdge solves "how to make multiple models divide work, debate, supervise, and deliver inside a real engineering task."
+
+Different models have different capabilities, prices, context lengths, latency profiles, and privacy boundaries. Model vendors have incentives to keep users inside their own stacks, but engineering teams need the best cross-model composition: use strong models for architecture judgment, review, and arbitration; use cost-efficient models for exploration, implementation, and repetitive work; use local models for privacy; use external coding agents for selected high-value roles; and use humans for critical authorization.
+
+TomorrowEdge is about **heterogeneous model-system efficiency under budget constraints**. It asks which steps deserve strong-agent calls, which steps should go to cheaper models, when to invoke an external agent, when to stay local, and when to require a human decision. Those choices become explainable, traceable, replayable workflow state.
+
+OpenRouter solves "how to call multiple models"; TomorrowEdge solves "how to make multiple models and multiple agents divide work, debate, supervise, and deliver inside a real engineering task."
+
+## Differentiation
+
+| Compared with | What they usually solve | What TomorrowEdge solves |
+| --- | --- | --- |
+| Single-model coding CLI | Let one model directly read and write code | Split work into planner / coder / reviewer / judge / repairer roles and route each role to the right model |
+| Codex / Claude Code | Give a strong agent full tool access | Govern where strong agents are used, how much budget they consume, what evidence they produce, and how delivery is reviewed |
+| OpenRouter | Route model requests | Route roles, capabilities, budgets, and engineering workflows |
+| LangGraph / CrewAI / AutoGen | Build agent frameworks | Put native workflows and existing agent frameworks under one visible cockpit |
+| Generic GUI wrapper | Display chat and output | Display routing reasons, cost, risk, diff, tests, fallback, approvals, trace, and artifacts |
+
+In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, roles, budgets, and engineering delivery.**
 
 ## Current Version
 
@@ -654,29 +694,22 @@ On WSL, `npm run dev` automatically switches `TMPDIR` to `/tmp` when the inherit
 
 ## Core Features
 
-- Role-conditioned agent graph: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer
-- Multi-model routing across OpenRouter, DeepSeek, MiMo, Anthropic, Gemini, Ollama, local mock/fixture, and OpenAI-compatible providers
+- Strong-agent governance: reserve expensive / strong-reasoning agents for planning, review, judgment, failed-repair escalation, and security-sensitive changes
+- Budget-constrained routing: choose models by role, risk, capability, context length, latency, privacy, and cost instead of blindly calling the strongest model
+- Multi-agent workflow orchestration: Planner, Explorer, Coder-A/B, Reviewer, Judge, Runner, Repairer, Summarizer, and optional Core roles
+- Heterogeneous model-system efficiency across OpenRouter, DeepSeek, MiMo, Kimi, Anthropic, Gemini, Ollama, local mock/fixture, and OpenAI-compatible providers
 - User-configurable provider/model assignment per agent role for controlled model-comparison experiments
 - Capability stitching: image/screenshot/diagram inputs go through Vision Agent before coding agents
-- Access modes: `restricted`, `partial`, `full`
-- First-class event ledger with replayable `events.jsonl` and per-session artifacts
-- Artifact-aware trace/export for diffs, reviews, judge decisions, stdout/stderr, and model call refs
-- Non-mutating live advisory from routed providers
-- Non-mutating live patch candidates from routed providers
-- Explicit provider fallback recorded in `modelNotes`
-- Multi-model capability drills with Core/River as planner/reviewer
-- Core-led workflow with decomposition, multi-round debate, role execution, Core review, and saved reports
 - MCP Agent Bridge for binding Claude Code / Codex or other external coding agents to core/planner/reviewer/judge/coder/repairer roles
-- Patch safety: preview, sensitive-file blocking, explicit approval, undo snapshots
-- Productized safety baseline: guarded shell execution, artifact redaction, crypto IDs, patch rollback, and task-relevant context selection
-- GUI client for task queue, workflow focus, approval execution, telemetry,
-  details drawer, trace strip, and natural-language commands
-- GUI language switcher with English as the default and Chinese available from
-  the top bar; the preference is stored locally in the browser
-- Optional desktop app window via `tedge desktop`, reusing the local GUI client
-  without forking the runtime core
-- Shared cockpit ViewModel/API contract for the GUI client and future packaged
-  client surfaces
+- Explainable routing: role -> model / external-agent decisions, fallback causes, budget decisions, and risk signals are recorded
+- Evidence-based delivery: reviewers and judges consume patches, tests, stdout/stderr, artifact refs, and evidence packets rather than opaque final answers
+- Full-access trace: model calls, context selection, patches, shell runs, reviews, judge decisions, repair loops, and summaries are written to the event ledger
+- Access modes: `restricted`, `partial`, `full`
+- Artifact-aware trace/export for diffs, reviews, judge decisions, stdout/stderr, and model call refs
+- GUI control plane for task queue, workflow focus, approval execution, telemetry, details drawer, trace strip, Key/Role management, and natural-language commands
+- GUI language switcher with English as the default and Chinese available from the top bar; the preference is stored locally in the browser
+- Optional desktop app window via `tedge desktop`, reusing the local GUI client without forking the runtime core
+- Shared cockpit ViewModel/API contract for the GUI client, desktop shell, local cockpit API, and future packaged client surfaces
 - Conversation Targets for `core`, role-specific questions, debate-room broadcasts, and external agents
 - Framework-agnostic orchestration backend abstraction with `native` as the default backend and LangGraph/CrewAI/AutoGen placeholders
 
