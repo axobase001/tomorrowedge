@@ -18,6 +18,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - `tedge memory failures`, `tedge memory show <id>`, and
   `tedge memory explain "<task>"` for local failure-memory inspection,
   JSON export, and retrieval rationale.
+- `tedge experiment error-loop` for deterministic no-key error-loop runs with
+  manifest, trial JSONL, retrieval decisions, memory records, metrics, and a
+  Markdown report.
 - Error-loop research caveats and falsification criteria in
   `docs/ERROR_LOOP_RESEARCH.md`.
 - Direct unit coverage for agent classes, project tools, and safety boundary
@@ -35,6 +38,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - GUI provider setup no longer writes newly pasted API keys to plaintext
   `.tomorrowedge/local.env`; that path remains read-compatible for existing
   installations.
+- Error-loop experiment exports now report explicit `memoryUpdateStatus`
+  reasons such as `written`, `skipped_no_failure`, and `skipped_ablation`
+  instead of implying learning whenever a workflow fails.
 
 ## [1.2.14] - 2026-06-09
 

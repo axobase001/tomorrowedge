@@ -236,6 +236,7 @@ tedge memory
 tedge memory failures
 tedge memory show <failure-id>
 tedge memory explain "fix npm test failure in index.js"
+tedge experiment error-loop --ablation memory_on,memory_off
 tedge review-export latest --format github
 tedge github-report latest --repo owner/repo --pr 123 --dry-run
 tedge github-report latest --repo owner/repo --pr 123 --post-comment
@@ -809,6 +810,7 @@ tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
+tedge experiment error-loop --ablation memory_on,memory_off
 tedge review-export latest --format github
 tedge github-report latest --repo owner/repo --pr 123 --dry-run
 tedge github-report latest --repo owner/repo --pr 123 --post-comment
@@ -841,6 +843,17 @@ tedge memory failures --json
 
 Research caveats and falsification criteria are documented in
 [docs/ERROR_LOOP_RESEARCH.md](docs/ERROR_LOOP_RESEARCH.md).
+
+For a deterministic no-key export bundle:
+
+```bash
+tedge experiment error-loop --tasks "fix failing test" --ablation memory_on,memory_off
+```
+
+The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,
+`retrieval_decisions.jsonl`, `metrics.json`, and `report.md`, with explicit
+`memoryUpdateStatus` values such as `written`, `skipped_no_failure`, and
+`skipped_ablation`.
 
 ## Conversation Targets
 
