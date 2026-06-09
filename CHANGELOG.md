@@ -7,6 +7,19 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-06-09
+
+1.2.8 fixes DeepSeek onboarding and connection testing from the GUI key manager.
+
+### Fixed
+
+- DeepSeek now has a known default endpoint of `https://api.deepseek.com`.
+- Older configs with an empty DeepSeek `base_url` are normalized at load time so
+  GUI connection tests no longer fail with `base_url missing` after a user saves
+  only the API key, env name, and model.
+- Regression coverage verifies both config migration and GUI key-save readiness
+  for DeepSeek.
+
 ## [1.2.7] - 2026-06-09
 
 1.2.7 adds first-class GUI language switching for the local client.

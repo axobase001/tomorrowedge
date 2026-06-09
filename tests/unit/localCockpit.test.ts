@@ -402,6 +402,35 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("keeps DeepSeek testable when the GUI saves only key, env, and model", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-deepseek-key-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/deepseek?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek-v4-pro",
+          apiKeyEnv: "TEST_KEY_PANEL_DEEPSEEK",
+          apiKey: "test-panel-deepseek-key"
+        })
+      });
+      const afterSave = await response.json() as { providers: Array<{ id: string; baseUrl: string; keyConfigured: boolean }> };
+      const config = loadConfig(cwd);
+
+      expect(response.status).toBe(200);
+      expect(afterSave.providers.find((provider) => provider.id === "deepseek")).toMatchObject({
+        baseUrl: "https://api.deepseek.com",
+        keyConfigured: true
+      });
+      expect(config.providers.deepseek.base_url).toBe("https://api.deepseek.com");
+    } finally {
+      delete process.env.TEST_KEY_PANEL_DEEPSEEK;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("saves GUI role assignments into provider/model agent routing", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-roles-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

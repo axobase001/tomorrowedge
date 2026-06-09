@@ -20,7 +20,7 @@ export function loadConfig(cwd: string): TomorrowEdgeConfig {
     return defaultConfig;
   }
   const parsed = YAML.parse(readFileSync(configPath, "utf8")) as unknown;
-  const config = configSchema.parse(deepMerge(defaultConfig, parsed));
+  const config = withKnownProviderDefaults(configSchema.parse(deepMerge(defaultConfig, parsed)));
   validateAgentProviderReferences(config);
   return config;
 }
@@ -67,6 +67,17 @@ function deepMerge(base: unknown, override: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function withKnownProviderDefaults(config: TomorrowEdgeConfig): TomorrowEdgeConfig {
+  const providers: TomorrowEdgeConfig["providers"] = { ...config.providers };
+  for (const [id, provider] of Object.entries(providers)) {
+    const defaultProvider = defaultConfig.providers[id];
+    if (!provider.base_url.trim() && defaultProvider?.base_url) {
+      providers[id] = { ...provider, base_url: defaultProvider.base_url };
+    }
+  }
+  return { ...config, providers };
 }
 
 function validateAgentProviderReferences(config: TomorrowEdgeConfig): void {

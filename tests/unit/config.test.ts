@@ -23,8 +23,35 @@ describe("config loader", () => {
     expect(config.orchestration.langgraph.enabled).toBe(false);
     expect(config.providers.mock.enabled).toBe(true);
     expect(config.providers.openrouter.enabled).toBe(false);
+    expect(config.providers.deepseek.base_url).toBe("https://api.deepseek.com");
     expect(config.providers.kimi.base_url).toBe("https://api.moonshot.ai/v1");
     expect(config.providers.kimi.model).toBe("kimi-k2.6");
+  });
+
+  it("fills known provider base URLs for older configs with blank endpoints", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-provider-defaults-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "providers:",
+          "  deepseek:",
+          "    enabled: true",
+          "    api_key_env: DEEPSEEK_API_KEY",
+          "    base_url: \"\"",
+          "    model: deepseek-v4-pro"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const config = loadConfig(cwd);
+
+      expect(config.providers.deepseek.enabled).toBe(true);
+      expect(config.providers.deepseek.base_url).toBe("https://api.deepseek.com");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("does not overwrite an existing config unless force is explicit", async () => {

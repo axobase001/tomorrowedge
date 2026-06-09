@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.2.7. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.2.8. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -9,7 +9,7 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Access modes and full-access trace | stable | Restricted, partial, and full modes are implemented with event-ledger visibility. |
 | Event ledger, artifacts, trace/export | stable | Sessions, events, artifact refs, markdown/json export, and trace diagnostics are implemented. |
 | Provider configuration and OpenAI-compatible adapters | stable | OpenRouter, DeepSeek, MiMo, Kimi, Anthropic, Gemini, Ollama, mock, fixture, and generic OpenAI-compatible config are available. Real usability depends on provider keys, quota, and model support. |
-| Provider smoke and connection checks | stable | `tedge models --provider`, `--connection-test`, `--real-smoke`, and `--smoke-suite` exist. Doctor reports static configuration, not guaranteed live chat quota. |
+| Provider smoke and connection checks | stable | `tedge models --provider`, `--connection-test`, `--real-smoke`, and `--smoke-suite` exist. Doctor reports static configuration, not guaranteed live chat quota. DeepSeek has a known default endpoint and older blank `base_url` configs are normalized at load time. |
 | Live advisory and live patch candidates | experimental | Non-mutating live outputs are supported. Empty or malformed live patch diffs are rejected and retried before being marked unavailable. |
 | Capability stitching for image inputs | experimental | Vision handoff and structured visual specs exist; provider-specific vision quality depends on configured model support. |
 | MCP Agent Bridge | experimental | MCP server, tool surface, role binding, external agent registry, and command runner skeleton exist. Real Claude Code/Codex process integration still needs adapter hardening. |
