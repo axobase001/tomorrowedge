@@ -8,6 +8,7 @@ import {
   cockpitLiveEventsUrl,
   configureCockpitSetup,
   deleteCockpitProviderKey,
+  listCockpitProviderModels,
   listCockpitSessions,
   loadCockpitSetupStatus,
   loadCockpitViewModel,
@@ -310,6 +311,10 @@ function CockpitWebRoot() {
     }
   }, [apiOptions, setupBusy, t]);
 
+  const refreshProviderModels = useCallback(async (provider: string) => {
+    return listCockpitProviderModels(provider, apiOptions);
+  }, [apiOptions]);
+
   const dismissSetup = useCallback(() => {
     setupDismissedRef.current = true;
     writeSetupDismissed(true);
@@ -383,6 +388,7 @@ function CockpitWebRoot() {
       onDeleteProviderKey={deleteProviderKey}
       onSaveRoleAssignments={saveRoleAssignments}
       onTestSetup={testSetup}
+      onListProviderModels={refreshProviderModels}
       onDismissSetup={dismissSetup}
       onOpenKeyManager={() => setKeyManagerOpen(true)}
       onCloseKeyManager={() => setKeyManagerOpen(false)}

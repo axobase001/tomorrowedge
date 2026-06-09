@@ -1,6 +1,6 @@
 import type { CockpitApprovalIntent, CockpitRunMode, CockpitViewModel } from "../../cockpit/contracts.js";
 import type { AccessMode } from "../../config/schema.js";
-import type { CockpitProviderConnectionResult, CockpitProviderKeyRequest, CockpitRoleAssignment, CockpitSessionSummary, CockpitSetupRequest, CockpitSetupStatus } from "./api.js";
+import type { CockpitProviderConnectionResult, CockpitProviderKeyRequest, CockpitProviderModelOption, CockpitRoleAssignment, CockpitSessionSummary, CockpitSetupRequest, CockpitSetupStatus } from "./api.js";
 import { TopBar } from "./components/TopBar.js";
 import { TaskListPanel } from "./components/TaskListPanel.js";
 import { WorkflowPanel } from "./components/WorkflowPanel.js";
@@ -42,6 +42,7 @@ export type AppProps = {
   onDeleteProviderKey: (provider: string) => void;
   onSaveRoleAssignments: (assignments: CockpitRoleAssignment[]) => void;
   onTestSetup: (provider: string) => void;
+  onListProviderModels: (provider: string) => Promise<CockpitProviderModelOption[]>;
   onDismissSetup: () => void;
   onOpenKeyManager: () => void;
   onCloseKeyManager: () => void;
@@ -83,6 +84,7 @@ export function App({
   onDeleteProviderKey,
   onSaveRoleAssignments,
   onTestSetup,
+  onListProviderModels,
   onDismissSetup,
   onOpenKeyManager,
   onCloseKeyManager,
@@ -130,6 +132,7 @@ export function App({
           onDeleteProviderKey={onDeleteProviderKey}
           onSaveRoleAssignments={onSaveRoleAssignments}
           onTestProvider={onTestSetup}
+          onListProviderModels={onListProviderModels}
         />
       ) : null}
       {setupVisible ? (

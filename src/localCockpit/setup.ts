@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
 import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
+import { fetchOpenRouterCatalog, recommendFreeOpenRouterModels } from "../providers/openrouterCatalog.js";
 import { log } from "../utils/logger.js";
 
 export type CockpitProviderReadiness = {
@@ -58,7 +59,16 @@ export type CockpitProviderKeyRequest = {
   model?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
-  apiKey: string;
+  apiKey?: string;
+};
+
+export type CockpitProviderModelOption = {
+  id: string;
+  label: string;
+  source: "catalog" | "static";
+  isFree?: boolean;
+  isLowCost?: boolean;
+  tags?: string[];
 };
 
 export type CockpitRoleAssignmentsRequest = {
@@ -155,16 +165,21 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
   const config = loadConfig(cwd);
   const providerId = normalizeProviderId(request.provider);
   const currentProvider = providerConfigForSetup(config, providerId);
-  const apiKey = request.apiKey.trim();
-  if (!apiKey) throw new Error("API key is required.");
+  const apiKey = request.apiKey?.trim() ?? "";
   const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
   if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   const model = request.model?.trim() || currentProvider.model;
   if (!model) throw new Error("At least one model id is required.");
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
-  await writeLocalEnvValue(cwd, apiKeyEnv, apiKey);
-  process.env[apiKeyEnv] = apiKey;
+  if (apiKey) {
+    await writeLocalEnvValue(cwd, apiKeyEnv, apiKey);
+    process.env[apiKeyEnv] = apiKey;
+  } else if (requiresAuth(currentProvider)) {
+    const localEnv = readLocalEnvMap(cwd);
+    const existingKey = process.env[apiKeyEnv] ?? localEnv.get(apiKeyEnv);
+    if (!existingKey) throw new Error("API key is required unless an existing key is configured for this env var.");
+  }
   await writeConfig(cwd, {
     ...config,
     providers: {
@@ -179,6 +194,24 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
     }
   });
   return getCockpitSetupStatus(cwd);
+}
+
+export async function listCockpitProviderModels(cwd: string, providerIdValue: string, limit = 20): Promise<CockpitProviderModelOption[]> {
+  const config = loadConfig(cwd);
+  const providerId = normalizeProviderId(providerIdValue);
+  const provider = providerConfigForSetup(config, providerId);
+  if (providerId !== "openrouter") return staticModelOptionsFor(providerId);
+  const localEnv = readLocalEnvMap(cwd);
+  const apiKey = provider.api_key_env ? process.env[provider.api_key_env] ?? localEnv.get(provider.api_key_env) : undefined;
+  const catalog = await fetchOpenRouterCatalog(provider, apiKey);
+  return recommendFreeOpenRouterModels(catalog, { limit: Math.max(1, Math.min(limit, 50)), preferKimi: true }).map((model) => ({
+    id: model.id,
+    label: `${model.name ?? model.id}${model.isFree ? " (free)" : model.isLowCost ? " (low cost)" : ""}`,
+    source: "catalog",
+    isFree: model.isFree,
+    isLowCost: model.isLowCost,
+    tags: model.tags
+  }));
 }
 
 export async function deleteCockpitProviderKey(cwd: string, providerIdValue: string): Promise<CockpitSetupStatus> {
@@ -304,6 +337,24 @@ function sanitizeBaseUrl(value?: string): string | undefined {
     throw new Error("Base URL must use http or https.");
   }
   return trimmed;
+}
+
+function staticModelOptionsFor(providerId: string): CockpitProviderModelOption[] {
+  const options: Record<string, string[]> = {
+    openrouter: ["moonshotai/kimi-k2:free", "qwen/qwen3-coder:free", "deepseek/deepseek-chat-v3-0324:free"],
+    deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
+    kimi: ["kimi-k2-0711-preview", "kimi-latest"],
+    mimo: ["mimo-v2.5-pro"],
+    anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
+    gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
+    openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
+  };
+  return (options[providerId] ?? []).map((id) => ({
+    id,
+    label: id,
+    source: "static",
+    isFree: id.includes(":free")
+  }));
 }
 
 async function writeLocalEnvValue(cwd: string, key: string, value: string): Promise<void> {

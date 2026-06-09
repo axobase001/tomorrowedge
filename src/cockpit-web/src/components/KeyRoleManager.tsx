@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   CockpitExternalAgentOption,
+  CockpitProviderModelOption,
   CockpitProviderConnectionResult,
   CockpitProviderKeyRequest,
   CockpitRoleAssignment,
@@ -19,6 +20,7 @@ type KeyRoleManagerProps = {
   onDeleteProviderKey: (provider: string) => void;
   onSaveRoleAssignments: (assignments: CockpitRoleAssignment[]) => void;
   onTestProvider: (provider: string) => void;
+  onListProviderModels: (provider: string) => Promise<CockpitProviderModelOption[]>;
 };
 
 export function KeyRoleManager({
@@ -31,21 +33,27 @@ export function KeyRoleManager({
   onSaveProviderKey,
   onDeleteProviderKey,
   onSaveRoleAssignments,
-  onTestProvider
+  onTestProvider,
+  onListProviderModels
 }: KeyRoleManagerProps) {
   const providers = useMemo(() => setupStatus?.providers.filter((provider) => provider.authRequired) ?? [], [setupStatus]);
   const providerIds = providers.map((provider) => provider.id);
   const externalAgents = setupStatus?.externalAgents ?? [];
-  const initialProvider = setupStatus?.selectedProvider ?? setupStatus?.recommendedProvider ?? providerIds[0] ?? "openrouter";
+  const selectedKeyProvider = setupStatus?.selectedProvider && providers.some((item) => item.id === setupStatus.selectedProvider)
+    ? setupStatus.selectedProvider
+    : undefined;
+  const initialProvider = selectedKeyProvider ?? setupStatus?.recommendedProvider ?? providerIds[0] ?? "openrouter";
   const [tab, setTab] = useState<"keys" | "roles">("keys");
   const [provider, setProvider] = useState(initialProvider);
   const normalizedProvider = normalizeProviderId(provider);
   const selectedProvider = providers.find((item) => item.id === normalizedProvider);
-  const initialProviderDefaults = selectedProvider ?? providers[0];
-  const [model, setModel] = useState(setupStatus?.selectedModel ?? initialProviderDefaults?.model ?? suggestedModelFor(provider));
-  const [baseUrl, setBaseUrl] = useState(initialProviderDefaults?.baseUrl ?? defaultBaseUrlFor(provider));
-  const [apiKeyEnv, setApiKeyEnv] = useState(initialProviderDefaults?.apiKeyEnv ?? defaultEnvFor(provider));
+  const initialDraft = providerFormDefaults(initialProvider, providers, setupStatus?.selectedModel);
+  const [model, setModel] = useState(initialDraft.model);
+  const [baseUrl, setBaseUrl] = useState(initialDraft.baseUrl);
+  const [apiKeyEnv, setApiKeyEnv] = useState(initialDraft.apiKeyEnv);
   const [apiKey, setApiKey] = useState("");
+  const [catalogModels, setCatalogModels] = useState<CockpitProviderModelOption[]>([]);
+  const [catalogMessage, setCatalogMessage] = useState("");
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
 
   useEffect(() => {
@@ -58,13 +66,25 @@ export function KeyRoleManager({
 
   useEffect(() => {
     const providerId = normalizeProviderId(provider);
-    const nextProvider = providers.find((item) => item.id === providerId);
-    setModel((current) => current || nextProvider?.model || suggestedModelFor(providerId));
-    setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(providerId));
-    setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(providerId));
+    const nextDraft = providerFormDefaults(providerId, providers);
+    setModel(nextDraft.model);
+    setBaseUrl(nextDraft.baseUrl);
+    setApiKeyEnv(nextDraft.apiKeyEnv);
+    setApiKey("");
+    setCatalogModels([]);
+    setCatalogMessage("");
   }, [provider, providers]);
 
-  const canSaveKey = Boolean(normalizedProvider && model.trim() && baseUrl.trim() && apiKeyEnv.trim() && apiKey.trim()) && !busy;
+  const canSaveKey = canSaveProviderConfig({
+    provider: normalizedProvider,
+    model,
+    baseUrl,
+    apiKeyEnv,
+    apiKey,
+    keyConfigured: Boolean(selectedProvider?.keyConfigured),
+    busy
+  });
+  const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, catalogModels);
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
@@ -105,7 +125,10 @@ export function KeyRoleManager({
               </label>
               <label>
                 <span>{t("keymgr.model")}</span>
-                <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
+                <input value={model} list="keymgr-model-options" onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
+                <datalist id="keymgr-model-options">
+                  {modelOptions.map((item) => <option key={item} value={item} />)}
+                </datalist>
               </label>
               <label>
                 <span>{t("keymgr.baseUrl")}</span>
@@ -122,12 +145,23 @@ export function KeyRoleManager({
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={!canSaveKey} onClick={() => {
-                onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey });
+                onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey: apiKey || undefined });
                 setApiKey("");
               }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
+              <button type="button" className="te-quiet-button" disabled={busy || !normalizedProvider} onClick={async () => {
+                setCatalogMessage(t("keymgr.loadingModels"));
+                try {
+                  const options = await onListProviderModels(normalizedProvider);
+                  setCatalogModels(options);
+                  setCatalogMessage(options.length ? t("keymgr.modelsLoaded", { count: String(options.length) }) : t("keymgr.noModelsFound"));
+                } catch (error) {
+                  setCatalogMessage(t("keymgr.modelsFailed", { message: error instanceof Error ? error.message : String(error) }));
+                }
+              }} data-testid="keymgr-refresh-models">{t("keymgr.refreshModels")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || !normalizedProvider || !selectedProvider} onClick={() => onTestProvider(normalizedProvider)} data-testid="keymgr-test-key">{t("keymgr.test")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || !selectedProvider?.keyConfigured} onClick={() => onDeleteProviderKey(normalizedProvider)} data-testid="keymgr-delete-key">{t("keymgr.removeKey")}</button>
             </div>
+            {catalogMessage ? <p className="te-setup-message" data-testid="keymgr-models-message">{catalogMessage}</p> : null}
           </section>
         ) : (
           <section className="te-keymgr-body">
@@ -163,6 +197,30 @@ export function KeyRoleManager({
 
 function updateAssignment(assignments: CockpitRoleAssignment[], role: string, patch: Partial<CockpitRoleAssignment>): CockpitRoleAssignment[] {
   return assignments.map((assignment) => assignment.role === role ? { ...assignment, ...patch } : assignment);
+}
+
+export function providerFormDefaults(provider: string, providers: Array<{ id: string; model: string; baseUrl: string; apiKeyEnv?: string }>, selectedModel?: string): { model: string; baseUrl: string; apiKeyEnv: string } {
+  const providerId = normalizeProviderId(provider);
+  const selectedProvider = providers.find((item) => item.id === providerId);
+  return {
+    model: selectedModel ?? selectedProvider?.model ?? suggestedModelFor(providerId),
+    baseUrl: selectedProvider?.baseUrl ?? defaultBaseUrlFor(providerId),
+    apiKeyEnv: selectedProvider?.apiKeyEnv ?? defaultEnvFor(providerId)
+  };
+}
+
+export function canSaveProviderConfig(input: { provider: string; model: string; baseUrl: string; apiKeyEnv: string; apiKey?: string; keyConfigured: boolean; busy: boolean }): boolean {
+  return Boolean(input.provider && input.model.trim() && input.baseUrl.trim() && input.apiKeyEnv.trim() && (input.apiKey?.trim() || input.keyConfigured)) && !input.busy;
+}
+
+export function modelOptionIds(provider: string, configuredModel: string | undefined, catalogModels: CockpitProviderModelOption[]): string[] {
+  const providerId = normalizeProviderId(provider);
+  return [...new Set([
+    configuredModel,
+    suggestedModelFor(providerId),
+    ...staticModelOptionsFor(providerId),
+    ...catalogModels.map((model) => model.id)
+  ].filter((item): item is string => Boolean(item)))];
 }
 
 export function roleProviderOptions(providerIds: string[], externalAgents: CockpitExternalAgentOption[], currentProvider: string): string[] {
@@ -221,6 +279,20 @@ function suggestedModelFor(provider: string): string {
     gemini: "gemini-2.5-pro"
   };
   return lookup[providerId] ?? "";
+}
+
+function staticModelOptionsFor(provider: string): string[] {
+  const providerId = normalizeProviderId(provider);
+  const lookup: Record<string, string[]> = {
+    openrouter: ["moonshotai/kimi-k2:free", "qwen/qwen3-coder:free", "deepseek/deepseek-chat-v3-0324:free"],
+    deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
+    kimi: ["kimi-k2-0711-preview", "kimi-latest"],
+    mimo: ["mimo-v2.5-pro"],
+    anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
+    gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
+    openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
+  };
+  return lookup[providerId] ?? [];
 }
 
 function labelProvider(provider: string, externalAgents: CockpitExternalAgentOption[] = []): string {
