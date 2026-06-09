@@ -7,6 +7,31 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-06-09
+
+1.2.10 promotes the planner/routing/budget governance upgrade to a release.
+
+### Added
+
+- Model-backed planning path with a strict structured JSON contract and native
+  adaptive fallback.
+- Per-role budget controls through `agents.<role>.budget`, including independent
+  call and cost caps for planner/reviewer/judge/coder roles.
+
+### Changed
+
+- Native planning is now adaptive: plan length and phases vary by task type,
+  risk, and constraints instead of always emitting the same fixed workflow.
+- Routing can rerun after Planner output, allowing downstream roles to respond
+  to task risk, privacy requirements, user overrides, and required capabilities.
+
+### Fixed
+
+- Several previously quiet catch fallbacks now emit diagnostic logs for
+  non-benign failures while keeping normal new-file patch validation quiet.
+- The GUI key/role modal header stays visible while scrolling long provider
+  configuration lists.
+
 ## [1.2.9] - 2026-06-09
 
 1.2.9 extends provider compatibility fixes beyond DeepSeek.
