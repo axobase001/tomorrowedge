@@ -14,7 +14,7 @@ import { prefsCommand } from "./commands/prefs.js";
 import { drillCommand } from "./commands/drill.js";
 import { benchmarkCommand } from "./commands/benchmark.js";
 import { workflowCommand } from "./commands/workflow.js";
-import { memoryCommand } from "./commands/memory.js";
+import { memoryCommand, memoryExplainCommand, memoryFailuresCommand, memoryShowCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
@@ -27,6 +27,7 @@ import { askCommand, targetsCommand } from "./commands/conversation.js";
 import { recipesCommand } from "./commands/recipes.js";
 
 const program = new Command();
+program.enablePositionalOptions();
 const cwd = process.cwd();
 const require = createRequire(import.meta.url);
 const packageJson = require("../../package.json") as { version: string };
@@ -176,7 +177,19 @@ program
 
 program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
 
-program.command("memory").description("List learned local task memory").option("--limit <n>", "number of entries", "20").option("--strategy", "show opt-in strategy memory routing and test-command hints").action((options: { limit?: string; strategy?: boolean }) => memoryCommand(cwd, options));
+const memory = program
+  .command("memory")
+  .description("Inspect learned local task and failure memory")
+  .option("--limit <n>", "number of entries", "20")
+  .option("--strategy", "show opt-in strategy memory routing and test-command hints")
+  .option("--json", "print machine-readable JSON")
+  .action((options: { limit?: string; strategy?: boolean; json?: boolean }) => memoryCommand(cwd, options));
+const memoryFailures = memory.command("failures").description("List structured failure memories").option("--limit <n>", "number of entries", "20").option("--json", "print machine-readable JSON");
+memoryFailures.action(() => memoryFailuresCommand(cwd, memoryFailures.opts() as { limit?: string; json?: boolean }));
+const memoryShow = memory.command("show").description("Show one failure memory by id or goal fingerprint").argument("<id>", "failure memory id or goal fingerprint").option("--json", "print machine-readable JSON");
+memoryShow.action((id: string) => memoryShowCommand(cwd, id, memoryShow.opts() as { json?: boolean }));
+const memoryExplain = memory.command("explain").description("Explain which failure memories apply to a task").argument("<task>", "task goal or natural-language problem").option("--limit <n>", "number of selected memories", "5").option("--json", "print machine-readable JSON");
+memoryExplain.action((task: string) => memoryExplainCommand(cwd, task, memoryExplain.opts() as { limit?: string; json?: boolean }));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));

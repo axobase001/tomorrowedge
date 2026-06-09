@@ -233,6 +233,9 @@ tedge export latest --brief
 tedge export latest --format json --include-artifacts
 tedge sessions
 tedge memory
+tedge memory failures
+tedge memory show <failure-id>
+tedge memory explain "fix npm test failure in index.js"
 tedge review-export latest --format github
 tedge github-report latest --repo owner/repo --pr 123 --dry-run
 tedge github-report latest --repo owner/repo --pr 123 --post-comment
@@ -817,6 +820,24 @@ allowed to create check runs for the target repository.
 The GUI command composer is the primary client entrypoint for natural-language
 tasks and approval feedback. CLI commands remain available for scripted runs and
 automation.
+
+## Failure Memory
+
+TomorrowEdge writes compact local task memory when sessions are saved. Failed or
+partial sessions now get structured failure records with redacted goal previews,
+failure class, correction strategy, confidence, recurrence, and artifact refs.
+The records are intended for supervision and retrieval, not for hidden
+validator leakage or raw log storage.
+
+```bash
+tedge memory failures
+tedge memory show <failure-id>
+tedge memory explain "repair this validation failure"
+tedge memory failures --json
+```
+
+Research caveats and falsification criteria are documented in
+[docs/ERROR_LOOP_RESEARCH.md](docs/ERROR_LOOP_RESEARCH.md).
 
 ## Conversation Targets
 

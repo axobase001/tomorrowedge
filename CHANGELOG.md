@@ -7,6 +7,25 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Added
+
+- Structured failure memory records for failed or partial saved sessions,
+  including failure class, correction strategy, confidence, recurrence, and
+  artifact refs without raw bulky artifact content.
+- `tedge memory failures`, `tedge memory show <id>`, and
+  `tedge memory explain "<task>"` for local failure-memory inspection,
+  JSON export, and retrieval rationale.
+- Error-loop research caveats and falsification criteria in
+  `docs/ERROR_LOOP_RESEARCH.md`.
+- Direct unit coverage for agent classes, project tools, and safety boundary
+  helpers.
+
+### Changed
+
+- Cockpit E2E smoke now treats GUI `data-testid` attributes as an explicit
+  contract across setup, key management, composer, workflow, telemetry,
+  approval, trace, and drawer surfaces.
+
 ## [1.2.14] - 2026-06-09
 
 1.2.14 clears the P0-P2 issue sweep for provider routing, trace quality, GUI

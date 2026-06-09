@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { classifyFileRisk, isBinaryLikePath } from "../../src/safety/fileRisk.js";
+import { createIgnoreMatcher } from "../../src/safety/ignoreRules.js";
 import { canSendToCloud } from "../../src/safety/privacyGuard.js";
 import { redactText, scanSecrets } from "../../src/safety/secretScanner.js";
 import { classifyProviderError, formatProviderError, redactProviderError, redactSessionRecord } from "../../src/safety/providerRedaction.js";
@@ -59,6 +65,30 @@ describe("safety", () => {
   it("blocks raw cloud context in privacy mode", () => {
     const decision = canSendToCloud("normal code", "privacy");
     expect(decision.allowed).toBe(false);
+  });
+
+  it("applies repo ignore rules before context indexing", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-ignore-"));
+    try {
+      await writeFile(path.join(cwd, ".gitignore"), "dist/\n");
+      await writeFile(path.join(cwd, ".tomorrowedgeignore"), "private-notes.md\n");
+      const matcher = createIgnoreMatcher(cwd, defaultConfig);
+
+      expect(matcher.ignores("dist/bundle.js")).toBe(true);
+      expect(matcher.ignores("private-notes.md")).toBe(true);
+      expect(matcher.ignores("src/index.ts")).toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("classifies risky file paths without opening file contents", () => {
+    expect(classifyFileRisk(".env.local", 20)).toBe("sensitive");
+    expect(classifyFileRisk("certs/app.pem", 20)).toBe("sensitive");
+    expect(classifyFileRisk("screenshots/app.png", 20)).toBe("binary");
+    expect(classifyFileRisk("logs/big.txt", 600_000)).toBe("large");
+    expect(classifyFileRisk("src/index.ts", 20)).toBe("safe");
+    expect(isBinaryLikePath("archive.zip")).toBe(true);
   });
 
   it("blocks shell metacharacters and dangerous executables", () => {
