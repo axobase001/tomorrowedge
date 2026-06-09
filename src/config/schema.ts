@@ -140,6 +140,17 @@ export const configSchema = z.object({
     review_guard: true,
     repair_context: true
   }),
+  failure_memory: z.object({
+    enabled: z.boolean().default(false),
+    storage_scope: z.enum(["project", "experiment"]).default("project"),
+    redaction: z.enum(["metadata_only", "artifact_refs"]).default("metadata_only"),
+    retention_days: z.number().int().min(1).max(3650).default(30)
+  }).default({
+    enabled: false,
+    storage_scope: "project",
+    redaction: "metadata_only",
+    retention_days: 30
+  }),
   privacy: z.object({
     mode: z.enum(["normal", "privacy", "local"]).default("normal"),
     allow_cloud_repo_context: z.boolean().default(true),

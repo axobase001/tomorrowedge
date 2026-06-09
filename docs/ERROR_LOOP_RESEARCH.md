@@ -46,6 +46,11 @@ Reports must not claim the system learned from a failure unless
 `memoryUpdateStatus` is `written`, or unless a skipped reason is explicitly
 audited.
 
+Normal project runs do not write failure-memory records by default. The
+experiment harness opts in with `failure_memory.enabled: true` and marks records
+as `storage_scope: experiment`, so research memory stays isolated from ordinary
+project memory unless the user explicitly enables it.
+
 `metrics.json` also separates:
 
 - `memoryWritten`: new memory records created

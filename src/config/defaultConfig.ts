@@ -47,6 +47,12 @@ export const defaultConfig: TomorrowEdgeConfig = {
     review_guard: true,
     repair_context: true
   },
+  failure_memory: {
+    enabled: false,
+    storage_scope: "project",
+    redaction: "metadata_only",
+    retention_days: 30
+  },
   privacy: {
     mode: "normal",
     allow_cloud_repo_context: true,

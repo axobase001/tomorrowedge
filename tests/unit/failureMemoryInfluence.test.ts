@@ -77,7 +77,7 @@ async function seedValidationFailureMemory(cwd: string): Promise<void> {
     risksRemaining: ["Verifier failed."],
     suggestedCommitMessage: "fix: test"
   };
-  await saveSession(cwd, state);
+  await saveSession(cwd, state, { failureMemory: { enabled: true, redaction: "artifact_refs" } });
 }
 
 function memoryEnabledConfig(): typeof defaultConfig {

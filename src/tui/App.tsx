@@ -367,7 +367,7 @@ async function submitComposer(args: SubmitComposerArgs): Promise<void> {
       ? createConversationSession({ message: command.goal, target: command.target, config: currentConfig })
       : await runOfflineGraph(args.cwd, command.goal, currentConfig, { conversationTarget: command.target, accessMode: args.accessMode });
     args.setDraft("");
-    await saveSession(args.cwd, state);
+    await saveSession(args.cwd, state, { failureMemory: currentConfig.failure_memory });
     args.setViewGraph(state);
     args.setMessage(command.kind === "ask" ? "Recorded non-mutating directed conversation." : `Workflow completed: ${state.finalSummary?.result ?? "unknown"}.`);
   } catch (error: unknown) {

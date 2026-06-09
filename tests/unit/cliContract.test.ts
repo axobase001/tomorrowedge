@@ -71,6 +71,18 @@ describe("CLI contract", () => {
     expect(() => JSON.parse(explained.stdout)).not.toThrow();
   }, 15_000);
 
+  it("lists failure-memory privacy commands", async () => {
+    const result = await execa("tsx", ["src/cli/index.ts", "memory", "--help"], {
+      cwd: process.cwd(),
+      preferLocal: true
+    });
+
+    expect(result.stdout).toContain("preview");
+    expect(result.stdout).toContain("export");
+    expect(result.stdout).toContain("delete");
+    expect(result.stdout).toContain("compact");
+  }, 15_000);
+
   it("runs the deterministic error-loop experiment command", async () => {
     const outputRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-cli-error-loop-"));
     try {

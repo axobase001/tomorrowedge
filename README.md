@@ -857,11 +857,19 @@ tedge memory failures
 tedge memory failures --include-stale
 tedge memory show <failure-id>
 tedge memory explain "repair this validation failure"
+tedge memory preview latest
+tedge memory export --output failure-memory.json
+tedge memory delete <failure-id>
+tedge memory compact --limit 50
 tedge memory failures --json
 ```
 
 Research caveats and falsification criteria are documented in
 [docs/ERROR_LOOP_RESEARCH.md](docs/ERROR_LOOP_RESEARCH.md).
+Failed or partial sessions do not write failure-memory records by default. To
+opt in, set `failure_memory.enabled: true`; `metadata_only` redaction avoids
+artifact refs, while `artifact_refs` stores redacted stdout/stderr/diff handles
+for audit-heavy experiments.
 
 For a deterministic no-key export bundle:
 

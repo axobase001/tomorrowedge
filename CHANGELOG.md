@@ -35,6 +35,8 @@ Changelog: newest changes first, grouped by release and by change type.
 - GUI/detail drawer error-loop timeline that reconstructs candidate attempts,
   patch applications, failed/passed verification, repair attempts, memory
   retrieval, artifact refs, and stop reasons from the shared event ledger.
+- Failure-memory consent controls via `failure_memory.enabled`, storage scope,
+  redaction level, retention days, plus `tedge memory preview/export/delete/compact`.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 
@@ -62,6 +64,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - `strategy_memory` now has independent ablation switches for
   `failure_premortem`, `coder_constraints`, `review_guard`, and
   `repair_context`.
+- Failed or partial sessions no longer silently write failure-memory records in
+  normal project runs; experiments opt in explicitly and mark memory as
+  experiment-scoped.
 
 ## [1.2.14] - 2026-06-09
 

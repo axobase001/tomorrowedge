@@ -39,6 +39,33 @@ export type LearnedTaskMemory = {
   recurrenceCount?: number;
   fixedCount?: number;
   sourceSessionIds?: string[];
+  failureMemoryConsent?: "enabled";
+  failureMemoryStorageScope?: FailureMemoryStorageScope;
+  failureMemoryRedaction?: FailureMemoryRedaction;
+  failureMemoryRetentionDays?: number;
+};
+
+export type FailureMemoryStorageScope = "project" | "experiment";
+export type FailureMemoryRedaction = "metadata_only" | "artifact_refs";
+
+export type FailureMemoryPolicy = {
+  enabled: boolean;
+  storageScope: FailureMemoryStorageScope;
+  redaction: FailureMemoryRedaction;
+  retentionDays: number;
+  experimentId?: string;
+};
+
+export type FailureMemoryPolicyInput = Partial<FailureMemoryPolicy> & {
+  storage_scope?: FailureMemoryStorageScope;
+  retention_days?: number;
+};
+
+export type FailureMemoryPreview = {
+  wouldWrite: boolean;
+  reason: string;
+  policy: FailureMemoryPolicy;
+  record?: LearnedTaskMemory;
 };
 
 export type MemoryScope = {
@@ -95,7 +122,25 @@ export const emptyTaskMemory: TaskMemory = {
   commonConstraints: []
 };
 
-export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphState): Promise<void> {
+export const defaultFailureMemoryPolicy: FailureMemoryPolicy = {
+  enabled: false,
+  storageScope: "project",
+  redaction: "metadata_only",
+  retentionDays: 30
+};
+
+export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphState, options: { failureMemory?: FailureMemoryPolicyInput } = {}): Promise<void> {
+  const preview = await previewLearnedTaskMemory(cwd, state, options);
+  if (!preview.record || !preview.wouldWrite) return;
+  const dir = path.join(cwd, ".tomorrowedge");
+  await mkdir(dir, { recursive: true });
+  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+  const merged = mergeLearnedMemory(records, preview.record);
+  await writeTaskMemoryFile(cwd, merged);
+}
+
+export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphState, options: { failureMemory?: FailureMemoryPolicyInput } = {}): Promise<FailureMemoryPreview> {
+  const policy = normalizeFailureMemoryPolicy(options.failureMemory);
   const now = new Date().toISOString();
   const record: LearnedTaskMemory = {
     schemaVersion: "task-memory/v2",
@@ -103,8 +148,8 @@ export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphStat
     firstSeen: now,
     lastSeen: now,
     goalFingerprint: fingerprintGoal(state.goal),
-    goalPreview: clip(redactText(state.goal), 180),
-    memoryScope: await buildMemoryScope(cwd),
+    goalPreview: clip(redactMemoryText(state.goal), 180),
+    memoryScope: await buildMemoryScope(cwd, policy),
     taskType: state.plan?.taskType ?? "unknown",
     riskLevel: state.plan?.riskLevel ?? "unknown",
     routingMode: state.routing.mode,
@@ -123,18 +168,28 @@ export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphStat
       : []
   };
   const failure = buildFailureMemoryFields(state, record);
-  Object.assign(record, failure);
+  if (!failure.failureClass) {
+    return { wouldWrite: true, reason: "success_or_non_failure_task_metadata", policy, record };
+  }
+  Object.assign(record, failure, {
+    failureMemoryConsent: "enabled",
+    failureMemoryStorageScope: policy.storageScope,
+    failureMemoryRedaction: policy.redaction,
+    failureMemoryRetentionDays: policy.retentionDays
+  });
+  if (policy.redaction === "metadata_only") record.evidenceRefs = [];
   if (record.failureClass) {
     record.failureSignature = buildFailureSignature(state, record);
     record.recurrenceCount = 1;
     record.fixedCount = state.finalSummary?.result === "completed" ? 1 : 0;
     record.sourceSessionIds = [state.sessionId];
   }
-  const dir = path.join(cwd, ".tomorrowedge");
-  await mkdir(dir, { recursive: true });
-  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
-  const merged = mergeLearnedMemory(records, record);
-  await writeTaskMemoryFile(cwd, merged);
+  return {
+    wouldWrite: policy.enabled,
+    reason: policy.enabled ? "failure_memory.enabled" : "failure_memory.disabled",
+    policy,
+    record
+  };
 }
 
 export async function buildStrategyMemoryHints(cwd: string, options: { limit?: number } = {}): Promise<StrategyMemoryHints> {
@@ -199,6 +254,29 @@ export async function showFailureMemory(cwd: string, id: string, options: { incl
   return records.find((record) => record.id === id || record.goalFingerprint === id);
 }
 
+export async function deleteFailureMemory(cwd: string, id: string): Promise<boolean> {
+  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+  const next = records.filter((record) => {
+    const failure = normalizeFailureRecord(record, cwd);
+    return failure.id !== id && failure.goalFingerprint !== id;
+  });
+  if (next.length === records.length) return false;
+  await writeTaskMemoryFile(cwd, next);
+  return true;
+}
+
+export async function compactFailureMemories(cwd: string, options: { keepStale?: boolean; limit?: number } = {}): Promise<{ before: number; after: number; removed: number }> {
+  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+  const nonFailure = records.filter((record) => !isFailureMemoryLike(record));
+  const failures = records.filter(isFailureMemoryLike);
+  const keptFailures = failures
+    .filter((record) => options.keepStale || !normalizeFailureRecord(record, cwd).stale)
+    .slice(-(options.limit ?? 10_000));
+  const kept = [...nonFailure, ...keptFailures].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  await writeTaskMemoryFile(cwd, kept);
+  return { before: records.length, after: kept.length, removed: records.length - kept.length };
+}
+
 export async function explainFailureMemories(cwd: string, task: string, options: { limit?: number } = {}): Promise<FailureMemoryExplanation> {
   const records = await readFailureMemories(cwd, Math.max(options.limit ?? 5, 20), { includeStale: true });
   const taskSignals = tokenize(task);
@@ -234,10 +312,23 @@ export async function explainFailureMemories(cwd: string, task: string, options:
   }
   selected.sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt));
   return {
-    task: clip(redactText(task), 180),
+    task: clip(redactMemoryText(task), 180),
     selected: selected.slice(0, options.limit ?? 5),
     rejected: rejected.slice(0, 12)
   };
+}
+
+function normalizeFailureMemoryPolicy(policy: FailureMemoryPolicyInput | undefined): FailureMemoryPolicy {
+  return {
+    ...defaultFailureMemoryPolicy,
+    ...policy,
+    storageScope: policy?.storageScope ?? policy?.storage_scope ?? defaultFailureMemoryPolicy.storageScope,
+    retentionDays: Math.max(1, Math.floor(policy?.retentionDays ?? policy?.retention_days ?? defaultFailureMemoryPolicy.retentionDays))
+  };
+}
+
+function isFailureMemoryLike(record: LearnedTaskMemory): boolean {
+  return Boolean(record.failureClass || record.failureMemoryConsent === "enabled" || ["failed", "partially_completed", "aborted"].includes(record.result ?? ""));
 }
 
 function fingerprintGoal(goal: string): string {
@@ -367,7 +458,7 @@ function collectEvidenceRefs(state: AgentGraphState): string[] {
       return values;
     })
   ];
-  return [...new Set(refs.map((ref) => redactText(ref)).filter(Boolean))].slice(0, 12);
+  return [...new Set(refs.map((ref) => redactMemoryText(ref)).filter(Boolean))].slice(0, 12);
 }
 
 function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemory): LearnedTaskMemory[] {
@@ -399,11 +490,12 @@ async function writeTaskMemoryFile(cwd: string, records: LearnedTaskMemory[]): P
   await writeFile(path.join(dir, "task-memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
 }
 
-async function buildMemoryScope(cwd: string): Promise<MemoryScope> {
+async function buildMemoryScope(cwd: string, policy?: FailureMemoryPolicy): Promise<MemoryScope> {
   return {
     projectFingerprint: hashText(path.resolve(cwd).toLowerCase()),
     dependencyLockHash: await dependencyLockHash(cwd),
-    fixtureFamily: "native-fixture"
+    fixtureFamily: "native-fixture",
+    experimentId: policy?.storageScope === "experiment" ? policy.experimentId ?? "experiment" : undefined
   };
 }
 
@@ -425,7 +517,7 @@ function staleStatus(record: LearnedTaskMemory, cwd: string): { stale: boolean; 
     return { stale: true, reason: "project scope changed" };
   }
   const lastSeenTime = Date.parse(record.lastSeen ?? record.createdAt);
-  const ttlMs = Number(process.env.TOMORROWEDGE_MEMORY_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000;
+  const ttlMs = Number(record.failureMemoryRetentionDays ?? process.env.TOMORROWEDGE_MEMORY_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000;
   if (Number.isFinite(lastSeenTime) && ttlMs > 0 && Date.now() - lastSeenTime > ttlMs) {
     return { stale: true, reason: "memory TTL expired" };
   }
@@ -434,7 +526,7 @@ function staleStatus(record: LearnedTaskMemory, cwd: string): { stale: boolean; 
 
 function buildFailureSignature(state: AgentGraphState, record: LearnedTaskMemory): string {
   const failedRun = state.runResults.find((run) => !run.success && !run.skipped);
-  const errorSignature = clip(redactText([failedRun?.stderr, failedRun?.stdout].filter(Boolean).join("\n")), 220)
+  const errorSignature = clip(redactMemoryText([failedRun?.stderr, failedRun?.stdout].filter(Boolean).join("\n")), 220)
     .replace(/\d+/g, "#")
     .toLowerCase();
   const files = unique([
@@ -478,6 +570,13 @@ function confidenceForFailure(failureClass: FailureClass, evidenceRefs: string[]
 function clip(value: string, max: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= max ? normalized : `${normalized.slice(0, max - 3)}...`;
+}
+
+function redactMemoryText(value: string): string {
+  return redactText(value)
+    .replace(/[A-Za-z]:[\\/][^\s"'`<>|]+/g, "[path]")
+    .replace(/\/(?:Users|home|data|tmp|var|opt)\/[^\s"'`<>|]+/g, "[path]")
+    .replace(/\\\\[^\\/\s]+\\[^\s"'`<>|]+/g, "[path]");
 }
 
 function tokenize(value: string): Set<string> {

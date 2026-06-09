@@ -269,6 +269,33 @@ sessions are saved. It records compact metadata only: task type, risk level,
 routing mode, verification commands, visual page type, judge decision, and
 result. It does not store file contents or long model outputs.
 
+Failure memory is more sensitive than successful route metadata, so failed or
+partial sessions do not write failure-memory records unless explicitly enabled:
+
+```yaml
+failure_memory:
+  enabled: false
+  storage_scope: project # project | experiment
+  redaction: metadata_only # metadata_only | artifact_refs
+  retention_days: 30
+```
+
+- `enabled: false` prevents silent failure-memory capture in normal runs.
+- `metadata_only` stores class/correction/signature metadata without artifact
+  refs; `artifact_refs` may include redacted refs such as stdout/stderr/diff
+  artifact handles.
+- `storage_scope: experiment` marks records with an experiment scope so research
+  harnesses stay separate from ordinary project memory.
+
+Useful inspection commands:
+
+```bash
+tedge memory preview latest
+tedge memory export --output failure-memory.json
+tedge memory delete <failure-id>
+tedge memory compact --limit 50
+```
+
 ```yaml
 strategy_memory:
   enabled: false
