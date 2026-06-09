@@ -50,6 +50,10 @@ Changelog: newest changes first, grouped by release and by change type.
 - Structured correction scope for failure-memory lessons, including wrong
   assumption, corrected rule, applicability, counterexamples, validation
   command, and `verified` / `partial` / `unverified` correction status.
+- Error-loop hypothesis metrics mapped to experiment outputs, including
+  recovery attempts, repeated same-class error rate, validation pass rate,
+  transfer pass-rate placeholder, cost/time to recovery, retrieval precision,
+  harmful retrieval rate, and repair success after retrieval.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

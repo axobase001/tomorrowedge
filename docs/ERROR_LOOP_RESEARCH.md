@@ -62,6 +62,20 @@ project memory unless the user explicitly enables it.
 - `memoryOccurrences`: selected or updated failure records observed in trials
 - `suspectedNegativeTransfer`: trials where retrieved memory was available but
   the workflow still did not complete
+- `recoveryAttemptsAfterFirstFailureTotal` and
+  `averageRecoveryAttemptsAfterFirstFailure`: how much repair/execution happened
+  after the first failed validation
+- `repeatedSameClassErrorRate`: repeated same-class error signal from repair
+  policy or recurring failure memory
+- `validationPassRate`: share of trials with at least one passing verifier
+- `transferTaskPassRate`: exported as `null` until a transfer split exists
+- `averageCostToRecoveryUsd` and `averageTimeToRecoveryMs`: cost/time over
+  completed recoveries when measured
+- `memoryRetrievalPrecision`: selected retrievals over selected plus rejected
+  retrieval records
+- `harmfulRetrievalRate`: retrieved-memory trials that still did not complete
+- `repairSuccessAfterRetrievalRate`: repair-context retrievals followed by
+  successful validation
 
 These fields are intentionally conservative. They support audit and ablation;
 they do not prove causal improvement.
@@ -192,6 +206,13 @@ Research exports should report:
 - trace completeness
 - memory update status counts
 - prediction accuracy / mismatch counts
+- recovery attempts after first failure
+- repeated same-class error rate
+- validation pass rate
+- transfer pass rate, or `null` when no transfer split exists
+- memory retrieval precision
+- harmful retrieval rate
+- repair success after retrieval
 - leakage checks
 
 The product claim should stay narrow:

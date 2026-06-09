@@ -913,6 +913,13 @@ constraints and repair hints use those fields instead of opaque "we failed
 before" notes, and retrieval scores verified corrections above unverified
 lessons with the same task signals.
 
+The experiment bundle maps the falsifiable error-loop hypothesis to concrete
+fields: recovery attempts after first failure, repeated same-class error rate,
+validation pass rate, transfer pass-rate placeholder, cost/time to recovery,
+memory retrieval precision, harmful retrieval rate, repair success after
+retrieval, prediction accuracy, and trace completeness. Unsupported dimensions
+such as hidden/transfer validation are exported as `null` rather than invented.
+
 ## Conversation Targets
 
 TomorrowEdge Core is the default natural-language conversation object. Users can
