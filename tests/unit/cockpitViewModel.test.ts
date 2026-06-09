@@ -21,6 +21,7 @@ describe("cockpit view model", () => {
     expect(vm.trace.length).toBeGreaterThan(0);
     expect(vm.sessionMeta.source).toBe("saved");
     expect(vm.sessionMeta.stale).toBe(true);
+    expect(vm.roleGraph?.workflowKind).toBe("debate_patch");
     expect(vm.capabilities.find((item) => item.id === "provider-routing")?.status).toBe("available");
     expect(vm.capabilities.find((item) => item.id === "workflow-ledger")?.readiness).toContain("event");
   });
@@ -159,6 +160,30 @@ describe("cockpit view model", () => {
     expect(vm.currentApproval).toBeUndefined();
     expect(vm.status).toBe("done");
     expect(vm.approvalHistory.some((item) => item.kind === "patch" && item.status === "waiting")).toBe(false);
+  });
+
+  it("does not mark pending patch authorization as rejected history", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      events: [{
+        id: "event_patch_pending",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: "session_invariant",
+        mode: "partial",
+        type: "patch_apply",
+        phase: "patch",
+        role: "runner",
+        provider: "local_tool",
+        model: "patch",
+        candidateId: "candidate_a",
+        filesChanged: ["index.js"],
+        undoSnapshotIds: [],
+        applied: false,
+        error: "Patch application blocked: approval required."
+      }]
+    }));
+
+    expect(vm.approvalHistory.some((item) => item.action === "rejected")).toBe(false);
+    expect(vm.approvalHistory.at(-1)?.action).toBe("waiting");
   });
 
   it("shows shell approval only after patch application and before shell execution", () => {

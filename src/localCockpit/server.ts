@@ -3,9 +3,11 @@ import { randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "../config/configLoader.js";
-import { runOfflineGraph, type OfflineGraphOptions } from "../core/agentGraph/executor.js";
+import type { OfflineGraphOptions } from "../core/agentGraph/executor.js";
 import { loadLatestSession, loadSession, listSessions, saveSession } from "../core/memory/sessionMemory.js";
+import { NativeBackend } from "../core/orchestration/nativeBackend.js";
+import { createOrchestrationBackend } from "../core/orchestration/registry.js";
+import { prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, liveOption } from "../core/runtime/runPreparation.js";
 import { TomorrowEdgeMcpBridge } from "../mcp/bridge.js";
 import { cockpitIconSvg, cockpitManifest } from "./brand.js";
 import { renderCockpitHtml } from "./html.js";
@@ -17,7 +19,7 @@ import { buildCockpitViewModel } from "../cockpit/viewModel.js";
 import { cockpitEventBus } from "../cockpit/eventBus.js";
 import { isAllowedBrowserOrigin, isAuthorizedCockpitRequest } from "../cockpit/auth.js";
 import { recordApprovalIntent } from "../cockpit/approvals.js";
-import type { CockpitApprovalIntent } from "../cockpit/contracts.js";
+import type { CockpitApprovalIntent, CockpitRunMode } from "../cockpit/contracts.js";
 import { safeArtifactPath } from "../cockpit/artifacts.js";
 import { executeCockpitApprovalAction } from "../cockpit/approvalExecutor.js";
 import { buildAccessPolicy } from "../core/permissions/accessPolicy.js";
@@ -199,22 +201,28 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     }
     if (request.method === "POST" && url.pathname === "/api/runs") {
       const body = await readJsonBody(request);
-      const config = loadConfig(cwd);
+      const { prefs, memoryHints, config } = await resolveRuntimeConfig(cwd);
       const sessionId = `session_${randomBytes(8).toString("hex")}`;
       const goal = typeof body.goal === "string" && body.goal.trim() ? body.goal : "fix failing test";
-      const accessMode = parseAccessMode(body.accessMode);
+      const requestedRunMode = parseRunMode(body.runMode);
+      const accessMode = parseAccessMode(body.accessMode) ?? prefs.accessMode ?? config.project.access_mode;
+      const runFlags = resolveRunFlags(requestedRunMode, body, config);
       const liveState = createLiveState(sessionId, goal, config, accessMode);
+      const workspace = await prepareRunWorkspace(cwd, { fixtureMode: runFlags.fixtureMode, forceFixtureWorkspace: runFlags.fixtureMode });
       const options: OfflineGraphOptions = {
-        fixtureMode: body.fixtureMode !== false,
+        fixtureMode: runFlags.fixtureMode,
         accessMode,
-        livePatch: Boolean(body.livePatch),
-        liveAdvisory: Boolean(body.liveAdvisory),
+        livePatch: runFlags.livePatch,
+        liveAdvisory: runFlags.liveAdvisory,
         liveVision: Boolean(body.liveVision),
         approvePatch: Boolean(body.approvePatch),
         approveShell: Boolean(body.approveShell),
         repairOnFail: Boolean(body.repairOnFail),
         approveRepair: Boolean(body.approveRepair),
         conversationTarget: typeof body.to === "string" ? body.to : "core",
+        testCommand: typeof body.testCommand === "string" && body.testCommand.trim()
+          ? body.testCommand.trim()
+          : prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
         sessionId,
         onEvent: (event) => {
           applyLiveEvent(liveState, event);
@@ -222,7 +230,8 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
         }
       };
-      void runOfflineGraph(cwd, goal, config, options)
+      const backend = createOrchestrationBackend(config);
+      void runCockpitBackend(backend, workspace.executionCwd, goal, options)
         .then(async (state) => {
           await saveSession(cwd, state);
           cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
@@ -295,6 +304,41 @@ function validateApprovalIntent(cwd: string, state: AgentGraphState, intent: Coc
   const shellAction = intent.action === "approve_shell" || intent.action === "reject_shell";
   if (patchAction && active.kind === "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is a shell approval.`);
   if (shellAction && active.kind !== "shell") throw new HttpError(409, "approval_mismatch", `Current approval ${active.id} is not a shell approval.`);
+}
+
+async function runCockpitBackend(
+  backend: ReturnType<typeof createOrchestrationBackend>,
+  executionCwd: string,
+  goal: string,
+  options: OfflineGraphOptions
+): Promise<AgentGraphState> {
+  if (!(backend instanceof NativeBackend)) {
+    for await (const _event of backend.run({ cwd: executionCwd, goal, options })) {
+      // Placeholder adapters are surfaced as explicit backend errors below.
+    }
+    throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
+  }
+  return backend.runGraph(executionCwd, goal, options);
+}
+
+function resolveRunFlags(runMode: CockpitRunMode, body: Record<string, unknown>, config: TomorrowEdgeConfig): { fixtureMode: boolean; livePatch: boolean; liveAdvisory: boolean } {
+  const live = runMode === "live";
+  const offline = runMode === "offline";
+  const fixtureMode = runMode === "fixture"
+    ? true
+    : live || offline
+      ? false
+      : body.fixtureMode !== false;
+  const autoLive = shouldAutoLive(config, { fixtureMode, live, offline });
+  return {
+    fixtureMode,
+    livePatch: liveOption(offline, live, autoLive, booleanOrUndefined(body.livePatch)),
+    liveAdvisory: liveOption(offline, live, autoLive, booleanOrUndefined(body.liveAdvisory))
+  };
+}
+
+function booleanOrUndefined(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 class HttpError extends Error {
@@ -450,6 +494,12 @@ function parseAccessMode(value: unknown): AccessMode | undefined {
   if (value === undefined) return undefined;
   if (value === "restricted" || value === "partial" || value === "full") return value;
   throw new HttpError(400, "invalid_access_mode", "accessMode must be restricted, partial, or full.");
+}
+
+function parseRunMode(value: unknown): CockpitRunMode {
+  if (value === undefined) return "auto";
+  if (value === "auto" || value === "fixture" || value === "offline" || value === "live") return value;
+  throw new HttpError(400, "invalid_run_mode", "runMode must be auto, fixture, offline, or live.");
 }
 
 function isMutatingMethod(method?: string): boolean {

@@ -250,6 +250,7 @@ describe("offline agent graph", () => {
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
     expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
     expect(state.changedFiles).toEqual([]);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.role === "planner" && event.status !== "blocked")).toBe(true);
   });
 
   it("blocks live advisory before model calls when budget is exceeded", async () => {
@@ -263,6 +264,7 @@ describe("offline agent graph", () => {
     expect(state.budgetStatuses.map((status) => status.status)).toContain("blocked");
     expect(state.modelNotes).toEqual([]);
     expect(state.usageSummary.totalTokens).toBe(0);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.status === "blocked")).toBe(true);
   });
 
   it("restricted access blocks live advisory before cloud/model calls", async () => {
@@ -326,6 +328,8 @@ describe("offline agent graph", () => {
     expect(state.candidates.length).toBeGreaterThan(2);
     expect(state.modelNotes.filter((note) => note.kind === "patch_generation").length).toBe(2);
     expect(state.changedFiles).toEqual([]);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_a" && event.phase === "coding")).toBe(true);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_b" && event.phase === "coding")).toBe(true);
   });
 
   it("restricted access blocks live patch generation", async () => {

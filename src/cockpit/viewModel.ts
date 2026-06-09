@@ -51,6 +51,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
       elapsedMs: agent.elapsedMs
     })),
     routes,
+    roleGraph: buildRoleGraphSummary(state),
     telemetry: buildTelemetry(state, routes, currentApproval),
     approvals,
     approvalHistory,
@@ -136,6 +137,25 @@ function buildRoutes(state?: AgentGraphState): CockpitRouteSummary[] {
   }));
 }
 
+function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleGraph"] {
+  if (!state?.roleGraph) return undefined;
+  return {
+    workflowKind: state.roleGraph.workflowKind,
+    nodes: state.roleGraph.nodes.map((node) => ({
+      id: node.id,
+      role: node.role,
+      required: node.required,
+      dependencies: node.dependencies,
+      canFallback: node.canFallback,
+      canSkip: node.canSkip,
+      maxRetries: node.maxRetries,
+      produces: node.produces,
+      consumes: node.consumes
+    })),
+    stopConditions: state.roleGraph.stopConditions
+  };
+}
+
 function isFixtureSession(state?: AgentGraphState): boolean {
   if (!state) return false;
   return state.routing.assignments.some((assignment) => assignment.provider === "fixture")
@@ -192,6 +212,7 @@ function buildApprovalHistory(state: AgentGraphState | undefined, currentApprova
   const items: CockpitApprovalHistoryItem[] = [];
   for (const event of state?.events ?? []) {
     if (event.type === "patch_apply") {
+      if (isPendingPatchAuthorization(event)) continue;
       const undone = event.candidateId === "undo_latest_patch" || event.error === "undo_latest_patch";
       const rejected = !event.applied && !undone;
       items.push({
@@ -274,6 +295,12 @@ function buildApprovalHistory(state: AgentGraphState | undefined, currentApprova
     });
   }
   return items.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function isPendingPatchAuthorization(event: TomorrowEdgeEvent): boolean {
+  return event.type === "patch_apply"
+    && event.applied === false
+    && /approval required/i.test(event.error ?? "");
 }
 
 function blockingSummary(approval: CockpitApproval): string {

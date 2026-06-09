@@ -316,7 +316,7 @@ input, textarea, select {
 }
 .te-composer {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) 150px auto minmax(0, auto) auto;
+  grid-template-columns: 112px minmax(0, 1fr) repeat(3, minmax(112px, 150px)) minmax(0, 220px) auto;
   gap: 8px;
   align-items: center;
   padding: 8px 10px;

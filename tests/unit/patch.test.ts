@@ -76,6 +76,41 @@ literal 0
     expect(result.issues[0]?.reason).toContain("escapes");
   });
 
+  it("allows project-relative add-file paths under new directories", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-patch-new-dir-"));
+    try {
+      const createNestedDiff = `--- /dev/null
++++ b/assignments/finite-division-ring-field/proof.md
+@@ -0,0 +1 @@
++hello`;
+      const result = validateUnifiedDiff(cwd, createNestedDiff);
+
+      expect(result.ok).toBe(true);
+      await applyUnifiedDiff(cwd, createNestedDiff, true);
+      expect(await readFile(path.join(cwd, "assignments", "finite-division-ring-field", "proof.md"), "utf8")).toBe("hello\n");
+    } finally {
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("blocks obvious mojibake and malformed generated HTML additions", () => {
+    const mojibakeDiff = `--- /dev/null
++++ b/assignments/proof.md
+@@ -0,0 +1,3 @@
++# 鏈夐檺闄ょ幆涓€瀹氭槸鍩
++## 鎽樿
++鐨勮瘉鏄庡嚭鐜颁簡绋嬪簭`;
+    const htmlDiff = `--- /dev/null
++++ b/assignments/proof.html
+@@ -0,0 +1,3 @@
++<p>broken?/p>
++<strong>bad?/strong>
++<h3>heading?/h3>`;
+
+    expect(validateUnifiedDiff(process.cwd(), mojibakeDiff).issues[0]?.reason).toContain("mojibake");
+    expect(validateUnifiedDiff(process.cwd(), htmlDiff).issues[0]?.reason).toContain("malformed");
+  });
+
   it("rejects diffs that parse to no file targets", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-empty-patch-"));
     try {

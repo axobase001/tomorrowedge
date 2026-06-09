@@ -50,9 +50,10 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("run a smoke task");
     expect(html).toContain("Workflow running...");
-    expect(html).toContain("target: core");
     expect(html).toContain("data-testid=\"composer-input\"");
     expect(html).toContain("data-testid=\"composer-mode\"");
+    expect(html).toContain("data-testid=\"composer-run-mode\"");
+    expect(html).toContain("data-testid=\"composer-target\"");
     expect(html).toContain("partial");
   });
 
@@ -73,6 +74,30 @@ describe("cockpit web React surface", () => {
       accessMode: "partial",
       repairOnFail: false,
       approveRepair: false
+    });
+  });
+
+  it("lets GUI runs explicitly choose target role and run mode", () => {
+    expect(buildCockpitRunRequest({ goal: "review patch", accessMode: "partial", setupReady: true, runMode: "offline", target: "reviewer" })).toMatchObject({
+      runMode: "offline",
+      fixtureMode: false,
+      livePatch: false,
+      liveAdvisory: false,
+      to: "reviewer"
+    });
+    expect(buildCockpitRunRequest({ goal: "debate this", accessMode: "partial", setupReady: true, runMode: "fixture", target: "debate" })).toMatchObject({
+      runMode: "fixture",
+      fixtureMode: true,
+      livePatch: false,
+      liveAdvisory: false,
+      to: "debate"
+    });
+    expect(buildCockpitRunRequest({ goal: "run live", accessMode: "partial", setupReady: false, runMode: "live", target: "planner" })).toMatchObject({
+      runMode: "live",
+      fixtureMode: false,
+      livePatch: true,
+      liveAdvisory: true,
+      to: "planner"
     });
   });
 
@@ -179,6 +204,15 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("because high-risk plan needs conservative review");
   });
 
+  it("renders the workflow role graph in the detail drawer", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("Role graph");
+    expect(html).toContain("workflow=patch");
+    expect(html).toContain("planner (planner) required");
+    expect(html).toContain("stop=judge_abort");
+  });
+
   it("renders capability dashboard readiness in the detail drawer", () => {
     const html = renderApp(sampleViewModel());
 
@@ -208,6 +242,8 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       selectedSession: "session_test",
       goal: overrides.goal ?? "",
       accessMode: "partial",
+      runMode: "auto",
+      conversationTarget: "core",
       busy: false,
       statusMessage: overrides.statusMessage,
       setupStatus: {
@@ -247,6 +283,8 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       t,
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
+      onRunModeChange: () => undefined,
+      onConversationTargetChange: () => undefined,
       onLanguageChange: () => undefined,
       onConfigureSetup: () => undefined,
       onSaveProviderKey: () => undefined,
@@ -297,6 +335,21 @@ function sampleViewModel(): CockpitViewModel {
     ],
     agents: [],
     routes: [{ role: "planner", provider: "fixture", model: "fixture-scripted", reason: "test" }],
+    roleGraph: {
+      workflowKind: "patch",
+      nodes: [{
+        id: "planner",
+        role: "planner",
+        required: true,
+        dependencies: [],
+        canFallback: true,
+        canSkip: false,
+        maxRetries: 0,
+        produces: ["plan"],
+        consumes: []
+      }],
+      stopConditions: ["judge_abort"]
+    },
     telemetry: {
       providerSummary: "fixture",
       inputTokens: 0,
