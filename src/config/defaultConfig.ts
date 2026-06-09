@@ -31,6 +31,14 @@ export const defaultConfig: TomorrowEdgeConfig = {
     hard_cap_usd: 10,
     warn_at_percent: 80
   },
+  agent_budget: {
+    vision: 0.30,
+    planner: 0.10,
+    coder: 0.15,
+    reviewer: 0.10,
+    judge: 0.10,
+    other: 0.10
+  },
   strong_agents: {
     max_calls_per_task: 3,
     max_cost_usd: 2,

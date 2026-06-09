@@ -317,6 +317,14 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
     }
   }
 
+  // Ensure deterministic ordering of state.agents after parallel coder+livePatch section.
+  // runAgentState pushes agentState synchronously before its first await, so the order IS
+  // deterministic in practice (the map() callback is synchronous). This sort is a defensive
+  // measure against future concurrency patterns and satisfies static analysis (#362).
+  const EXECUTION_ORDER: AgentRole[] = ["core", "vision", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer"];
+  const agentRoleOrder = new Map(EXECUTION_ORDER.map((role, i) => [role, i]));
+  state.agents.sort((a, b) => (agentRoleOrder.get(a.role) ?? 99) - (agentRoleOrder.get(b.role) ?? 99));
+
   const reviewer = new ReviewerAgent();
   const externalReviewer = externalProfileForRole(router, externalAgents, "reviewer");
   state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
