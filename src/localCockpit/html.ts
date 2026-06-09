@@ -899,6 +899,7 @@ function renderDrawer(open) {
     '<h3>Changed files</h3><pre class="body-pre">' + esc(currentVm.main.filesChanged.join("\\n") || "-") + '</pre>' +
     '<h3>Telemetry details</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.telemetry, null, 2)) + '</pre>' +
     '<h3>Routes</h3><pre class="body-pre">' + esc(currentVm.routes.map((route) => route.role + " -> " + route.provider + "/" + route.model + " because " + route.reason).join("\\n")) + '</pre>' +
+    '<h3>Memory influence</h3><pre class="body-pre">' + esc(currentVm.memoryInfluence ? JSON.stringify(currentVm.memoryInfluence, null, 2) : "-") + '</pre>' +
     '<h3>Artifacts</h3><pre class="body-pre">' + esc(currentVm.artifacts.slice(0, 40).map((item) => item.ref).join("\\n") || "-") + '</pre>' +
     '<h3>Raw event trace</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.rawEvents || currentVm.trace, null, 2)) + '</pre>';
 }

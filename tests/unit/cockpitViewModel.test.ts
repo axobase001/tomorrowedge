@@ -42,6 +42,71 @@ describe("cockpit view model", () => {
     expect(vm.sessionMeta.fixtureMode).toBe(true);
   });
 
+  it("projects retrieved failure-memory influence into cockpit cards", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      failureMemory: {
+        premortem: {
+          schemaVersion: "failure-memory-premortem/v1",
+          task: "fix failing test",
+          selectedMemoryIds: ["mem_validation"],
+          rejected: [{ id: "mem_old", reason: "stale" }],
+          knownTraps: ["mem_validation: validation_failed"],
+          avoidRules: ["Preserve npm test"],
+          extraChecks: ["npm test"],
+          constraints: [{
+            id: "constraint_test",
+            kind: "test_command",
+            memoryId: "mem_validation",
+            failureClass: "validation_failed",
+            text: "Run npm test before approving.",
+            command: "npm test",
+            confidence: 0.9,
+            score: 8,
+            evidenceRefs: ["artifacts/stderr.txt"]
+          }]
+        },
+        coderConstraints: [{
+          id: "constraint_test",
+          kind: "test_command",
+          memoryId: "mem_validation",
+          failureClass: "validation_failed",
+          text: "Run npm test before approving.",
+          command: "npm test",
+          confidence: 0.9,
+          score: 8,
+          evidenceRefs: ["artifacts/stderr.txt"]
+        }],
+        reviewAssessments: [{
+          candidateId: "candidate_a",
+          memoryIds: ["mem_validation"],
+          memoryViolations: [],
+          memoryAlignment: ["keeps memory-required verifier: npm test"],
+          penalty: 0
+        }]
+      },
+      events: [{
+        id: "event_memory",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: "session_invariant",
+        mode: "partial",
+        type: "memory_retrieval",
+        phase: "planning",
+        role: "planner",
+        retrievalStage: "premortem",
+        selectedMemoryIds: ["mem_validation"],
+        rejectedCount: 1,
+        constraintCount: 1,
+        artifactRef: "artifacts/memory/memory_1.json",
+        summary: "pre-mortem selected 1 memory"
+      }]
+    }));
+
+    expect(vm.memoryInfluence?.selectedCount).toBe(1);
+    expect(vm.memoryInfluence?.rejectedCount).toBe(1);
+    expect(vm.memoryInfluence?.cards[0]?.score).toBe(8);
+    expect(vm.memoryInfluence?.cards.some((card) => card.stage === "review_guard" && card.alignment.length)).toBe(true);
+  });
+
   it("switches the main view to approval when a candidate waits for authorization", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-vm-approval-"));
     await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
