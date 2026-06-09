@@ -11,6 +11,12 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
           <h2>{t("drawer.title")}</h2>
           <button type="button" onClick={onClose} data-testid="detail-drawer-close">{t("drawer.close")}</button>
         </header>
+      <h3>{t("drawer.objectiveContract")}</h3>
+      <pre>{formatObjectiveContract(viewModel)}</pre>
+      <h3>{t("drawer.objectiveTrace")}</h3>
+      <pre>{formatObjectiveTrace(viewModel)}</pre>
+      <h3>{t("drawer.orchestrationPolicy")}</h3>
+      <pre>{formatOrchestrationPolicy(viewModel)}</pre>
       <h3>{t("drawer.approvalHistory")}</h3>
       <pre>{viewModel.approvalHistory.map((item) => [
         `${item.timestamp} ${item.approvalId} ${item.kind}/${item.status}`,
@@ -110,5 +116,63 @@ function formatRoleGraph(viewModel: CockpitViewModel): string {
     ...nodes,
     "",
     `stop=${graph.stopConditions.join(", ") || "-"}`
+  ].join("\n");
+}
+
+function formatObjectiveContract(viewModel: CockpitViewModel): string {
+  const contract = viewModel.objectiveContract;
+  if (!contract) return "-";
+  return [
+    `id=${contract.contractId}`,
+    `localObjective=${contract.localObjective}`,
+    `scenario=${contract.scenarioType}`,
+    `workflow=${contract.workflowKind}`,
+    `risk=${contract.riskLevel}`,
+    `source=${contract.source}`,
+    `verification=${contract.verificationStatus ?? "-"} score=${contract.verificationScore ?? "-"}`,
+    "",
+    "successCriteria:",
+    ...(contract.successCriteria ?? []).map((item) => `- ${item}`),
+    "failureCriteria:",
+    ...(contract.failureCriteria ?? []).map((item) => `- ${item}`),
+    "requiredEvidence:",
+    ...(contract.requiredEvidence ?? []).map((item) => `- ${item}`),
+    `allowedTools=${(contract.allowedTools ?? []).join(", ") || "-"}`,
+    `forbiddenActions=${(contract.forbiddenActions ?? []).join(", ") || "-"}`,
+    "stopCondition:",
+    `success=${(contract.stopCondition?.success ?? []).join(" | ") || "-"}`,
+    `partial=${(contract.stopCondition?.partial ?? []).join(" | ") || "-"}`,
+    `failure=${(contract.stopCondition?.failure ?? []).join(" | ") || "-"}`,
+    `unsafe=${(contract.stopCondition?.unsafe ?? []).join(" | ") || "-"}`
+  ].join("\n");
+}
+
+function formatObjectiveTrace(viewModel: CockpitViewModel): string {
+  const trace = viewModel.objectiveTrace;
+  if (!trace) return "-";
+  return [
+    `traceWritten=${trace.traceWritten ? "yes" : "no"}`,
+    `traceId=${trace.traceId ?? "-"}`,
+    `outcome=${trace.outcomeStatus ?? "-"}`,
+    `evidenceScore=${trace.evidenceScore ?? "-"}`,
+    `similarTraces=${(trace.similarTraceIds ?? []).join(", ") || "-"}`,
+    `lessonsReused=${(trace.lessonsReused ?? []).join(" | ") || "-"}`,
+    `failurePatternsAvoided=${(trace.failurePatternsAvoided ?? []).join(" | ") || "-"}`,
+    `missingEvidence=${(trace.missingEvidence ?? []).join(", ") || "-"}`
+  ].join("\n");
+}
+
+function formatOrchestrationPolicy(viewModel: CockpitViewModel): string {
+  const policy = viewModel.orchestrationPolicy;
+  if (!policy) return "-";
+  return [
+    `policyId=${policy.policyId}`,
+    `mode=${policy.mode}`,
+    `contractDepth=${policy.contractDepth}`,
+    `traceTopK=${policy.traceTopK}`,
+    `verificationStrictness=${policy.verificationStrictness}`,
+    `repairRounds=${policy.repairRounds}`,
+    `stopMode=${policy.stopMode}`,
+    `fitness=${policy.fitness ?? "-"}`
   ].join("\n");
 }

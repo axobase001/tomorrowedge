@@ -6,7 +6,7 @@ import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
-import { assertCockpitWebZipEntries, createZipArchive } from "../../scripts/package-zip.js";
+import { assertCockpitWebZipEntries, assertNoLocalStateEntries, createZipArchive } from "../../scripts/package-zip.js";
 import { assertCockpitAssetPaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
 
 describe("release verification scripts", () => {
@@ -99,6 +99,12 @@ describe("release verification scripts", () => {
       "tomorrowedge/dist/cockpit-web/index.html",
       "tomorrowedge/dist/cockpit-web/assets/index-abc.js"
     ])).toThrow("dist/cockpit-web/assets/*.css");
+  });
+
+  it("rejects nested local TomorrowEdge state in zip archives", () => {
+    expect(() => assertNoLocalStateEntries([
+      { entryName: "tomorrowedge/tests/fixtures/sample/.tomorrowedge/objective-traces.jsonl", sourcePath: "ignored" }
+    ])).toThrow("local .tomorrowedge state");
   });
 
   it("parses npm pack output and requires cockpit web assets", () => {

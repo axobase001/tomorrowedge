@@ -21,6 +21,10 @@ import type { RoleGraph } from "../orchestration/roleGraph.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import type { TaskGovernanceDecision } from "../goal/taskGovernance.js";
 import type { FailureMemoryInfluenceState } from "../memory/failureMemoryInfluence.js";
+import type { ScenarioProfile } from "../scenarios/scenarioTypes.js";
+import type { ObjectiveContractV1, ContractVerificationResult } from "../contracts/objectiveContract.js";
+import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
+import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -45,6 +49,12 @@ export type AgentGraphState = {
   workflowKind?: WorkflowKind;
   taskGovernance?: TaskGovernanceDecision;
   roleGraph?: RoleGraph;
+  scenarioProfile?: ScenarioProfile;
+  objectiveContract?: ObjectiveContractV1;
+  contractVerification?: ContractVerificationResult;
+  retrievedObjectiveTraces?: ObjectiveTraceV1[];
+  orchestrationPolicy?: OrchestrationPolicyGenome;
+  objectiveTrace?: ObjectiveTraceV1;
   failureMemory?: FailureMemoryInfluenceState;
   budgetRuntime: BudgetRuntimeState;
   budgetStatus?: ModelBudgetStatus;

@@ -48,6 +48,14 @@ export const defaultConfig: TomorrowEdgeConfig = {
     review_guard: true,
     repair_context: true
   },
+  self_iterating_orchestration: {
+    enabled: true,
+    mode: "trace_guided",
+    allow_policy_mutation: false,
+    allow_offline_evolution: true,
+    max_policy_variants: 8,
+    elite_retention: 2
+  },
   failure_memory: {
     enabled: false,
     storage_scope: "project",

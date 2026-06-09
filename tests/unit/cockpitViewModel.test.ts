@@ -25,6 +25,11 @@ describe("cockpit view model", () => {
     expect(vm.roleGraph?.workflowKind).toBe("debate_patch");
     expect(vm.capabilities.find((item) => item.id === "provider-routing")?.status).toBe("available");
     expect(vm.capabilities.find((item) => item.id === "workflow-ledger")?.readiness).toContain("event");
+    expect(vm.objectiveContract?.workflowKind).toBe("patch");
+    expect(vm.objectiveContract?.verificationStatus).toMatch(/passed|repaired|downgraded/);
+    expect(vm.objectiveTrace?.traceWritten).toBe(true);
+    expect(vm.objectiveTrace?.traceId).toBeTruthy();
+    expect(vm.orchestrationPolicy?.policyId).toBeTruthy();
   });
 
   it("marks live snapshots as connected and non-stale", async () => {

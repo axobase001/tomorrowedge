@@ -58,6 +58,9 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     capabilities: buildCapabilityDashboard(state),
     memoryInfluence: buildMemoryInfluence(state),
     errorLoopTimeline: buildErrorLoopTimeline(state),
+    objectiveContract: buildObjectiveContractSummary(state),
+    objectiveTrace: buildObjectiveTraceSummary(state),
+    orchestrationPolicy: buildOrchestrationPolicySummary(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -73,6 +76,60 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
       ref: artifact.ref,
       kind: artifact.ref.split(/[\\/]/)[1] ?? "artifact"
     }))
+  };
+}
+
+function buildObjectiveContractSummary(state?: AgentGraphState): CockpitViewModel["objectiveContract"] {
+  const contract = state?.objectiveContract;
+  if (!contract) return undefined;
+  return {
+    contractId: contract.contractId,
+    localObjective: contract.localObjective,
+    scenarioType: contract.scenarioType,
+    workflowKind: contract.workflowKind,
+    successCriteria: contract.successCriteria,
+    failureCriteria: contract.failureCriteria,
+    requiredEvidence: contract.requiredEvidence,
+    allowedTools: contract.allowedTools,
+    forbiddenActions: contract.forbiddenActions,
+    riskLevel: contract.riskLevel,
+    source: contract.source,
+    verificationStatus: state?.contractVerification?.status,
+    verificationScore: state?.contractVerification?.score,
+    stopCondition: contract.stopCondition
+  };
+}
+
+function buildObjectiveTraceSummary(state?: AgentGraphState): CockpitViewModel["objectiveTrace"] {
+  const contract = state?.objectiveContract;
+  const trace = state?.objectiveTrace;
+  if (!contract && !trace && !state?.retrievedObjectiveTraces?.length) return undefined;
+  return {
+    similarTraceIds: state?.retrievedObjectiveTraces?.map((item) => item.traceId) ?? contract?.traceHints.similarTraceIds ?? [],
+    lessonsReused: contract?.traceHints.reusedLessons ?? [],
+    failurePatternsAvoided: contract?.traceHints.avoidedFailurePatterns ?? [],
+    traceWritten: Boolean(trace),
+    traceId: trace?.traceId,
+    evidenceScore: trace?.evidenceSummary.evidenceScore,
+    outcomeStatus: trace?.outcome.finalStatus,
+    missingEvidence: trace?.evidenceSummary.missingEvidence ?? []
+  };
+}
+
+function buildOrchestrationPolicySummary(state?: AgentGraphState): CockpitViewModel["orchestrationPolicy"] {
+  const policy = state?.orchestrationPolicy;
+  if (!policy) return undefined;
+  const selected = state?.events.find((event) => event.type === "orchestration_policy_selected");
+  const mode = selected?.type === "orchestration_policy_selected" ? selected.policyMode : "trace_guided";
+  return {
+    policyId: policy.policyId,
+    mode,
+    contractDepth: policy.contractPolicy.contractDepth,
+    traceTopK: policy.tracePolicy.traceTopK,
+    verificationStrictness: policy.verificationPolicy.verificationStrictness,
+    repairRounds: policy.repairPolicy.maxRepairRounds,
+    stopMode: policy.stopPolicy.stopMode,
+    fitness: policy.metadata.fitness
   };
 }
 

@@ -429,6 +429,88 @@ export type MemoryPolicyEvent = BaseEvent & {
   reason: string;
 };
 
+export type ScenarioProfileEvent = BaseEvent & {
+  type: "scenario_profile";
+  scenarioType: "coding" | "research" | "document" | "debugging" | "refactor" | "analysis" | "planning" | "ops" | "unknown";
+  workflowKind: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
+  ambiguityLevel: "low" | "medium" | "high";
+  expectedDeliverable: string;
+  riskSignals: string[];
+  profileRef: string;
+};
+
+export type TraceRetrievalEvent = BaseEvent & {
+  type: "trace_retrieval";
+  selectedTraceIds: string[];
+  rejectedCount: number;
+  policyMode: "off" | "trace_guided" | "offline_evolution" | "experimental_online";
+  summary: string;
+  artifactRef?: string;
+};
+
+export type ObjectiveContractEvent = BaseEvent & {
+  type: "objective_contract";
+  contractId: string;
+  contractRef: string;
+  localObjective: string;
+  scenarioType: string;
+  workflowKind: string;
+  riskLevel: "low" | "medium" | "high";
+  source: "native" | "model" | "trace_guided" | "repaired";
+};
+
+export type ContractVerificationEvent = BaseEvent & {
+  type: "contract_verification";
+  contractId: string;
+  status: "passed" | "repaired" | "failed" | "downgraded";
+  score: number;
+  missing: string[];
+  violations: string[];
+  repairs: string[];
+  verificationRef: string;
+};
+
+export type OrchestrationPolicySelectedEvent = BaseEvent & {
+  type: "orchestration_policy_selected";
+  policyId: string;
+  policyMode: "off" | "trace_guided" | "offline_evolution" | "experimental_online";
+  contractDepth: "light" | "medium" | "strict";
+  traceTopK: number;
+  verificationStrictness: "light" | "medium" | "strict";
+  repairRounds: number;
+  stopMode: "early" | "balanced" | "evidence_strict";
+  policyRef: string;
+};
+
+export type OrchestrationPolicyScoredEvent = BaseEvent & {
+  type: "orchestration_policy_scored";
+  policyId: string;
+  finalFitness: number;
+  fitnessRef: string;
+};
+
+export type PolicyMutationEvent = BaseEvent & {
+  type: "policy_mutation";
+  parentPolicyId: string;
+  policyId: string;
+  mutationRef: string;
+};
+
+export type PolicyEvolutionEvent = BaseEvent & {
+  type: "policy_evolution";
+  selectedPolicyIds: string[];
+  evaluatedCount: number;
+  evolutionRef: string;
+};
+
+export type ObjectiveTraceWrittenEvent = BaseEvent & {
+  type: "objective_trace_written";
+  traceId: string;
+  traceRef: string;
+  outcomeStatus: "success" | "partial" | "failure" | "unsafe" | "aborted";
+  evidenceScore: number;
+};
+
 export type TomorrowEdgeEvent =
   | ModelCallEvent
   | AgentRunEvent
@@ -472,7 +554,16 @@ export type TomorrowEdgeEvent =
   | TraceCompletenessEvent
   | AgentCacheEvent
   | MemoryRetrievalEvent
-  | MemoryPolicyEvent;
+  | MemoryPolicyEvent
+  | ScenarioProfileEvent
+  | TraceRetrievalEvent
+  | ObjectiveContractEvent
+  | ContractVerificationEvent
+  | OrchestrationPolicySelectedEvent
+  | OrchestrationPolicyScoredEvent
+  | PolicyMutationEvent
+  | PolicyEvolutionEvent
+  | ObjectiveTraceWrittenEvent;
 
 export type EventArtifact = {
   ref: string;

@@ -210,6 +210,50 @@ export type CockpitErrorLoopTimelineSummary = {
   items: CockpitErrorLoopTimelineItem[];
 };
 
+export type CockpitObjectiveContractSummary = {
+  contractId: string;
+  localObjective: string;
+  scenarioType: string;
+  workflowKind: string;
+  successCriteria: string[];
+  failureCriteria: string[];
+  requiredEvidence: string[];
+  allowedTools: string[];
+  forbiddenActions: string[];
+  riskLevel: "low" | "medium" | "high";
+  source: string;
+  verificationStatus?: string;
+  verificationScore?: number;
+  stopCondition: {
+    success: string[];
+    partial: string[];
+    failure: string[];
+    unsafe: string[];
+  };
+};
+
+export type CockpitObjectiveTraceSummary = {
+  similarTraceIds: string[];
+  lessonsReused: string[];
+  failurePatternsAvoided: string[];
+  traceWritten: boolean;
+  traceId?: string;
+  evidenceScore?: number;
+  outcomeStatus?: string;
+  missingEvidence: string[];
+};
+
+export type CockpitOrchestrationPolicySummary = {
+  policyId: string;
+  mode: "off" | "trace_guided" | "offline_evolution" | "experimental_online";
+  contractDepth: string;
+  traceTopK: number;
+  verificationStrictness: string;
+  repairRounds: number;
+  stopMode: string;
+  fitness?: number;
+};
+
 export type CockpitViewModel = {
   version: "1";
   sessionId?: string;
@@ -230,6 +274,9 @@ export type CockpitViewModel = {
   capabilities: CockpitCapabilitySummary[];
   memoryInfluence?: CockpitMemoryInfluenceSummary;
   errorLoopTimeline?: CockpitErrorLoopTimelineSummary;
+  objectiveContract?: CockpitObjectiveContractSummary;
+  objectiveTrace?: CockpitObjectiveTraceSummary;
+  orchestrationPolicy?: CockpitOrchestrationPolicySummary;
   currentApproval?: CockpitApproval;
   main: {
     title: string;

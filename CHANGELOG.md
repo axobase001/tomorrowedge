@@ -7,6 +7,35 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-10
+
+1.3.0 introduces the contract-first self-iterating orchestration layer:
+TomorrowEdge now profiles the user scenario, generates and verifies an
+Objective Contract before planning, records compact objective-action-feedback
+traces after runs, and can score/evolve bounded orchestration policies offline.
+
+### Added
+
+- Contract-first Objective Contract lifecycle: scenario profiling, native
+  contract generation, contract verification/repair, contract-derived plans,
+  and planner overlay so model/native plans cannot relax workflow, evidence,
+  permission, or stop-condition requirements.
+- Objective-action-feedback trace memory in `.tomorrowedge/objective-traces.jsonl`,
+  with `tedge trace inspect` and `tedge trace list --scenario` for compact
+  replay learning over the full event ledger.
+- Trace-guided orchestration policies with bounded policy genomes, run scoring,
+  `tedge policy inspect`, offline `tedge policy evolve`, and `tedge policy eval`.
+- GUI detail drawer sections for Objective Contract, Objective Trace, and
+  Orchestration Policy summaries through the shared cockpit view model.
+- Documentation for Objective Contracts, Trace Memory, Self-Iterating
+  Orchestration, and Policy Evolution.
+
+### Changed
+
+- Read-only intent is preserved through contract overlay, so inspect/list/read
+  requests do not become patch workflows merely because the scenario contains
+  bug or debugging language.
+
 ## [1.2.15] - 2026-06-10
 
 1.2.15 turns the latest issue sweep into a release: failure-memory retrieval now

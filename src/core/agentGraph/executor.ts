@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole, AgentRunState } from "../../schemas/agentTask.js";
+import { makeId } from "../../utils/ids.js";
 import { nowIso } from "../../utils/time.js";
 import { CoderAgent } from "../agents/coder.js";
 import { ExplorerAgent } from "../agents/explorer.js";
@@ -74,6 +75,17 @@ import {
 import { explainFailureMemories } from "../memory/taskMemory.js";
 import { decideRepairPolicy, type RepairPolicyDecision } from "../errorLoop/repairPolicy.js";
 import { applyMemoryRetrievalPolicy, type MemoryRetrievalPolicyDecision } from "../memory/retrievalPolicy.js";
+import { profileScenario } from "../scenarios/scenarioProfiler.js";
+import { generateNativeObjectiveContract } from "../contracts/contractGenerator.js";
+import { verifyAndRepairContract } from "../contracts/contractVerifier.js";
+import { contractToPlan, overlayPlanWithContract } from "../contracts/contractToPlan.js";
+import { renderObjectiveContractArtifact } from "../contracts/contractArtifacts.js";
+import { retrieveSimilar, addTrace } from "../traces/traceStore.js";
+import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
+import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome, type SelfIterationMode } from "../orchestrationPolicy/orchestrationPolicy.js";
+import { loadBestPolicy, savePolicyScore } from "../orchestrationPolicy/policyStore.js";
+import { evaluatePolicyFitness, policyWithFitness } from "../orchestrationPolicy/policyEvaluator.js";
+import { evolvePoliciesOffline } from "../orchestrationPolicy/policyEvolution.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -118,11 +130,12 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   const workflowIntent = await runRoutingIntentPhase(runtime, state);
   await runExternalCorePhase(runtime, state);
   await runVisionPhase(runtime, state);
+  await runContractPhase(runtime, state, workflowIntent);
   await runPlanningPhase(runtime, state, workflowIntent);
   await runExplorationPhase(runtime, state);
   if (isReadOnlyPlan(state.plan!)) {
     await maybeRunGovernedReadOnlyAdvisory({ cwd, goal, config, router: runtime.router, ledger: runtime.ledger, state, access: runtime.access });
-    return finalizeReadOnlyState(cwd, state, runtime.ledger, runtime.router);
+    return finalizeReadOnlyState(runtime, state);
   }
 
   await runCandidatePhase(runtime, state);
@@ -130,7 +143,7 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
   await runLiveAdvisoryPhase(runtime, state);
   await runPatchApplicationPhase(runtime, state);
   await runVerificationAndRepairPhase(runtime, state);
-  return finalizeState(state, runtime.ledger, runtime.router);
+  return finalizeState(runtime, state);
 }
 
 function createOfflineGraphRuntime(cwd: string, goal: string, config: TomorrowEdgeConfig, options: OfflineGraphOptions): OfflineGraphRuntime {
@@ -254,6 +267,119 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
   return workflowIntent;
 }
 
+async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
+  const { access, config, cwd, goal, imagePaths, ledger } = runtime;
+  const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: access.mode, hasImageInputs: imagePaths.length > 0 });
+  state.scenarioProfile = scenarioProfile;
+  ledger.append({
+    type: "scenario_profile",
+    phase: "planning",
+    role: "planner",
+    scenarioType: scenarioProfile.scenarioType,
+    workflowKind: scenarioProfile.likelyWorkflowKind,
+    ambiguityLevel: scenarioProfile.ambiguityLevel,
+    expectedDeliverable: scenarioProfile.expectedDeliverable,
+    riskSignals: scenarioProfile.riskSignals,
+    profileRef: ledger.writeArtifact("scenario_profiles", JSON.stringify(scenarioProfile, null, 2), "json")
+  });
+
+  const policyMode = selfIterationMode(config);
+  const policy = await selectOrchestrationPolicy(cwd, policyMode, scenarioProfile.scenarioType);
+  state.orchestrationPolicy = policy;
+  ledger.append({
+    type: "orchestration_policy_selected",
+    phase: "planning",
+    role: "planner",
+    policyId: policy.policyId,
+    policyMode,
+    contractDepth: policy.contractPolicy.contractDepth,
+    traceTopK: policy.tracePolicy.traceTopK,
+    verificationStrictness: policy.verificationPolicy.verificationStrictness,
+    repairRounds: policy.repairPolicy.maxRepairRounds,
+    stopMode: policy.stopPolicy.stopMode,
+    policyRef: ledger.writeArtifact("policies", JSON.stringify(policy, null, 2), "json")
+  });
+
+  const retrievedTraces = policyMode === "off" ? [] : await retrieveSimilar(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK);
+  state.retrievedObjectiveTraces = retrievedTraces;
+  ledger.append({
+    type: "trace_retrieval",
+    phase: "memory",
+    role: "planner",
+    selectedTraceIds: retrievedTraces.map((trace) => trace.traceId),
+    rejectedCount: 0,
+    policyMode,
+    summary: retrievedTraces.length ? `Retrieved ${retrievedTraces.length} objective-action-feedback trace(s).` : "No similar objective trace found.",
+    artifactRef: ledger.writeArtifact("objective_trace_retrieval", JSON.stringify(retrievedTraces.map((trace) => ({
+      traceId: trace.traceId,
+      scenarioType: trace.scenarioProfile.scenarioType,
+      workflowKind: trace.planSummary.workflowKind,
+      finalStatus: trace.outcome.finalStatus,
+      lessons: trace.outcome.lessons
+    })), null, 2), "json")
+  });
+
+  const generated = generateNativeObjectiveContract({
+    goal,
+    workflowIntent,
+    scenarioProfile,
+    retrievedTraces,
+    config,
+    accessMode: access.mode
+  });
+  const { contract, verification } = verifyAndRepairContract(generated, {
+    accessMode: access.mode,
+    workflowIntent,
+    scenarioProfile,
+    config
+  });
+  state.objectiveContract = contract;
+  state.contractVerification = verification;
+  state.workflowKind = contract.workflowKind;
+  ledger.append({
+    type: "objective_contract",
+    phase: "planning",
+    role: "planner",
+    contractId: contract.contractId,
+    contractRef: ledger.writeArtifact("objective_contracts", renderObjectiveContractArtifact(contract), "json"),
+    localObjective: contract.localObjective,
+    scenarioType: contract.scenarioType,
+    workflowKind: contract.workflowKind,
+    riskLevel: contract.riskLevel,
+    source: contract.source
+  });
+  ledger.append({
+    type: "contract_verification",
+    phase: "planning",
+    role: "planner",
+    contractId: contract.contractId,
+    status: verification.status,
+    score: verification.score,
+    missing: verification.missing,
+    violations: verification.violations,
+    repairs: verification.repairs,
+    verificationRef: ledger.writeArtifact("contract_verifications", JSON.stringify(verification, null, 2), "json")
+  });
+}
+
+async function selectOrchestrationPolicy(cwd: string, mode: SelfIterationMode, scenarioType: NonNullable<AgentGraphState["scenarioProfile"]>["scenarioType"]): Promise<OrchestrationPolicyGenome> {
+  if (mode === "off") return defaultOrchestrationPolicy();
+  const policy = await loadBestPolicy(cwd, scenarioType);
+  return {
+    ...policy,
+    metadata: {
+      ...policy.metadata,
+      source: policy.metadata.source === "default" ? "default" : "selected",
+      scenarioType
+    }
+  };
+}
+
+function selfIterationMode(config: TomorrowEdgeConfig): SelfIterationMode {
+  if (!config.self_iterating_orchestration.enabled) return "off";
+  return config.self_iterating_orchestration.mode;
+}
+
 async function runExternalCorePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { access, conversationTarget, cwd, externalAgents, goal, ledger, router } = runtime;
   const externalCore = externalProfileForRole(router, externalAgents, "core");
@@ -346,7 +472,19 @@ async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphSta
 async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
   const { access, config, cwd, externalAgents, goal, imagePaths, ledger, options, router, conversationTarget } = runtime;
   const planner = new PlannerAgent();
-  const plannerGoal = [targetPromptPrefix(conversationTarget), goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
+  const contractPlan = state.objectiveContract ? contractToPlan(state.objectiveContract) : undefined;
+  const contractPrompt = state.objectiveContract
+    ? [
+        "Objective Contract:",
+        `localObjective=${state.objectiveContract.localObjective}`,
+        `successCriteria=${state.objectiveContract.successCriteria.join(" | ")}`,
+        `requiredEvidence=${state.objectiveContract.requiredEvidence.join(" | ")}`,
+        `allowedTools=${state.objectiveContract.allowedTools.join(", ")}`,
+        `forbiddenActions=${state.objectiveContract.forbiddenActions.join(", ")}`,
+        `stopCondition.success=${state.objectiveContract.stopCondition.success.join(" | ")}`
+      ].join("\n")
+    : undefined;
+  const plannerGoal = [targetPromptPrefix(conversationTarget), contractPrompt, goal, state.visualSpec?.handoffPrompt].filter(Boolean).join("\n\n");
   const externalPlanner = externalProfileForRole(router, externalAgents, "planner");
   const planFromExternalCore = Boolean(state.plan);
   const cachedPlan = !state.plan && !externalPlanner ? getCachedPlan(cwd, plannerGoal) : undefined;
@@ -359,8 +497,8 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
       cwd,
       profile: externalPlanner,
       role: "planner",
-      prompt: `Create a TomorrowEdge plan for this goal: ${plannerGoal}`,
-      context: { goal: plannerGoal, visualSpec: state.visualSpec, routing: state.routing },
+      prompt: `Create a TomorrowEdge plan from this Objective Contract and goal: ${plannerGoal}`,
+      context: { goal: plannerGoal, objectiveContract: state.objectiveContract, visualSpec: state.visualSpec, routing: state.routing },
       ledger
     });
     const plan = normalizeExternalPlan(result.payload, goal);
@@ -372,13 +510,16 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     budgetFallback: () => planner.run({ goal: plannerGoal }),
     budgetFallbackLabel: "native planner"
   } : "offline");
+  state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract) : state.plan ?? contractPlan;
   if (!externalPlanner && !planFromExternalCore && !cachedPlan && state.plan && workflowIntent.requiresPatchWorkflow) {
     const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
     if (modelPlan.plan) {
-      state.plan = {
-        ...modelPlan.plan,
-        constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints])
-      };
+      state.plan = state.objectiveContract
+        ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints]) }, state.objectiveContract)
+        : {
+            ...modelPlan.plan,
+            constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints])
+          };
       updateCapabilityStep(state, "planner", "success", "planner completed");
       ledger.append({
         type: "evidence_update",
@@ -400,6 +541,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   }
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
+  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract);
   state.taskGovernance = await classifyTaskGovernance({ goal, plan: state.plan, workflowIntent, config, router, ledger, localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed });
   ledger.append({
     type: "task_governance",
@@ -415,6 +557,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     fallbackUsed: state.taskGovernance.fallbackUsed
   });
   state.plan = applyTaskGovernanceToPlan(state.plan, state.taskGovernance);
+  if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract);
   if (!externalPlanner) {
     rememberPlan(cwd, plannerGoal, state.plan);
     ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "write", keyHint: plannerGoal.slice(0, 80) });
@@ -1095,7 +1238,8 @@ function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
   });
 }
 
-async function finalizeState(state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {
+async function finalizeState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
+  const { ledger, router } = runtime;
   const summarizer = new SummarizerAgent();
   try {
     state.finalSummary = await runAgentState(state, ledger, router, "summarizer", () =>
@@ -1123,12 +1267,13 @@ async function finalizeState(state: AgentGraphState, ledger: EventLedger, router
       suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
     };
   }
-  appendFinalSummaryEvents(state, ledger);
+  await appendFinalSummaryEvents(state, ledger, runtime);
   await releaseExternalAgentProcessPool();
   return state;
 }
 
-async function finalizeReadOnlyState(cwd: string, state: AgentGraphState, ledger: EventLedger, router: ModelRouter): Promise<AgentGraphState> {
+async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
+  const { cwd, ledger, router } = runtime;
   const result = await runAgentState(state, ledger, router, "summarizer", () =>
     buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
   , "offline");
@@ -1149,12 +1294,12 @@ async function finalizeReadOnlyState(cwd: string, state: AgentGraphState, ledger
     risksRemaining: [],
     suggestedCommitMessage: "chore: no code changes"
   };
-  appendFinalSummaryEvents(state, ledger);
+  await appendFinalSummaryEvents(state, ledger, runtime);
   await releaseExternalAgentProcessPool();
   return state;
 }
 
-function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger): void {
+async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
   if (!state.finalSummary) throw new Error("Cannot finalize workflow without a final summary.");
   ledger.append({
     type: "summary",
@@ -1180,6 +1325,225 @@ function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger): 
     missing: state.traceCompleteness.missing,
     workflowKind
   });
+  await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
+}
+
+async function writeObjectiveTraceAndPolicyEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
+  if (!state.scenarioProfile || !state.objectiveContract || !state.contractVerification) return;
+  const trace = buildObjectiveTrace(state, runtime);
+  state.objectiveTrace = trace;
+  const traceRef = ledger.writeArtifact("objective_traces", JSON.stringify(trace, null, 2), "json");
+  await addTrace(runtime.cwd, trace);
+  ledger.append({
+    type: "objective_trace_written",
+    phase: "memory",
+    role: "summarizer",
+    traceId: trace.traceId,
+    traceRef,
+    outcomeStatus: trace.outcome.finalStatus,
+    evidenceScore: trace.evidenceSummary.evidenceScore
+  });
+  if (state.orchestrationPolicy) {
+    const fitness = evaluatePolicyFitness(state.orchestrationPolicy, trace, state);
+    const scoredPolicy = policyWithFitness({
+      ...state.orchestrationPolicy,
+      metadata: {
+        ...state.orchestrationPolicy.metadata,
+        scenarioType: state.scenarioProfile.scenarioType
+      }
+    }, fitness);
+    state.orchestrationPolicy = scoredPolicy;
+    ledger.append({
+      type: "orchestration_policy_scored",
+      phase: "memory",
+      role: "summarizer",
+      policyId: scoredPolicy.policyId,
+      finalFitness: fitness.finalFitness,
+      fitnessRef: ledger.writeArtifact("policy_fitness", JSON.stringify(fitness, null, 2), "json")
+    });
+    await savePolicyScore(runtime.cwd, scoredPolicy);
+    await maybeRecordPolicyEvolution(runtime, state, trace, scoredPolicy);
+  }
+}
+
+async function maybeRecordPolicyEvolution(runtime: OfflineGraphRuntime, state: AgentGraphState, trace: ObjectiveTraceV1, policy: OrchestrationPolicyGenome): Promise<void> {
+  const { config, ledger } = runtime;
+  const mode = selfIterationMode(config);
+  const enabled = mode === "offline_evolution" || (mode === "experimental_online" && config.self_iterating_orchestration.allow_policy_mutation);
+  if (!enabled || !config.self_iterating_orchestration.allow_offline_evolution) return;
+  const result = evolvePoliciesOffline({
+    basePolicy: policy,
+    traces: [trace, ...(state.retrievedObjectiveTraces ?? [])],
+    maxPolicyVariants: config.self_iterating_orchestration.max_policy_variants,
+    eliteRetention: config.self_iterating_orchestration.elite_retention
+  });
+  for (const variant of result.variants) {
+    ledger.append({
+      type: "policy_mutation",
+      phase: "memory",
+      role: "planner",
+      parentPolicyId: policy.policyId,
+      policyId: variant.policyId,
+      mutationRef: ledger.writeArtifact("policy_mutations", JSON.stringify(variant, null, 2), "json")
+    });
+  }
+  ledger.append({
+    type: "policy_evolution",
+    phase: "memory",
+    role: "planner",
+    selectedPolicyIds: result.selected.map((item) => item.policyId),
+    evaluatedCount: result.scored.length,
+    evolutionRef: ledger.writeArtifact("policy_evolution", JSON.stringify(result, null, 2), "json")
+  });
+  for (const selected of result.selected) await savePolicyScore(runtime.cwd, selected);
+}
+
+function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntime): ObjectiveTraceV1 {
+  const contract = state.objectiveContract!;
+  const verification = state.contractVerification!;
+  const scenarioProfile = state.scenarioProfile!;
+  const evidenceRefs = collectEvidencePacketRefs(state);
+  const requiredEvidenceSatisfied = satisfiedEvidence(contract.requiredEvidence, state);
+  const missingEvidence = contract.requiredEvidence.filter((item) => !requiredEvidenceSatisfied.includes(item));
+  const finalStatus = finalTraceStatus(state);
+  return {
+    schemaVersion: "objective-trace/v1",
+    traceId: makeId("objective_trace"),
+    runId: state.sessionId,
+    createdAt: nowIso(),
+    goal: state.goal,
+    scenarioProfile,
+    contract,
+    contractVerification: verification,
+    planSummary: {
+      workflowKind: state.workflowKind ?? workflowKindFromPlan(state.plan),
+      steps: state.plan?.steps.map((step) => step.title) ?? [],
+      allowedPhases: state.plan?.allowedPhases ?? contract.allowedPhases,
+      verificationCommands: state.plan?.verificationCommands ?? []
+    },
+    roleGraphSummary: {
+      rolesUsed: uniqueAgentRoles(state.agents.map((agent) => agent.role)),
+      routingDecisions: state.routing.assignments.map((assignment) => `${assignment.role}->${assignment.provider}/${assignment.model}: ${assignment.reason}`),
+      fallbackDecisions: state.events.filter((event) => event.type === "fallback_to_native" || event.type === "provider_fallback").map((event) => eventSummaryForTrace(event))
+    },
+    executionSummary: {
+      actions: state.events.filter((event) => ["patch_candidate", "patch_apply", "shell_run", "repair_attempt", "review_decision", "judge_decision"].includes(event.type)).map(eventSummaryForTrace),
+      toolCalls: state.events.filter((event) => ["file_read", "shell_run", "patch_apply", "context_select"].includes(event.type)).map(eventSummaryForTrace),
+      observations: state.events.filter((event) => event.type === "outcome_observation").map(eventSummaryForTrace),
+      shellRuns: state.runResults.length,
+      filesTouched: state.changedFiles
+    },
+    evidenceSummary: {
+      evidencePacketRefs: evidenceRefs,
+      requiredEvidenceSatisfied,
+      missingEvidence,
+      evidenceScore: evidenceScore(requiredEvidenceSatisfied.length, contract.requiredEvidence.length, verification)
+    },
+    verificationSummary: {
+      status: finalStatus === "success" ? "success" : finalStatus === "partial" ? "partial" : finalStatus === "unsafe" ? "unsafe" : finalStatus === "failure" ? "failure" : "uncertain",
+      passedCriteria: finalStatus === "success" ? contract.successCriteria : [],
+      failedCriteria: finalStatus === "success" ? [] : contract.failureCriteria,
+      reviewerDecision: state.review?.overallRecommendation,
+      judgeDecision: state.judge?.decision
+    },
+    repairSummary: {
+      repairAttempts: state.repairCandidates.length,
+      recovered: state.repairCandidates.length > 0 && state.runResults.at(-1)?.success === true,
+      recurringFailurePattern: state.events.find((event) => event.type === "repair_policy" && event.occurrence > 1 && "failureSignature" in event)?.type === "repair_policy"
+        ? (state.events.find((event) => event.type === "repair_policy" && event.occurrence > 1) as Extract<typeof state.events[number], { type: "repair_policy" }>).failureSignature
+        : undefined
+    },
+    costSummary: {
+      tokens: state.usageSummary.totalTokens,
+      toolCalls: state.events.filter((event) => ["file_read", "shell_run", "patch_apply", "context_select"].includes(event.type)).length,
+      shellRuns: state.runResults.length,
+      wallTimeMs: Date.now() - runtime.startedAtMs,
+      estimatedCostUsd: state.usageSummary.estimatedCostUsd
+    },
+    feedback: {
+      implicitSignals: implicitFeedbackSignals(state)
+    },
+    outcome: {
+      finalStatus,
+      failureType: finalStatus === "success" ? undefined : workflowStopReason(state),
+      lessons: objectiveTraceLessons(state, missingEvidence)
+    }
+  };
+}
+
+function finalTraceStatus(state: AgentGraphState): ObjectiveTraceV1["outcome"]["finalStatus"] {
+  if (state.contractVerification?.status === "failed") return "unsafe";
+  if (state.finalSummary?.result === "completed") return "success";
+  if (state.finalSummary?.result === "failed") return "failure";
+  if (state.finalSummary?.result === "aborted") return "aborted";
+  return "partial";
+}
+
+function collectEvidencePacketRefs(state: AgentGraphState): string[] {
+  return state.events
+    .filter((event) => event.type === "evidence_packet")
+    .map((event) => event.type === "evidence_packet" ? event.packetRef : "")
+    .filter(Boolean);
+}
+
+function satisfiedEvidence(requiredEvidence: string[], state: AgentGraphState): string[] {
+  const eventTypes = new Set(state.events.map((event) => event.type));
+  const artifacts = state.eventArtifacts.map((artifact) => artifact.ref).join("\n").toLowerCase();
+  return requiredEvidence.filter((item) => {
+    const normalized = item.toLowerCase();
+    if (normalized.includes("contract")) return eventTypes.has("objective_contract") && eventTypes.has("contract_verification");
+    if (normalized.includes("patch") || normalized.includes("diff")) return eventTypes.has("patch_candidate") || artifacts.includes("diffs/");
+    if (normalized.includes("review")) return eventTypes.has("review_decision");
+    if (normalized.includes("judge")) return eventTypes.has("judge_decision");
+    if (normalized.includes("shell") || normalized.includes("verification") || normalized.includes("verifier")) return eventTypes.has("shell_run") || state.runResults.length > 0 || state.plan?.requiresPatchWorkflow === false;
+    if (normalized.includes("summary")) return Boolean(state.finalSummary);
+    if (normalized.includes("event ledger")) return state.events.length > 0;
+    if (normalized.includes("objective")) return eventTypes.has("objective_contract");
+    return Boolean(state.finalSummary);
+  });
+}
+
+function evidenceScore(satisfied: number, required: number, verification: NonNullable<AgentGraphState["contractVerification"]>): number {
+  const ratio = required ? satisfied / required : 1;
+  return Math.max(0, Math.min(100, Math.round(ratio * 75 + verification.score * 0.25)));
+}
+
+function implicitFeedbackSignals(state: AgentGraphState): string[] {
+  const signals: string[] = [];
+  if (state.access.patchApproved) signals.push("patch_approved");
+  if (state.access.shellApproved) signals.push("shell_approved");
+  if (state.runResults.some((result) => result.success)) signals.push("verification_passed");
+  if (state.events.some((event) => event.type === "fallback_to_native" || event.type === "provider_fallback")) signals.push("fallback_used");
+  return signals;
+}
+
+function objectiveTraceLessons(state: AgentGraphState, missingEvidence: string[]): string[] {
+  const lessons = [
+    `Contract-first workflow kind: ${state.workflowKind ?? workflowKindFromPlan(state.plan)}.`,
+    state.finalSummary?.result ? `Final status: ${state.finalSummary.result}.` : "Final summary missing."
+  ];
+  if (missingEvidence.length) lessons.push(`Missing evidence next time: ${missingEvidence.join(", ")}.`);
+  const failedRun = state.runResults.find((result) => !result.success && !result.skipped);
+  if (failedRun) lessons.push(`Verification failed on ${failedRun.command}; route repair with stdout/stderr evidence.`);
+  return lessons;
+}
+
+function uniqueAgentRoles(values: AgentRole[]): AgentRole[] {
+  return [...new Set(values)];
+}
+
+function eventSummaryForTrace(event: TomorrowEdgeEvent): string {
+  if (event.type === "patch_candidate") return `patch_candidate:${event.candidateId}:${event.summary}`;
+  if (event.type === "patch_apply") return `patch_apply:${event.applied ? "applied" : "blocked"}:${event.candidateId}`;
+  if (event.type === "shell_run") return `shell_run:${event.command}:success=${event.success}`;
+  if (event.type === "review_decision") return `review:${event.recommendation}`;
+  if (event.type === "judge_decision") return `judge:${event.decision}:${event.selectedCandidateId ?? "-"}`;
+  if (event.type === "fallback_to_native") return `fallback_to_native:${event.fallbackRole}:${event.reason}`;
+  if (event.type === "provider_fallback") return `provider_fallback:${event.fromProvider}->${event.toProvider}:${event.reason}`;
+  if (event.type === "context_select") return `context_select:${event.selectedFiles.length} files`;
+  if (event.type === "file_read") return `file_read:${event.path}`;
+  if (event.type === "outcome_observation") return `observation:${event.target}:${event.observedOutcome}:${event.mismatchType}`;
+  return `${event.type}:${event.phase}`;
 }
 
 function workflowStopReason(state: AgentGraphState): string {

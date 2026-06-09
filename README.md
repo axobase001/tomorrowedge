@@ -45,8 +45,9 @@ OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么�
 
 ## 当前版本
 
-当前版本：`1.2.15`。
+当前版本：`1.3.0`。
 
+- `1.3.0` introduces the contract-first self-iterating orchestration layer: Objective Contracts before planning, objective-action-feedback trace memory after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI inspection surfaces for contract, trace, and policy state.
 - `1.2.15` releases the failure-memory/error-loop upgrade: retrieval policy now supports balanced exploit, forced exploit, forced exploration, and deterministic random control; failure lessons store scoped correction rules and verification status; error-loop experiments export falsifiable hypothesis metrics; and ablation runs can compare memory-off, write-only, retrieve-only, success-only, failure-only, and random-control modes.
 - `1.2.14` clears the P0-P2 issue sweep: OpenRouter display labels now canonicalize to real model IDs, model discovery now refreshes common non-OpenRouter providers, provider tests smoke-test the selected model, verbose trace output compresses huge context exclusions, GUI final/failure panels show user-facing results and diagnosis, artifact refs are clickable, saved sessions can be renamed/deleted, live agent status updates telemetry, pre-judge reviewer/judge model advice feeds debate evidence, workflow simulation now runs through the NativeBackend dry-run path, local cockpit URLs no longer expose nonce tokens in the address bar, strong-agent role budgets now also debit the global strong-agent pool, parallel candidate state is normalized before review, document-only deliverables avoid irrelevant repository test runs, and capability docs clarify env/local-env API key storage versus planned keychain/encrypted storage.
 - `1.2.13` clears the next GUI orchestration issue batch: the composer can choose target roles and run mode (`auto` / `fixture` / `offline` / `live`), clears submitted commands after acceptance, GUI runs now use the orchestration backend registry plus CLI project preferences and strategy memory, fixture demos run in isolated sample workspaces, live patch/advisory calls emit invocation-time `budget_decision` events, Chinese file-creation tasks no longer collapse into read-only workflows, pending patch authorization is no longer shown as rejected history, patch failures leave waiting approval with a clear failure state, nested project-relative add-file paths are accepted, obvious mojibake/malformed HTML additions are blocked, the detail drawer shows the RoleGraph, configured no-auth local providers and external MCP agents no longer force fixture fallback, the key manager supports model-only provider saves and OpenRouter/free-model refresh, and custom OpenAI-compatible gateways can be added from the GUI.
@@ -89,6 +90,36 @@ Capability maturity: see [Capability Status](docs/CAPABILITY_STATUS.md) for the
 authoritative stable / experimental / placeholder / planned table.
 README GUI, desktop, and release-package promises are tracked in
 [README Promise Map](docs/README_PROMISE_MAP.md).
+
+## Self-Iterating Orchestration Layer
+
+TomorrowEdge now includes a contract-first, trace-guided orchestration layer.
+Before a workflow plans or edits, it creates an **Objective Contract**: the
+local objective, workflow kind, success/failure criteria, required evidence,
+allowed tools, forbidden actions, budget bounds, and stop conditions. Planner
+output can add detail, but it cannot relax the contract.
+
+After a run, TomorrowEdge writes an **objective-action-feedback trace**: a
+compact learning record over the full event ledger. Future runs can retrieve
+similar traces and reuse lessons without sending full logs, diffs, or shell
+output back to a model. Policy evolution is deliberately offline: it mutates
+only safe orchestration knobs and scores variants against stored traces.
+
+```bash
+tedge contract inspect latest
+tedge trace inspect latest
+tedge trace list --scenario debugging --limit 20
+tedge policy inspect
+tedge policy evolve --offline --generations 2 --population 4 --elite 2
+tedge policy eval
+```
+
+Docs:
+
+- [Objective Contracts](docs/OBJECTIVE_CONTRACTS.md)
+- [Trace Memory](docs/TRACE_MEMORY.md)
+- [Self-Iterating Orchestration](docs/SELF_ITERATING_ORCHESTRATION.md)
+- [Policy Evolution](docs/POLICY_EVOLUTION.md)
 
 ## 3-minute tryout
 
@@ -229,6 +260,12 @@ tedge mcp agents --diagnose
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
+tedge trace inspect latest
+tedge trace list --scenario debugging
+tedge contract inspect latest
+tedge policy inspect
+tedge policy evolve --offline
+tedge policy eval
 tedge export latest --format markdown
 tedge export latest --brief
 tedge export latest --format json --include-artifacts
@@ -478,7 +515,12 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes capabilities, rol
 
 ## Current Version
 
-Current version: `1.2.15`.
+Current version: `1.3.0`.
+
+`1.3.0` introduces the contract-first self-iterating orchestration layer:
+Objective Contracts before planning, objective-action-feedback trace memory
+after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI
+inspection surfaces for contract, trace, and policy state.
 
 `1.2.15` releases the failure-memory/error-loop upgrade: retrieval policy now
 supports balanced exploit, forced exploit, forced exploration, and deterministic

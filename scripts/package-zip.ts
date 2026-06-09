@@ -19,11 +19,15 @@ const ignore = [
   "node_modules/**",
   "dist/**",
   ".tomorrowedge/**",
+  "**/.tomorrowedge/**",
   ".vite/**",
+  "**/.vite/**",
   "coverage/**",
   "output/**",
   ".env",
   ".env.*",
+  "**/.env",
+  "**/.env.*",
   "*.zip",
   "*.tgz",
   "*.tar",
@@ -62,6 +66,7 @@ export async function runPackageZip(outputArg?: string): Promise<string> {
     sourcePath: path.join(cwd, file)
   }));
   assertNoEnvEntries(entries);
+  assertNoLocalStateEntries(entries);
   assertCockpitWebZipEntries(entries.map((entry) => entry.entryName));
 
   await mkdir(path.dirname(output), { recursive: true });
@@ -190,6 +195,11 @@ function normalizeZipEntryName(value: string): string {
 function assertNoEnvEntries(entries: ZipSourceEntry[]): void {
   const hits = entries.filter((entry) => /(^|\/)\.env(\.|$)/.test(normalizeZipEntryName(entry.entryName)));
   if (hits.length) throw new Error(`Refusing to package .env files: ${hits.map((entry) => entry.entryName).join(", ")}`);
+}
+
+export function assertNoLocalStateEntries(entries: ZipSourceEntry[]): void {
+  const hits = entries.filter((entry) => normalizeZipEntryName(entry.entryName).split("/").includes(".tomorrowedge"));
+  if (hits.length) throw new Error(`Refusing to package local .tomorrowedge state: ${hits.map((entry) => entry.entryName).join(", ")}`);
 }
 
 export function assertCockpitWebZipEntries(entryNames: string[]): void {

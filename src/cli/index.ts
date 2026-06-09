@@ -17,6 +17,9 @@ import { workflowCommand } from "./commands/workflow.js";
 import { memoryCommand, memoryCompactCommand, memoryDeleteCommand, memoryExplainCommand, memoryExportCommand, memoryFailuresCommand, memoryPreviewCommand, memoryShowCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
 import { traceCommand } from "./commands/trace.js";
+import { traceInspectCommand, traceListCommand } from "./commands/trace.js";
+import { contractInspectCommand } from "./commands/contract.js";
+import { policyEvalCommand, policyEvolveCommand, policyInspectCommand } from "./commands/policy.js";
 import { diagnosticsCommand } from "./commands/diagnostics.js";
 import { serveCommand } from "./commands/serve.js";
 import { desktopCommand } from "./commands/desktop.js";
@@ -155,7 +158,17 @@ program.command("doctor").description("Check local configuration and provider re
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 
-program.command("trace").description("Print a saved session event timeline").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").option("--diagnostics", "append routing, projection, fallback, budget, and trace completeness diagnostics").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { verbose?: boolean; diagnostics?: boolean; cwd?: string; workdir?: string }) => traceCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
+const trace = program.command("trace").description("Print or inspect saved session event timelines and objective traces").argument("[session-id]", "session id or latest", "latest").option("--verbose", "show artifact refs").option("--diagnostics", "append routing, projection, fallback, budget, and trace completeness diagnostics").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { verbose?: boolean; diagnostics?: boolean; cwd?: string; workdir?: string }) => traceCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
+trace.command("inspect").description("Inspect an objective-action-feedback trace").argument("[session-id]", "session id, trace id, or latest", "latest").option("--json", "print raw JSON").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { json?: boolean; cwd?: string; workdir?: string }) => traceInspectCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
+trace.command("list").description("List stored objective-action-feedback traces").option("--scenario <type>", "filter by scenario type").option("--limit <n>", "number of traces", "20").option("--json", "print raw JSON").action((options: { scenario?: string; limit?: string; json?: boolean }) => traceListCommand(cwd, options));
+
+const contract = program.command("contract").description("Inspect Objective Contracts");
+contract.command("inspect").description("Inspect a session Objective Contract").argument("[session-id]", "session id or latest", "latest").option("--json", "print raw JSON").action((sessionId: string, options: { json?: boolean }) => contractInspectCommand(cwd, sessionId, options));
+
+const policy = program.command("policy").description("Inspect or evolve orchestration policies");
+policy.command("inspect").description("Inspect the selected trace-guided orchestration policy").option("--json", "print raw JSON").action((options: { json?: boolean }) => policyInspectCommand(cwd, options));
+policy.command("evolve").description("Run offline policy evolution over stored objective traces").option("--offline", "use stored objective traces only", true).option("--generations <n>", "offline generations", "1").option("--population <n>", "mutated policy variants per generation").option("--elite <n>", "selected policies to retain").option("--json", "print raw JSON").action((options: { offline?: boolean; generations?: string; population?: string; elite?: string; json?: boolean }) => policyEvolveCommand(cwd, options));
+policy.command("eval").description("Evaluate the selected policy against stored traces").option("--taskset <path>", "optional taskset file to summarize alongside trace evaluation").option("--json", "print raw JSON").action((options: { taskset?: string; json?: boolean }) => policyEvalCommand(cwd, options));
 
 program.command("diagnostics").description("Inspect workflow diagnostics for a saved session").argument("[action]", "on, latest, or a session id", "latest").action((action: string) => diagnosticsCommand(cwd, action));
 

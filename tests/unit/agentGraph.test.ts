@@ -30,6 +30,7 @@ describe("offline agent graph", () => {
       "runRoutingIntentPhase",
       "runExternalCorePhase",
       "runVisionPhase",
+      "runContractPhase",
       "runPlanningPhase",
       "runExplorationPhase",
       "runCandidatePhase",
@@ -46,7 +47,7 @@ describe("offline agent graph", () => {
   it("runs without external providers", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "fix failing test without changing schema", defaultConfig);
-    expect(state.plan?.constraints[0]).toContain("Without");
+    expect(state.plan?.constraints.some((constraint) => constraint.includes("Without"))).toBe(true);
     expect(state.candidates.length).toBe(2);
     expect(state.review).toBeTruthy();
     expect(state.debateRounds.length).toBeGreaterThan(0);
@@ -55,14 +56,26 @@ describe("offline agent graph", () => {
     expect(state.evidencePackets.length).toBeGreaterThan(0);
     expect(state.providerViews.length).toBeGreaterThan(0);
     expect(state.traceCompleteness?.score).toBeGreaterThan(0);
+    expect(state.scenarioProfile?.scenarioType).toBe("debugging");
+    expect(state.objectiveContract?.workflowKind).toBe("patch");
+    expect(state.contractVerification?.status).toMatch(/passed|repaired|downgraded/);
+    expect(state.objectiveTrace?.outcome.finalStatus).toBeTruthy();
+    expect(state.orchestrationPolicy?.policyId).toBeTruthy();
     expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(false);
     expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "scenario_profile",
+      "trace_retrieval",
+      "objective_contract",
+      "contract_verification",
+      "orchestration_policy_selected",
       "routing_decision",
       "budget_preview",
       "artifact_projection",
       "context_projection",
       "evidence_packet",
       "workflow_stop_reason",
+      "objective_trace_written",
+      "orchestration_policy_scored",
       "trace_completeness"
     ]));
   });
@@ -143,6 +156,7 @@ describe("offline agent graph", () => {
     const evidence = state.finalSummary?.evidence.join("\n") ?? "";
 
     expect(state.plan?.taskType).toBe("analysis");
+    expect(state.objectiveContract?.workflowKind).toBe("read_only");
     expect(state.finalSummary?.result).toBe("completed");
     expect(evidence).toContain("Read-only request completed without patch generation.");
     expect(evidence).not.toContain(`${cwd}${path.sep}provider`);

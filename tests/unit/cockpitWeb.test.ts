@@ -45,6 +45,17 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("te-drawer open");
   });
 
+  it("renders self-iteration contract, trace, and policy sections in the drawer", () => {
+    const html = renderApp(sampleViewModel(), { drawerOpen: true });
+
+    expect(html).toContain("Objective contract");
+    expect(html).toContain("Objective trace");
+    expect(html).toContain("Orchestration policy");
+    expect(html).toContain("contract_test");
+    expect(html).toContain("trace_test");
+    expect(html).toContain("policy_test");
+  });
+
   it("shows composer connection status without clearing the controlled goal", () => {
     const html = renderApp(sampleViewModel(), { goal: "run a smoke task", statusMessage: "Workflow running..." });
 
@@ -578,6 +589,47 @@ function sampleViewModel(): CockpitViewModel {
       readiness: "1 provider(s): fixture.",
       refs: ["src/core/routing/policies.ts"]
     }],
+    objectiveContract: {
+      contractId: "contract_test",
+      scenarioType: "debugging",
+      workflowKind: "patch",
+      localObjective: "Fix the failing test with evidence.",
+      successCriteria: ["Test passes"],
+      failureCriteria: ["Verification fails"],
+      requiredEvidence: ["objective contract", "review decision"],
+      allowedTools: ["file_read", "patch_apply"],
+      forbiddenActions: ["bypass_event_ledger"],
+      riskLevel: "low",
+      source: "native",
+      verificationStatus: "passed",
+      verificationScore: 98,
+      stopCondition: {
+        success: ["criteria met"],
+        partial: ["approval pending"],
+        failure: ["verification failed"],
+        unsafe: ["forbidden action"]
+      }
+    },
+    objectiveTrace: {
+      similarTraceIds: [],
+      lessonsReused: ["reuse contract-first patch flow"],
+      failurePatternsAvoided: [],
+      traceWritten: true,
+      traceId: "trace_test",
+      evidenceScore: 83,
+      outcomeStatus: "partial",
+      missingEvidence: ["verification result"]
+    },
+    orchestrationPolicy: {
+      policyId: "policy_test",
+      mode: "trace_guided",
+      contractDepth: "medium",
+      traceTopK: 3,
+      verificationStrictness: "medium",
+      repairRounds: 2,
+      stopMode: "balanced",
+      fitness: 274
+    },
     main: { title: "Main", subtitle: "subtitle", body: "body", filesChanged: ["index.js"], testStatus: "not_run" },
     trace: [{ id: "event_1", timestamp: "2026-06-07T00:00:00.000Z", type: "plan", phase: "plan", summary: "planned" }],
     rawEvents: [],

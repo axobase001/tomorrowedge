@@ -4,8 +4,10 @@ import { accessModeSchema, type AccessMode } from "../../config/schema.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
 import { NativeBackend } from "../../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../../core/orchestration/registry.js";
+import { savePolicyScore } from "../../core/orchestrationPolicy/policyStore.js";
 import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
 import { getGitStatus } from "../../core/tools/gitTool.js";
+import { addTrace } from "../../core/traces/traceStore.js";
 import { renderCockpit } from "../renderCockpit.js";
 import { getWorkflowRecipe, materializeRecipeGoal } from "../../core/recipes/recipeLoader.js";
 import { liveOption, prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, isFixtureRun } from "../../core/runtime/runPreparation.js";
@@ -83,6 +85,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   }
   const state = await backend.runGraph(workspace.executionCwd, effectiveGoal, backendInput.options);
   const sessionPath = await saveSession(targetCwd, state, { failureMemory: config.failure_memory });
+  await persistRunLearning(targetCwd, state);
   if (options.headless) {
     const headlessPayload = {
       sessionPath,
@@ -94,6 +97,11 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
       approvals: state.approvals,
       capabilityRoute: state.capabilityRoute,
       conversationTarget: state.conversationTarget,
+      scenarioProfile: state.scenarioProfile,
+      objectiveContract: state.objectiveContract,
+      contractVerification: state.contractVerification,
+      objectiveTrace: state.objectiveTrace,
+      orchestrationPolicy: state.orchestrationPolicy,
       visualSpec: state.visualSpec,
       review: state.review,
       judge: state.judge,
@@ -111,6 +119,15 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     return;
   }
   await renderCockpit(state, config.project.safe_mode, workspace.executionCwd);
+}
+
+async function persistRunLearning(cwd: string, state: Awaited<ReturnType<NativeBackend["runGraph"]>>): Promise<void> {
+  if (state.objectiveTrace) {
+    await addTrace(cwd, state.objectiveTrace).catch(() => undefined);
+  }
+  if (state.orchestrationPolicy?.metadata.fitness !== undefined) {
+    await savePolicyScore(cwd, state.orchestrationPolicy).catch(() => undefined);
+  }
 }
 
 function parseAccessMode(mode?: string): AccessMode | undefined {

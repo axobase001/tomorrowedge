@@ -6,6 +6,10 @@ TomorrowEdge is split into stable contracts:
 - `core/routing`: role-conditioned model assignment
 - `core/model`: live provider calls, budget accounting, usage summaries, and fallback handling
 - `core/budget`: BudgetGate execution enforcement, budget previews, and per-role/global budget runtime state
+- `core/contracts`: Objective Contracts, contract verification/repair, and contract-to-plan overlay
+- `core/scenarios`: scenario profiling before planning and routing
+- `core/traces`: objective-action-feedback trace memory and retrieval
+- `core/orchestrationPolicy`: trace-guided policy genomes, scoring, and offline evolution
 - `core/events`: replayable full-access event ledger, artifact refs, trace rendering, and export support
 - `core/orchestration`: backend interface, native backend wrapper, and third-party adapter placeholders
 - `core/agentGraph`: workflow execution state
@@ -22,9 +26,12 @@ The native runtime separates route planning from execution governance:
 
 ```text
 access/privacy -> workflow intent -> workflow kind -> route proposal
-  -> budget preview -> planner -> post-plan reroute
+  -> budget preview -> scenario profile -> Objective Contract
+  -> contract verification/repair -> contract-derived planner
+  -> post-plan reroute
   -> BudgetGate before live/external invocation
   -> native fallback / block / execute
+  -> objective-action-feedback trace / policy score
 ```
 
 This means the cockpit can show a proposed strong-agent route without spending
@@ -38,6 +45,11 @@ interface and stream `TomorrowEdgeEvent` records back into the cockpit.
 Provider calls write `model_call:start`, `model_call:success`, and
 `model_call:failure` events when an event ledger is attached. Provider fallback
 is recorded as a first-class `provider_fallback` event, not only as a model note.
+
+See [OBJECTIVE_CONTRACTS.md](OBJECTIVE_CONTRACTS.md),
+[TRACE_MEMORY.md](TRACE_MEMORY.md), [SELF_ITERATING_ORCHESTRATION.md](SELF_ITERATING_ORCHESTRATION.md),
+and [POLICY_EVOLUTION.md](POLICY_EVOLUTION.md) for the v1.3 contract-first
+orchestration layer.
 
 See [LIVE_EVENT_STREAM.md](LIVE_EVENT_STREAM.md) for the planned transition from
 post-run ledger rendering to a live async event stream cockpit.

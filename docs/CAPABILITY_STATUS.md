@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.2.15. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.3.0. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -13,6 +13,9 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Strong-agent and per-role budget enforcement | stable | Live and external role invocations pass through BudgetGate before execution. Blocked planner/reviewer/judge/coder roles use native fallback where available, and tests guard against blocked+success contradictions. |
 | Workflow-kind trace completeness | stable | Read-only workflows use a read-only rubric and no longer require patch, review, judge, apply, or shell events. Patch workflows retain patch/review/judge/apply/shell requirements. |
 | Workflow-kind role graph foundation | experimental | `RoleGraph` describes read-only, patch, debate patch, high-risk patch, and repair-loop role dependencies. The current native executor still executes mostly sequentially while consuming the graph for workflow classification and future scheduler hardening. |
+| Objective Contracts | experimental | Each run now profiles the scenario, generates an Objective Contract before planning, verifies/repairs the contract, and overlays planner output so model/native plans cannot relax evidence, permission, workflow-kind, or stop-condition requirements. Inspect with `tedge contract inspect latest`. |
+| Objective-action-feedback trace memory | experimental | Runs write compact objective traces in addition to the raw event ledger. Traces summarize contract, plan, routing, evidence, verification, repair, cost, and lessons for future retrieval. Inspect with `tedge trace inspect latest` and `tedge trace list --scenario <type>`. |
+| Trace-guided orchestration policy | experimental | `self_iterating_orchestration` selects a policy genome, retrieves similar traces, scores the resulting run, and can evolve bounded policy variants offline with `tedge policy evolve --offline`. Mutation is limited to orchestration knobs; permissions, prompts, secrets, and source code are not self-modified. |
 | Workflow simulation executor projection | stable | `tedge workflow` now calls the NativeBackend through a dry-run patch/review/judge path, records the shared event ledger, and projects that state into the legacy workflow report instead of maintaining an independent provider loop. |
 | Parallel candidate production | experimental | Coder-A, Coder-B, and live patch generation now start in the same candidate-production stage, then merge candidates in a stable review order. |
 | Planner/explorer context cache | experimental | Native planner and explorer outputs can be reused in-process. Explorer cache keys include repository file size and mtime fingerprints so repo changes invalidate context selection. |

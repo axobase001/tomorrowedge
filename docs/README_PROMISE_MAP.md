@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.2.15 README product promises. Use this
+Authoritative map for TomorrowEdge 1.3.0 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -32,6 +32,10 @@ an implementation owner plus either a validation command or a tracking issue.
 | repair-approval-focus | Failed verification repair candidates remain visible as repair approval cards and browser approval applies the repair candidate. | `src/cockpit/viewModel.ts`, `src/cockpit/approvalExecutor.ts` | `tests/unit/cockpitViewModel.test.ts` | #320 |
 | external-mcp-process-reuse | Auto-started external MCP process clients are reused during role calls and released after workflow finalization. | `src/core/externalAgents/externalRoleInvoker.ts`, `src/core/externalAgents/externalAgentProcess.ts`, `src/core/agentGraph/executor.ts` | `tests/unit/externalAgentRunner.test.ts`, `tests/unit/agentGraph.test.ts` | #311 |
 | workflow-simulation-native | `tedge workflow` is a NativeBackend dry-run projection rather than a second orchestration engine. | `src/core/eval/workflowSimulation.ts`, `src/core/agentGraph/executor.ts`, `src/core/externalAgents/externalRoleInvoker.ts` | `tests/unit/workflowSimulation.test.ts`, `tests/unit/agentGraph.test.ts`, `npm run verify` | #309 |
+| objective-contracts | Runs create and verify an Objective Contract before planning, and planner output cannot relax contract evidence, workflow-kind, permissions, or stop conditions. | `src/core/contracts`, `src/core/scenarios`, `src/core/agentGraph/executor.ts`, `src/cli/commands/contract.ts` | `tests/unit/objectiveContract.test.ts`, `tests/unit/agentGraph.test.ts`, `tedge contract inspect latest` | implemented |
+| objective-trace-memory | Runs write compact objective-action-feedback traces that can be inspected, listed by scenario, and reused for future trace-guided orchestration. | `src/core/traces`, `src/core/agentGraph/executor.ts`, `src/cli/commands/trace.ts` | `tests/unit/objectiveTracePolicy.test.ts`, `tests/unit/agentGraph.test.ts`, `tedge trace inspect latest`, `tedge trace list --scenario debugging` | implemented |
+| orchestration-policy-evolution | Stored objective traces can score and offline-evolve bounded orchestration policy genomes without mutating permissions, secrets, prompts, or source code. | `src/core/orchestrationPolicy`, `src/cli/commands/policy.ts`, `src/config/schema.ts` | `tests/unit/objectiveTracePolicy.test.ts`, `tedge policy inspect`, `tedge policy evolve --offline`, `tedge policy eval` | implemented |
+| self-iteration-gui-visibility | GUI detail drawer exposes Objective Contract, Objective Trace, and Orchestration Policy summaries through the shared cockpit view model. | `src/cockpit/viewModel.ts`, `src/cockpit/contracts.ts`, `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | implemented |
 
 ## Desktop Entrypoint
 

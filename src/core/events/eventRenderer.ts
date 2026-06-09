@@ -96,6 +96,24 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.retrievalStage} selected=${event.selectedMemoryIds.length} rejected=${event.rejectedCount} constraints=${event.constraintCount}: ${event.summary}`;
     case "memory_policy":
       return `${event.retrievalStage} ${event.policyMode} ${event.action}: ${event.selectedAfter}/${event.selectedBefore} selected - ${event.reason}`;
+    case "scenario_profile":
+      return `${event.scenarioType}/${event.workflowKind} ambiguity=${event.ambiguityLevel} risks=${event.riskSignals.join(",") || "-"} deliverable=${event.expectedDeliverable}`;
+    case "trace_retrieval":
+      return `selected=${event.selectedTraceIds.length} rejected=${event.rejectedCount} mode=${event.policyMode}: ${event.summary}`;
+    case "objective_contract":
+      return `${event.contractId} ${event.scenarioType}/${event.workflowKind} risk=${event.riskLevel} source=${event.source}: ${event.localObjective}`;
+    case "contract_verification":
+      return `${event.status} score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}${event.violations.length ? ` violations=${event.violations.join(",")}` : ""}`;
+    case "orchestration_policy_selected":
+      return `${event.policyId} mode=${event.policyMode} contract=${event.contractDepth} traceTopK=${event.traceTopK} verify=${event.verificationStrictness} repair=${event.repairRounds} stop=${event.stopMode}`;
+    case "orchestration_policy_scored":
+      return `${event.policyId} fitness=${event.finalFitness}`;
+    case "policy_mutation":
+      return `${event.parentPolicyId} -> ${event.policyId}`;
+    case "policy_evolution":
+      return `evaluated=${event.evaluatedCount} selected=${event.selectedPolicyIds.join(",") || "-"}`;
+    case "objective_trace_written":
+      return `${event.traceId} status=${event.outcomeStatus} evidence=${event.evidenceScore}`;
   }
 }
 
@@ -128,6 +146,14 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("predictionRef" in event && event.predictionRef) refs.push(event.predictionRef);
   if ("observationRef" in event && event.observationRef) refs.push(event.observationRef);
   if ("artifactRef" in event && event.artifactRef) refs.push(event.artifactRef);
+  if ("profileRef" in event && event.profileRef) refs.push(event.profileRef);
+  if ("contractRef" in event && event.contractRef) refs.push(event.contractRef);
+  if ("verificationRef" in event && event.verificationRef) refs.push(event.verificationRef);
+  if ("policyRef" in event && event.policyRef) refs.push(event.policyRef);
+  if ("fitnessRef" in event && event.fitnessRef) refs.push(event.fitnessRef);
+  if ("mutationRef" in event && event.mutationRef) refs.push(event.mutationRef);
+  if ("evolutionRef" in event && event.evolutionRef) refs.push(event.evolutionRef);
+  if ("traceRef" in event && event.traceRef) refs.push(event.traceRef);
   return refs;
 }
 

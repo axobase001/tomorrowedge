@@ -16,6 +16,8 @@ export type ShellPolicy = z.infer<typeof shellPolicySchema>;
 export const externalAgentTransportSchema = z.enum(["mcp"]);
 export const externalAgentTrustLevelSchema = z.enum(["low", "medium", "high", "owner"]);
 export const agentRoleSchema = z.enum(agentRoles);
+export const selfIterationModeSchema = z.enum(["off", "trace_guided", "offline_evolution", "experimental_online"]);
+export type SelfIterationMode = z.infer<typeof selfIterationModeSchema>;
 
 export const providerConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -141,6 +143,21 @@ export const configSchema = z.object({
     coder_constraints: true,
     review_guard: true,
     repair_context: true
+  }),
+  self_iterating_orchestration: z.object({
+    enabled: z.boolean().default(true),
+    mode: selfIterationModeSchema.default("trace_guided"),
+    allow_policy_mutation: z.boolean().default(false),
+    allow_offline_evolution: z.boolean().default(true),
+    max_policy_variants: z.number().int().min(1).max(32).default(8),
+    elite_retention: z.number().int().min(1).max(8).default(2)
+  }).default({
+    enabled: true,
+    mode: "trace_guided",
+    allow_policy_mutation: false,
+    allow_offline_evolution: true,
+    max_policy_variants: 8,
+    elite_retention: 2
   }),
   failure_memory: z.object({
     enabled: z.boolean().default(false),
