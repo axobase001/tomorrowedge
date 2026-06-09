@@ -47,6 +47,9 @@ Changelog: newest changes first, grouped by release and by change type.
   `balanced`, `exploit_memory`, `explore_alternative`, and
   `random_control`, recorded as `memory_policy` events and exposed through
   `tedge experiment error-loop --memory-policy`.
+- Structured correction scope for failure-memory lessons, including wrong
+  assumption, corrected rule, applicability, counterexamples, validation
+  command, and `verified` / `partial` / `unverified` correction status.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 
@@ -71,6 +74,8 @@ Changelog: newest changes first, grouped by release and by change type.
 - Failure-memory retrieval now rejects stale or low-confidence records before
   scoring, reducing negative transfer from old project state or irrelevant
   memories.
+- Failure-memory retrieval now gives verified correction lessons a stronger
+  score than unverified lessons with the same task signals.
 - `strategy_memory` now has independent ablation switches for
   `failure_premortem`, `coder_constraints`, `review_guard`, and
   `repair_context`.
