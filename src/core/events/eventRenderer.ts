@@ -32,6 +32,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return event.success === undefined ? `shell blocked: ${event.error ?? event.command}` : `${event.command} exit=${event.exitCode}`;
     case "repair_attempt":
       return event.applied ? `repair applied ${event.candidateId}` : `repair candidate ${event.candidateId}`;
+    case "repair_policy":
+      return `${event.failureClass} occurrence=${event.occurrence} action=${event.action}: ${event.reason}`;
     case "provider_fallback":
       return `${event.fromProvider}/${event.fromModel} -> ${event.toProvider}/${event.toModel}`;
     case "cost_usage":

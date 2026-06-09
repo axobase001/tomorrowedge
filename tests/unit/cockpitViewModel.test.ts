@@ -145,6 +145,16 @@ describe("cockpit view model", () => {
           durationMs: 22,
           success: false
         }),
+        eventBase("event_repair_policy", "repair_policy", {
+          phase: "repair",
+          role: "repairer",
+          failureClass: "semantic_test_failure",
+          failureSignature: "failure_sig_1",
+          occurrence: 1,
+          action: "repair",
+          strategy: "repair patch using failing test stdout/stderr",
+          reason: "Failure looks like a semantic test assertion or regression."
+        }),
         eventBase("event_repair_memory", "memory_retrieval", {
           phase: "repair",
           role: "repairer",
@@ -185,10 +195,12 @@ describe("cockpit view model", () => {
 
     expect(vm.errorLoopTimeline?.failedVerifications).toBe(1);
     expect(vm.errorLoopTimeline?.passedVerifications).toBe(1);
+    expect(vm.errorLoopTimeline?.policyDecisions).toBe(1);
     expect(vm.errorLoopTimeline?.repairAttempts).toBe(1);
     expect(vm.errorLoopTimeline?.memoryRetrievals).toBe(1);
     expect(vm.errorLoopTimeline?.stopReason).toBe("repair applied and verification passed");
-    expect(vm.errorLoopTimeline?.items.map((item) => item.kind)).toEqual(["candidate", "patch_apply", "verification", "memory", "repair", "verification", "stop"]);
+    expect(vm.errorLoopTimeline?.items.map((item) => item.kind)).toEqual(["candidate", "patch_apply", "verification", "policy", "memory", "repair", "verification", "stop"]);
+    expect(vm.errorLoopTimeline?.items.find((item) => item.kind === "policy")?.status).toBe("allowed");
     expect(vm.errorLoopTimeline?.items.find((item) => item.kind === "memory")?.memoryIds).toEqual(["mem_validation"]);
   });
 

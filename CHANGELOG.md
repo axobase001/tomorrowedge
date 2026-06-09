@@ -37,6 +37,9 @@ Changelog: newest changes first, grouped by release and by change type.
   retrieval, artifact refs, and stop reasons from the shared event ledger.
 - Failure-memory consent controls via `failure_memory.enabled`, storage scope,
   redaction level, retention days, plus `tedge memory preview/export/delete/compact`.
+- Repair-policy trace events that classify failed verification runs, choose the
+  next repair action, and escalate repeated same-signature failures instead of
+  silently repeating the same repair strategy.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 

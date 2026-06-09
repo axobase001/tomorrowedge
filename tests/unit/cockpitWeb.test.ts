@@ -332,6 +332,7 @@ describe("cockpit web React surface", () => {
         candidateAttempts: 1,
         failedVerifications: 1,
         passedVerifications: 1,
+        policyDecisions: 1,
         repairAttempts: 1,
         memoryRetrievals: 1,
         stopReason: "repair applied and verification passed",
@@ -347,6 +348,16 @@ describe("cockpit web React surface", () => {
           artifactRefs: ["artifacts/stderr/failed.txt"],
           exitCode: 1,
           durationMs: 22,
+          memoryIds: []
+        }, {
+          id: "repair_policy",
+          timestamp: "2026-06-07T00:00:00.500Z",
+          kind: "policy",
+          status: "allowed",
+          title: "Repair policy decision",
+          summary: "semantic_test_failure occurrence=1 action=repair",
+          filesChanged: [],
+          artifactRefs: [],
           memoryIds: []
         }, {
           id: "repair_memory",

@@ -72,6 +72,7 @@ import {
   type RepairMemoryContext
 } from "../memory/failureMemoryInfluence.js";
 import { explainFailureMemories } from "../memory/taskMemory.js";
+import { decideRepairPolicy, type RepairPolicyDecision } from "../errorLoop/repairPolicy.js";
 
 export type OfflineGraphOptions = {
   provider?: string;
@@ -750,6 +751,7 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
   const defaultVerification = !options.testCommand;
   let shellRuns = 0;
   let repairAttempts = 0;
+  const failureOccurrences = new Map<string, number>();
   if (state.changedFiles.length && testCommands.length) {
     try {
       for (const testCommand of testCommands) {
@@ -761,7 +763,9 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         state.runResults.push(result);
         recordShellRunEvent(state, ledger, cwd, result);
         if (result.success) continue;
+        const repairPolicy = recordRepairPolicyDecision(state, ledger, result, failureOccurrences);
         if (!options.repairOnFail) break;
+        if (!allowsPatchRepair(repairPolicy)) break;
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "repair")) return;
         if (!canAttemptRepair(config, repairAttempts, ledger)) return;
         repairAttempts += 1;
@@ -804,7 +808,10 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
             const repairedRun = normalizeVerificationResult(rawRepairedRun, { defaultVerification });
             state.runResults.push(repairedRun);
             recordShellRunEvent(state, ledger, cwd, repairedRun);
-            if (!repairedRun.success) break;
+            if (!repairedRun.success) {
+              recordRepairPolicyDecision(state, ledger, repairedRun, failureOccurrences);
+              break;
+            }
           } catch (error) {
             ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: error instanceof Error ? error.message : String(error) });
             state.agents.push({
@@ -1777,6 +1784,39 @@ function canAttemptRepair(config: TomorrowEdgeConfig, repairs: number, ledger: E
   if (repairs < config.autonomy.max_repairs) return true;
   ledger.append({ type: "autonomy_limit_reached", phase: "repair", status: "blocked_by_iteration_limit", reason: `max_repairs=${config.autonomy.max_repairs} reached` });
   return false;
+}
+
+function recordRepairPolicyDecision(state: AgentGraphState, ledger: EventLedger, failedRun: RunResult, occurrences: Map<string, number>): RepairPolicyDecision {
+  const firstPass = decideRepairPolicy({ failedRun, changedFiles: state.changedFiles });
+  const previousOccurrences = occurrences.get(firstPass.failureSignature) ?? 0;
+  const decision = previousOccurrences
+    ? decideRepairPolicy({ failedRun, changedFiles: state.changedFiles, previousOccurrences })
+    : firstPass;
+  occurrences.set(decision.failureSignature, decision.occurrence);
+  ledger.append({
+    type: "repair_policy",
+    phase: "repair",
+    role: "repairer",
+    failureClass: decision.failureClass,
+    failureSignature: decision.failureSignature,
+    occurrence: decision.occurrence,
+    action: decision.action,
+    strategy: decision.strategy,
+    reason: decision.reason
+  });
+  if (decision.action === "escalate") {
+    ledger.append({
+      type: "autonomy_limit_reached",
+      phase: "repair",
+      status: "blocked_by_iteration_limit",
+      reason: decision.reason
+    });
+  }
+  return decision;
+}
+
+function allowsPatchRepair(decision: RepairPolicyDecision): boolean {
+  return decision.action === "repair";
 }
 
 function setBudgetStatus(state: AgentGraphState, status: NonNullable<AgentGraphState["budgetStatus"]>): NonNullable<AgentGraphState["budgetStatus"]> {

@@ -90,6 +90,15 @@ Each influence point emits a `memory_retrieval` event with selected memory ids,
 rejected count, constraint count, and an artifact ref. Experiments should ablate
 these switches separately before claiming memory improves outcomes.
 
+Verification failures also emit `repair_policy` events before a repair attempt.
+The policy records a compact failure class, stable failure signature,
+occurrence count, action, strategy, and reason. The first semantic verifier
+failure may proceed to patch repair, but a repeated same-signature failure
+escalates instead of silently repeating the same repair strategy. Environment,
+provider-output, wrong-file, and missing-context failures are routed away from
+blind patch repair so the trace explains why the workflow stopped or needs
+broader context.
+
 ## Current Failure Classes
 
 - `coding_error`
@@ -105,6 +114,15 @@ these switches separately before claiming memory improves outcomes.
 These classes are workflow diagnostics. They should help route future tasks and
 explain why a memory was selected, but they are not ground-truth labels unless a
 human or benchmark harness verifies them.
+
+Repair-policy failure classes are separate runtime routing labels:
+
+- `semantic_test_failure`
+- `environment_failure`
+- `provider_parse_failure`
+- `wrong_file_patch`
+- `missing_context`
+- `unknown_failure`
 
 ## Caveats
 
