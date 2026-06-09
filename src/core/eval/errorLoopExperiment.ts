@@ -7,6 +7,7 @@ import { runOfflineGraph } from "../agentGraph/executor.js";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import { saveSession } from "../memory/sessionMemory.js";
 import { explainFailureMemories, readFailureMemories, type FailureMemoryExplanation, type FailureMemoryRecord } from "../memory/taskMemory.js";
+import type { MemoryRetrievalPolicyMode } from "../memory/retrievalPolicy.js";
 
 export type ErrorLoopAblation = "memory_on" | "memory_off";
 export type MemoryUpdateReason =
@@ -23,6 +24,7 @@ export type ErrorLoopExperimentOptions = {
   ablations?: ErrorLoopAblation[];
   seed?: string;
   outputDir?: string;
+  memoryPolicy?: MemoryRetrievalPolicyMode;
 };
 
 export type ErrorLoopTrial = {
@@ -45,6 +47,8 @@ export type ErrorLoopTrial = {
   predictionMatched: number;
   predictionTotal: number;
   predictionAccuracy: number | null;
+  memoryPolicyExploit: number;
+  memoryPolicyBypass: number;
 };
 
 export type ErrorLoopMetrics = {
@@ -58,6 +62,8 @@ export type ErrorLoopMetrics = {
   retrievalDecisions: number;
   suspectedNegativeTransfer: number;
   predictionAccuracy: number | null;
+  memoryPolicyExploit: number;
+  memoryPolicyBypass: number;
   averageTraceCompleteness?: number;
 };
 
@@ -81,6 +87,7 @@ type RetrievalDecisionRow = {
   trialId: string;
   task: string;
   ablation: ErrorLoopAblation;
+  memoryPolicy: MemoryRetrievalPolicyMode;
   selected: FailureMemoryExplanation["selected"];
   rejected: FailureMemoryExplanation["rejected"];
 };
@@ -97,6 +104,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   const tasks = normalizeTasks(options.tasks);
   const repetitions = clampPositiveInt(options.repetitions ?? 1, 1, 20);
   const ablations = normalizeAblations(options.ablations);
+  const memoryPolicy = options.memoryPolicy ?? defaultConfig.strategy_memory.policy;
   const trials: ErrorLoopTrial[] = [];
   const memoryRecords: FailureMemoryRecord[] = [];
   const retrievalDecisions: RetrievalDecisionRow[] = [];
@@ -116,7 +124,8 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
           trialId,
           task,
           repetition,
-          ablation
+          ablation,
+          memoryPolicy
         });
         trials.push(trial.trial);
         memoryRecords.push(...trial.memoryRecords);
@@ -140,6 +149,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
     tasks: tasks.map((task) => redactText(task)),
     repetitions,
     ablations,
+    memoryPolicy,
     redaction: {
       applied: true,
       note: "Goals, records, and artifacts are passed through TomorrowEdge redaction before export rows are written."
@@ -158,7 +168,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   await writeFile(metricsPath, `${JSON.stringify(metrics, null, 2)}\n`, "utf8");
   await writeFile(memoryRecordsPath, jsonl(memoryRecords), "utf8");
   await writeFile(retrievalDecisionsPath, jsonl(retrievalDecisions), "utf8");
-  await writeFile(reportPath, renderErrorLoopReport({ id, createdAt, tasks, repetitions, ablations, metrics, trials }), "utf8");
+  await writeFile(reportPath, renderErrorLoopReport({ id, createdAt, tasks, repetitions, ablations, memoryPolicy, metrics, trials }), "utf8");
 
   return {
     schemaVersion: "error-loop-experiment/v1",
@@ -182,6 +192,7 @@ export function renderErrorLoopReport(input: {
   tasks: string[];
   repetitions: number;
   ablations: ErrorLoopAblation[];
+  memoryPolicy: MemoryRetrievalPolicyMode;
   metrics: ErrorLoopMetrics;
   trials: ErrorLoopTrial[];
 }): string {
@@ -201,12 +212,13 @@ memory and retrieval behavior. It is not a live provider benchmark.
 - Tasks: ${input.tasks.map((task) => `\`${redactText(task)}\``).join(", ")}
 - Repetitions: ${input.repetitions}
 - Ablations: ${input.ablations.join(", ")}
+- Memory policy: ${input.memoryPolicy}
 
 ## Metrics
 
-| Trials | Completed | Failures | Memory written | Occurrences | Retrieval decisions | Suspected negative transfer | Prediction accuracy | Avg trace |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.predictionAccuracy === null ? "-" : `${(input.metrics.predictionAccuracy * 100).toFixed(1)}%`} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
+| Trials | Completed | Failures | Memory written | Occurrences | Retrieval decisions | Policy exploit/bypass | Suspected negative transfer | Prediction accuracy | Avg trace |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ${input.metrics.trials} | ${input.metrics.completed} | ${input.metrics.failures} | ${input.metrics.memoryWritten} | ${input.metrics.memoryOccurrences} | ${input.metrics.retrievalDecisions} | ${input.metrics.memoryPolicyExploit}/${input.metrics.memoryPolicyBypass} | ${input.metrics.suspectedNegativeTransfer} | ${input.metrics.predictionAccuracy === null ? "-" : `${(input.metrics.predictionAccuracy * 100).toFixed(1)}%`} | ${input.metrics.averageTraceCompleteness?.toFixed(1) ?? "-"} |
 
 ## Memory Update Status
 
@@ -214,9 +226,9 @@ ${skippedRows}
 
 ## Trials
 
-| Trial | Ablation | Result | Memory update | Retrieval | Prediction | Failure class |
-| --- | --- | --- | --- | ---: | ---: | --- |
-${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
+| Trial | Ablation | Result | Memory update | Retrieval | Policy | Prediction | Failure class |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- |
+${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
 `;
 }
 
@@ -226,6 +238,7 @@ async function runTrial(input: {
   task: string;
   repetition: number;
   ablation: ErrorLoopAblation;
+  memoryPolicy: MemoryRetrievalPolicyMode;
 }): Promise<{ trial: ErrorLoopTrial; memoryRecords: FailureMemoryRecord[]; retrievalDecision: RetrievalDecisionRow }> {
   const trialCwd = path.join(input.outputDir, "workspaces", input.trialId);
   await mkdir(trialCwd, { recursive: true });
@@ -233,7 +246,8 @@ async function runTrial(input: {
     ...defaultConfig,
     strategy_memory: {
       ...defaultConfig.strategy_memory,
-      enabled: input.ablation === "memory_on"
+      enabled: input.ablation === "memory_on",
+      policy: input.memoryPolicy
     },
     failure_memory: {
       ...defaultConfig.failure_memory,
@@ -274,11 +288,13 @@ async function runTrial(input: {
     trialId: input.trialId,
     task: redactText(input.task),
     ablation: input.ablation,
+    memoryPolicy: input.memoryPolicy,
     selected: retrieval.selected,
     rejected: retrieval.rejected
   };
   const [firstFailure] = memoryRecords;
   const prediction = predictionStats(state);
+  const policyStats = memoryPolicyStats(state);
   return {
     trial: {
       schemaVersion: "error-loop-trial/v1",
@@ -299,7 +315,9 @@ async function runTrial(input: {
       failureClass: firstFailure?.failureClass,
       predictionMatched: prediction.matched,
       predictionTotal: prediction.total,
-      predictionAccuracy: prediction.total ? prediction.matched / prediction.total : null
+      predictionAccuracy: prediction.total ? prediction.matched / prediction.total : null,
+      memoryPolicyExploit: policyStats.exploit,
+      memoryPolicyBypass: policyStats.bypass
     },
     memoryRecords,
     retrievalDecision
@@ -321,6 +339,8 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
   const traceScores = trials.map((trial) => trial.traceCompletenessScore).filter((score): score is number => typeof score === "number");
   const predictionMatched = trials.reduce((sum, trial) => sum + trial.predictionMatched, 0);
   const predictionTotal = trials.reduce((sum, trial) => sum + trial.predictionTotal, 0);
+  const memoryPolicyExploit = trials.reduce((sum, trial) => sum + trial.memoryPolicyExploit, 0);
+  const memoryPolicyBypass = trials.reduce((sum, trial) => sum + trial.memoryPolicyBypass, 0);
   return {
     schemaVersion: "error-loop-metrics/v1",
     trials: trials.length,
@@ -332,7 +352,17 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     retrievalDecisions,
     suspectedNegativeTransfer: trials.filter((trial) => trial.retrievalSelected > 0 && trial.result !== "completed").length,
     predictionAccuracy: predictionTotal ? predictionMatched / predictionTotal : null,
+    memoryPolicyExploit,
+    memoryPolicyBypass,
     averageTraceCompleteness: traceScores.length ? traceScores.reduce((sum, score) => sum + score, 0) / traceScores.length : undefined
+  };
+}
+
+function memoryPolicyStats(state: AgentGraphState): { exploit: number; bypass: number } {
+  const decisions = state.events.filter((event) => event.type === "memory_policy");
+  return {
+    exploit: decisions.filter((event) => event.action === "exploit").length,
+    bypass: decisions.filter((event) => event.action === "bypass").length
   };
 }
 

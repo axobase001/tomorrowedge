@@ -90,6 +90,21 @@ Each influence point emits a `memory_retrieval` event with selected memory ids,
 rejected count, constraint count, and an artifact ref. Experiments should ablate
 these switches separately before claiming memory improves outcomes.
 
+Retrieval also passes through `strategy_memory.policy` before memories are made
+model-visible:
+
+- `balanced`: exploit only high-confidence matches and bypass likely negative
+  transfer.
+- `exploit_memory`: force selected memories to be used.
+- `explore_alternative`: retrieve and report memories, then bypass them so the
+  workflow explores another path.
+- `random_control`: deterministic exploit/bypass assignment for control runs.
+
+Each decision emits a `memory_policy` event with selected-before/after counts,
+bypassed memory ids, and a reason. `tedge experiment error-loop
+--memory-policy <mode>` stores the mode in `manifest.json` and reports
+exploit/bypass counts in `trials.jsonl`, `metrics.json`, and `report.md`.
+
 Verification failures also emit `repair_policy` events before a repair attempt.
 The policy records a compact failure class, stable failure signature,
 occurrence count, action, strategy, and reason. The first semantic verifier

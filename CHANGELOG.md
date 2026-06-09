@@ -43,6 +43,10 @@ Changelog: newest changes first, grouped by release and by change type.
 - Outcome prediction and observation trace events for patch, shell, and repair
   attempts, with mismatch classification, GUI timeline cards, failure-memory
   references, and experiment prediction-accuracy reporting.
+- Failure-memory retrieval policies for exploitation/exploration control:
+  `balanced`, `exploit_memory`, `explore_alternative`, and
+  `random_control`, recorded as `memory_policy` events and exposed through
+  `tedge experiment error-loop --memory-policy`.
 - Direct unit coverage for agent classes, project tools, and safety boundary
   helpers.
 
@@ -70,6 +74,8 @@ Changelog: newest changes first, grouped by release and by change type.
 - `strategy_memory` now has independent ablation switches for
   `failure_premortem`, `coder_constraints`, `review_guard`, and
   `repair_context`.
+- Error-loop experiment bundles now report memory-policy exploit/bypass counts
+  in `metrics.json`, `trials.jsonl`, and `report.md`.
 - Failed or partial sessions no longer silently write failure-memory records in
   normal project runs; experiments opt in explicitly and mark memory as
   experiment-scoped.

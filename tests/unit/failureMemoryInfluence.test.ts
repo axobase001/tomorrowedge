@@ -19,6 +19,7 @@ describe("failure memory workflow influence", () => {
       expect(state.review?.reviews[0]?.memoryIds?.length).toBeGreaterThan(0);
       expect(state.review?.reviews[0]?.memoryAlignment?.length).toBeGreaterThan(0);
       expect(state.judge?.reason).toContain("Memory guard checked");
+      expect(state.events.some((event) => event.type === "memory_policy" && event.retrievalStage === "premortem" && event.action === "exploit")).toBe(true);
       expect(state.events.some((event) => event.type === "memory_retrieval" && event.retrievalStage === "premortem")).toBe(true);
       expect(state.events.some((event) => event.type === "memory_retrieval" && event.retrievalStage === "coder_constraints")).toBe(true);
       expect(state.events.some((event) => event.type === "memory_retrieval" && event.retrievalStage === "review_guard")).toBe(true);
@@ -44,6 +45,26 @@ describe("failure memory workflow influence", () => {
       expect(state.repairCandidates[0]?.knownTradeoffs.some((item) => item.includes("Retrieved repair correction"))).toBe(true);
       expect(state.events.some((event) => event.type === "memory_retrieval" && event.retrievalStage === "repair_context")).toBe(true);
       expect(state.runResults.map((result) => result.success)).toEqual([false, true]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("can bypass retrieved memories to force exploration", async () => {
+    const cwd = await fixtureWorkspace("tedge-memory-explore-");
+    try {
+      await seedValidationFailureMemory(cwd);
+      const state = await runOfflineGraph(cwd, "fix npm test failure in index.js", memoryEnabledConfig("explore_alternative"), { provider: "fixture" });
+
+      const policyEvent = state.events.find((event) => event.type === "memory_policy" && event.retrievalStage === "premortem");
+      const retrievalEvent = state.events.find((event) => event.type === "memory_retrieval" && event.retrievalStage === "premortem");
+
+      expect(policyEvent?.action).toBe("bypass");
+      expect(policyEvent?.selectedBefore).toBeGreaterThan(0);
+      expect(policyEvent?.selectedAfter).toBe(0);
+      expect(state.failureMemory?.premortem?.selectedMemoryIds).toEqual([]);
+      expect(state.plan?.constraints.some((constraint) => constraint.includes("Memory pre-mortem"))).toBe(false);
+      expect(retrievalEvent?.selectedMemoryIds).toEqual([]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -80,12 +101,13 @@ async function seedValidationFailureMemory(cwd: string): Promise<void> {
   await saveSession(cwd, state, { failureMemory: { enabled: true, redaction: "artifact_refs" } });
 }
 
-function memoryEnabledConfig(): typeof defaultConfig {
+function memoryEnabledConfig(policy: typeof defaultConfig.strategy_memory.policy = "balanced"): typeof defaultConfig {
   return {
     ...defaultConfig,
     strategy_memory: {
       ...defaultConfig.strategy_memory,
-      enabled: true
+      enabled: true,
+      policy
     }
   };
 }

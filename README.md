@@ -883,6 +883,7 @@ For a deterministic no-key export bundle:
 
 ```bash
 tedge experiment error-loop --tasks "fix failing test" --ablation memory_on,memory_off
+tedge experiment error-loop --memory-policy explore_alternative
 ```
 
 The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,
@@ -891,6 +892,19 @@ The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,
 `skipped_ablation`. Metrics separate new memory writes from observed recurrence
 and suspected negative transfer, and include prediction accuracy when observed
 outcomes are available.
+
+`strategy_memory.policy` controls whether retrieved failure memories are used or
+bypassed before model-visible context is built:
+
+- `balanced`: exploit only recent high-confidence memories without obvious
+  negative-transfer signals.
+- `exploit_memory`: force use of selected memories for ablation.
+- `explore_alternative`: retrieve and record matching memories, but bypass them
+  so the workflow tries a different path.
+- `random_control`: deterministic exploit/bypass assignment for control runs.
+
+Every decision is recorded as a `memory_policy` event, and error-loop reports
+show policy exploit/bypass counts.
 
 ## Conversation Targets
 
