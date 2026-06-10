@@ -2,6 +2,10 @@ import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
 
 export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: CockpitTelemetry; t: Translator; onOpenDetails?: () => void }) {
+  // Live cost gauge — real-time "taxi meter" during workflow
+  const liveCost = telemetry.liveRunningCostUsd ?? 0;
+  const rate = telemetry.liveSavingRateUsd ?? 0;
+
   const routes = [
     telemetry.plannerModel && `planner: ${telemetry.plannerModel}`,
     telemetry.coderModel && `coder: ${telemetry.coderModel}`,
@@ -12,6 +16,19 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
   return (
     <aside className="te-panel te-telemetry" data-testid="telemetry-panel">
       <header><h2>{t("telemetry.title")}</h2><span className="te-chip">{t("telemetry.fallback", { count: telemetry.fallbackCount })}</span></header>
+
+      {/* Live cost gauge — taxi meter style */}
+      {liveCost > 0 && (
+        <div style={{ margin: "8px 12px", padding: "6px 10px", borderRadius: 5, background: "rgba(47,157,104,0.08)", border: "1px solid rgba(47,157,104,0.2)", textAlign: "center" }}>
+          <div style={{ font: "700 18px/1 'Cascadia Mono', monospace", color: "#2f9d68" }}>
+            🚀 ${liveCost.toFixed(4)}
+          </div>
+          <div style={{ font: "10px 'Cascadia Mono', monospace", color: "#6b7a88", marginTop: 2 }}>
+            {rate > 0 ? <>⚡ ~${rate.toFixed(5)}/s · 实时省</> : "正在累计..."}
+          </div>
+        </div>
+      )}
+
       {routes.length > 0 && (
         <div data-testid="telemetry-routing">
           {routes.map((route) => (

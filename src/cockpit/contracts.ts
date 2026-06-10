@@ -70,6 +70,8 @@ export type CockpitTelemetry = {
   providerSummary: string;
   currentCostUsd?: number;
   budgetUsd?: number;
+  liveRunningCostUsd?: number;       // real-time cost from SSE events (live only)
+  liveSavingRateUsd?: number;        // estimated saving per second during live run
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
