@@ -161,6 +161,7 @@ function CockpitWebRoot() {
     closeLiveSource();
     const source = new EventSource(cockpitLiveEventsUrl(sessionId, apiOptions));
     liveSource.current = source;
+    let liveRunningCostUsd = 0;
     source.addEventListener("snapshot", (message) => {
       const payload = JSON.parse(message.data) as { viewModel?: CockpitViewModel; snapshot?: { done?: boolean } };
       if (payload.viewModel) setViewModel(payload.viewModel);
@@ -171,8 +172,11 @@ function CockpitWebRoot() {
       }
     });
     source.addEventListener("event", (message) => {
-      const payload = JSON.parse(message.data) as { event?: { id?: string; timestamp?: string; type?: string; phase?: string; summary?: string } };
+      const payload = JSON.parse(message.data) as { event?: { id?: string; timestamp?: string; type?: string; phase?: string; summary?: string; estimatedCostUsd?: number } };
       if (!payload.event) return;
+      if (payload.event.type === "model_call" && typeof payload.event.estimatedCostUsd === "number") {
+        liveRunningCostUsd += payload.event.estimatedCostUsd;
+      }
       setViewModel((current) => ({
         ...current,
         sessionId,
@@ -186,6 +190,10 @@ function CockpitWebRoot() {
           connectionLabel: "Connected",
           stale: false
         },
+        telemetry: liveRunningCostUsd > 0 ? {
+          ...current.telemetry,
+          liveRunningCostUsd
+        } : current.telemetry,
         trace: [{
           id: payload.event?.id ?? `${Date.now()}`,
           timestamp: payload.event?.timestamp ?? new Date().toISOString(),

@@ -42,6 +42,9 @@ export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetr
           </div>
         </div>
       ) : null}
+      {typeof telemetry.liveRunningCostUsd === "number" && telemetry.liveRunningCostUsd > 0 ? (
+        <Metric label="live cost" value={money(telemetry.liveRunningCostUsd)} />
+      ) : null}
       <Metric label={t("telemetry.tokens")} value={compact(telemetry.totalTokens)} />
       <Metric label={t("telemetry.cache")} value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
       <Metric label={t("telemetry.agents")} value={t("telemetry.agentsValue", { done: telemetry.completed, waiting: telemetry.waiting })} />

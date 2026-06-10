@@ -70,6 +70,7 @@ export type CockpitTelemetry = {
   providerSummary: string;
   currentCostUsd?: number;
   budgetUsd?: number;
+  liveRunningCostUsd?: number;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
