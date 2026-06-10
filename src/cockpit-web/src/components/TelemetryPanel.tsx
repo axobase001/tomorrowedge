@@ -19,7 +19,7 @@ function findModelPrice(model: string): { input: number; output: number; label: 
   return { ...MODEL_PRICES[key], label: key };
 }
 
-function cheaperAlternatives(currentCostPer1K: number, model: string): Array<{ name: string; input: number; output: number; label: string }> {
+function cheaperAlternatives(model: string): Array<{ name: string; input: number; output: number; label: string }> {
   const current = findModelPrice(model);
   if (!current) return [];
   const totalPer1K = current.input + current.output;
@@ -76,7 +76,7 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
               <div style={{ fontWeight: 600, marginBottom: 6, color: "var(--te-deep-blue)" }}>换模型可以再省：</div>
               {routes.map((route) => {
                 const [role, model] = route.split(": ") as [string, string];
-                const alt = cheaperAlternatives(0, model);
+                const alt = cheaperAlternatives( model);
                 if (!alt.length) return null;
                 return (
                   <div key={role} style={{ marginBottom: 4, padding: "3px 0", borderBottom: "1px solid rgba(215,228,234,0.3)" }}>
@@ -98,10 +98,10 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
                   </div>
                 );
               })}
-              {(routes.some((r) => cheaperAlternatives(0, r.split(": ")[1]).length > 0)) && (
+              {(routes.some((r) => cheaperAlternatives( r.split(": ")[1]).length > 0)) && (
                 <div style={{ textAlign: "center", marginTop: 4 }}>
-                  <span className="te-chip te-chip-green" style={{ fontSize: 10, cursor: "pointer" }} onClick={() => alert("可配置到 config.yaml agents.{role}.provider")}>
-                    应用建议
+                  <span className="te-chip te-chip-green" style={{ fontSize: 10 }}>
+                    预览 · 配置见 config.yaml
                   </span>
                 </div>
               )}
