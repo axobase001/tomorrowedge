@@ -26,7 +26,7 @@ export class SummarizerAgent extends BaseAgent<{ plan: Plan; changedFiles: strin
       task: input.plan.goal,
       result,
       userReply: buildUserReply(input, result),
-      userReplySource: "local",
+      userReplySource: "system",
       changedFiles: input.changedFiles,
       testsRun: input.testsRun,
       evidence: input.evidence,

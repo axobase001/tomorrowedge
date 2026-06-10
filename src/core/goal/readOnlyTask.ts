@@ -8,8 +8,6 @@ import type { Plan } from "../../schemas/plan.js";
 export type ReadOnlyTaskResult = {
   evidence: string[];
   artifactText: string;
-  userReply: string;
-  userReplySource: "local" | "handoff";
   targetPath?: string;
 };
 
@@ -26,11 +24,8 @@ export async function buildReadOnlyTaskResult(cwd: string, plan: Plan, contextSe
   if (!target) {
     const files = contextSelection?.selectedFiles.map((file) => `- ${file.path} (${file.risk})`).join("\n") || "- No task-relevant safe files selected.";
     const artifactText = [`Read-only analysis`, `Goal: ${plan.goal}`, "", "Selected context:", files].join("\n");
-    const localReply = buildLocalReadOnlyReply(plan.goal, contextSelection?.contextSummary);
     return {
       artifactText,
-      userReply: localReply.text,
-      userReplySource: localReply.source,
       evidence: [
         "Read-only request completed without patch generation.",
         contextSelection?.contextSummary ?? "No repository context selected.",
@@ -44,12 +39,6 @@ export async function buildReadOnlyTaskResult(cwd: string, plan: Plan, contextSe
   return {
     targetPath: target,
     artifactText,
-    userReply: [
-      `Here is the requested read-only inspection for ${target}:`,
-      "",
-      described.text
-    ].join("\n"),
-    userReplySource: "local",
     evidence: [
       `Read-only request completed for ${target}.`,
       described.summary,
@@ -57,36 +46,6 @@ export async function buildReadOnlyTaskResult(cwd: string, plan: Plan, contextSe
       described.text
     ]
   };
-}
-
-function buildLocalReadOnlyReply(goal: string, contextSummary?: string): { text: string; source: "local" | "handoff" } {
-  if (isGreeting(goal)) {
-    return {
-      source: "local",
-      text: "Hello. I am TomorrowEdge, your local multi-agent coding cockpit. Tell me the task, constraints, and access mode you want, and I can route it through the workflow."
-    };
-  }
-  if (contextSummary?.trim()) {
-    return {
-      source: "local",
-      text: [
-        "I completed a read-only pass and did not modify files or run shell commands.",
-        "",
-        contextSummary.trim()
-      ].join("\n")
-    };
-  }
-  return {
-    source: "handoff",
-    text: [
-      "I could not produce a model-backed answer from local context alone.",
-      "Configure at least one answer-capable provider, then rerun this request for a full natural-language response."
-    ].join("\n")
-  };
-}
-
-function isGreeting(goal: string): boolean {
-  return /^(hi|hello|hey|morning|good morning|good evening|你好|嗨|早|早上好|晚上好)[!！.\s]*$/i.test(goal.trim());
 }
 
 function resolveReadOnlyTarget(cwd: string, goal: string): string | undefined {
@@ -101,10 +60,10 @@ function resolveReadOnlyTarget(cwd: string, goal: string): string | undefined {
 }
 
 function extractExplicitPath(goal: string): string | undefined {
-  const quoted = /[`"'"\u201c\u201d\u300c\u300e]([^`"'"\u201c\u201d\u300d\u300f]+)[`"'"\u201c\u201d\u300d\u300f]/.exec(goal);
+  const quoted = /[`"'\u201c\u201d\u300c\u300e]([^`"'\u201c\u201d\u300d\u300f]+)[`"'\u201c\u201d\u300d\u300f]/.exec(goal);
   if (quoted?.[1]?.trim()) return cleanupTarget(quoted[1]);
 
-  const windowsPath = /([A-Za-z]:[\\/][^\s,;，。；]+)/.exec(goal);
+  const windowsPath = /([A-Za-z]:[\\/][^\s,;\uFF0C\u3002\uFF1B]+)/.exec(goal);
   if (windowsPath?.[1]) return cleanupTarget(windowsPath[1]);
 
   const desktopFolder = /(?:desktop|\u684c\u9762)\s*(?:\u7684|\u4e0b|\u91cc|\u4e2d|:|\uff1a)?\s*([A-Za-z0-9_.@()[\]\-\u4e00-\u9fff ]+?)\s*(?:\u6587\u4ef6\u5939|\u76ee\u5f55|folder|directory)/i.exec(goal);
@@ -119,7 +78,7 @@ function extractExplicitPath(goal: string): string | undefined {
 }
 
 function cleanupTarget(value: string): string {
-  return value.trim().replace(/[,;，。；]+$/g, "").replace(/^(?:\u7684|\u4e0b|\u91cc|\u4e2d)\s*/g, "");
+  return value.trim().replace(/[,;\uFF0C\u3002\uFF1B]+$/g, "").replace(/^(?:\u7684|\u4e0b|\u91cc|\u4e2d)\s*/g, "");
 }
 
 function isLikelyPathToken(value: string): boolean {

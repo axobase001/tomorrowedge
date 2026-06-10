@@ -701,7 +701,7 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return {
       title: failed ? "Failure diagnosis" : "Answer",
       subtitle: state.finalSummary.result,
-      body: state.finalSummary.userReply ?? (failed ? "The workflow stopped before producing a user-facing answer." : completedAnswerFallback(state)),
+      body: state.finalSummary.userReply ?? "No model-generated user reply was recorded. Open Details for trace evidence.",
       supportingDetail: failed ? failureBody(state) : completedBody(state),
       filesChanged: state.changedFiles,
       testStatus: state.runResults.at(-1)?.success ? "passed" : state.runResults.length ? "failed" : "not_run"
@@ -723,16 +723,6 @@ function missingPatchBody(state: AgentGraphState): string {
     "The requested deliverable was not created, so this task needs revision or a retry with a patch-capable route.",
     expected.trim()
   ].filter(Boolean).join("\n");
-}
-
-function completedAnswerFallback(state: AgentGraphState): string {
-  const summary = state.finalSummary;
-  if (!summary) return "";
-  if (summary.changedFiles.length) {
-    return `Done. I prepared changes in ${summary.changedFiles.join(", ")}.`;
-  }
-  const usefulEvidence = summary.evidence.find((item) => item.trim() && !/artifact|offline graph completed/i.test(item));
-  return usefulEvidence ?? "The task completed without file changes.";
 }
 
 function completedBody(state: AgentGraphState): string {

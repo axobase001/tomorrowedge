@@ -43,6 +43,8 @@ export async function classifyWorkflowIntent(input: {
     provider: assignment.provider,
     model: assignment.model,
     ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
     buildRequest: (model) => ({
       model,
       temperature: 0,
@@ -70,12 +72,12 @@ export async function classifyWorkflowIntent(input: {
     })
   });
   const parsed = parseIntentResponse(result.response?.content);
-  const decision = parsed ?? conservativeFallback(input.goal, result.error);
+  const decision = parsed ?? modelIntentBlocked(result.error);
   return {
     ...decision,
-    provider: result.response ? result.provider : "local_intent_fallback",
-    model: result.response ? result.model : "conservative",
-    fallbackUsed: result.fallbackUsed || !parsed
+    provider: result.provider,
+    model: result.model,
+    fallbackUsed: false
   };
 }
 
@@ -224,15 +226,13 @@ function clampConfidence(value: unknown): number {
   return Math.max(0, Math.min(1, number));
 }
 
-function conservativeFallback(goal: string, error?: string): Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed"> {
-  const local = classifyWorkflowIntentLocally(goal);
-  if (local.intent !== "ask_user") return { ...local, reason: `${local.reason} Intent model result was unavailable or invalid.${error ? ` ${error}` : ""}` };
+function modelIntentBlocked(error?: string): Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed"> {
   return {
     intent: "ask_user",
     requiresPatchWorkflow: false,
     workflowKind: "ask_user",
-    confidence: 0.25,
-    reason: `Intent model result was unavailable or invalid; asking user instead of defaulting to patch workflow.${error ? ` ${error}` : ""}`
+    confidence: 0,
+    reason: `Model intent classification was unavailable or invalid; TomorrowEdge will not use a local semantic fallback.${error ? ` ${error}` : ""}`
   };
 }
 

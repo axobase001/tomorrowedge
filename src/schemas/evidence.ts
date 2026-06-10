@@ -13,7 +13,7 @@ export type FinalSummary = {
   task: string;
   result: "completed" | "partially_completed" | "failed" | "aborted";
   userReply?: string;
-  userReplySource?: "model" | "local" | "handoff";
+  userReplySource?: "model" | "system" | "blocked";
   changedFiles: string[];
   testsRun: string[];
   evidence: string[];

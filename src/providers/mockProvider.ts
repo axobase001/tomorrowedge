@@ -96,7 +96,7 @@ function classifyMockTaskGovernance(text: string) {
 
 function createMockPlannerPlan(text: string) {
   const lower = text.toLowerCase();
-  const readOnly = /\b(read|list|show|inspect|scan|describe|summarize|tree|structure|directory|folder)\b|璇诲彇|鏌ョ湅|鍒楀嚭|杈撳嚭|鏂囦欢缁撴瀯|鍒嗘瀽/.test(lower);
+  const readOnly = hasInspectSignal(lower) || (containsCjk(text) && !hasMutationSignal(lower));
   const highRisk = /\b(auth|oauth|payment|billing|secret|credential|database|schema|delete|security)\b/.test(lower);
   const feature = /\b(add|feature|implement|create|build|support)\b/.test(lower);
   const refactor = /\b(refactor|migrate|cleanup|rename)\b/.test(lower);
@@ -129,8 +129,8 @@ function createMockPlannerPlan(text: string) {
 
 function classifyMockWorkflowIntent(text: string) {
   const lower = text.toLowerCase();
-  const mutation = /\b(fix|update|change|modify|add|delete|remove|refactor|implement|write|create|patch|restore|build|generate|port)\b|修复|修改|更新|新增|删除|重构|实现|写入|创建|还原|生成/.test(lower);
-  const inspect = /\b(read|list|show|inspect|scan|describe|summarize|tree|structure|directory|folder)\b|读取|查看|列出|输出|文件结构|目录结构|文件夹|总结|分析/.test(lower);
+  const mutation = hasMutationSignal(lower);
+  const inspect = hasInspectSignal(lower) || (containsCjk(text) && !mutation);
   if (mutation) {
     return {
       intent: "patch",
@@ -157,20 +157,25 @@ function classifyMockWorkflowIntent(text: string) {
 
 function createMockUserReply(prompt: string): string {
   const request = extractUserRequest(prompt);
-  if (/^(hi|hello|hey|morning|good morning|good evening|你好|嗨|早|早上好|晚上好)[!！.\s]*$/i.test(request)) {
-    return "Hello. I am TomorrowEdge, your local multi-agent coding cockpit. Tell me the task, constraints, and access mode you want, and I can route it through the workflow.";
-  }
-  if (/finite division ring|division ring.*field|有限.*除环.*域|除环.*域/i.test(request)) {
-    return [
-      "A finite division ring is a field.",
-      "",
-      "Sketch: let D be a finite division ring and let Z be its center. Wedderburn's little theorem says every finite division ring is commutative. One standard proof studies maximal subfields and the conjugation action of D*; the class equation forces the multiplicative group to have a cyclic structure incompatible with a noncommutative finite division ring. Therefore multiplication in D is commutative, so D is a finite field."
-    ].join("\n");
-  }
-  if (/^(what|why|how|explain|prove|summarize|describe)\b|^(什么|为什么|怎么|解释|证明|总结|概括)/i.test(request)) {
-    return `Direct answer: ${request}\n\nThis offline mock route can only provide a compact deterministic answer. Configure a live provider for a deeper model-backed explanation.`;
-  }
-  return `I completed a read-only answer pass for: ${request || "the request"}. No files were changed and no shell commands were run.`;
+  return [
+    "Mock provider response.",
+    "",
+    "This offline provider proves that TomorrowEdge invoked the model route, but it does not contain domain knowledge or task-specific reasoning. Configure DeepSeek, OpenRouter, Kimi, MiMo, Ollama, or another OpenAI-compatible provider for a real semantic answer.",
+    "",
+    `Request received: ${request || "the request"}`
+  ].join("\n");
+}
+
+function hasInspectSignal(text: string): boolean {
+  return /\b(read|list|show|inspect|scan|describe|summarize|summary|tree|structure|directory|folder|review architecture|suggest improvements)\b|\u8bfb\u53d6|\u67e5\u770b|\u5217\u51fa|\u8f93\u51fa|\u6587\u4ef6\u7ed3\u6784|\u76ee\u5f55\u7ed3\u6784|\u603b\u7ed3|\u5206\u6790|\u5efa\u8bae|\u4e0d\u8981\u4fee\u6539|\u4e0d\u4fee\u6539|\u53ea\u8bfb/.test(text);
+}
+
+function hasMutationSignal(text: string): boolean {
+  return /\b(fix|update|change|modify|add|delete|remove|refactor|implement|write|create|patch|restore|build|generate|save|repair)\b|\u4fee\u590d|\u4fee\u6539|\u66f4\u65b0|\u65b0\u589e|\u5220\u9664|\u91cd\u6784|\u5b9e\u73b0|\u5199\u5165|\u521b\u5efa|\u65b0\u5efa|\u8fd8\u539f|\u751f\u6210|\u4fdd\u5b58/.test(text);
+}
+
+function containsCjk(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text);
 }
 
 function extractUserRequest(prompt: string): string {

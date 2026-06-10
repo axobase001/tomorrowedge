@@ -7,6 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.10] - 2026-06-10
+
+1.3.10 corrects the answer-first runtime path from 1.3.8: user-facing
+read-only/chat answers must be model-backed or explicitly blocked.
+
+### Changed
+
+- Read-only and chat-style final answers no longer use local hardcoded
+  greetings, proofs, repository summaries, or evidence-derived answer
+  fallbacks.
+- The summarizer answer path now calls the configured model route with provider
+  fallback disabled; unavailable models produce a `blocked` final summary and
+  `workflow_stop_reason` instead of silently falling back.
+- Mock provider `user_reply` output no longer contains task-specific knowledge
+  such as canned mathematical proofs; it only identifies itself as an offline
+  test provider.
+- The Cockpit main panel no longer synthesizes a completed answer from evidence
+  when no model-generated reply was recorded.
+- Workflow intent routing keeps high-confidence safety heuristics for explicit
+  patch/read-only commands, but ambiguous intent model calls no longer
+  conservative-fallback into local semantic guesses.
+
 ## [1.3.9] - 2026-06-10
 
 1.3.9 fixes the GUI status projection for patch-like tasks that produce no

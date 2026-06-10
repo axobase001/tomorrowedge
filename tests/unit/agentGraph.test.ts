@@ -251,8 +251,10 @@ describe("offline agent graph", () => {
     const state = await runOfflineGraph(cwd, "hello", defaultConfig);
 
     expect(state.finalSummary?.result).toBe("completed");
-    expect(state.finalSummary?.userReply).toContain("Hello");
+    expect(state.finalSummary?.userReplySource).toBe("model");
+    expect(state.finalSummary?.userReply).toContain("Mock provider response");
     expect(state.finalSummary?.userReply).not.toContain("Read-only request completed without patch generation.");
+    expect(state.events.some((event) => event.type === "model_call" && event.role === "summarizer" && event.status === "success")).toBe(true);
     expect(state.candidates).toEqual([]);
   });
 
@@ -261,7 +263,9 @@ describe("offline agent graph", () => {
     const state = await runOfflineGraph(cwd, "prove that a finite division ring is a field", defaultConfig);
 
     expect(state.finalSummary?.result).toBe("completed");
-    expect(state.finalSummary?.userReply?.toLowerCase()).toContain("finite division ring is a field");
+    expect(state.finalSummary?.userReplySource).toBe("model");
+    expect(state.finalSummary?.userReply).toContain("Mock provider response");
+    expect(state.finalSummary?.userReply).not.toContain("A finite division ring is a field.");
     expect(state.finalSummary?.userReply).not.toContain("Selected context:");
     expect(state.events.some((event) => event.type === "model_call" && event.role === "summarizer" && event.status === "success")).toBe(true);
     expect(state.candidates).toEqual([]);
@@ -272,10 +276,38 @@ describe("offline agent graph", () => {
     const state = await runOfflineGraph(cwd, "summarize this repository without editing files", defaultConfig, { fixtureMode: true });
 
     expect(state.finalSummary?.result).toBe("completed");
-    expect(state.finalSummary?.userReply).toContain("I completed a read-only pass");
+    expect(state.finalSummary?.userReplySource).toBe("model");
+    expect(state.finalSummary?.userReply).toContain("Mock provider response");
+    expect(state.finalSummary?.userReply).not.toContain("I completed a read-only pass");
     expect(state.finalSummary?.userReply).not.toContain("Result:");
     expect(state.finalSummary?.evidence.join("\n")).toContain("No file writes");
     expect(state.candidates).toEqual([]);
+  });
+
+  it("blocks read-only user replies when the configured answer model is unavailable instead of falling back", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: false, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        summarizer: { provider: "openrouter", model: "openai/gpt-5.2", reason: "test unavailable answer model" }
+      }
+    };
+    const state = await runOfflineGraph(cwd, "summarize this repository without editing files", config, { fixtureMode: true });
+
+    expect(state.finalSummary?.result).toBe("failed");
+    expect(state.finalSummary?.userReplySource).toBe("blocked");
+    expect(state.finalSummary?.userReply).toContain("No model-backed user answer was produced.");
+    expect(state.events.some((event) => event.type === "model_call" && event.role === "summarizer" && event.provider === "openrouter" && event.status === "failure")).toBe(true);
+    expect(state.events.some((event) => event.type === "model_call" && event.role === "summarizer" && event.provider === "mock" && event.status === "success")).toBe(false);
+    expect(state.events.some((event) => event.type === "provider_fallback" && event.role === "summarizer")).toBe(false);
+    expect(state.events.find((event) => event.type === "workflow_stop_reason")).toMatchObject({
+      reason: "model-backed answer unavailable; workflow blocked without fallback"
+    });
   });
 
   it("keeps natural-language inspect requests from becoming fake missing paths", async () => {

@@ -456,7 +456,7 @@ describe("cockpit view model", () => {
         task: "create generated files",
         result: "partially_completed",
         userReply: "No patch was applied.",
-        userReplySource: "local",
+        userReplySource: "system",
         changedFiles: [],
         testsRun: [],
         evidence: ["offline graph completed"],

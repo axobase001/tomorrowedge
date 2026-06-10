@@ -33,10 +33,13 @@ export async function chatWithProviderFallback(input: {
   model: string;
   buildRequest: (model: string, provider: string) => ChatRequest;
   ledger?: EventLedger;
+  allowFallback?: boolean;
+  markProviderUnavailable?: boolean;
 }): Promise<ProviderFallbackResult> {
   const primary = { provider: input.provider, model: input.model };
-  const primaryResult = await tryChat(input.config, input.role, primary.provider, primary.model, input.buildRequest, input.ledger);
-  if (primaryResult.response || !input.config.routing.fallback || primary.provider === "local_tool") {
+  const primaryResult = await tryChat(input.config, input.role, primary.provider, primary.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true);
+  const fallbackAllowed = input.allowFallback !== false;
+  if (primaryResult.response || !fallbackAllowed || !input.config.routing.fallback || primary.provider === "local_tool") {
     return { ...primary, ...primaryResult };
   }
 
@@ -45,7 +48,7 @@ export async function chatWithProviderFallback(input: {
     return { ...primary, ...primaryResult };
   }
 
-  const fallbackResult = await tryChat(input.config, input.role, fallback.provider, fallback.model, input.buildRequest, input.ledger);
+  const fallbackResult = await tryChat(input.config, input.role, fallback.provider, fallback.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true);
   if (!fallbackResult.response) {
     return {
       ...primary,
@@ -82,7 +85,8 @@ async function tryChat(
   providerId: string,
   model: string,
   buildRequest: (model: string, provider: string) => ChatRequest,
-  ledger?: EventLedger
+  ledger?: EventLedger,
+  markUnavailable = true
 ): Promise<Pick<ProviderFallbackResult, "response" | "error" | "errorCategory">> {
   const provider = cachedProviderRegistry(config).get(providerId);
   const requestId = makeId(`request_${role}`);
@@ -150,7 +154,7 @@ async function tryChat(
   } catch (error) {
     const report = redactProviderError(error);
     const message = formatProviderError(report);
-    if (ledger && shouldSkipAfterProviderError(report.category)) {
+    if (markUnavailable && ledger && shouldSkipAfterProviderError(report.category)) {
       markProviderBlocked(ledger, providerId, report.category);
     }
     ledger?.append({

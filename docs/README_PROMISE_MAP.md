@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.3.9 README product promises. Use this
+Authoritative map for TomorrowEdge 1.3.10 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -35,6 +35,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | objective-contracts | Runs create and verify an Objective Contract before planning, and planner output cannot relax contract evidence, workflow-kind, permissions, or stop conditions. | `src/core/contracts`, `src/core/scenarios`, `src/core/agentGraph/executor.ts`, `src/cli/commands/contract.ts` | `tests/unit/objectiveContract.test.ts`, `tests/unit/agentGraph.test.ts`, `tedge contract inspect latest` | implemented |
 | objective-trace-memory | Runs write compact objective-action-feedback traces that can be inspected, listed by scenario, and reused for future trace-guided orchestration. | `src/core/traces`, `src/core/agentGraph/executor.ts`, `src/cli/commands/trace.ts` | `tests/unit/objectiveTracePolicy.test.ts`, `tests/unit/agentGraph.test.ts`, `tedge trace inspect latest`, `tedge trace list --scenario debugging` | implemented |
 | orchestration-policy-evolution | Stored objective traces can score and offline-evolve bounded orchestration policy genomes without mutating permissions, secrets, prompts, or source code. | `src/core/orchestrationPolicy`, `src/cli/commands/policy.ts`, `src/config/schema.ts` | `tests/unit/objectiveTracePolicy.test.ts`, `tedge policy inspect`, `tedge policy evolve --offline`, `tedge policy eval` | implemented |
+| model-backed-user-replies | Read-only/chat answers are produced by the configured summarizer model route or explicitly blocked; TomorrowEdge does not synthesize local hardcoded answers when the model is unavailable. | `src/core/agentGraph/executor.ts`, `src/core/goal/readOnlyTask.ts`, `src/core/model/providerFallback.ts`, `src/cockpit/viewModel.ts`, `src/providers/mockProvider.ts` | `tests/unit/agentGraph.test.ts`, `tests/unit/cockpitViewModel.test.ts` | implemented |
 | governed-skills-tool-packs | Governed skills and human-seeded workflow/workspace/code/GitHub/web/document/data/API tool packs can be listed, validated, routed, mined from traces as inert candidates, and recorded in objective traces without bypassing Objective Contracts or access modes. | `src/core/skills`, `src/cli/commands/skills.ts`, `src/core/agentGraph/executor.ts`, `src/core/traces/objectiveTrace.ts` | `tests/unit/skills.test.ts`, `tests/unit/agentGraph.test.ts`, `tedge skills list`, `tedge skills propose` | #406, #407, #408, #409, #410, #411, #412, #413, #414, #415, #416, #417, #418, #419 |
 | self-iteration-gui-visibility | GUI detail drawer exposes Objective Contract, Objective Trace, and Orchestration Policy summaries through the shared cockpit view model. | `src/cockpit/viewModel.ts`, `src/cockpit/contracts.ts`, `src/cockpit-web/src/components/DetailDrawer.tsx` | `tests/unit/cockpitViewModel.test.ts`, `tests/unit/cockpitWeb.test.ts` | implemented |
 
