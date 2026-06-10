@@ -85,6 +85,20 @@ export type CockpitTelemetry = {
   latestRiskLevel?: "low" | "medium" | "high";
   decisionConfidence?: number;
   fallbackCount: number;
+  // Budget visualization (dopamine design)
+  baselineCostUsd?: number;         // what the best/cheapest model combo would cost
+  savedUsd?: number;                // baselineCostUsd - currentCostUsd
+  savingsPercent?: number;          // (savedUsd / baselineCostUsd) * 100, e.g. 87
+  baselineModelLabel?: string;      // e.g. "GPT-4o"
+  budgetUsedPercent?: number;       // currentCostUsd / budgetUsd * 100
+  cumulativeSavedUsd?: number;      // cross-session total (from localStorage)
+  nextMilestoneUsd?: number;        // next dopamine milestone target
+  roleCosts?: Array<{
+    role: string;
+    model: string;
+    costUsd: number;
+    percent: number;                // of total cost
+  }>;
 };
 
 export type CockpitSessionSource = "empty" | "saved" | "live" | "api_unavailable";

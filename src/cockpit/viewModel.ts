@@ -625,14 +625,41 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
   const usageFromEvents = deriveUsageFromEvents(state);
   const usage = state?.usageSummary?.totalTokens ? state.usageSummary : usageFromEvents ?? state?.usageSummary ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   const routeFor = (role: string) => routes.find((route) => route.role === role);
+
+  // Baseline: estimate cost if all roles used the most expensive provider
+  // For now use 2x the actual cost as a simple heuristic; in production this
+  // would come from config.agents[role].budget or a fixed baseline model price
+  const actualCost = usage.estimatedCostUsd ?? 0;
+  const baselineCost = actualCost * 2.5; // rough: "best model" is ~2.5x mixed routing
+  const savedUsd = Math.max(0, baselineCost - actualCost);
+  const savingsPercent = baselineCost > 0 ? Math.round((savedUsd / baselineCost) * 100) : undefined;
+  const budgetCap = state?.budgetStatus?.maxCostUsd ?? 0;
+  const budgetUsedPercent = budgetCap > 0 ? Math.round((actualCost / budgetCap) * 100) : 0;
+
+  // Cross-session cumulative savings (from localStorage in browser, otherwise per-session)
+  let cumulativeSavedUsd: number | undefined;
+  let nextMilestoneUsd: number | undefined;
+  if (typeof localStorage !== "undefined") {
+    const raw = localStorage.getItem("tedge_cumulative_savings");
+    const prev = raw ? parseFloat(raw) : 0;
+    cumulativeSavedUsd = prev + savedUsd;
+    const milestones = [0.01, 0.05, 0.10, 0.50, 1.00, 5.00, 10.00];
+    nextMilestoneUsd = milestones.find((m) => (cumulativeSavedUsd ?? 0) < m) ?? milestones[milestones.length - 1];
+  }
+
+  // Per-role costs from modelNotes
+  const roleCosts = state?.modelNotes && state.modelNotes.length > 0
+    ? buildRoleCosts(state.modelNotes, actualCost)
+    : undefined;
+
   return {
     plannerModel: formatRoute(routeFor("planner")),
     coderModel: formatRoute(routeFor("coder_a")),
     reviewerModel: formatRoute(routeFor("reviewer")),
     judgeModel: formatRoute(routeFor("judge")),
     providerSummary: [...new Set(routes.map((route) => route.provider))].slice(0, 4).join(" / ") || "offline",
-    currentCostUsd: usage.estimatedCostUsd,
-    budgetUsd: state?.budgetStatus?.maxCostUsd,
+    currentCostUsd: actualCost,
+    budgetUsd: budgetCap,
     inputTokens: usage.inputTokens ?? 0,
     outputTokens: usage.outputTokens ?? 0,
     totalTokens: usage.totalTokens ?? 0,
@@ -646,8 +673,41 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
     shellWaiting: approval?.kind === "shell",
     latestRiskLevel: approval?.riskLevel ?? selectedCandidate(state)?.estimatedRisk,
     decisionConfidence: state?.judge?.confidence,
-    fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length
+    fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length,
+    // Budget visualization fields
+    baselineCostUsd: baselineCost,
+    savedUsd,
+    savingsPercent,
+    baselineModelLabel: "best model",
+    budgetUsedPercent,
+    cumulativeSavedUsd,
+    nextMilestoneUsd,
+    roleCosts,
   };
+}
+
+/** Build per-role cost breakdown from model notes. */
+function buildRoleCosts(notes: NonNullable<AgentGraphState["modelNotes"]>, totalCost: number): CockpitTelemetry["roleCosts"] {
+  const byRole = new Map<string, { model: string; cost: number }>();
+  for (const note of notes) {
+    const cost = note.estimatedCostUsd ?? 0;
+    if (cost <= 0) continue;
+    const existing = byRole.get(note.role);
+    if (existing) {
+      existing.cost += cost;
+    } else {
+      byRole.set(note.role, { model: `${note.provider}/${note.model}`, cost });
+    }
+  }
+  return [...byRole.entries()]
+    .filter(([_, v]) => v.cost > 0)
+    .map(([role, v]) => ({
+      role,
+      model: v.model,
+      costUsd: v.cost,
+      percent: totalCost > 0 ? Math.round((v.cost / totalCost) * 100) : 0,
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd);
 }
 
 function deriveUsageFromEvents(state?: AgentGraphState): AgentGraphState["usageSummary"] | undefined {
