@@ -5,6 +5,8 @@ import { inferWorkflowKindFromEvents, type WorkflowKind } from "../orchestration
 export type TraceCompleteness = {
   score: number;
   missing: string[];
+  intentionallySkipped: string[];
+  blockedByApproval: string[];
 };
 
 type TraceRequirement = { label: string; types: TomorrowEdgeEvent["type"][] };
@@ -47,10 +49,14 @@ export function computeTraceCompleteness(events: TomorrowEdgeEvent[], options: {
   const workflowKind = options.workflowKind ?? inferWorkflowKindFromEvents(events, options.plan);
   const required = requirementsForWorkflowKind(workflowKind);
   const presentTypes = new Set(events.map((event) => event.type));
-  const missing = required.filter((item) => !item.types.some((type) => presentTypes.has(type))).map((item) => item.label);
+  const rawMissing = required.filter((item) => !item.types.some((type) => presentTypes.has(type))).map((item) => item.label);
+  const skipped = classifySkippedRequirements(rawMissing, events, options.plan);
+  const missing = rawMissing.filter((item) => !skipped.intentionallySkipped.includes(item) && !skipped.blockedByApproval.includes(item));
   return {
     score: Math.round(((required.length - missing.length) / required.length) * 100),
-    missing
+    missing,
+    intentionallySkipped: skipped.intentionallySkipped,
+    blockedByApproval: skipped.blockedByApproval
   };
 }
 
@@ -58,4 +64,38 @@ function requirementsForWorkflowKind(workflowKind: WorkflowKind): TraceRequireme
   if (workflowKind === "read_only") return READ_ONLY_REQUIRED;
   if (workflowKind === "advisory" || workflowKind === "ask_user") return ADVISORY_REQUIRED;
   return PATCH_REQUIRED;
+}
+
+function classifySkippedRequirements(missing: string[], events: TomorrowEdgeEvent[], plan?: Plan): Pick<TraceCompleteness, "intentionallySkipped" | "blockedByApproval"> {
+  const intentionallySkipped: string[] = [];
+  const blockedByApproval: string[] = [];
+  if (missing.includes("shell run recorded")) {
+    if (hasApprovalBlockedPatch(events)) {
+      blockedByApproval.push("shell run recorded");
+    } else if (hasSkippedTestRunner(events) || !plan?.verificationCommands?.length) {
+      intentionallySkipped.push("shell run recorded");
+    }
+  }
+  return { intentionallySkipped, blockedByApproval };
+}
+
+function hasApprovalBlockedPatch(events: TomorrowEdgeEvent[]): boolean {
+  return events.some((event) =>
+    event.type === "patch_apply"
+    && event.applied === false
+    && /approval required/i.test(event.error ?? "")
+  ) || events.some((event) =>
+    event.type === "role_node_result"
+    && event.nodeId === "patch_runner"
+    && event.status === "skipped"
+    && /approval/i.test(event.summary)
+  );
+}
+
+function hasSkippedTestRunner(events: TomorrowEdgeEvent[]): boolean {
+  return events.some((event) =>
+    event.type === "role_node_result"
+    && event.nodeId === "test_runner"
+    && event.status === "skipped"
+  );
 }

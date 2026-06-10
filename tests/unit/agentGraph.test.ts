@@ -135,6 +135,34 @@ describe("offline agent graph", () => {
     expect(state.agents.findIndex((agent) => agent.role === "reviewer")).toBeGreaterThan(state.agents.findIndex((agent) => agent.role === "coder_b"));
   });
 
+  it("executes patch runner and test runner only after RoleGraph and TaskGraph dependencies are terminal", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-rolegraph-execution-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, {
+        fixtureMode: true,
+        accessMode: "full",
+        approvePatch: true,
+        approveShell: true,
+        testCommand: "node test.js"
+      });
+      const roleEvents = state.events.filter((event) => event.type === "role_node_result");
+      const roleOrder = roleEvents.map((event) => event.nodeId);
+      const taskEvents = state.events.filter((event) => event.type === "task_node_result");
+      const taskOrder = taskEvents.map((event) => event.taskNodeId);
+
+      expect(roleOrder.indexOf("patch_runner")).toBeGreaterThan(roleOrder.indexOf("judge"));
+      expect(roleOrder.indexOf("test_runner")).toBeGreaterThan(roleOrder.indexOf("patch_runner"));
+      expect(roleOrder.indexOf("summarizer")).toBeGreaterThan(roleOrder.indexOf("test_runner"));
+      expect(taskOrder.indexOf("apply_patch")).toBeGreaterThan(taskOrder.indexOf("judge_patch"));
+      expect(taskOrder.indexOf("verify_patch")).toBeGreaterThan(taskOrder.indexOf("apply_patch"));
+      expect(state.events.some((event) => event.type === "shell_run" && event.success === true)).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("honors planningPolicy.allowParallelRoles=false in the runtime candidate and debate path", async () => {
     const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-no-parallel-policy-"));
@@ -155,6 +183,28 @@ describe("offline agent graph", () => {
       expect(state.agents.map((agent) => agent.role)).not.toContain("coder_b");
       expect(state.roleGraph?.nodes.map((node) => node.role)).not.toContain("coder_b");
       expect(state.debateRounds).toHaveLength(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("classifies approval-blocked verification as blockedByApproval instead of ordinary missing shell evidence", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-approval-trace-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+      const completenessEvent = state.events.find((event) => event.type === "trace_completeness");
+
+      expect(state.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "role_node_result", nodeId: "patch_runner", status: "skipped" }),
+        expect.objectContaining({ type: "role_node_result", nodeId: "test_runner", status: "skipped" })
+      ]));
+      expect(state.traceCompleteness?.missing).not.toContain("shell run recorded");
+      expect(state.traceCompleteness?.blockedByApproval).toContain("shell run recorded");
+      expect(completenessEvent).toMatchObject({
+        blockedByApproval: expect.arrayContaining(["shell run recorded"])
+      });
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -604,6 +654,7 @@ describe("offline agent graph", () => {
     expect(state.modelNotes.length).toBeGreaterThan(0);
     expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
     expect(state.events.some((event) => event.type === "budget_decision" && event.invocationKind === "live_advisory" && event.status === "allowed")).toBe(true);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.invocationKind === "live_advisory" && event.simulated)).toBe(true);
   });
 
   it("restricted access blocks live advisory before cloud/model calls", async () => {

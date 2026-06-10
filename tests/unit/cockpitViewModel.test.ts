@@ -75,11 +75,35 @@ describe("cockpit view model", () => {
         kind: "implementation_advice",
         content: "patch",
         estimatedCostUsd: 0.02
-      }]
+      }],
+      events: [
+        eventBase("event_budget_real", "budget_decision", {
+          phase: "planning",
+          role: "planner",
+          provider: "openrouter",
+          model: "openai/gpt-5.2",
+          status: "allowed",
+          reason: "real provider budget decision",
+          realProvider: true,
+          simulated: false
+        }),
+        eventBase("event_budget_sim", "budget_decision", {
+          phase: "planning",
+          role: "planner",
+          provider: "mock",
+          model: "mock-balanced",
+          status: "allowed",
+          reason: "simulated governance",
+          realProvider: false,
+          simulated: true
+        })
+      ]
     }));
 
     expect(vm.telemetry.budgetUsedPercent).toBe(30);
     expect(vm.telemetry.budgetRemainingUsd).toBeCloseTo(0.07);
+    expect(vm.telemetry.realBudgetDecisions).toBe(1);
+    expect(vm.telemetry.simulatedBudgetDecisions).toBe(1);
     expect(vm.telemetry.roleCosts).toEqual([
       expect.objectContaining({ role: "coder_a", model: "openrouter/qwen/free", costUsd: 0.02, percent: 67 }),
       expect.objectContaining({ role: "planner", model: "deepseek/deepseek-chat", costUsd: 0.01, percent: 33 })

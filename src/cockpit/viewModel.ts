@@ -627,6 +627,7 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
   const routeFor = (role: string) => routes.find((route) => route.role === role);
   const currentCostUsd = usage.estimatedCostUsd;
   const budgetUsd = state?.budgetStatus?.maxCostUsd;
+  const budgetDecisions = (state?.events ?? []).filter((event) => event.type === "budget_decision");
   const budgetUsedPercent = typeof currentCostUsd === "number" && typeof budgetUsd === "number" && budgetUsd > 0
     ? Math.min(100, Math.round((currentCostUsd / budgetUsd) * 100))
     : undefined;
@@ -655,6 +656,8 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
     latestRiskLevel: approval?.riskLevel ?? selectedCandidate(state)?.estimatedRisk,
     decisionConfidence: state?.judge?.confidence,
     fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length,
+    realBudgetDecisions: budgetDecisions.filter((event) => event.realProvider).length,
+    simulatedBudgetDecisions: budgetDecisions.filter((event) => event.simulated).length,
     budgetUsedPercent,
     budgetRemainingUsd,
     roleCosts: buildRoleCosts(state?.modelNotes ?? [], currentCostUsd)

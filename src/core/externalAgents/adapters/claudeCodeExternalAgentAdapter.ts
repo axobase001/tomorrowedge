@@ -96,14 +96,16 @@ function normalizeClaudeOutput(input: ExternalAgentOutputInput): ExternalAgentNo
   } else if (input.role === "reviewer") {
     const review = reviewFromPayload(payload);
     if (review) {
-      payload = { summary: summaryFromPayload(payload, "Claude Code reviewer normalized review output."), review, issues: asRecord(payload)?.issues ?? [] };
+      const reviewRef = artifactRefFromPayload(payload, ["reviewRef", "artifactRef"]);
+      payload = { summary: summaryFromPayload(payload, "Claude Code reviewer normalized review output."), review, issues: asRecord(payload)?.issues ?? [], reviewRef };
       return { ...generic, status: warnings.length ? "warning" : "success", warnings, payload, summary: summaryFromPayload(payload, "Claude Code reviewer normalized review output.") };
     }
     warnings.push("Claude reviewer output did not include review/reviews.");
   } else if (input.role === "judge") {
     const judgment = judgmentFromPayload(payload);
     if (judgment) {
-      payload = { summary: judgment.reason, judgment };
+      const decisionRef = artifactRefFromPayload(payload, ["decisionRef", "judgeRef", "artifactRef"]);
+      payload = { summary: judgment.reason, judgment, decisionRef };
       return { ...generic, status: warnings.length ? "warning" : "success", warnings, payload, summary: judgment.reason };
     }
     warnings.push("Claude judge output did not include judgment/decision.");
@@ -142,9 +144,9 @@ function extractClaudeEvidence(input: ExternalAgentEvidenceInput): string[] {
 function extractClaudeEvidencePackets(input: ExternalAgentEvidenceInput): EvidencePacket[] {
   const packets: EvidencePacket[] = [];
   const review = reviewFromPayload(input.normalized.payload);
-  if (review) packets.push(buildReviewEvidence(review));
+  if (review) packets.push(buildReviewEvidence(review, artifactRefFromPayload(input.normalized.payload, ["reviewRef", "artifactRef"])));
   const judgment = judgmentFromPayload(input.normalized.payload);
-  if (judgment) packets.push(buildJudgeEvidence(judgment));
+  if (judgment) packets.push(buildJudgeEvidence(judgment, artifactRefFromPayload(input.normalized.payload, ["decisionRef", "judgeRef", "artifactRef"])));
   return packets;
 }
 
@@ -285,6 +287,18 @@ function summaryFromPayload(payload: unknown, fallback: string): string {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function artifactRefFromPayload(payload: unknown, keys: string[]): string | undefined {
+  const object = asRecord(payload);
+  const review = asRecord(object?.review);
+  const judgment = asRecord(object?.judgment);
+  for (const key of keys) {
+    const value = object?.[key] ?? review?.[key] ?? judgment?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  const artifacts = Array.isArray(object?.artifacts) ? object.artifacts : [];
+  return artifacts.find((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function isDefined<T>(value: T | undefined): value is T {

@@ -12,7 +12,7 @@ export function buildDebateSession(input: {
   evidencePackets: EvidencePacket[];
   maxRounds: number;
 }): DebateSession {
-  const packetRefs = input.evidencePackets.flatMap((packet) => packet.supportingArtifacts);
+  const packetRefs = input.evidencePackets.flatMap((packet) => packet.supportingArtifacts.length ? packet.supportingArtifacts : [packet.id]);
   const candidateClaims = input.candidates.map<DebateClaim>((candidate) => ({
     id: `claim_${candidate.candidateId}`,
     speaker: candidate.agentId,
@@ -94,7 +94,7 @@ export function buildDebateSession(input: {
 function buildIssues(review: ReviewReport | undefined, moves: DebateMove[], packetRefs: string[]): DebateIssue[] {
   const issues: DebateIssue[] = [];
   for (const item of review?.reviews ?? []) {
-    const security = item.securityConcerns.map((title) => ({ title, global: true, evidence: ["security review evidence"] }));
+    const security = item.securityConcerns.map((title) => ({ title, global: isGlobalSecurityConcern(title), evidence: ["security review evidence"] }));
     const regressions = item.regressionConcerns.map((title) => ({ title, global: false, evidence: ["regression evidence"] }));
     const redTeam = item.redTeamFindings
       .filter((finding) => finding.severity === "high" || finding.severity === "critical")
@@ -126,6 +126,12 @@ function buildIssues(review: ReviewReport | undefined, moves: DebateMove[], pack
     }
   }
   return issues;
+}
+
+function isGlobalSecurityConcern(title: string): boolean {
+  const value = title.toLowerCase();
+  return /\b(critical|credential|credentials|secret|secrets|api key|apikey|token leak|token leakage|leakage|private key|password)\b/.test(value)
+    || /\b(shared auth|auth boundary|authorization boundary|permission boundary|repository-wide|repo-wide|global invariant|shared invariant|all candidates)\b/.test(value);
 }
 
 function evidenceCoverage(claims: DebateClaim[]): number {

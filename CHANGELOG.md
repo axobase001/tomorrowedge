@@ -7,8 +7,36 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-11
+
+1.4.1 hardens the Adaptive Orchestration Runtime without claiming a fully
+asynchronous graph executor. The native backend remains the executor, but patch
+workflows now dispatch from RoleGraph-ready and TaskGraph-ready intersections.
+
 ### Changed
 
+- Patch workflows now use an `executeReadyRoleGraphNodes()` loop and
+  `executeReadyTaskNode()` dispatch path for graph-ready coder, reviewer,
+  judge, patch-runner, and test-runner nodes. Legacy phase functions remain the
+  internal actions, but RoleGraph/TaskGraph readiness is now the top-level gate.
+- TaskGraphs now align with RoleGraphs: optional `coder_b` branches create an
+  explicit `produce_patch_alt` task node, and stale cached/model task graphs are
+  rebuilt when they no longer match the selected RoleGraph.
+- Live patch primary generation no longer starts an extra native `coder_b` after
+  `coder_a` has produced the live candidate set, and `debate.max_candidates=1`
+  prevents optional `coder_b` from entering the RoleGraph.
+- Debate Protocol v2 now treats ordinary security concerns as candidate-scoped
+  by default. Only critical red-team findings, credential/secret leakage,
+  shared auth boundary risks, and repository-wide invariant risks become global
+  blockers.
+- Trace completeness now separates ordinary missing evidence from
+  `blockedByApproval` and `intentionallySkipped` categories, so partial
+  approval-blocked workflows do not report shell execution as an unqualified
+  missing trace item.
+- Budget decisions now label real provider calls separately from simulated
+  mock/fixture/local governance calls, and the GUI telemetry shows both counts.
+- Codex and Claude Code external adapter evidence packets now preserve stable
+  diff, review, and judge artifact refs when the external payload provides them.
 - Strategy memory can now be toggled from project preferences with
   `tedge prefs --strategy-memory-routing true|false`, and
   `tedge memory --strategy "<task>"` shows task-scoped matched records,

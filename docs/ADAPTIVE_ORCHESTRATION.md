@@ -50,6 +50,23 @@ relevant instead of merely visible:
   according to adapter policy and convert normalized role outputs into
   EvidencePackets.
 
+The 1.4.1 hardening pass tightens the same boundary:
+
+- patch workflows dispatch executable work from the intersection of
+  RoleGraph-ready nodes and TaskGraph-ready task nodes;
+- optional `coder_b` branches require explicit `produce_patch_alt` task nodes,
+  and stale cached/model task graphs are rebuilt when they no longer match the
+  selected RoleGraph;
+- approval-blocked patch workflows classify missing shell evidence under
+  `blockedByApproval`, while intentional skips remain separate from ordinary
+  missing trace evidence;
+- Debate Protocol v2 reports selected/global/non-selected issue counts and
+  keeps ordinary candidate-local security concerns scoped to their candidate;
+- budget decisions mark real provider calls separately from simulated
+  mock/fixture/local governance calls;
+- external Codex/Claude Code EvidencePackets keep stable diff, review, and
+  judge artifact refs when those refs are provided by the external agent.
+
 The key principle is unchanged:
 
 > Strong agents decide. Efficient agents execute. Local agents protect privacy.

@@ -25,6 +25,8 @@ export async function finalizePostApprovalTrace(cwd: string, state: AgentGraphSt
     role: "summarizer",
     score: completeness.score,
     missing: completeness.missing,
+    intentionallySkipped: completeness.intentionallySkipped,
+    blockedByApproval: completeness.blockedByApproval,
     workflowKind
   });
   const next = {
