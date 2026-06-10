@@ -21,14 +21,18 @@ export function ReceiptModal({
   const discountPct = baseline > 0 ? Math.round((saved / baseline) * 100) : 0;
 
   return (
-    <div style={{
+    <div
+      onClick={onDismiss}
+      style={{
       position: "fixed", inset: 0, zIndex: 80,
       display: "grid", placeItems: "center",
       background: "rgba(11,18,24,0.42)",
       animation: "te-fade-in 120ms ease",
       padding: 20,
     }}>
-      <div style={{
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
         width: "min(400px, calc(100vw - 32px))",
         border: "1px solid var(--te-border)",
         borderRadius: 7,
