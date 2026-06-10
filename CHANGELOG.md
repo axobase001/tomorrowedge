@@ -39,6 +39,10 @@ Changelog: newest changes first, grouped by release and by change type.
   candidates plus post-validation reviewer misses and judge selection errors.
   It also records plan-step/subtask outcomes so final success does not erase
   earlier failed or blocked subtasks.
+- Error-loop experiments now include a fixture catalog with train/validation/
+  transfer metadata, runtime/commit/fixture-hash manifest fields, model-visible
+  versus evaluator-only memory exports, fail-fast leakage checks, cohort metrics
+  with variance and CI95, and explicit insufficient-data flags.
 
 ## [1.3.10] - 2026-06-10
 

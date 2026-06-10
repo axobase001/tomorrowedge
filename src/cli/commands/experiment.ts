@@ -37,7 +37,8 @@ function renderExperimentSummary(result: Awaited<ReturnType<typeof runErrorLoopE
     `| ${result.metrics.trials} | ${result.metrics.completed} | ${result.metrics.failures} | ${result.metrics.memoryWritten} | ${result.metrics.retrievalDecisions} | ${result.metrics.memoryPolicyExploit}/${result.metrics.memoryPolicyBypass} |`,
     "",
     `Report: ${result.reportPath}`,
-    `Manifest: ${result.manifestPath}`
+    `Manifest: ${result.manifestPath}`,
+    `Cohorts: ${result.cohortMetricsPath}`
   ].join("\n") + "\n";
 }
 

@@ -35,6 +35,7 @@ research-friendly bundle:
 - `trials.jsonl`
 - `memory_records.jsonl`
 - `retrieval_decisions.jsonl`
+- `cohort_metrics.json`
 - `metrics.json`
 - `report.md`
 
@@ -67,8 +68,10 @@ The harness supports explicit ablation arms:
 - `random_memory_control`: failure-memory loop with deterministic
   `random_control` retrieval policy.
 
-`manifest.json` records `ablationSettings` for every arm, so hidden defaults do
-not silently mix write, retrieval, and injection modes.
+`manifest.json` records `ablationSettings` for every arm, runtime metadata,
+commit SHA when available, a fixture-catalog hash, task split/family labels, and
+hidden-validator counts. Hidden validator names and oracle-only answer tokens are
+kept out of model-visible prompts and memory records.
 
 Normal project runs do not write failure-memory records by default. The
 experiment harness opts in with `failure_memory.enabled: true` and marks records
@@ -87,7 +90,8 @@ project memory unless the user explicitly enables it.
 - `repeatedSameClassErrorRate`: repeated same-class error signal from repair
   policy or recurring failure memory
 - `validationPassRate`: share of trials with at least one passing verifier
-- `transferTaskPassRate`: exported as `null` until a transfer split exists
+- `transferTaskPassRate`: transfer validation rate when catalog tasks include
+  transfer fixtures, otherwise `null`
 - `averageCostToRecoveryUsd` and `averageTimeToRecoveryMs`: cost/time over
   completed recoveries when measured
 - `memoryRetrievalPrecision`: selected retrievals over selected plus rejected
@@ -95,9 +99,38 @@ project memory unless the user explicitly enables it.
 - `harmfulRetrievalRate`: retrieved-memory trials that still did not complete
 - `repairSuccessAfterRetrievalRate`: repair-context retrievals followed by
   successful validation
+- `cohortMetrics`: grouped metrics by ablation, task family, train/validation/
+  transfer split, and failure class
+- `leakage`: fail-fast evaluator-only token scan over model-visible memory
+  exports
 
 These fields are intentionally conservative. They support audit and ablation;
 they do not prove causal improvement.
+
+`memory_records.jsonl` distinguishes:
+
+- `model_visible`: redacted failure-memory evidence that may be shown to future
+  agents
+- `evaluator_only`: fixture id, hidden-validator count, and leakage-token count
+  used by the harness
+
+If an evaluator-only token appears in `model_visible`, the experiment aborts
+instead of writing a misleading report.
+
+## Fixture Catalog
+
+The no-key catalog includes metadata-driven train, validation, and transfer
+tasks for:
+
+- boundary/off-by-one unit tasks across JavaScript and Python surfaces
+- React/UI async, accessibility, and responsive overflow transfer tasks
+- state-machine terminal-transition invariants
+- flaky validator uncertainty
+
+The catalog exposes structural labels such as `taskFamily`,
+`latentFailureType`, `language`, and `split` while keeping exact hidden oracles
+out of model-visible context. This is enough to test trace, memory, and leakage
+plumbing without claiming a live-provider benchmark result.
 
 ## Lifecycle and Retrieval Guards
 
@@ -196,6 +229,8 @@ Repair-policy failure classes are separate runtime routing labels:
 - Hidden validators must not be leaked into memory records.
 - A completed retry does not prove the memory caused the recovery; it only
   records that the memory was available.
+- Cohort rows with fewer than two trials are marked as insufficient data; do
+  not report confidence intervals as evidence when the report flags this state.
 
 ## Falsification Criteria
 
@@ -229,6 +264,7 @@ Research exports should report:
 - repeated same-class error rate
 - validation pass rate
 - transfer pass rate, or `null` when no transfer split exists
+- cohort means, variance, and confidence intervals where sample size allows
 - memory retrieval precision
 - harmful retrieval rate
 - repair success after retrieval

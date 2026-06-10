@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defaultConfig } from "../../config/defaultConfig.js";
@@ -8,6 +9,7 @@ import type { AgentGraphState } from "../agentGraph/state.js";
 import { saveSession } from "../memory/sessionMemory.js";
 import { explainFailureMemories, readFailureMemories, type FailureMemoryExplanation, type FailureMemoryRecord } from "../memory/taskMemory.js";
 import type { MemoryRetrievalPolicyMode } from "../memory/retrievalPolicy.js";
+import { defaultExperimentTasks, fixtureCatalogHash, resolveExperimentFixture, type ExperimentFixtureMetadata } from "./experimentFixtures.js";
 
 export type ErrorLoopAblation =
   | "memory_on"
@@ -37,7 +39,13 @@ export type ErrorLoopExperimentOptions = {
 export type ErrorLoopTrial = {
   schemaVersion: "error-loop-trial/v1";
   trialId: string;
+  taskId: string;
   task: string;
+  taskFamily: string;
+  taskSplit: "train" | "validation" | "transfer";
+  latentFailureType: string;
+  language: string;
+  validatorUncertain: boolean;
   repetition: number;
   ablation: ErrorLoopAblation;
   sessionId: string;
@@ -92,7 +100,30 @@ export type ErrorLoopMetrics = {
   memoryRetrievalPrecision: number | null;
   harmfulRetrievalRate: number | null;
   repairSuccessAfterRetrievalRate: number | null;
+  leakage: {
+    checked: boolean;
+    violations: number;
+    tokensChecked: number;
+  };
+  cohortMetrics: ErrorLoopCohortMetric[];
   averageTraceCompleteness?: number;
+};
+
+export type ErrorLoopCohortMetric = {
+  schemaVersion: "error-loop-cohort/v1";
+  key: string;
+  ablation: ErrorLoopAblation;
+  taskFamily: string;
+  taskSplit: "train" | "validation" | "transfer";
+  failureClass: string;
+  trials: number;
+  validationPassRate: number;
+  recoveryAttemptsMean: number | null;
+  recoveryAttemptsVariance: number | null;
+  recoveryAttemptsCi95: number | null;
+  costMeanUsd: number | null;
+  elapsedMeanMs: number | null;
+  insufficientData: boolean;
 };
 
 export type ErrorLoopExperimentResult = {
@@ -106,6 +137,7 @@ export type ErrorLoopExperimentResult = {
   metricsPath: string;
   memoryRecordsPath: string;
   retrievalDecisionsPath: string;
+  cohortMetricsPath: string;
   metrics: ErrorLoopMetrics;
   trials: ErrorLoopTrial[];
 };
@@ -120,6 +152,17 @@ type RetrievalDecisionRow = {
   rejected: FailureMemoryExplanation["rejected"];
 };
 
+type MemoryRecordExportRow = {
+  schemaVersion: "error-loop-memory-export/v1";
+  trialId?: string;
+  model_visible: FailureMemoryRecord;
+  evaluator_only: {
+    fixtureId: string;
+    hiddenValidatorCount: number;
+    leakageTokensChecked: number;
+  };
+};
+
 type AblationSettings = {
   strategyMemoryEnabled: boolean;
   failureMemoryWriteEnabled: boolean;
@@ -129,10 +172,7 @@ type AblationSettings = {
   memoryPolicyOverride?: MemoryRetrievalPolicyMode;
 };
 
-const defaultTasks = [
-  "fix failing test",
-  "repair npm test validation failure in index.js"
-];
+const defaultTasks = defaultExperimentTasks();
 
 export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExperimentOptions = {}): Promise<ErrorLoopExperimentResult> {
   const id = makeId("error_loop");
@@ -156,10 +196,12 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
       for (const task of tasks) {
         index += 1;
         const trialId = `trial_${String(index).padStart(3, "0")}`;
+        const fixture = resolveExperimentFixture(task);
         const trial = await runTrial({
           outputDir,
           trialId,
-          task,
+          task: fixture.task,
+          fixture,
           repetition,
           ablation,
           memoryPolicy
@@ -171,23 +213,47 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
     }
   }
 
-  const metrics = buildMetrics(trials, retrievalDecisions.length);
+  const memoryExports = buildMemoryExports(memoryRecords, trials);
+  const leakage = checkMemoryLeakage(memoryExports);
+  const metrics = buildMetrics(trials, retrievalDecisions.length, leakage);
   const manifestPath = path.join(outputDir, "manifest.json");
   const trialsPath = path.join(outputDir, "trials.jsonl");
   const metricsPath = path.join(outputDir, "metrics.json");
   const memoryRecordsPath = path.join(outputDir, "memory_records.jsonl");
   const retrievalDecisionsPath = path.join(outputDir, "retrieval_decisions.jsonl");
+  const cohortMetricsPath = path.join(outputDir, "cohort_metrics.json");
   const reportPath = path.join(outputDir, "report.md");
   const manifest = {
     schemaVersion: "error-loop-manifest/v1",
     id,
     createdAt,
     seed: options.seed ?? "deterministic-fixture",
-    tasks: tasks.map((task) => redactText(task)),
+    tasks: tasks.map((task) => {
+      const fixture = resolveExperimentFixture(task);
+      return {
+        id: fixture.id,
+        prompt: redactText(fixture.modelVisible.prompt),
+        split: fixture.split,
+        taskFamily: fixture.taskFamily,
+        latentFailureType: fixture.latentFailureType,
+        language: fixture.language,
+        surface: fixture.surface,
+        visibleValidators: fixture.modelVisible.visibleValidators,
+        hiddenValidatorCount: fixture.evaluatorOnly.hiddenValidators.length
+      };
+    }),
     repetitions,
     ablations,
     ablationSettings: Object.fromEntries(ablations.map((ablation) => [ablation, ablationSettings(ablation)])),
     memoryPolicy,
+    runtime: {
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      commitSha: gitCommitSha(cwd) ?? "unknown",
+      fixtureCatalogHash: fixtureCatalogHash(),
+      rerunFromManifest: "partial: deterministic fixture inputs are captured; live provider replay requires external provider state."
+    },
     redaction: {
       applied: true,
       note: "Goals, records, and artifacts are passed through TomorrowEdge redaction before export rows are written."
@@ -197,6 +263,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
       metrics: path.basename(metricsPath),
       memoryRecords: path.basename(memoryRecordsPath),
       retrievalDecisions: path.basename(retrievalDecisionsPath),
+      cohortMetrics: path.basename(cohortMetricsPath),
       report: path.basename(reportPath)
     }
   };
@@ -204,8 +271,9 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   await writeFile(trialsPath, jsonl(trials), "utf8");
   await writeFile(metricsPath, `${JSON.stringify(metrics, null, 2)}\n`, "utf8");
-  await writeFile(memoryRecordsPath, jsonl(memoryRecords), "utf8");
+  await writeFile(memoryRecordsPath, jsonl(memoryExports), "utf8");
   await writeFile(retrievalDecisionsPath, jsonl(retrievalDecisions), "utf8");
+  await writeFile(cohortMetricsPath, `${JSON.stringify(metrics.cohortMetrics, null, 2)}\n`, "utf8");
   await writeFile(reportPath, renderErrorLoopReport({ id, createdAt, tasks, repetitions, ablations, memoryPolicy, metrics, trials }), "utf8");
 
   return {
@@ -219,6 +287,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
     metricsPath,
     memoryRecordsPath,
     retrievalDecisionsPath,
+    cohortMetricsPath,
     metrics,
     trials
   };
@@ -270,15 +339,27 @@ memory and retrieval behavior. It is not a live provider benchmark.
 | ---: | ---: | ---: |
 | ${formatPercent(input.metrics.memoryRetrievalPrecision)} | ${formatPercent(input.metrics.harmfulRetrievalRate)} | ${formatPercent(input.metrics.repairSuccessAfterRetrievalRate)} |
 
+## Leakage Guard
+
+- Checked: ${input.metrics.leakage.checked ? "yes" : "no"}
+- Tokens checked: ${input.metrics.leakage.tokensChecked}
+- Violations: ${input.metrics.leakage.violations}
+
+## Cohorts
+
+| Cohort | Trials | Pass rate | Recovery mean | Recovery CI95 | Cost mean | Insufficient |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+${input.metrics.cohortMetrics.map((cohort) => `| ${cohort.key} | ${cohort.trials} | ${formatPercent(cohort.validationPassRate)} | ${formatNullable(cohort.recoveryAttemptsMean)} | ${formatNullable(cohort.recoveryAttemptsCi95)} | ${formatUsd(cohort.costMeanUsd)} | ${cohort.insufficientData ? "yes" : "no"} |`).join("\n") || "| - | 0 | - | - | - | - | yes |"}
+
 ## Memory Update Status
 
 ${skippedRows}
 
 ## Trials
 
-| Trial | Ablation | Result | Memory update | Retrieval | Policy | Recovery | Validation | Prediction | Failure class |
-| --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
-${input.trials.map((trial) => `| ${trial.trialId} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.recoveryAttemptsAfterFirstFailure} | ${trial.validationPassed ? "passed" : trial.validationFailed ? "failed" : "not_run"} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
+| Trial | Split | Family | Ablation | Result | Memory update | Retrieval | Policy | Recovery | Validation | Prediction | Failure class |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
+${input.trials.map((trial) => `| ${trial.trialId} | ${trial.taskSplit} | ${trial.taskFamily} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.recoveryAttemptsAfterFirstFailure} | ${trial.validationPassed ? "passed" : trial.validationFailed ? "failed" : "not_run"} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
 `;
 }
 
@@ -286,6 +367,7 @@ async function runTrial(input: {
   outputDir: string;
   trialId: string;
   task: string;
+  fixture: ExperimentFixtureMetadata;
   repetition: number;
   ablation: ErrorLoopAblation;
   memoryPolicy: MemoryRetrievalPolicyMode;
@@ -357,7 +439,13 @@ async function runTrial(input: {
     trial: {
       schemaVersion: "error-loop-trial/v1",
       trialId: input.trialId,
+      taskId: input.fixture.id,
       task: redactText(input.task),
+      taskFamily: input.fixture.taskFamily,
+      taskSplit: input.fixture.split,
+      latentFailureType: input.fixture.latentFailureType,
+      language: input.fixture.language,
+      validatorUncertain: input.fixture.surface === "flaky" || firstFailure?.outcomeMismatchType === "flaky_result",
       repetition: input.repetition,
       ablation: input.ablation,
       sessionId: state.sessionId,
@@ -384,9 +472,9 @@ async function runTrial(input: {
       repairSuccessAfterRetrieval: outcome.repairSuccessAfterRetrieval,
       estimatedCostUsd: state.usageSummary.estimatedCostUsd ?? null,
       timeToRecoveryMs: outcome.timeToRecoveryMs,
-      transferTask: false,
-      transferTaskPassed: null,
-      hiddenValidationPassed: null
+      transferTask: input.fixture.split === "transfer",
+      transferTaskPassed: input.fixture.split === "transfer" ? outcome.validationPassed : null,
+      hiddenValidationPassed: input.fixture.evaluatorOnly.hiddenValidators.length ? outcome.validationPassed : null
     },
     memoryRecords,
     retrievalDecision
@@ -400,7 +488,7 @@ function memoryStatusFor(failure: boolean, newRecords: FailureMemoryRecord[], up
   return "skipped_low_confidence";
 }
 
-function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): ErrorLoopMetrics {
+function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number, leakage: ErrorLoopMetrics["leakage"]): ErrorLoopMetrics {
   const memorySkipped = emptySkippedCounts();
   for (const trial of trials) {
     if (trial.memoryUpdateStatus !== "written") memorySkipped[trial.memoryUpdateStatus] += 1;
@@ -442,8 +530,46 @@ function buildMetrics(trials: ErrorLoopTrial[], retrievalDecisions: number): Err
     memoryRetrievalPrecision: retrievalSelected + retrievalRejected ? retrievalSelected / (retrievalSelected + retrievalRejected) : null,
     harmfulRetrievalRate: retrievalTrials.length ? retrievalTrials.filter((trial) => trial.result !== "completed").length / retrievalTrials.length : null,
     repairSuccessAfterRetrievalRate: repairRetrievalTrials.length ? repairRetrievalTrials.filter((trial) => trial.repairSuccessAfterRetrieval).length / repairRetrievalTrials.length : null,
+    leakage,
+    cohortMetrics: buildCohortMetrics(trials),
     averageTraceCompleteness: traceScores.length ? traceScores.reduce((sum, score) => sum + score, 0) / traceScores.length : undefined
   };
+}
+
+function buildCohortMetrics(trials: ErrorLoopTrial[]): ErrorLoopCohortMetric[] {
+  const groups = new Map<string, ErrorLoopTrial[]>();
+  for (const trial of trials) {
+    const key = [
+      trial.ablation,
+      trial.taskFamily,
+      trial.taskSplit,
+      trial.failureClass ?? "unknown"
+    ].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), trial]);
+  }
+  return [...groups.entries()].map(([key, rows]) => {
+    const [ablation, taskFamily, taskSplit, failureClass] = key.split("|") as [ErrorLoopAblation, string, ErrorLoopTrial["taskSplit"], string];
+    const recoveryAttempts = rows.map((row) => row.recoveryAttemptsAfterFirstFailure);
+    const costs = rows.map((row) => row.estimatedCostUsd).filter((value): value is number => value !== null);
+    const elapsed = rows.map((row) => row.timeToRecoveryMs).filter((value): value is number => value !== null);
+    const variance = varianceOrNull(recoveryAttempts);
+    return {
+      schemaVersion: "error-loop-cohort/v1" as const,
+      key,
+      ablation,
+      taskFamily,
+      taskSplit,
+      failureClass,
+      trials: rows.length,
+      validationPassRate: rows.filter((row) => row.validationPassed).length / rows.length,
+      recoveryAttemptsMean: averageOrNull(recoveryAttempts),
+      recoveryAttemptsVariance: variance,
+      recoveryAttemptsCi95: ci95(recoveryAttempts),
+      costMeanUsd: averageOrNull(costs),
+      elapsedMeanMs: averageOrNull(elapsed),
+      insufficientData: rows.length < 2
+    };
+  }).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 function trialOutcomeStats(state: AgentGraphState, firstFailure: FailureMemoryRecord | undefined): {
@@ -478,6 +604,58 @@ function trialOutcomeStats(state: AgentGraphState, firstFailure: FailureMemoryRe
   };
 }
 
+function buildMemoryExports(records: FailureMemoryRecord[], trials: ErrorLoopTrial[]): MemoryRecordExportRow[] {
+  const trialByMemoryId = new Map<string, ErrorLoopTrial>();
+  for (const trial of trials) {
+    for (const id of trial.memoryRecordIds) trialByMemoryId.set(id, trial);
+  }
+  return records.map((record) => {
+    const trial = trialByMemoryId.get(record.id);
+    const fixture = resolveExperimentFixture(trial?.taskId ?? trial?.task ?? record.goalPreview ?? "");
+    return {
+      schemaVersion: "error-loop-memory-export/v1",
+      trialId: trial?.trialId,
+      model_visible: record,
+      evaluator_only: {
+        fixtureId: fixture.id,
+        hiddenValidatorCount: fixture.evaluatorOnly.hiddenValidators.length,
+        leakageTokensChecked: fixture.evaluatorOnly.leakageTokens.length
+      }
+    };
+  });
+}
+
+function checkMemoryLeakage(rows: MemoryRecordExportRow[]): ErrorLoopMetrics["leakage"] {
+  let tokensChecked = 0;
+  const violations: string[] = [];
+  for (const row of rows) {
+    const fixture = resolveExperimentFixture(row.evaluator_only.fixtureId);
+    const visibleText = JSON.stringify(row.model_visible).toLowerCase();
+    for (const token of fixture.evaluatorOnly.leakageTokens) {
+      tokensChecked += 1;
+      if (token && visibleText.includes(token.toLowerCase())) {
+        violations.push(`${row.trialId ?? "unknown"}:${fixture.id}:${token}`);
+      }
+    }
+  }
+  if (violations.length) {
+    throw new Error(`Experiment leakage guard failed: evaluator-only token(s) leaked into model-visible memory: ${violations.slice(0, 5).join(", ")}`);
+  }
+  return {
+    checked: rows.length > 0,
+    violations: 0,
+    tokensChecked
+  };
+}
+
+function gitCommitSha(cwd: string): string | undefined {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function memoryPolicyStats(state: AgentGraphState): { exploit: number; bypass: number } {
   const decisions = state.events.filter((event) => event.type === "memory_policy");
   return {
@@ -496,6 +674,19 @@ function predictionStats(state: AgentGraphState): { matched: number; total: numb
 
 function averageOrNull(values: number[]): number | null {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function varianceOrNull(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const mean = averageOrNull(values) ?? 0;
+  return values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / (values.length - 1);
+}
+
+function ci95(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const variance = varianceOrNull(values);
+  if (variance === null) return null;
+  return 1.96 * Math.sqrt(variance / values.length);
 }
 
 function formatNullable(value: number | null): string {
