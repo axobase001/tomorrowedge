@@ -1,10 +1,12 @@
 import type { AgentGraphState } from "../../core/agentGraph/state.js";
-import { applyUnifiedDiff } from "../../core/patch/patchApplier.js";
+import { applyUnifiedDiffWithResult } from "../../core/patch/patchApplier.js";
 import { runTestCommand } from "../../core/verifier/testRunner.js";
 import { evidenceFromRun } from "../../core/verifier/evidenceMatcher.js";
 import { SummarizerAgent } from "../../core/agents/summarizer.js";
 import { restoreLatestUndoSnapshot } from "../../core/patch/undoManager.js";
 import { loadConfig } from "../../config/configLoader.js";
+import { finalizePostApprovalTrace } from "../../core/traces/postApprovalFinalizer.js";
+import { makeId } from "../../utils/ids.js";
 
 export type TuiActionResult = {
   graph: AgentGraphState;
@@ -19,10 +21,11 @@ export async function approveSelectedPatch(cwd: string, graph: AgentGraphState):
   if (!selected?.unifiedDiff) {
     return { graph, message: "当前没有可应用的候选补丁。" };
   }
-  const changedFiles = await applyUnifiedDiff(cwd, selected.unifiedDiff, true);
+  const applyResult = await applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, true);
+  const diffRef = writeArtifact(graph, "diffs", selected.unifiedDiff, "diff");
   const nextGraph = await refreshSummary({
     ...graph,
-    changedFiles,
+    changedFiles: [...new Set([...graph.changedFiles, ...applyResult.changedFiles])],
     approvals: { ...graph.approvals, patchApproved: true },
     agents: [
       ...graph.agents,
@@ -32,11 +35,26 @@ export async function approveSelectedPatch(cwd: string, graph: AgentGraphState):
         provider: "local_tool",
         model: "approval_gate",
         status: "success",
-        summary: `已应用补丁：${changedFiles.join(", ")}`
+        summary: `已应用补丁：${applyResult.changedFiles.join(", ")}`
       }
+    ],
+    events: [
+      ...graph.events,
+      makeEvent(graph, {
+        type: "patch_apply",
+        phase: "patch",
+        role: "runner",
+        provider: "local_tool",
+        model: "patch",
+        candidateId: selected.candidateId,
+        filesChanged: applyResult.changedFiles,
+        diffRef,
+        undoSnapshotIds: applyResult.undoSnapshotIds,
+        applied: true
+      })
     ]
   });
-  return { graph: nextGraph, message: `补丁已应用：${changedFiles.join(", ")}` };
+  return { graph: nextGraph, message: `补丁已应用：${applyResult.changedFiles.join(", ")}` };
 }
 
 export async function approveTestCommand(cwd: string, graph: AgentGraphState): Promise<TuiActionResult> {
@@ -53,7 +71,9 @@ export async function approveTestCommand(cwd: string, graph: AgentGraphState): P
     policy: config.shell.policy ?? (graph.access.mode === "full" ? "unrestricted" : "verification_allowlist"),
     verificationAllowlist: config.shell.verification_allowlist
   });
-  const nextGraph = await refreshSummary({
+  const stdoutRef = writeArtifact(graph, "stdout", result.stdout || "", "txt");
+  const stderrRef = writeArtifact(graph, "stderr", result.stderr || "", "txt");
+  const summarized = await refreshSummary({
     ...graph,
     runResults: [...graph.runResults, result],
     approvals: { ...graph.approvals, shellApproved: true },
@@ -67,8 +87,26 @@ export async function approveTestCommand(cwd: string, graph: AgentGraphState): P
         status: result.success ? "success" : "failed",
         summary: `${command} 退出码 ${result.exitCode}`
       }
+    ],
+    events: [
+      ...graph.events,
+      makeEvent(graph, {
+        type: "shell_run",
+        phase: "shell",
+        role: "runner",
+        provider: "local_tool",
+        model: "shell",
+        command,
+        cwd,
+        exitCode: result.exitCode,
+        stdoutRef,
+        stderrRef,
+        durationMs: result.durationMs,
+        success: result.success
+      })
     ]
   });
+  const nextGraph = await finalizePostApprovalTrace(cwd, summarized, "tui");
   return { graph: nextGraph, message: result.success ? `命令通过：${command}` : `命令失败：${command}` };
 }
 
@@ -109,6 +147,22 @@ async function refreshSummary(graph: AgentGraphState): Promise<AgentGraphState> 
     evidence: ["offline graph completed", ...graph.runResults.map(evidenceFromRun)]
   });
   return { ...graph, finalSummary };
+}
+
+function writeArtifact(graph: AgentGraphState, kind: string, content: string, extension: string): string {
+  const ref = `artifacts/${kind}/${makeId(kind)}.${extension}`;
+  graph.eventArtifacts.push({ ref, content });
+  return ref;
+}
+
+function makeEvent(graph: AgentGraphState, event: Record<string, unknown>): AgentGraphState["events"][number] {
+  return {
+    ...event,
+    id: makeId(String(event.type ?? "event")),
+    timestamp: new Date().toISOString(),
+    sessionId: graph.sessionId,
+    mode: graph.access.mode
+  } as AgentGraphState["events"][number];
 }
 
 function accessBlockedMessage(graph: AgentGraphState, action: "patch" | "shell" | "undo"): string {

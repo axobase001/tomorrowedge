@@ -73,6 +73,13 @@ providers:
     api_key_env: OPENROUTER_API_KEY
     base_url: https://openrouter.ai/api/v1
     model: openai/gpt-5.2
+    models:
+      - id: openai/gpt-5.2
+        label: strong planner/judge
+      - id: moonshotai/kimi-k2.6:free
+        label: free onboarding
+      - id: qwen/qwen3-coder:free
+        label: cheap coder
     api_format: openai_chat
     auth_header: bearer
     extra_headers: {}
@@ -102,6 +109,11 @@ agents:
       max_cost_per_call_usd: 1.5
       max_calls_per_task: 2
 ```
+
+`providers.<id>.model` remains the backward-compatible default. The optional
+`providers.<id>.models` list lets one API key/base URL expose several model IDs
+to the GUI role picker, so roles can share the same provider while using
+different models.
 
 Recommended experiment pattern:
 

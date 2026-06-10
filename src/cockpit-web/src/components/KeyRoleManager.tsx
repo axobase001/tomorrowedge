@@ -86,7 +86,8 @@ export function KeyRoleManager({
     keyConfigured: Boolean(selectedProvider?.keyConfigured),
     busy
   });
-  const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, catalogModels);
+  const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, [...(selectedProvider?.models ?? []), ...catalogModels]);
+  const selectedModelChoice = modelOptions.includes(model) ? model : "__custom";
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
@@ -127,10 +128,15 @@ export function KeyRoleManager({
               </label>
               <label>
                 <span>{t("keymgr.model")}</span>
-                <input value={model} list="keymgr-model-options" onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
-                <datalist id="keymgr-model-options">
-                  {modelOptions.map((item) => <option key={item} value={item} />)}
-                </datalist>
+                <div className="te-model-picker">
+                  <select value={selectedModelChoice} onChange={(event) => {
+                    if (event.target.value !== "__custom") setModel(event.target.value);
+                  }} data-testid="keymgr-model-select">
+                    {modelOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                    <option value="__custom">Custom model...</option>
+                  </select>
+                  <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
+                </div>
               </label>
               <label>
                 <span>{t("keymgr.baseUrl")}</span>
@@ -179,7 +185,19 @@ export function KeyRoleManager({
                       <option key={item} value={item}>{labelProvider(item, externalAgents)}</option>
                     ))}
                   </select>
-                  <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} />
+                  <select
+                    value={roleModelOptionIds(assignment.provider, roleProviders, assignment.model).includes(assignment.model) ? assignment.model : "__custom"}
+                    onChange={(event) => {
+                      if (event.target.value !== "__custom") setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }));
+                    }}
+                    data-testid={`keymgr-role-model-select-${assignment.role}`}
+                  >
+                    {roleModelOptionIds(assignment.provider, roleProviders, assignment.model).map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                    <option value="__custom">Custom model...</option>
+                  </select>
+                  <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
                 </div>
               ))}
             </div>
@@ -227,6 +245,16 @@ export function modelOptionIds(provider: string, configuredModel: string | undef
   ].filter((item): item is string => Boolean(item)))];
 }
 
+export function roleModelOptionIds(provider: string, providers: Array<{ id: string; model: string; models?: CockpitProviderModelOption[] }>, currentModel: string): string[] {
+  if (provider === "auto" || provider.startsWith("external:")) return ["auto"];
+  const providerId = normalizeProviderId(provider);
+  const selectedProvider = providers.find((item) => item.id === providerId);
+  return modelOptionIds(providerId, selectedProvider?.model, [
+    ...(selectedProvider?.models ?? []),
+    ...(currentModel && currentModel !== "auto" ? [{ id: currentModel, label: currentModel, source: "config" as const }] : [])
+  ]);
+}
+
 export function roleProviderOptions(providerIds: string[], externalAgents: CockpitExternalAgentOption[], currentProvider: string): string[] {
   return [...new Set([
     "auto",
@@ -236,10 +264,11 @@ export function roleProviderOptions(providerIds: string[], externalAgents: Cockp
   ].filter(Boolean))];
 }
 
-function defaultModelFor(provider: string, providers: Array<{ id: string; model: string }>, fallback: string): string {
+function defaultModelFor(provider: string, providers: Array<{ id: string; model: string; models?: CockpitProviderModelOption[] }>, fallback: string): string {
   if (provider === "auto") return "auto";
   if (provider.startsWith("external:")) return "auto";
-  return providers.find((item) => item.id === provider)?.model || fallback || "auto";
+  const selectedProvider = providers.find((item) => item.id === provider);
+  return selectedProvider?.model || selectedProvider?.models?.[0]?.id || fallback || "auto";
 }
 
 function defaultEnvFor(provider: string): string {

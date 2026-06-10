@@ -18,6 +18,7 @@ export type CockpitProviderReadiness = {
   id: string;
   enabled: boolean;
   model: string;
+  models: CockpitProviderModelOption[];
   baseUrl: string;
   apiKeyEnv?: string;
   keyConfigured: boolean;
@@ -72,7 +73,7 @@ export type CockpitProviderKeyRequest = {
 export type CockpitProviderModelOption = {
   id: string;
   label: string;
-  source: "catalog" | "static";
+  source: "catalog" | "static" | "config";
   isFree?: boolean;
   isLowCost?: boolean;
   tags?: string[];

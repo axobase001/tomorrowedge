@@ -56,7 +56,7 @@ export function generateNativeObjectiveContract(input: NativeContractGeneratorIn
     allowedPhases: allowedPhasesFor(effectiveWorkflowKind),
     allowedRoles,
     allowedTools,
-    forbiddenActions: forbiddenActionsFor(input.accessMode, riskLevel),
+    forbiddenActions: forbiddenActionsFor(input.accessMode, riskLevel, effectiveWorkflowKind),
     riskLevel,
     reasoningSensitivity: reasoningSensitivityFor(riskLevel, input.scenarioProfile.ambiguityLevel),
     budget: {
@@ -271,9 +271,9 @@ function allowedToolsFor(workflowKind: WorkflowKind, accessMode: AccessMode): st
   return [...tools];
 }
 
-function forbiddenActionsFor(accessMode: AccessMode, riskLevel: RiskLevel): string[] {
+function forbiddenActionsFor(accessMode: AccessMode, riskLevel: RiskLevel, workflowKind: WorkflowKind): string[] {
   const actions = ["bypass_event_ledger", "weaken_safety_boundary", "hide_model_call"];
-  if (accessMode === "restricted") actions.push("write_files", "apply_patch", "run_shell");
+  if (accessMode === "restricted" || workflowKind === "read_only" || workflowKind === "advisory" || workflowKind === "ask_user") actions.push("write_files", "apply_patch", "run_shell");
   if (riskLevel === "high") actions.push("skip_reviewer", "skip_judge", "claim_success_without_evidence");
   return actions;
 }

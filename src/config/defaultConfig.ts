@@ -72,24 +72,30 @@ export const defaultConfig: TomorrowEdgeConfig = {
     verification_allowlist: ["npm", "node", "npx", "pnpm", "yarn", "python", "python3", "pytest", "tsx", "tsc", "vitest", "jest", "cargo", "rustc", "make", "cmake", "go", "uv", "pip", "bun", "deno"]
   },
   providers: {
-    mock: { enabled: true, base_url: "", model: "mock-balanced", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
-    fixture: { enabled: true, base_url: "", model: "fixture-scripted", api_format: "openai_chat", auth_header: "none", extra_headers: {} },
+    mock: { enabled: true, base_url: "", model: "mock-balanced", models: [{ id: "mock-balanced", label: "Mock balanced" }], api_format: "openai_chat", auth_header: "none", extra_headers: {} },
+    fixture: { enabled: true, base_url: "", model: "fixture-scripted", models: [{ id: "fixture-scripted", label: "Fixture scripted" }], api_format: "openai_chat", auth_header: "none", extra_headers: {} },
     openrouter: {
       enabled: false,
       api_key_env: "OPENROUTER_API_KEY",
       base_url: "https://openrouter.ai/api/v1",
       model: "openai/gpt-5.2",
+      models: [
+        { id: "openai/gpt-5.2", label: "GPT-5.2" },
+        { id: "moonshotai/kimi-k2.6:free", label: "Kimi K2.6 free" },
+        { id: "qwen/qwen3-coder:free", label: "Qwen3 Coder free" },
+        { id: "deepseek/deepseek-chat-v3-0324:free", label: "DeepSeek V3 free" }
+      ],
       api_format: "openai_chat",
       auth_header: "bearer",
       extra_headers: {}
     },
-    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1", model: "mimo-v2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
-    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
-    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com", model: "deepseek-v4-pro", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
-    kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "https://api.moonshot.ai/v1", model: "kimi-k2.6", api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
-    anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "https://api.anthropic.com/v1", model: "claude-sonnet-4-5", api_format: "legacy_chat", auth_header: "api-key", extra_headers: {} },
-    gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-pro", api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
-    ollama: { enabled: true, base_url: "http://localhost:11434", model: "local-auto", api_format: "openai_chat", auth_header: "none", extra_headers: {} }
+    mimo: { enabled: false, api_key_env: "MIMO_API_KEY", base_url: "https://token-plan-sgp.xiaomimimo.com/v1", model: "mimo-v2.5-pro", models: [{ id: "mimo-v2.5-pro", label: "MiMo V2.5 Pro" }], api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
+    openai_compatible: { enabled: false, api_key_env: "OPENAI_API_KEY", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", models: [{ id: "gpt-4o-mini", label: "GPT-4o mini" }], api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    deepseek: { enabled: false, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com", model: "deepseek-v4-pro", models: [{ id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" }, { id: "deepseek-chat", label: "DeepSeek Chat" }, { id: "deepseek-reasoner", label: "DeepSeek Reasoner" }], api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    kimi: { enabled: false, api_key_env: "KIMI_API_KEY", base_url: "https://api.moonshot.ai/v1", model: "kimi-k2.6", models: [{ id: "kimi-k2.6", label: "Kimi K2.6" }, { id: "kimi-k2-0711-preview", label: "Kimi K2 preview" }], api_format: "openai_chat", auth_header: "bearer", extra_headers: {} },
+    anthropic: { enabled: false, api_key_env: "ANTHROPIC_API_KEY", base_url: "https://api.anthropic.com/v1", model: "claude-sonnet-4-5", models: [{ id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" }, { id: "claude-opus-4.1", label: "Claude Opus 4.1" }], api_format: "legacy_chat", auth_header: "api-key", extra_headers: {} },
+    gemini: { enabled: false, api_key_env: "GEMINI_API_KEY", base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-pro", models: [{ id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" }, { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" }], api_format: "openai_chat", auth_header: "api-key", extra_headers: {} },
+    ollama: { enabled: true, base_url: "http://localhost:11434", model: "local-auto", models: [{ id: "local-auto", label: "Local auto" }, { id: "qwen2.5-coder", label: "Qwen2.5 Coder" }, { id: "deepseek-r1", label: "DeepSeek R1" }], api_format: "openai_chat", auth_header: "none", extra_headers: {} }
   },
   external_agents: {
     claude_code: {

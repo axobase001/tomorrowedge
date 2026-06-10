@@ -7,6 +7,30 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-06-10
+
+1.3.7 clears the next GUI/runtime issue sweep around model selection,
+read-only intent safety, live patch candidate coherence, approval trace
+freshness, and long document recovery.
+
+### Changed
+
+- The GUI key/role manager now exposes refreshed provider catalogs through a
+  real model `<select>` while keeping custom model entry available.
+- Provider configs can retain multiple model IDs, and GUI role assignment can
+  select configured models from the same provider.
+- Live patch runs no longer mix offline/mock candidates into live candidate
+  sets, and post-judge live advisory is skipped once a live patch candidate has
+  already been selected for approval.
+- Explicit no-edit/no-shell requests now stay in read-only workflow contracts,
+  with patch/shell/undo excluded and file/shell mutation actions forbidden.
+- Browser and TUI manual approval paths now append real approval events and
+  refresh workflow stop reason, trace completeness, and objective traces after
+  verified approval.
+- Long document-generation responses that fail patch JSON parsing can be
+  recovered as Markdown patch candidates instead of silently ending with no
+  changed files.
+
 ## [1.3.6] - 2026-06-10
 
 1.3.6 fixes document/content patch verification semantics and an

@@ -27,8 +27,14 @@ describe("TUI approval actions", () => {
 
     expect(source).toContain("return a + b");
     expect(applied.graph.changedFiles).toEqual(["index.js"]);
+    expect(applied.graph.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(true);
     expect(tested.graph.runResults[0]?.success).toBe(true);
     expect(tested.graph.finalSummary?.result).toBe("completed");
+    expect(tested.graph.events.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+    expect(tested.graph.events.some((event) => event.type === "workflow_stop_reason" && event.result === "completed")).toBe(true);
+    expect(tested.graph.objectiveTrace?.outcome.finalStatus).toBe("success");
+    expect(tested.graph.objectiveTrace?.executionSummary.filesTouched).toContain("index.js");
+    expect(tested.graph.objectiveTrace?.executionSummary.shellRuns).toBeGreaterThan(0);
   }, 15_000);
 
   it("can undo the latest applied patch from TUI actions", async () => {

@@ -184,6 +184,80 @@ describe("live patch generator", () => {
     }
   });
 
+  it("recovers long document drafts as a new markdown patch when live patch JSON parsing fails", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-document-fallback-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const draft = [
+        "# Ramsey numbers survey",
+        "",
+        "## Abstract",
+        "This Chinese survey draft explains the development of Ramsey numbers with definitions, context, examples, and references.",
+        "",
+        "## R(3,3)=6",
+        "The proof studies red-blue edge colorings of K6 and shows that every coloring contains a monochromatic triangle.",
+        "",
+        "## References",
+        "1. F. P. Ramsey, On a Problem of Formal Logic, 1930.",
+        "2. R. L. Graham, B. L. Rothschild, J. H. Spencer, Ramsey Theory."
+      ].join("\n").repeat(3);
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: `\`\`\`markdown\n${draft}\n\`\`\`` } }],
+            usage: { prompt_tokens: 10, completion_tokens: 100 }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          openai_compatible: {
+            ...defaultConfig.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "openai_compatible", model: "free-test-model" },
+          coder_b: { provider: "openai_compatible", model: "free-test-model" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const plan = await planner.run({ goal: "Write docs/ramsey-review.md as a Chinese survey paper about Ramsey numbers" });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal: "Write docs/ramsey-review.md as a Chinese survey paper about Ramsey numbers",
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "document generation"
+        }
+      });
+
+      expect(result.candidates).toHaveLength(2);
+      expect(result.candidates.every((candidate) => candidate.filesChanged.includes("docs/ramsey-review.md"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.unifiedDiff.startsWith("--- /dev/null\n+++ b/docs/ramsey-review.md"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.summary.includes("Recovered document draft"))).toBe(true);
+      expect(result.notes.every((note) => note.retryUsed)).toBe(true);
+      expect(result.notes.map((note) => note.fallbackReason).join("\n")).toContain("document_response_export");
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("omits API-level JSON response_format for DeepSeek live patch calls", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-deepseek-format-"));
     const originalFetch = globalThis.fetch;

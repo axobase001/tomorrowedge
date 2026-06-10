@@ -107,8 +107,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.3.6`。
+当前版本：`1.3.7`。
 
+- `1.3.7` clears the next GUI/runtime issue sweep: refreshed provider catalogs are exposed through real model dropdowns, providers can retain multiple configured model IDs for role routing, live patch runs no longer mix offline mock candidates or launch duplicate post-judge advisory calls, explicit no-edit/no-shell tasks stay read-only, manual approvals refresh objective traces, and long document drafts can be recovered as Markdown patch candidates when patch JSON parsing fails.
 - `1.3.6` fixes document/content patch verification semantics and OpenAI-compatible relay parsing: document-only file tasks no longer force full `npm test`, docs-only verification failures are reported as patch-applied partial outcomes, and SSE-style `data:` responses from compatible gateways are parsed correctly.
 - `1.3.5` clears a GUI/runtime governance sweep: empty GUI top-bar runs are rejected, Telemetry details opens the drawer, no-auth local providers remain assignable, Re-review clears stale patch approvals, TUI shell approval honors `shell.policy`, external agent `allowedRoles` and restricted-mode core gates are enforced, planner/governance model calls pass through budget preflight, and direct provider `model_call` usage is included in cost/token telemetry.
 - `1.3.4` adds the governed skills and human-seeded tool-pack foundation: skill manifests, built-in workflow/workspace/code/GitHub/web/document/data/API packs, lifecycle/validation gates, inert candidate proposals from traces, tool/skill routing policy, structured objective-trace tool usage, and `tedge skills` commands.
@@ -562,7 +563,15 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.3.6`.
+Current version: `1.3.7`.
+
+`1.3.7` clears the next GUI/runtime issue sweep: refreshed provider catalogs
+are exposed through real model dropdowns, providers can retain multiple
+configured model IDs for role routing, live patch runs no longer mix offline
+mock candidates or launch duplicate post-judge advisory calls, explicit
+no-edit/no-shell tasks stay read-only, manual approvals refresh objective
+traces, and long document drafts can be recovered as Markdown patch candidates
+when patch JSON parsing fails.
 
 `1.3.6` fixes document/content patch verification semantics and
 OpenAI-compatible relay parsing: document-only file tasks no longer force full

@@ -19,11 +19,18 @@ export const agentRoleSchema = z.enum(agentRoles);
 export const selfIterationModeSchema = z.enum(["off", "trace_guided", "offline_evolution", "experimental_online"]);
 export type SelfIterationMode = z.infer<typeof selfIterationModeSchema>;
 
+export const providerModelConfigSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().optional()
+});
+export type ProviderModelConfig = z.infer<typeof providerModelConfigSchema>;
+
 export const providerConfigSchema = z.object({
   enabled: z.boolean().default(false),
   api_key_env: z.string().optional(),
   base_url: z.string().default(""),
   model: z.string().default(""),
+  models: z.array(providerModelConfigSchema).default([]),
   api_format: providerApiFormatSchema.default("openai_chat"),
   auth_header: providerAuthHeaderSchema.default("bearer"),
   extra_headers: z.record(z.string()).default({})

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
-import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
+import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleModelOptionIds, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
@@ -139,6 +139,7 @@ describe("cockpit web React surface", () => {
     expect(open).toContain("API keys and role routing");
     expect(open).toContain("data-testid=\"key-role-manager\"");
     expect(open).toContain("list=\"keymgr-provider-options\"");
+    expect(open).toContain("data-testid=\"keymgr-model-select\"");
     expect(open).toContain("data-testid=\"keymgr-base-url\"");
     expect(open).toContain("data-testid=\"keymgr-save-key\"");
     expect(open).toContain("data-testid=\"keymgr-refresh-models\"");
@@ -185,6 +186,17 @@ describe("cockpit web React surface", () => {
 
   it("combines static and catalog model recommendations for the picker", () => {
     expect(modelOptionIds("openrouter", "moonshotai/kimi-k2.6:free", [{ id: "qwen/qwen3-coder:free", label: "Qwen", source: "catalog" }])).toContain("qwen/qwen3-coder:free");
+  });
+
+  it("exposes provider models to role-level model pickers", () => {
+    expect(roleModelOptionIds("openrouter", [{
+      id: "openrouter",
+      model: "moonshotai/kimi-k2.6:free",
+      models: [
+        { id: "moonshotai/kimi-k2.6:free", label: "Kimi", source: "config" },
+        { id: "qwen/qwen3-coder:free", label: "Qwen", source: "config" }
+      ]
+    }], "qwen/qwen3-coder:free")).toContain("qwen/qwen3-coder:free");
   });
 
   it("renders the role assignment tab entry in the key manager", () => {
@@ -469,6 +481,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           id: "openrouter",
           enabled: false,
           model: "",
+          models: [{ id: "moonshotai/kimi-k2.6:free", label: "Kimi", source: "config" }],
           baseUrl: "https://openrouter.ai/api/v1",
           apiKeyEnv: "OPENROUTER_API_KEY",
           keyConfigured: false,
@@ -478,6 +491,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           id: "deepseek",
           enabled: false,
           model: "deepseek-chat",
+          models: [{ id: "deepseek-chat", label: "DeepSeek Chat", source: "config" }],
           baseUrl: "https://api.deepseek.com/v1",
           apiKeyEnv: "DEEPSEEK_API_KEY",
           keyConfigured: false,

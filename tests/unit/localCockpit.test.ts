@@ -224,13 +224,26 @@ describe("local cockpit server", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
       });
-      const payload = await response.json() as { status: string; intent: { action: string }; viewModel: { currentApproval?: { kind: string }; main: { filesChanged: string[] } } };
+      const payload = await response.json() as { status: string; intent: { action: string }; viewModel: { currentApproval?: { id: string; kind: string }; main: { filesChanged: string[] } } };
 
       expect(response.status).toBe(200);
       expect(payload.status).toBe("applied");
       expect(payload.intent.action).toBe("approve_patch");
       expect(payload.viewModel.currentApproval?.kind).toBe("shell");
       expect(payload.viewModel.main.filesChanged).toContain("index.js");
+
+      const shellResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: payload.viewModel.currentApproval?.id })
+      });
+      const shellPayload = await shellResponse.json() as { viewModel: { objectiveTrace?: { outcomeStatus?: string }; rawEvents: Array<{ type: string; result?: string; applied?: boolean; success?: boolean }> } };
+
+      expect(shellResponse.status).toBe(200);
+      expect(shellPayload.viewModel.objectiveTrace?.outcomeStatus).toBe("success");
+      expect(shellPayload.viewModel.rawEvents.some((event) => event.type === "patch_apply" && event.applied)).toBe(true);
+      expect(shellPayload.viewModel.rawEvents.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+      expect(shellPayload.viewModel.rawEvents.some((event) => event.type === "workflow_stop_reason" && event.result === "completed")).toBe(true);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

@@ -13,6 +13,7 @@ export type CockpitProviderReadiness = {
   id: string;
   enabled: boolean;
   model: string;
+  models: CockpitProviderModelOption[];
   baseUrl: string;
   apiKeyEnv?: string;
   keyConfigured: boolean;
@@ -67,7 +68,7 @@ export type CockpitProviderKeyRequest = {
 export type CockpitProviderModelOption = {
   id: string;
   label: string;
-  source: "catalog" | "static";
+  source: "catalog" | "static" | "config";
   isFree?: boolean;
   isLowCost?: boolean;
   tags?: string[];
@@ -149,6 +150,7 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
     ...currentProvider,
     enabled: true,
     model,
+    models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
     base_url: baseUrl,
     api_key_env: apiKeyEnv
   };
@@ -191,6 +193,7 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
         ...currentProvider,
         enabled: true,
         model,
+        models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
         base_url: baseUrl,
         api_key_env: apiKeyEnv
       }
@@ -321,6 +324,7 @@ function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<s
     id,
     enabled: provider.enabled,
     model: provider.model,
+    models: providerModelOptionsFromConfig(provider),
     baseUrl: provider.base_url,
     apiKeyEnv: envName,
     keyConfigured: !authRequired || Boolean(keyValue),
@@ -328,6 +332,33 @@ function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<s
     maskedKey: keyValue ? maskSecret(keyValue) : undefined,
     authRequired
   };
+}
+
+function providerModelOptionsFromConfig(provider: ProviderConfig): CockpitProviderModelOption[] {
+  return mergeProviderModels(provider.models, provider.model ? [{ id: provider.model, label: provider.model }] : [])
+    .map((model) => ({
+      id: model.id,
+      label: model.label ?? model.id,
+      source: "config" as const,
+      isFree: model.id.includes(":free")
+    }));
+}
+
+function mergeProviderModels(
+  current: Array<{ id: string; label?: string }> | undefined,
+  next: Array<{ id: string; label?: string }>
+): Array<{ id: string; label?: string }> {
+  const byId = new Map<string, { id: string; label?: string }>();
+  for (const model of [...(current ?? []), ...next]) {
+    const id = model.id.trim();
+    if (!id) continue;
+    const existing = byId.get(id);
+    byId.set(id, {
+      id,
+      label: model.label?.trim() || existing?.label
+    });
+  }
+  return Array.from(byId.values());
 }
 
 function requiresAuth(provider: ProviderConfig): boolean {
@@ -340,6 +371,7 @@ function providerConfigForSetup(config: TomorrowEdgeConfig, providerId: string):
     api_key_env: defaultEnvNameFor(providerId),
     base_url: "",
     model: "",
+    models: [],
     api_format: "openai_chat",
     auth_header: "bearer",
     extra_headers: {}

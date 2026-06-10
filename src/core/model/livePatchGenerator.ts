@@ -117,6 +117,25 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
   }
 
   const message = parseError ?? "Live patch response was not usable.";
+  const fallbackCandidate = buildDocumentFallbackCandidate(input, plan, result.response.content, message);
+  if (fallbackCandidate) {
+    return {
+      candidate: fallbackCandidate,
+      note: {
+        ...noteBase,
+        provider: result.provider,
+        model: result.model,
+        fallbackUsed: result.fallbackUsed,
+        fallbackFrom: result.fallbackFrom,
+        fallbackReason: result.fallbackReason ?? "document_response_export",
+        error: message,
+        content: `Recovered long-form document content into ${fallbackCandidate.filesChanged.join(", ")} after patch JSON parsing failed.`,
+        usage: result.response.usage,
+        estimatedCostUsd: estimateCostUsd(result.provider, result.response.usage),
+        retryUsed
+      }
+    };
+  }
   return {
     candidate: emptyCandidate(plan.role, message, input.plan),
     note: {
@@ -358,6 +377,68 @@ function validateUsableUnifiedDiff(diff: string, claimedFiles: string[]): void {
   if (claimedFiles.length && diffFiles.length && missing.length === claimedFiles.length) {
     throw new Error(`Live patch response diff did not touch claimed files: ${claimedFiles.join(", ")}`);
   }
+}
+
+function buildDocumentFallbackCandidate(input: LivePatchInput, plan: LivePatchPlan, rawContent: string, reason: string): PatchCandidate | undefined {
+  if (!isLongDocumentGenerationTask(input.goal, input.plan.taskType)) return undefined;
+  const content = extractDocumentDraft(rawContent);
+  if (content.length < 240) return undefined;
+  const filePath = preferredDocumentOutputPath(input.goal);
+  const unifiedDiff = unifiedDiffForNewFile(filePath, content);
+  return {
+    candidateId: makeId(`live_${plan.role}_document`),
+    agentId: plan.role,
+    approach: plan.role === "coder_a" ? "minimal_patch" : "alternative",
+    summary: `Recovered document draft as ${filePath} after live patch parsing failed: ${reason}`,
+    filesChanged: [filePath],
+    unifiedDiff,
+    testPlan: [],
+    knownTradeoffs: [
+      "Generated as Markdown fallback because the provider did not return a valid patch JSON response.",
+      "HTML/PDF conversion, if requested, should be handled in a follow-up verified step."
+    ],
+    estimatedRisk: "medium"
+  };
+}
+
+function isLongDocumentGenerationTask(goal: string, taskType: Plan["taskType"]): boolean {
+  return taskType === "docs" || /\b(markdown|document|article|paper|survey|report|html|pdf|latex)\b|论文|综述|文章|文档|报告|参考文献|摘要|关键词/.test(goal.toLowerCase());
+}
+
+function extractDocumentDraft(rawContent: string): string {
+  const trimmed = rawContent.trim();
+  const fenced = /```(?:markdown|md)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const content = fenced?.[1]?.trim() || trimmed;
+  return content
+    .replace(/^\s*Here is (?:the )?(?:markdown|document|article)[^\n]*\n/i, "")
+    .trim();
+}
+
+function preferredDocumentOutputPath(goal: string): string {
+  const explicit = [...goal.matchAll(/(?:^|[\s`"'(:])((?:(?:[A-Za-z0-9_.@()[\]-]+[\\/])+)?[A-Za-z0-9_.@()[\]-]+\.(?:md|markdown|html|htm|txt|rst|adoc))(?:$|[\s`"',.;:)])/gi)]
+    .map((match) => normalizeMentionedPath(match[1]))
+    .find((value): value is string => Boolean(value));
+  if (explicit) return explicit.replace(/\.markdown$/i, ".md");
+  const slug = slugFromGoal(goal);
+  return `docs/${slug || "generated-document"}.md`;
+}
+
+function slugFromGoal(goal: string): string {
+  const ascii = goal.toLowerCase().match(/[a-z0-9]+/g)?.slice(0, 5).join("-") ?? "";
+  if (ascii) return ascii.slice(0, 48);
+  return "generated-document";
+}
+
+function unifiedDiffForNewFile(filePath: string, content: string): string {
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n?$/, "\n");
+  const lines = normalized.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return [
+    "--- /dev/null",
+    `+++ b/${filePath}`,
+    `@@ -0,0 +1,${Math.max(1, lines.length)} @@`,
+    ...lines.map((line) => `+${line}`)
+  ].join("\n") + "\n";
 }
 
 function emptyCandidate(role: "coder_a" | "coder_b", reason: string, plan: Plan): PatchCandidate {

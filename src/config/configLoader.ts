@@ -73,9 +73,14 @@ function withKnownProviderDefaults(config: TomorrowEdgeConfig): TomorrowEdgeConf
   const providers: TomorrowEdgeConfig["providers"] = { ...config.providers };
   for (const [id, provider] of Object.entries(providers)) {
     const defaultProvider = defaultConfig.providers[id];
+    let nextProvider = provider;
     if (!provider.base_url.trim() && defaultProvider?.base_url) {
-      providers[id] = { ...provider, base_url: defaultProvider.base_url };
+      nextProvider = { ...nextProvider, base_url: defaultProvider.base_url };
     }
+    if (!provider.models.length && defaultProvider?.models.length) {
+      nextProvider = { ...nextProvider, models: defaultProvider.models };
+    }
+    providers[id] = nextProvider;
   }
   return { ...config, providers };
 }

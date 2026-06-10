@@ -167,7 +167,16 @@ export async function runOfflineGraph(cwd: string, goal: string, config: Tomorro
 
   await runCandidatePhase(runtime, state);
   await runReviewAndJudgePhase(runtime, state);
-  await runLiveAdvisoryPhase(runtime, state);
+  if (shouldSkipPostJudgeLiveAdvisory(runtime, state)) {
+    runtime.ledger.append({
+      type: "evidence_update",
+      phase: "judge",
+      role: "judge",
+      evidence: ["post-judge live advisory skipped because live patch already produced the selected approval candidate"]
+    });
+  } else {
+    await runLiveAdvisoryPhase(runtime, state);
+  }
   await runPatchApplicationPhase(runtime, state);
   await runVerificationAndRepairPhase(runtime, state);
   return finalizeState(runtime, state);
@@ -748,7 +757,8 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
       constraints: state.failureMemory.coderConstraints
     }, `coder-visible memory constraints=${state.failureMemory.coderConstraints.length}`);
   }
-  const candidateJobs: Array<{ label: string; run: () => Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> }> = [
+  const livePatchPrimary = Boolean(options.livePatch && access.cloudAllowed);
+  const candidateJobs: Array<{ label: string; run: () => Promise<{ candidates: PatchCandidate[]; notes: ModelNote[] }> }> = livePatchPrimary ? [] : [
     {
       label: "coder_a",
       run: async () => ({
@@ -758,7 +768,7 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
     }
   ];
   const allowParallelRoles = parallelRolesAllowed(state);
-  if (allowParallelRoles && config.debate.enabled && config.debate.max_candidates > 1) {
+  if (!livePatchPrimary && allowParallelRoles && config.debate.enabled && config.debate.max_candidates > 1) {
     candidateJobs.push({
       label: "coder_b",
       run: async () => ({
@@ -837,6 +847,25 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
       recordModelNoteEvents(ledger, result.value.notes, state.usageSummary);
     }
   }
+  if (livePatchPrimary && state.candidates.length === 0) {
+    ledger.append({
+      type: "fallback_to_native",
+      phase: "coding",
+      fallbackRole: "coder_a",
+      reason: "Live patch produced no candidate; falling back to native coder_a without mixing candidate sets."
+    });
+    const fallback = await runCoderCandidate({ cwd, state, ledger, router, externalAgents, coder, role: "coder_a", variant: "a", options, config });
+    state.candidates.push(fallback);
+    recordPatchCandidateEvent(state, ledger, "coder_a", fallback);
+  }
+}
+
+function shouldSkipPostJudgeLiveAdvisory(runtime: OfflineGraphRuntime, state: AgentGraphState): boolean {
+  if (!runtime.options.liveAdvisory || !runtime.options.livePatch) return false;
+  const selectedId = state.judge?.selectedCandidateId;
+  if (!selectedId || state.judge?.decision !== "select") return false;
+  const selected = state.candidates.find((candidate) => candidate.candidateId === selectedId);
+  return Boolean(selected?.candidateId.startsWith("live_") || selected?.agentId === "coder_a" && selected.summary.toLowerCase().includes("live"));
 }
 
 async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {

@@ -261,6 +261,27 @@ describe("offline agent graph", () => {
     expect(state.candidates).toEqual([]);
   });
 
+  it("honors explicit Chinese no-edit and no-shell instructions as read-only", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(
+      cwd,
+      "审查当前仓库 README.md 和 package.json 中的版本说明是否一致；只输出诊断和建议，不要修改文件，也不要运行命令。",
+      defaultConfig,
+      { fixtureMode: true }
+    );
+    const eventTypes = state.events.map((event) => event.type);
+
+    expect(state.workflowKind).toBe("read_only");
+    expect(state.objectiveContract?.workflowKind).toBe("read_only");
+    expect(state.objectiveContract?.allowedTools).not.toEqual(expect.arrayContaining(["patch_apply", "shell", "undo"]));
+    expect(state.objectiveContract?.forbiddenActions).toEqual(expect.arrayContaining(["write_files", "apply_patch", "run_shell"]));
+    expect(state.candidates).toEqual([]);
+    expect(state.review).toBeUndefined();
+    expect(state.judge).toBeUndefined();
+    expect(eventTypes).not.toContain("patch_candidate");
+    expect(eventTypes).not.toContain("shell_run");
+  });
+
   it("separates configured cloud route proposals from native offline execution", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
@@ -558,11 +579,67 @@ describe("offline agent graph", () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { livePatch: true });
 
-    expect(state.candidates.length).toBeGreaterThan(2);
+    expect(state.candidates).toHaveLength(2);
+    expect(state.candidates.every((candidate) => candidate.candidateId.startsWith("live_"))).toBe(true);
+    expect(state.candidates.every((candidate) => !candidate.summary.includes("[MOCK]"))).toBe(true);
     expect(state.modelNotes.filter((note) => note.kind === "patch_generation").length).toBe(2);
     expect(state.changedFiles).toEqual([]);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_a" && event.phase === "coding")).toBe(true);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_b" && event.phase === "coding")).toBe(true);
+  });
+
+  it("skips duplicate post-judge live advisory when live patch already selected a candidate", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              summary: "Fix add implementation.",
+              filesChanged: ["index.js"],
+              unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@ -1,5 +1,5 @@\n export function add(a, b) {\n-  return a - b;\n+  return a + b;\n }\n \n export default add;\n",
+              testPlan: ["npm test"],
+              knownTradeoffs: [],
+              estimatedRisk: "low"
+            })
+          }
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 10 }
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    const config = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openai_compatible: {
+          ...defaultConfig.providers.openai_compatible,
+          enabled: true,
+          api_key_env: "",
+          base_url: "http://provider.test/v1",
+          model: "live-test-model",
+          auth_header: "none" as const
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        coder_a: { provider: "openai_compatible", model: "live-test-model" },
+        coder_b: { provider: "openai_compatible", model: "live-test-model" }
+      }
+    };
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true, livePatch: true, liveAdvisory: true });
+
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(state.judge?.decision).toBe("select");
+      expect(state.candidates.every((candidate) => candidate.candidateId.startsWith("live_"))).toBe(true);
+      expect(state.modelNotes.filter((note) => note.kind === "plan_advice" || note.kind === "implementation_advice")).toEqual([]);
+      expect(state.events.some((event) => event.type === "evidence_update" && event.evidence.some((item) => item.includes("post-judge live advisory skipped")))).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("restricted access blocks live patch generation", async () => {

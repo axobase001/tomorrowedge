@@ -5,6 +5,7 @@ import { applyUnifiedDiffWithResult } from "../core/patch/patchApplier.js";
 import { restoreLatestUndoSnapshot } from "../core/patch/undoManager.js";
 import { runTestCommand } from "../core/verifier/testRunner.js";
 import { evidenceFromRun } from "../core/verifier/evidenceMatcher.js";
+import { finalizePostApprovalTrace } from "../core/traces/postApprovalFinalizer.js";
 import { makeId } from "../utils/ids.js";
 import type { CockpitApprovalIntent } from "./contracts.js";
 
@@ -137,7 +138,7 @@ async function approveShell(cwd: string, state: AgentGraphState): Promise<Cockpi
   const result = await runTestCommand(cwd, command, { approved: true, policy, verificationAllowlist: config.shell.verification_allowlist });
   const stdoutRef = writeArtifact(state, "stdout", result.stdout || "", "txt");
   const stderrRef = writeArtifact(state, "stderr", result.stderr || "", "txt");
-  const next = await refreshSummary({
+  const summarized = await refreshSummary({
     ...state,
     runResults: [...state.runResults, result],
     approvals: { ...state.approvals, shellApproved: true },
@@ -170,6 +171,7 @@ async function approveShell(cwd: string, state: AgentGraphState): Promise<Cockpi
       })
     ]
   });
+  const next = await finalizePostApprovalTrace(cwd, summarized, "browser_cockpit");
   return { state: next, message: result.success ? `Shell verification passed: ${command}` : `Shell verification failed: ${command}` };
 }
 
