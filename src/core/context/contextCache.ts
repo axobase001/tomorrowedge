@@ -6,12 +6,12 @@ const maxEntries = 50;
 const plannerCache = new Map<string, Plan>();
 const explorerCache = new Map<string, ContextSelection>();
 
-export function getCachedPlan(cwd: string, goal: string): Plan | undefined {
-  return clone(plannerCache.get(plannerKey(cwd, goal)));
+export function getCachedPlan(cwd: string, goal: string, context?: unknown): Plan | undefined {
+  return clone(plannerCache.get(plannerKey(cwd, goal, context)));
 }
 
-export function rememberPlan(cwd: string, goal: string, plan: Plan): void {
-  setBounded(plannerCache, plannerKey(cwd, goal), clone(plan));
+export function rememberPlan(cwd: string, goal: string, plan: Plan, context?: unknown): void {
+  setBounded(plannerCache, plannerKey(cwd, goal, context), clone(plan));
 }
 
 export async function getCachedContextSelection(cwd: string, plan: Plan): Promise<ContextSelection | undefined> {
@@ -27,8 +27,13 @@ export function clearContextCaches(): void {
   explorerCache.clear();
 }
 
-function plannerKey(cwd: string, goal: string): string {
-  return JSON.stringify({ cwd, goal: goal.trim().toLowerCase() });
+function plannerKey(cwd: string, goal: string, context?: unknown): string {
+  return JSON.stringify({ cwd, goal: goal.trim().toLowerCase(), context: stableContext(context) });
+}
+
+function stableContext(context: unknown): unknown {
+  if (!context || typeof context !== "object" || Array.isArray(context)) return context ?? {};
+  return Object.fromEntries(Object.entries(context as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 async function explorerKey(cwd: string, plan: Plan): Promise<string> {

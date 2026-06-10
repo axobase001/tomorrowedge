@@ -20,7 +20,8 @@ export function normalizeExternalAgentResponse(input: {
     role: input.role,
     outputContract: input.outputContract,
     rawPayload: input.rawPayload,
-    strictJson: input.profile.strictJson
+    strictJson: input.profile.strictJson,
+    normalizationStrictness: input.profile.normalizationStrictness
   };
   if (adapter === "codex") return normalizeCodexExternalAgentResult(normalizationInput);
   if (adapter === "claude_code") return normalizeClaudeCodeExternalAgentResult(normalizationInput);

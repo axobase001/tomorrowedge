@@ -58,8 +58,11 @@ export function readyRoleNodes(state: RoleGraphExecutionState): RoleNode[] {
     if (!execution || !["pending", "ready"].includes(execution.status)) return false;
     return node.dependencies.every((dependency) => {
       const dependencyState = state.nodes[dependency];
+      const dependencyNode = state.graph.nodes.find((item) => item.id === dependency);
       if (!dependencyState) return true;
-      return dependencyState.status === "success" || dependencyState.status === "skipped";
+      return dependencyState.status === "success"
+        || dependencyState.status === "skipped"
+        || Boolean(dependencyNode && !dependencyNode.required && (dependencyState.status === "failed" || dependencyState.status === "blocked"));
     });
   });
 }

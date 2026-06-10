@@ -146,7 +146,7 @@ function buildExecutorSimulationConfig(config: TomorrowEdgeConfig, options: Work
   const providerCycle = requested.filter((provider) => !provider.startsWith("external:") && !next.external_agents[provider]);
   const externalCycle = requested
     .map((provider) => provider.startsWith("external:") ? provider.slice("external:".length) : provider)
-    .filter((id) => next.external_agents[id]?.enabled);
+    .filter((id) => Boolean(next.external_agents[id]));
 
   if (providerCycle.length) {
     workflowRoles.forEach((role, index) => {
@@ -162,6 +162,7 @@ function buildExecutorSimulationConfig(config: TomorrowEdgeConfig, options: Work
 
   for (const externalId of externalCycle) {
     const profile = next.external_agents[externalId];
+    profile.enabled = true;
     for (const role of profile.roles) {
       next.agents[role] = {
         ...(next.agents[role] ?? { provider: "auto", model: "auto" }),

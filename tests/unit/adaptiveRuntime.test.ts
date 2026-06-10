@@ -22,6 +22,69 @@ describe("adaptive orchestration runtime", () => {
     expect(eventTypes).toEqual(expect.arrayContaining(["task_graph", "role_node_result", "debate_move", "debate_resolution"]));
   });
 
+  it("blocks runner execution when judge did not select a candidate", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          roles: ["judge"],
+          allowedRoles: ["judge"],
+          capabilities: ["judgment"]
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        judge: { provider: "external:codex", model: "auto" }
+      }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
+
+    expect(state.finalSummary?.result).toBe("aborted");
+    expect(state.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "evidence_gap", role: "runner", blocking: true }),
+      expect.objectContaining({ type: "workflow_stop_reason", role: "runner" })
+    ]));
+    expect(state.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(false);
+  });
+
+  it("does not fallback to native when a strict external coder returns malformed output", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: ["-e", "console.log('not-json')"],
+          autoStart: false,
+          roles: ["coder_a"],
+          allowedRoles: ["coder_a"],
+          capabilities: ["coding"],
+          strictJson: true,
+          normalizationStrictness: "strict" as const
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        coder_a: { provider: "external:codex", model: "auto" }
+      }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
+
+    expect(state.finalSummary?.result).toBe("aborted");
+    expect(state.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "external_agent_normalization", role: "coder_a", status: "failed" }),
+      expect.objectContaining({ type: "role_node_result", role: "coder_a", status: "failed" })
+    ]));
+    expect(state.events.some((event) => event.type === "fallback_to_native" && event.role === "coder_a")).toBe(false);
+  });
+
   it("validates evidence dependencies before judge and runner actions", () => {
     expect(validateEvidenceDependencies({ role: "judge", candidates: [] })).toEqual(expect.arrayContaining([
       expect.objectContaining({ missing: "review decision", blocking: true }),

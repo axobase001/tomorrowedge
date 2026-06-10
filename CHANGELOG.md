@@ -81,6 +81,19 @@ Changelog: newest changes first, grouped by release and by change type.
 - The default Orchestration Policy Genome schema is now
   `orchestration-policy/v2`; stored v1 policies are migrated with default
   debate, task-graph, and external-agent policy fields.
+- Patch workflows now run through the RoleGraphScheduler for candidate,
+  review, judge, runner, and verification/repair phases. Blocking evidence
+  gaps stop the workflow with `workflow_stop_reason` instead of being recorded
+  as passive trace metadata.
+- Planner cache keys now include access mode, workflow intent, allowed phases,
+  allowed roles, and allowed tools, preventing restricted/read-only workflows
+  from reusing earlier patch-capable plans.
+- Strict external-agent normalization failures now produce failed
+  `external_agent_normalization` / `role_node_result` events and abort the
+  workflow without native fallback. Non-strict adapters retain compatibility
+  behavior.
+- Patch and shell approval requirements remain visible as waiting-user states
+  and no longer poison required RoleGraph nodes as failed executions.
 
 ## [1.3.10] - 2026-06-10
 

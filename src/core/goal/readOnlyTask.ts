@@ -16,6 +16,9 @@ const maxTreeEntries = 220;
 const ignoredNames = new Set([".git", "node_modules", "dist", ".tomorrowedge"]);
 
 export function isReadOnlyPlan(plan: Plan): boolean {
+  if (plan.workflowKind === "read_only" || plan.workflowKind === "advisory" || plan.workflowKind === "ask_user") return true;
+  if (plan.requiresPatchWorkflow === false) return true;
+  if (plan.allowedPhases?.length && !plan.allowedPhases.some((phase) => phase === "coding" || phase === "patch" || phase === "shell" || phase === "repair")) return true;
   return plan.taskType === "analysis" && !plan.verificationCommands?.length;
 }
 
