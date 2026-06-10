@@ -88,6 +88,8 @@ export type CockpitTelemetry = {
   fallbackCount: number;
   realBudgetDecisions: number;
   simulatedBudgetDecisions: number;
+  realStrongAgentCallsUsed: number;
+  simulatedStrongAgentCallsUsed: number;
   budgetUsedPercent?: number;
   budgetRemainingUsd?: number;
   roleCosts?: Array<{

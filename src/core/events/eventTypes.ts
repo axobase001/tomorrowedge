@@ -445,6 +445,8 @@ export type BudgetDecisionEvent = BaseEvent & {
   estimatedCostUsd?: number;
   strongAgentCallsUsed?: number;
   strongAgentCallsRemaining?: number;
+  realStrongAgentCallsUsed?: number;
+  simulatedStrongAgentCallsUsed?: number;
   realProvider?: boolean;
   simulated?: boolean;
 };
@@ -545,6 +547,8 @@ export type TaskNodeResultEvent = BaseEvent & {
   summary: string;
   roleNodeId?: string;
   evidence: string[];
+  artifacts?: string[];
+  evidenceRef?: string;
   error?: string;
 };
 

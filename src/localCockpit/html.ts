@@ -799,7 +799,7 @@ function renderEmpty(message) {
   el("tasks").innerHTML = '<div class="task-item selected"><div class="task-title"><span>New task</span><span class="chip chip-blue">idle</span></div><div class="task-meta"><span>enter a command</span><span>now</span></div></div>';
   el("workflow-spine").innerHTML = ["Plan","Route","Edit","Review","Test","Judge","Approve"].map((label) => '<div class="step"><span class="dot"></span><strong>' + label + '</strong></div>').join("");
   el("main-view").innerHTML = '<div class="summary-box"><h3>' + esc(message) + '</h3><pre class="body-pre">Use the command composer for tasks, constraints, and approval feedback. TomorrowEdge creates a session, records the event ledger, and streams live workflow state into this client.</pre></div>';
-  el("telemetry").innerHTML = renderTelemetry({ plannerModel:"-", coderModel:"-", reviewerModel:"-", judgeModel:"-", providerSummary:"offline", inputTokens:0, outputTokens:0, totalTokens:0, dispatched:0, running:0, completed:0, waiting:0, failed:0, patchWaiting:false, shellWaiting:false, fallbackCount:0, realBudgetDecisions:0, simulatedBudgetDecisions:0 });
+  el("telemetry").innerHTML = renderTelemetry({ plannerModel:"-", coderModel:"-", reviewerModel:"-", judgeModel:"-", providerSummary:"offline", inputTokens:0, outputTokens:0, totalTokens:0, dispatched:0, running:0, completed:0, waiting:0, failed:0, patchWaiting:false, shellWaiting:false, fallbackCount:0, realBudgetDecisions:0, simulatedBudgetDecisions:0, realStrongAgentCallsUsed:0, simulatedStrongAgentCallsUsed:0 });
   el("trace-count").textContent = "0 events";
   el("trace-strip").innerHTML = "";
 }
@@ -882,7 +882,7 @@ function renderTelemetry(t) {
     metric("Tokens", measuredNumber(t.totalTokens)) +
     metric("Cache", typeof t.cacheHitPercent === "number" ? t.cacheHitPercent + "%" : "-") +
     metric("Agents", t.completed + " done · " + t.waiting + " waiting") +
-    metric("Budget calls", "real " + (t.realBudgetDecisions || 0) + " / sim " + (t.simulatedBudgetDecisions || 0)) +
+    metric("Strong calls", "real " + (t.realStrongAgentCallsUsed || 0) + " / sim " + (t.simulatedStrongAgentCallsUsed || 0)) +
     metric("Latency", t.latencyMs ? formatDuration(t.latencyMs) : "-") +
     metric("Risk", t.latestRiskLevel || "-") +
     '<div class="telemetry-details">details &gt;</div>';

@@ -6,6 +6,8 @@ import { allocateStrongAgentCall } from "./budgetAllocator.js";
 
 export type BudgetRuntimeState = {
   strongAgentCallsUsed: number;
+  realStrongAgentCallsUsed: number;
+  simulatedStrongAgentCallsUsed: number;
   roleCallsUsed: Partial<Record<AgentRole, number>>;
   blockedRoles: Partial<Record<AgentRole, string>>;
   reservations: BudgetReservation[];
@@ -20,6 +22,8 @@ export type BudgetGateDecision = {
   fallbackAssignment?: RouteAssignment;
   scope: "global_strong_pool" | "per_role" | "efficient";
   consumesGlobal: boolean;
+  realProvider: boolean;
+  simulated: boolean;
   estimatedCostUsd?: number;
   remainingCalls?: number;
 };
@@ -30,6 +34,8 @@ export type BudgetReservation = {
   phase: EventPhase;
   scope: BudgetGateDecision["scope"];
   consumesGlobal: boolean;
+  realProvider: boolean;
+  simulated: boolean;
   committed: boolean;
   released: boolean;
 };
@@ -75,6 +81,8 @@ export function evaluateModelCallInvocation(input: {
 export function createBudgetRuntimeState(): BudgetRuntimeState {
   return {
     strongAgentCallsUsed: 0,
+    realStrongAgentCallsUsed: 0,
+    simulatedStrongAgentCallsUsed: 0,
     roleCallsUsed: {},
     blockedRoles: {},
     reservations: []
@@ -104,6 +112,7 @@ export function evaluateRoleInvocation(input: {
     roleUsedCalls: input.runtime.roleCallsUsed[input.role] ?? 0
   });
   if (decision.allowed) {
+    const reality = providerReality(input.assignment.provider);
     return {
       role: input.role,
       phase: input.phase,
@@ -112,10 +121,13 @@ export function evaluateRoleInvocation(input: {
       assignment: input.assignment,
       scope: decision.scope,
       consumesGlobal: decision.consumesGlobal,
+      realProvider: reality.realProvider,
+      simulated: reality.simulated,
       estimatedCostUsd: decision.estimatedCostUsd,
       remainingCalls: decision.remainingCalls
     };
   }
+  const reality = providerReality(input.assignment.provider);
   return {
     role: input.role,
     phase: input.phase,
@@ -125,6 +137,8 @@ export function evaluateRoleInvocation(input: {
     fallbackAssignment: input.canFallback ? nativeFallbackAssignment(input.role, input.assignment) : undefined,
     scope: decision.scope,
     consumesGlobal: decision.consumesGlobal,
+    realProvider: reality.realProvider,
+    simulated: reality.simulated,
     estimatedCostUsd: decision.estimatedCostUsd,
     remainingCalls: decision.remainingCalls
   };
@@ -137,6 +151,8 @@ export function reserveRoleCall(runtime: BudgetRuntimeState, decision: BudgetGat
     phase: decision.phase,
     scope: decision.scope,
     consumesGlobal: decision.consumesGlobal,
+    realProvider: decision.realProvider,
+    simulated: decision.simulated,
     committed: false,
     released: false
   };
@@ -152,6 +168,8 @@ export function commitRoleCall(runtime: BudgetRuntimeState, reservation: BudgetR
   }
   if (reservation.consumesGlobal || reservation.scope === "global_strong_pool") {
     runtime.strongAgentCallsUsed += 1;
+    if (reservation.realProvider) runtime.realStrongAgentCallsUsed += 1;
+    if (reservation.simulated) runtime.simulatedStrongAgentCallsUsed += 1;
   }
 }
 
@@ -171,6 +189,16 @@ export function nativeFallbackAssignment(role: AgentRole, assignment: RouteAssig
 
 export function canFallbackWhenBudgetBlocked(role: AgentRole): boolean {
   return ["planner", "coder_a", "reviewer", "judge"].includes(role);
+}
+
+function providerReality(provider: string): { realProvider: boolean; simulated: boolean } {
+  const normalized = provider.toLowerCase();
+  const simulated = normalized === "mock"
+    || normalized === "fixture"
+    || normalized === "local_tool"
+    || normalized.startsWith("fixture:")
+    || normalized.startsWith("mock:");
+  return { realProvider: !simulated, simulated };
 }
 
 function phaseForInvocation(invocation: ModelInvocationKind): EventPhase {

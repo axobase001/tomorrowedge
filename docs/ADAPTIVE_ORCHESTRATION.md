@@ -54,18 +54,27 @@ The 1.4.1 hardening pass tightens the same boundary:
 
 - patch workflows dispatch executable work from the intersection of
   RoleGraph-ready nodes and TaskGraph-ready task nodes;
+- the summarizer is now an executable graph node: it can run only after its
+  RoleGraph and TaskGraph dependencies are terminal `success` or `skipped`;
+- `design_patch` and high-risk `risk_map` task nodes emit structured artifacts
+  and EvidencePackets instead of only marking planner work as complete;
 - optional `coder_b` branches require explicit `produce_patch_alt` task nodes,
   and stale cached/model task graphs are rebuilt when they no longer match the
   selected RoleGraph;
 - approval-blocked patch workflows classify missing shell evidence under
   `blockedByApproval`, while intentional skips remain separate from ordinary
   missing trace evidence;
+- trace completeness is a ledger-quality signal, not the workflow success
+  result: an approval-blocked workflow can have complete trace coverage while
+  still ending as `partially_completed` because the user did not authorize
+  mutation or shell execution;
 - Debate Protocol v2 reports selected/global/non-selected issue counts and
   keeps ordinary candidate-local security concerns scoped to their candidate;
-- budget decisions mark real provider calls separately from simulated
-  mock/fixture/local governance calls;
+- BudgetGate commit accounting separates real strong-agent calls from
+  simulated mock/fixture/local governance calls in cockpit telemetry;
 - external Codex/Claude Code EvidencePackets keep stable diff, review, and
-  judge artifact refs when those refs are provided by the external agent.
+  judge artifact refs, including raw-diff Codex output and Claude judge
+  unresolved-issue refs.
 
 The key principle is unchanged:
 

@@ -28,6 +28,8 @@ export function normalizeGenericExternalAgentResult(input: ExternalAgentNormaliz
   const warnings: string[] = [];
   const strictJsonFailed = Boolean(input.strictJson && typeof input.rawPayload === "string" && parsed === input.rawPayload);
   if (strictJsonFailed) warnings.push("strictJson requested but payload was not valid JSON");
+  const jsonBlockFailed = Boolean(input.responseMode === "json_block" && typeof input.rawPayload === "string" && parsed === input.rawPayload);
+  if (jsonBlockFailed) warnings.push("responseMode=json_block requested but no JSON block or object was found");
   const payload = parsed ?? input.rawPayload;
   const object = asRecord(payload);
   const contractMatched = outputMatchesContract(payload, input.outputContract);
@@ -38,7 +40,7 @@ export function normalizeGenericExternalAgentResult(input: ExternalAgentNormaliz
     ? object.summary.trim()
     : `External ${input.role} returned ${input.outputContract} payload.`;
   const strict = input.normalizationStrictness === "strict";
-  const status = strict && (strictJsonFailed || !contractMatched) ? "failed" : warnings.length ? "warning" : "success";
+  const status = strict && (strictJsonFailed || jsonBlockFailed || !contractMatched) ? "failed" : warnings.length ? "warning" : "success";
   return { adapter: input.adapter, responseMode: input.responseMode, status, payload, warnings, summary };
 }
 

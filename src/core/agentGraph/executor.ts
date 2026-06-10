@@ -48,6 +48,7 @@ import { buildPatchEvidence } from "../evidence/patchEvidence.js";
 import { buildTestEvidence } from "../evidence/testEvidence.js";
 import { buildReviewEvidence } from "../evidence/reviewEvidence.js";
 import { buildJudgeEvidence } from "../evidence/judgeEvidence.js";
+import { buildEvidencePacket } from "../evidence/evidenceBuilder.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
 import { validateEvidenceDependencies, validateEvidenceForTaskNode, type EvidenceDependencyGap } from "../evidence/evidenceDependency.js";
 import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
@@ -874,7 +875,6 @@ async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: Ag
       return;
     }
     const execution = await executeReadyRoleGraphNodes(runtime, state);
-    if (execution.deferSummarizer) return;
     if (!execution.executed) {
       if (ready.length) {
         const taskReady = state.plan?.taskGraph ? nextReadyTaskNodes(state.plan.taskGraph).map((node) => node.id).join(", ") : "none";
@@ -898,16 +898,14 @@ async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: Ag
   }
 }
 
-async function executeReadyRoleGraphNodes(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<{ executed: number; executedNodeIds: string[]; executedRoles: AgentRole[]; deferSummarizer: boolean }> {
-  if (!state.roleGraphExecution) return { executed: 0, executedNodeIds: [], executedRoles: [], deferSummarizer: false };
+async function executeReadyRoleGraphNodes(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<{ executed: number; executedNodeIds: string[]; executedRoles: AgentRole[] }> {
+  if (!state.roleGraphExecution) return { executed: 0, executedNodeIds: [], executedRoles: [] };
   const graph = state.plan?.taskGraph;
   const ready = readyRoleNodes(state.roleGraphExecution);
-  const summarizerReady = ready.some((node) => node.id === "summarizer" && (!graph || readyTaskNodeForRoleNode(graph, node)));
   const runnable = ready
-    .filter((node) => node.id !== "summarizer")
     .map((node) => ({ node, taskNode: readyTaskNodeForRoleNode(graph, node) }))
     .filter((entry): entry is { node: RoleNode; taskNode: TaskGraphNode } => Boolean(entry.taskNode));
-  if (!runnable.length) return { executed: 0, executedNodeIds: [], executedRoles: [], deferSummarizer: summarizerReady };
+  if (!runnable.length) return { executed: 0, executedNodeIds: [], executedRoles: [] };
 
   const candidateEntries = runnable.filter((entry) => (entry.node.id === "coder_a" || entry.node.id === "coder_b") && entry.taskNode.kind === "patch");
   const livePatchPrimaryEntry = runtime.options.livePatch && runtime.access.cloudAllowed
@@ -922,8 +920,7 @@ async function executeReadyRoleGraphNodes(runtime: OfflineGraphRuntime, state: A
   return {
     executed: batch.length,
     executedNodeIds: batch.map((entry) => entry.node.id),
-    executedRoles: batch.map((entry) => entry.node.role),
-    deferSummarizer: false
+    executedRoles: batch.map((entry) => entry.node.role)
   };
 }
 
@@ -986,10 +983,14 @@ async function executeReadyTaskNode(runtime: OfflineGraphRuntime, state: AgentGr
     return;
   }
   if (taskNode.kind === "design" || taskNode.kind === "analyze") {
-    recordRoleNodeExecutionResult(state, runtime.ledger, taskNode.ownerRole, "success", `${taskNode.title} satisfied by prior ${taskNode.ownerRole} output`, [], undefined, roleNode.id);
+    completeDesignOrAnalysisTaskNode(runtime.ledger, state, taskNode, roleNode.id);
+    recordRoleNodeExecutionResult(state, runtime.ledger, taskNode.ownerRole, "success", `${taskNode.title} produced structured evidence`, [], undefined, roleNode.id);
     return;
   }
-  if (taskNode.kind === "summarize") return;
+  if (taskNode.kind === "summarize") {
+    await executeSummarizerNode(runtime, state, taskNode, roleNode);
+    return;
+  }
   throw new WorkflowBlockedError(`TaskGraph has no executable action for node ${taskNode.id} (${taskNode.kind}).`);
 }
 
@@ -1894,37 +1895,8 @@ function validateImagePaths(cwd: string, imagePaths: string[]): string[] {
 }
 
 async function finalizeState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
-  const { ledger, router } = runtime;
-  const summarizer = new SummarizerAgent();
-  try {
-    state.finalSummary = await runAgentState(state, ledger, router, "summarizer", () =>
-      summarizer.run({
-        plan: state.plan!,
-        changedFiles: state.changedFiles,
-        testsRun: state.runResults.map((result) => result.command),
-        evidence: [
-          "offline graph completed",
-          ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
-          ...state.runResults.map(evidenceFromRun)
-        ]
-      }),
-      "offline"
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    state.finalSummary = {
-      task: state.goal,
-      result: state.runResults.some((result) => !result.success) ? "partially_completed" : "completed",
-      userReply: `I finished the workflow, but the summarizer failed before it could produce a polished answer. ${state.changedFiles.length ? `Changed files: ${state.changedFiles.join(", ")}.` : "No files were changed."}`,
-      userReplySource: "system",
-      changedFiles: state.changedFiles,
-      testsRun: state.runResults.map((result) => result.command),
-      evidence: ["summarizer failed; system diagnostic summary generated", ...state.runResults.map(evidenceFromRun)],
-      risksRemaining: [`summarizer failed: ${message}`],
-      suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
-    };
-  }
-  await appendFinalSummaryEvents(state, ledger, runtime);
+  if (!state.finalSummary) await executeSummarizerNode(runtime, state);
+  await appendFinalSummaryEvents(state, runtime.ledger, runtime);
   await releaseExternalAgentProcessPool();
   return state;
 }
@@ -1987,45 +1959,168 @@ async function finalizeBlockedByEvidenceGate(runtime: OfflineGraphRuntime, state
   return state;
 }
 
-async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
+async function executeSummarizerNode(runtime: OfflineGraphRuntime, state: AgentGraphState, taskNode?: TaskGraphNode, roleNode?: RoleNode): Promise<void> {
+  if (state.finalSummary) return;
+  assertSummarizerNodeReady(state, taskNode, roleNode);
+  if (isReadOnlyPlan(state.plan!)) {
+    await executeReadOnlySummarizerNode(runtime, state);
+    return;
+  }
+  const { ledger, router } = runtime;
+  const summarizer = new SummarizerAgent();
+  try {
+    state.finalSummary = await runAgentState(state, ledger, router, "summarizer", () =>
+      summarizer.run({
+        plan: state.plan!,
+        changedFiles: state.changedFiles,
+        testsRun: state.runResults.map((result) => result.command),
+        evidence: summaryEvidenceForState(state)
+      }),
+      "offline"
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    state.finalSummary = {
+      task: state.goal,
+      result: state.runResults.some((result) => !result.success) ? "partially_completed" : "completed",
+      userReply: `I finished the workflow, but the summarizer failed before it could produce a polished answer. ${state.changedFiles.length ? `Changed files: ${state.changedFiles.join(", ")}.` : "No files were changed."}`,
+      userReplySource: "system",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: ["summarizer failed; system diagnostic summary generated", ...summaryEvidenceForState(state)],
+      risksRemaining: [`summarizer failed: ${message}`],
+      suggestedCommitMessage: `chore: update ${state.changedFiles[0] ?? "workspace"}`
+    };
+  }
+}
+
+async function executeReadOnlySummarizerNode(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { cwd, ledger, router } = runtime;
-  skipOptionalReadOnlyGovernanceNodes(state, ledger);
-  const result = await runAgentState(state, ledger, router, "summarizer", () =>
-    buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
-  , "offline");
-  const evidenceRef = ledger.writeArtifact("summaries", result.artifactText);
-  const reply = await buildReadOnlyUserReply(runtime, state, result);
-  const replyRef = ledger.writeArtifact("summaries", reply.text);
-  ledger.append({
-    type: "evidence_update",
-    phase: "summary",
-    role: "summarizer",
-    evidence: [reply.source === "model" ? "user-facing reply generated by model" : `user-facing reply blocked: ${reply.error ?? "model answer unavailable"}`, ...result.evidence.slice(0, 2)],
-    evidenceRef
-  });
-  ledger.append({
-    type: "evidence_update",
-    phase: "summary",
-    role: "summarizer",
-    provider: reply.provider,
-    model: reply.model,
-    evidence: [reply.text],
-    evidenceRef: replyRef
-  });
+  const summarized = await runAgentState(state, ledger, router, "summarizer", async () => {
+    const result = await buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection);
+    const evidenceRef = ledger.writeArtifact("summaries", result.artifactText);
+    const reply = await buildReadOnlyUserReply(runtime, state, result);
+    const replyRef = ledger.writeArtifact("summaries", reply.text);
+    ledger.append({
+      type: "evidence_update",
+      phase: "summary",
+      role: "summarizer",
+      evidence: [reply.source === "model" ? "user-facing reply generated by model" : `user-facing reply blocked: ${reply.error ?? "model answer unavailable"}`, ...result.evidence.slice(0, 2)],
+      evidenceRef
+    });
+    ledger.append({
+      type: "evidence_update",
+      phase: "summary",
+      role: "summarizer",
+      provider: reply.provider,
+      model: reply.model,
+      evidence: [reply.text],
+      evidenceRef: replyRef
+    });
+    return { result, reply, evidenceRef, replyRef };
+  }, "offline");
   state.finalSummary = {
     task: state.goal,
-    result: reply.source === "model" ? "completed" : "failed",
-    userReply: reply.text,
-    userReplySource: reply.source,
+    result: summarized.reply.source === "model" ? "completed" : "failed",
+    userReply: summarized.reply.text,
+    userReplySource: summarized.reply.source,
     changedFiles: [],
     testsRun: [],
-    evidence: result.evidence,
-    risksRemaining: reply.source === "model" ? [] : [reply.error ?? "No model-backed user reply was produced."],
+    evidence: summarized.result.evidence,
+    risksRemaining: summarized.reply.source === "model" ? [] : [summarized.reply.error ?? "No model-backed user reply was produced."],
     suggestedCommitMessage: "chore: no code changes"
   };
-  await appendFinalSummaryEvents(state, ledger, runtime);
+}
+
+function assertSummarizerNodeReady(state: AgentGraphState, taskNode?: TaskGraphNode, roleNode?: RoleNode): void {
+  if (!state.roleGraphExecution) return;
+  const node = roleNode ?? state.roleGraphExecution.graph.nodes.find((item) => item.id === "summarizer");
+  if (!node) return;
+  const ready = readyRoleNodes(state.roleGraphExecution).some((item) => item.id === node.id);
+  const readyTask = taskNode ?? readyTaskNodeForRoleNode(state.plan?.taskGraph, node);
+  if (!ready || !readyTask) {
+    const roleState = state.roleGraphExecution.nodes[node.id]?.status ?? "missing";
+    const readyTasks = state.plan?.taskGraph ? nextReadyTaskNodes(state.plan.taskGraph).map((item) => item.id).join(", ") : "none";
+    throw new WorkflowBlockedError(`Summarizer cannot run before dependencies are terminal. roleState=${roleState} readyTasks=${readyTasks}`);
+  }
+}
+
+function summaryEvidenceForState(state: AgentGraphState): string[] {
+  const skippedOrBlocked = state.roleGraphExecution?.results
+    .filter((result) => result.status === "skipped" || result.status === "blocked")
+    .map((result) => `${result.nodeId ?? result.role} ${result.status}: ${result.summary}`) ?? [];
+  const taskSkips = state.events
+    .filter((event): event is Extract<TomorrowEdgeEvent, { type: "task_node_result" }> => event.type === "task_node_result")
+    .filter((event) => event.status === "skipped" || event.status === "blocked")
+    .map((event) => `${event.taskNodeId} ${event.status}: ${event.summary}`);
+  return uniqueStrings([
+    "offline graph completed",
+    ...(state.visualSpec ? [`capability stitching visual spec: ${state.visualSpec.summary}`] : []),
+    ...state.evidencePackets.map((packet) => packet.summary),
+    ...state.runResults.map(evidenceFromRun),
+    ...skippedOrBlocked,
+    ...taskSkips
+  ]);
+}
+
+async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
+  skipOptionalReadOnlyGovernanceNodes(state, runtime.ledger);
+  ensureReadOnlySummarizerTaskNode(state, runtime.ledger);
+  await executeSummarizerNode(runtime, state);
+  await appendFinalSummaryEvents(state, runtime.ledger, runtime);
   await releaseExternalAgentProcessPool();
   return state;
+}
+
+function ensureReadOnlySummarizerTaskNode(state: AgentGraphState, ledger: EventLedger): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph) return;
+  const existingReady = graph.nodes.some((node) => node.kind === "summarize" && node.status === "pending" && node.dependsOn.every((dependency) => {
+    const dep = graph.nodes.find((item) => item.id === dependency);
+    return dep?.status === "done" || dep?.status === "skipped";
+  }));
+  if (existingReady) return;
+  const dependencies = graph.nodes
+    .filter((node) => node.ownerRole !== "summarizer" && (node.status === "done" || node.status === "skipped"))
+    .map((node) => node.id);
+  const existing = graph.nodes.find((node) => node.kind === "summarize");
+  const node: TaskGraphNode = existing ?? {
+    id: "summarize_findings",
+    kind: "summarize",
+    title: "Summarize findings",
+    objective: "Return a bounded answer after read-only inspection.",
+    detail: "Return a bounded answer after read-only inspection.",
+    phase: "summary",
+    ownerRole: "summarizer",
+    roleHints: ["summarizer"],
+    dependsOn: [],
+    dependencies: [],
+    requiredInputs: [{ id: "context_summary", kind: "file", description: "Read-only context summary", required: false }],
+    expectedOutputs: [{ id: "final_answer", kind: "summary", description: "Final read-only answer" }],
+    requiredEvidence: ["Read-only context summary"],
+    expectedArtifacts: ["Final read-only answer"],
+    riskLevel: state.plan?.riskLevel ?? "low",
+    mutationAllowed: false,
+    canRunInParallel: false,
+    stopIfFails: true,
+    acceptanceCriteria: state.objectiveContract?.successCriteria ?? state.plan?.steps.map((step) => step.title) ?? [],
+    status: "pending"
+  };
+  node.dependsOn = dependencies;
+  node.dependencies = dependencies;
+  node.status = "pending";
+  if (!existing) graph.nodes.push(node);
+  graph.edges = graph.edges.filter((edge) => edge.to !== node.id);
+  graph.edges.push(...dependencies.map((from) => ({ from, to: node.id, reason: "Read-only summary requires completed inspection or clarification evidence" })));
+  graph.terminalNodeIds = [node.id];
+  ledger.append({
+    type: "evidence_gap",
+    phase: "summary",
+    role: "summarizer",
+    missing: ["read-only summarize task node"],
+    blocking: false,
+    reason: "Read-only TaskGraph was repaired to include an executable summarizer node."
+  });
 }
 
 function skipOptionalReadOnlyGovernanceNodes(state: AgentGraphState, ledger: EventLedger): void {
@@ -3042,6 +3137,8 @@ function updateTaskGraphForRoleNode(
       status: taskStatus,
       summary,
       evidence: summary ? [summary, ...artifacts] : artifacts,
+      artifacts,
+      evidenceRef: artifacts[0],
       error
     });
   }
@@ -3061,9 +3158,113 @@ function markTaskNodesRunning(state: AgentGraphState, ledger: EventLedger, roleN
       roleNodeId,
       status: "running",
       summary,
-      evidence: []
+      evidence: [],
+      artifacts: []
     });
   }
+}
+
+function completeDesignOrAnalysisTaskNode(ledger: EventLedger, state: AgentGraphState, node: TaskGraphNode, roleNodeId?: string): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph || node.status === "done") return;
+  const result = designOrRiskArtifactForNode(state, node);
+  const artifactRef = ledger.writeArtifact(result.kind === "risk_map" ? "risk_maps" : "designs", JSON.stringify(result.artifact, null, 2), "json");
+  const packet = buildEvidencePacket({
+    phase: "plan",
+    summary: result.summary,
+    claims: result.claims,
+    supportingArtifacts: [artifactRef],
+    riskSignals: result.riskSignals,
+    verificationStatus: "partial"
+  });
+  recordEvidencePacket(state, ledger, packet, node.ownerRole);
+  node.status = "done";
+  ledger.append({
+    type: "task_node_result",
+    phase: node.phase,
+    role: node.ownerRole,
+    taskNodeId: node.id,
+    roleNodeId,
+    status: "done",
+    summary: result.summary,
+    evidence: result.claims,
+    artifacts: [artifactRef],
+    evidenceRef: artifactRef
+  });
+}
+
+function designOrRiskArtifactForNode(state: AgentGraphState, node: TaskGraphNode): {
+  kind: "design_patch" | "risk_map";
+  summary: string;
+  claims: string[];
+  riskSignals: string[];
+  artifact: Record<string, unknown>;
+} {
+  const selectedFiles = state.contextSelection?.selectedFiles.map((file) => file.path) ?? state.plan?.expectedFiles ?? [];
+  const acceptanceCriteria = node.acceptanceCriteria.length ? node.acceptanceCriteria : state.objectiveContract?.successCriteria ?? [];
+  if (node.id === "risk_map") {
+    const securityBoundary = uniqueStrings([
+      ...(state.objectiveContract?.allowedTools.map((tool) => `allowed tool: ${tool}`) ?? []),
+      ...(state.objectiveContract?.forbiddenActions.map((action) => `forbidden action: ${action}`) ?? []),
+      ...(state.scenarioProfile?.riskSignals ?? [])
+    ]);
+    const regressionBoundary = uniqueStrings([
+      ...selectedFiles.map((file) => `selected file: ${file}`),
+      ...(state.plan?.verificationCommands ?? []).map((command) => `verification: ${command}`)
+    ]);
+    const requiredReviewEvidence = uniqueStrings([
+      "risk_map artifact",
+      "candidate diff",
+      "review_decision",
+      "judge_decision",
+      ...(state.plan?.verificationCommands?.length ? ["verification output"] : ["explicit no-verifier or approval-blocked reason"])
+    ]);
+    return {
+      kind: "risk_map",
+      summary: "risk_map produced structured high-risk review evidence",
+      claims: [
+        `security boundary items=${securityBoundary.length}`,
+        `regression boundary items=${regressionBoundary.length}`,
+        `required review evidence=${requiredReviewEvidence.join(" | ")}`
+      ],
+      riskSignals: securityBoundary,
+      artifact: {
+        taskNodeId: node.id,
+        workflowKind: state.workflowKind,
+        riskLevel: state.plan?.riskLevel,
+        securityBoundary,
+        regressionBoundary,
+        requiredReviewEvidence,
+        acceptanceCriteria
+      }
+    };
+  }
+  const patchStrategy = uniqueStrings([
+    ...((state.plan?.steps ?? []).map((step) => `${step.id}: ${step.title}`)),
+    state.visualSpec ? `vision handoff: ${state.visualSpec.summary}` : ""
+  ]);
+  const riskAssumptions = uniqueStrings([
+    `plan risk=${state.plan?.riskLevel ?? "unknown"}`,
+    `workflowKind=${state.workflowKind ?? state.plan?.workflowKind ?? "unknown"}`,
+    ...(state.objectiveContract?.forbiddenActions.map((action) => `must avoid ${action}`) ?? [])
+  ]);
+  return {
+    kind: "design_patch",
+    summary: "design_patch produced structured patch strategy evidence",
+    claims: [
+      `files likely to touch=${selectedFiles.join(", ") || "not yet known"}`,
+      `patch strategy steps=${patchStrategy.length}`,
+      `acceptance criteria=${acceptanceCriteria.join(" | ") || "not specified"}`
+    ],
+    riskSignals: riskAssumptions,
+    artifact: {
+      taskNodeId: node.id,
+      filesLikelyToTouch: selectedFiles,
+      patchStrategy,
+      riskAssumptions,
+      acceptanceCriteria
+    }
+  };
 }
 
 function taskNodeMatchesRoleNode(taskNodeId: string, kind: string, ownerRole: AgentRole, roleNodeId: string, role: AgentRole): boolean {
@@ -3101,7 +3302,12 @@ function flushReadyTaskGraphNodes(state: AgentGraphState, ledger: EventLedger): 
         roleNode.role === node.ownerRole && (roleNode.status === "success" || roleNode.status === "skipped")
       );
       if (!ownerDone) continue;
-      if (node.kind === "apply_patch" || node.kind === "verify") continue;
+      if (node.kind === "apply_patch" || node.kind === "verify" || node.kind === "summarize") continue;
+      if (node.kind === "design" || node.kind === "analyze") {
+        completeDesignOrAnalysisTaskNode(ledger, state, node);
+        changed = true;
+        continue;
+      }
       node.status = "done";
       changed = true;
       ledger.append({
@@ -3111,7 +3317,8 @@ function flushReadyTaskGraphNodes(state: AgentGraphState, ledger: EventLedger): 
         taskNodeId: node.id,
         status: "done",
         summary: `${node.id} completed after dependencies became available`,
-        evidence: []
+        evidence: [],
+        artifacts: []
       });
     }
   }
@@ -3178,6 +3385,8 @@ async function runAgentState<T>(
       estimatedCostUsd: gate.estimatedCostUsd,
       strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
       strongAgentCallsRemaining: gate.remainingCalls,
+      realStrongAgentCallsUsed: state.budgetRuntime.realStrongAgentCallsUsed,
+      simulatedStrongAgentCallsUsed: state.budgetRuntime.simulatedStrongAgentCallsUsed,
       realProvider: providerReality.realProvider,
       simulated: providerReality.simulated
     });
@@ -4064,6 +4273,8 @@ function beginModelInvocationBudgetScope(input: {
       estimatedCostUsd: decision.estimatedCostUsd,
       strongAgentCallsUsed: input.state.budgetRuntime.strongAgentCallsUsed,
       strongAgentCallsRemaining: decision.remainingCalls,
+      realStrongAgentCallsUsed: input.state.budgetRuntime.realStrongAgentCallsUsed,
+      simulatedStrongAgentCallsUsed: input.state.budgetRuntime.simulatedStrongAgentCallsUsed,
       realProvider: providerReality.realProvider,
       simulated: providerReality.simulated
     });
@@ -4132,106 +4343,6 @@ function commitModelInvocationBudgetScope(state: AgentGraphState, scope: ModelIn
 
 function releaseModelInvocationBudgetScope(state: AgentGraphState, reservations: BudgetReservation[], reason: string): void {
   for (const reservation of reservations) releaseRoleCall(state.budgetRuntime, reservation, reason);
-}
-
-function recordLiveBudgetDecisions(
-  ledger: EventLedger,
-  phase: "planning" | "coding",
-  plans: Array<{ role: AgentRole; provider: string; model: string }>,
-  status: ModelBudgetStatus
-): void {
-  for (const plan of plans) {
-    const providerReality = budgetProviderReality(plan.provider);
-    ledger.append({
-      type: "budget_decision",
-      phase,
-      role: plan.role,
-      provider: plan.provider,
-      model: plan.model,
-      status: status.status === "blocked" ? "blocked" : status.status === "price_unknown" ? "warn" : "allowed",
-      reason: status.reason,
-      budgetScope: "efficient",
-      maxCostUsd: status.maxCostUsd,
-      estimatedCostUsd: status.estimatedCostUsd,
-      realProvider: providerReality.realProvider,
-      simulated: providerReality.simulated
-    });
-  }
-}
-
-function canUseGovernanceModel(runtime: OfflineGraphRuntime, state: AgentGraphState, role: AgentRole, prompt: string, maxOutputTokens: number, label: string): boolean {
-  if (!runtime.access.cloudAllowed) {
-    runtime.ledger.append({
-      type: "autonomy_limit_reached",
-      phase: phaseForRole(role),
-      role,
-      status: "blocked_by_access_mode",
-      reason: `${label} blocked by access mode: ${runtime.access.mode}.`
-    });
-    return false;
-  }
-  const assignment = runtime.router.assignmentFor(role);
-  const budgetStatus = preflightBudget(
-    [{ provider: assignment.provider, prompt, maxOutputTokens }],
-    runtime.config.routing.max_cost_usd
-  );
-  if (state.budgetStatus?.status === "blocked") {
-    state.budgetStatuses.push(budgetStatus);
-  } else {
-    setBudgetStatus(state, budgetStatus);
-  }
-  recordLiveBudgetDecisions(runtime.ledger, "planning", [assignment], budgetStatus);
-  if (budgetStatus.status === "blocked") {
-    runtime.ledger.append({
-      type: "autonomy_limit_reached",
-      phase: phaseForRole(role),
-      role,
-      status: "blocked_by_budget",
-      reason: `${label} blocked before model invocation: ${budgetStatus.reason}`
-    });
-    return false;
-  }
-  const invocationKind = label.includes("debate") ? "pre_judge_debate" : label.includes("planner") ? "model_planner" : "live_advisory";
-  const invocationGate = evaluateModelCallInvocation({
-    config: runtime.config,
-    runtime: state.budgetRuntime,
-    invocation: invocationKind,
-    role,
-    assignment,
-    roleBudget: roleBudgetFor(runtime.config, role),
-    estimatedCostUsd: budgetStatus.estimatedCostUsd,
-    escalationSignals: policyEscalationSignals(state.orchestrationPolicy, state.plan?.riskLevel, inferStrongAgentEscalationSignals(state.goal)),
-    canFallback: false
-  });
-  const providerReality = budgetProviderReality(assignment.provider);
-  runtime.ledger.append({
-    type: "budget_decision",
-    phase: invocationGate.phase,
-    role,
-    provider: assignment.provider,
-    model: assignment.model,
-    status: invocationGate.action === "allow" ? "allowed" : "blocked",
-    reason: invocationGate.reason,
-    invocationKind,
-    budgetScope: invocationGate.scope,
-    maxCostUsd: roleBudgetFor(runtime.config, role)?.maxCostPerCallUsd ?? runtime.config.strong_agents.max_cost_usd,
-    estimatedCostUsd: invocationGate.estimatedCostUsd,
-    strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
-    strongAgentCallsRemaining: invocationGate.remainingCalls,
-    realProvider: providerReality.realProvider,
-    simulated: providerReality.simulated
-  });
-  if (invocationGate.action !== "allow") {
-    runtime.ledger.append({
-      type: "autonomy_limit_reached",
-      phase: phaseForRole(role),
-      role,
-      status: "blocked_by_budget",
-      reason: `${label} blocked by unified budget gate: ${invocationGate.reason}`
-    });
-    return false;
-  }
-  return true;
 }
 
 function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, startedAtMs: number, phase: "shell" | "repair" | "summary" | "coding"): boolean {
