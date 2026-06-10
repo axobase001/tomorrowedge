@@ -17,6 +17,7 @@ export function inferWorkflowStage(state?: AgentGraphState): CockpitWorkflowStag
   const events = state.events ?? [];
   if (state.finalSummary?.result === "failed") return "failed";
   if (state.finalSummary?.result === "aborted") return "failed";
+  if (isMissingPatchDeliverable(state)) return "failed";
   if (state.agents.some((agent) => agent.status === "waiting_for_user")) return "waiting_approval";
   if (state.finalSummary) return "done";
   if (events.some((event) => event.type === "shell_run")) return latestShellFailed(events) ? "failed" : "testing";
@@ -42,4 +43,25 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
 export function latestShellFailed(events: TomorrowEdgeEvent[]): boolean {
   const latest = [...events].reverse().find((event) => event.type === "shell_run");
   return latest?.type === "shell_run" && latest.success === false;
+}
+
+export function isMissingPatchDeliverable(state?: AgentGraphState): boolean {
+  if (!state?.finalSummary) return false;
+  const changedFiles = state.changedFiles.length || state.finalSummary.changedFiles.length;
+  if (changedFiles) return false;
+  const workflowKind = state.workflowKind ?? state.objectiveContract?.workflowKind ?? state.plan?.workflowKind;
+  const patchLike = state.plan?.requiresPatchWorkflow === true
+    || workflowKind === "patch"
+    || workflowKind === "repair"
+    || workflowKind === "vision_patch"
+    || state.plan?.taskType === "feature"
+    || state.plan?.taskType === "bugfix"
+    || state.plan?.taskType === "docs";
+  if (!patchLike || state.finalSummary.result === "failed" || state.finalSummary.result === "aborted") return false;
+  const summaryText = [
+    ...state.finalSummary.evidence,
+    ...state.finalSummary.risksRemaining,
+    ...state.events.flatMap((event) => event.type === "workflow_stop_reason" ? [event.reason] : [])
+  ].join("\n");
+  return state.finalSummary.result === "partially_completed" || /no patch (?:was )?(?:applied|generated)|no files? (?:were )?changed/i.test(summaryText);
 }

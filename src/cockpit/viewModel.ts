@@ -3,7 +3,7 @@ import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitErrorLoopTimelineItem, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { buildCapabilityDashboard } from "./capabilityRegistry.js";
-import { eventSummary, inferWorkflowStage, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
+import { eventSummary, inferWorkflowStage, isMissingPatchDeliverable, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 
 export type CockpitViewModelOptions = {
   source?: CockpitSessionSource;
@@ -687,6 +687,16 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return { title: "Ready for a new task", subtitle: "Enter a natural-language command", body: "Offline fixture mode can run without API keys.", filesChanged: [] };
   }
   if (state.finalSummary) {
+    if (isMissingPatchDeliverable(state)) {
+      return {
+        title: "No patch generated",
+        subtitle: "needs revision",
+        body: missingPatchBody(state),
+        supportingDetail: completedBody(state),
+        filesChanged: [],
+        testStatus: "not_run"
+      };
+    }
     const failed = state.finalSummary.result === "failed" || state.finalSummary.result === "aborted";
     return {
       title: failed ? "Failure diagnosis" : "Answer",
@@ -704,6 +714,15 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return { title: "Plan and route", subtitle: `${state.routing.mode} route`, body: state.plan.steps.map((item) => `- ${item.title}`).join("\n"), filesChanged: [] };
   }
   return { title: "Workflow running", subtitle: state.goal, body: "Collecting context and generating candidate changes.", filesChanged: [] };
+}
+
+function missingPatchBody(state: AgentGraphState): string {
+  const expected = state.plan?.expectedFiles?.length ? ` Expected files: ${state.plan.expectedFiles.join(", ")}.` : "";
+  return [
+    "No files were changed, and no patch is available to approve.",
+    "The requested deliverable was not created, so this task needs revision or a retry with a patch-capable route.",
+    expected.trim()
+  ].filter(Boolean).join("\n");
 }
 
 function completedAnswerFallback(state: AgentGraphState): string {

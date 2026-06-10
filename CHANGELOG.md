@@ -7,6 +7,18 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-06-10
+
+1.3.9 fixes the GUI status projection for patch-like tasks that produce no
+files.
+
+### Changed
+
+- Patch-like workflows that finish with no changed files and no patch applied
+  are now shown as failed/needs revision in the Cockpit instead of green `Done`.
+- The main panel now surfaces `No patch generated` with a clear retry/revision
+  explanation while preserving workflow evidence in supporting detail.
+
 ## [1.3.8] - 2026-06-10
 
 1.3.8 makes the Cockpit answer-first for read-only, chat-style, and governed

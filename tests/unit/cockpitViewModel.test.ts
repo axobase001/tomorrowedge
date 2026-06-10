@@ -445,6 +445,39 @@ describe("cockpit view model", () => {
     expect(vm.workflow.find((step) => step.id === "test")?.status).toBe("done");
     expect(vm.main.testStatus).toBe("passed");
   });
+
+  it("does not present missing patch deliverables as green done", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      candidates: [],
+      review: undefined,
+      judge: undefined,
+      changedFiles: [],
+      finalSummary: {
+        task: "create generated files",
+        result: "partially_completed",
+        userReply: "No patch was applied.",
+        userReplySource: "local",
+        changedFiles: [],
+        testsRun: [],
+        evidence: ["offline graph completed"],
+        risksRemaining: ["No patch was applied."],
+        suggestedCommitMessage: "chore: no generated files"
+      },
+      events: [eventBase("event_stop_no_patch", "workflow_stop_reason", {
+        phase: "summary",
+        role: "summarizer",
+        reason: "no patch applied; workflow finalized after review and judge",
+        result: "partially_completed"
+      })]
+    }));
+
+    expect(vm.status).toBe("failed");
+    expect(vm.statusText).toBe("Failed");
+    expect(vm.tasks[0]?.status).toBe("failed");
+    expect(vm.main.title).toBe("No patch generated");
+    expect(vm.main.body).toContain("No files were changed");
+    expect(vm.main.supportingDetail).toContain("No patch was applied.");
+  });
 });
 
 function eventBase<T extends TomorrowEdgeEvent["type"]>(id: string, type: T, fields: Omit<Extract<TomorrowEdgeEvent, { type: T }>, "id" | "timestamp" | "sessionId" | "mode" | "type">): Extract<TomorrowEdgeEvent, { type: T }> {
