@@ -8,14 +8,27 @@ export class SummarizerAgent extends BaseAgent<{ plan: Plan; changedFiles: strin
   async run(input: { plan: Plan; changedFiles: string[]; testsRun: string[]; evidence: string[] }): Promise<FinalSummary> {
     const hasPassingEvidence = input.evidence.some((item) => item.startsWith("Command passed:"));
     const onlySkippedVerification = input.testsRun.length > 0 && input.evidence.some((item) => item.startsWith("Command skipped:")) && !input.evidence.some((item) => item.startsWith("Command failed:"));
-    const result = input.changedFiles.length && input.testsRun.length ? (hasPassingEvidence || onlySkippedVerification ? "completed" : "failed") : "partially_completed";
+    const docsOnlyPatch = input.plan.taskType === "docs" || input.changedFiles.every((file) => /\.(md|markdown|html?|txt|rst|adoc)$/i.test(file));
+    const verificationFailed = input.testsRun.length > 0 && input.evidence.some((item) => item.startsWith("Command failed:"));
+    const result = input.changedFiles.length && input.testsRun.length
+      ? (hasPassingEvidence || onlySkippedVerification ? "completed" : docsOnlyPatch ? "partially_completed" : "failed")
+      : "partially_completed";
+    const risksRemaining = input.changedFiles.length
+      ? onlySkippedVerification
+        ? ["Patch applied but verification was skipped."]
+        : verificationFailed && docsOnlyPatch
+          ? ["Patch applied, but verification failed; inspect whether the failure is related to the requested document/content files."]
+          : input.testsRun.length
+            ? []
+            : ["Patch applied but no test command was run."]
+      : ["No patch was applied."];
     return {
       task: input.plan.goal,
       result,
       changedFiles: input.changedFiles,
       testsRun: input.testsRun,
       evidence: input.evidence,
-      risksRemaining: input.changedFiles.length ? (onlySkippedVerification ? ["Patch applied but verification was skipped."] : input.testsRun.length ? [] : ["Patch applied but no test command was run."]) : ["No patch was applied."],
+      risksRemaining,
       suggestedCommitMessage: `Implement ${input.plan.taskType} task`
     };
   }

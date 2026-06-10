@@ -13,6 +13,7 @@ import type { EventLedger } from "../events/eventLedger.js";
 import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
 import type { ObjectiveContractV1 } from "./objectiveContract.js";
 import { verifyAndRepairContract } from "./contractVerifier.js";
+import { isDocumentOnlyGoal } from "../goal/goalParser.js";
 
 export type NativeContractGeneratorInput = {
   goal: string;
@@ -31,7 +32,7 @@ export function generateNativeObjectiveContract(input: NativeContractGeneratorIn
   const restricted = input.accessMode === "restricted";
   const effectiveWorkflowKind = restricted && patchLike ? "read_only" : workflowKind;
   const allowedTools = allowedToolsFor(effectiveWorkflowKind, input.accessMode);
-  const requiredCommands = patchLike && input.accessMode !== "restricted" ? ["npm test"] : [];
+  const requiredCommands = patchLike && input.accessMode !== "restricted" && !isDocumentOnlyGoal(input.goal) ? ["npm test"] : [];
   const allowedRoles = allowedRolesFor(input.scenarioProfile.suggestedRoles, effectiveWorkflowKind, riskLevel);
   return {
     schemaVersion: "objective-contract/v1",

@@ -49,6 +49,25 @@ describe("objective contracts", () => {
     expect(result.contract.forbiddenActions).toEqual(expect.arrayContaining(["write_files", "apply_patch", "run_shell"]));
   });
 
+  it("does not require full npm test for document-only file creation contracts", () => {
+    const goal = [
+      "Create a new file assignments/gpt55-smoke-test/README.md.",
+      "Write a short Chinese explanation and do not modify any other files."
+    ].join("\n");
+    const workflowIntent = withProvider(classifyWorkflowIntentLocally(goal));
+    const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: "partial" });
+    const contract = generateNativeObjectiveContract({
+      goal,
+      workflowIntent,
+      scenarioProfile,
+      retrievedTraces: [],
+      config: defaultConfig,
+      accessMode: "partial"
+    });
+
+    expect(contract.verificationRubric.requiredCommands).not.toContain("npm test");
+  });
+
   it("overlays model/native plans without relaxing the contract", () => {
     const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
     const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });

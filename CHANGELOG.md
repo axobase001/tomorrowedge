@@ -7,6 +7,20 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-06-10
+
+1.3.6 fixes document/content patch verification semantics and an
+OpenAI-compatible relay parsing edge case.
+
+### Changed
+
+- Document-only file creation/update contracts no longer force a full `npm test`
+  verifier by default.
+- Summaries now distinguish "patch applied, verification failed" for docs-only
+  content changes instead of marking the entire task as a failed patch.
+- OpenAI-compatible providers now parse SSE-style `data:` chat completion
+  frames from relay services instead of treating them as invalid JSON.
+
 ## [1.3.5] - 2026-06-10
 
 1.3.5 clears a high-priority GUI/runtime governance issue batch focused on

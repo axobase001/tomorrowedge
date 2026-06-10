@@ -49,15 +49,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (!response.ok) {
       throw new Error(`${this.id} request failed: ${response.status} ${await response.text()}`);
     }
-    const json = (await response.json()) as {
-      id?: string;
-      choices?: Array<{ message?: { content?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
+    const json = parseOpenAICompatibleResponse(await response.text());
     return {
       id: json.id ?? `${this.id}-response`,
       model: req.model,
-      content: json.choices?.[0]?.message?.content ?? "",
+      content: json.content,
       usage: json.usage
         ? {
             inputTokens: json.usage.prompt_tokens ?? 0,
@@ -119,6 +115,50 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (this.options.authHeader === "api-key") return { "api-key": this.options.apiKey };
     return { Authorization: `Bearer ${this.options.apiKey}` };
   }
+}
+
+type OpenAICompatibleJson = {
+  id?: string;
+  content: string;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+};
+
+function parseOpenAICompatibleResponse(raw: string): OpenAICompatibleJson {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("data:")) {
+    const parsed = JSON.parse(trimmed) as {
+      id?: string;
+      choices?: Array<{ message?: { content?: string }; delta?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    return {
+      id: parsed.id,
+      content: parsed.choices?.[0]?.message?.content ?? parsed.choices?.[0]?.delta?.content ?? "",
+      usage: parsed.usage
+    };
+  }
+
+  let id: string | undefined;
+  let content = "";
+  let usage: OpenAICompatibleJson["usage"];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const item = line.trim();
+    if (!item.startsWith("data:")) continue;
+    const payload = item.slice("data:".length).trim();
+    if (!payload || payload === "[DONE]") continue;
+    const parsed = JSON.parse(payload) as {
+      id?: string;
+      choices?: Array<{ message?: { content?: string }; delta?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    id = parsed.id ?? id;
+    usage = parsed.usage ?? usage;
+    const messageContent = parsed.choices?.[0]?.message?.content;
+    const deltaContent = parsed.choices?.[0]?.delta?.content;
+    if (messageContent) content += messageContent;
+    else if (deltaContent) content += deltaContent;
+  }
+  return { id, content, usage };
 }
 
 function isRetryableStatus(status: number): boolean {

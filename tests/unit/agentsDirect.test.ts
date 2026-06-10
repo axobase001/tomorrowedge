@@ -61,6 +61,15 @@ describe("direct agent contracts", () => {
 
     await expect(summarizer.run({ plan, changedFiles: ["index.js"], testsRun: ["npm test"], evidence: ["Command passed: npm test"] })).resolves.toMatchObject({ result: "completed" });
     await expect(summarizer.run({ plan, changedFiles: ["index.js"], testsRun: ["npm test"], evidence: ["Command failed: npm test"] })).resolves.toMatchObject({ result: "failed" });
+    await expect(summarizer.run({
+      plan: { ...plan, taskType: "docs" },
+      changedFiles: ["assignments/gpt55-smoke-test/README.md"],
+      testsRun: ["npm test"],
+      evidence: ["Command failed: npm test"]
+    })).resolves.toMatchObject({
+      result: "partially_completed",
+      risksRemaining: ["Patch applied, but verification failed; inspect whether the failure is related to the requested document/content files."]
+    });
     await expect(summarizer.run({ plan, changedFiles: [], testsRun: [], evidence: [] })).resolves.toMatchObject({ result: "partially_completed" });
   });
 

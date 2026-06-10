@@ -96,7 +96,7 @@ function verificationCommandsFor(goal: string, taskType: TaskType): string[] {
   return ["npm test"];
 }
 
-function isDocumentOnlyGoal(goal: string): boolean {
+export function isDocumentOnlyGoal(goal: string): boolean {
   const pathLikeMatches = Array.from(goal.matchAll(/(?:^|[\s"'`(\[<])([A-Za-z0-9_.:/\\-]+\.(md|markdown|html|htm|txt|rst|adoc|json|yaml|yml|ts|tsx|js|jsx|mjs|cjs|py|rs|go|java|kt|cpp|cxx|cc|c|h|hpp|cs|php|rb|swift|vue|svelte|css|scss|sql))(?:$|[\s"'`)\]>.,;:])/gi));
   if (!pathLikeMatches.length) return false;
   const docExtensions = new Set(["md", "markdown", "html", "htm", "txt", "rst", "adoc"]);

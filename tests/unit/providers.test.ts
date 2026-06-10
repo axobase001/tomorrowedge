@@ -134,6 +134,37 @@ describe("provider registry", () => {
     expect(calls).toBe(2);
   });
 
+  it("parses OpenAI-compatible SSE data framing", async () => {
+    vi.stubGlobal("fetch", async () => new Response([
+      "data: {\"id\":\"sse-ok\",\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}",
+      "data: {\"id\":\"sse-ok\",\"choices\":[{\"delta\":{\"content\":\"lo\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+      "data: [DONE]",
+      ""
+    ].join("\n"), {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" }
+    }));
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openai_compatible",
+      name: "OpenAI-compatible",
+      apiKey: "test-key",
+      baseUrl: "https://relay.example/v1",
+      defaultModel: "gpt-5.5"
+    });
+
+    const response = await provider.chat({
+      model: "gpt-5.5",
+      messages: [{ role: "user", content: "hello" }]
+    });
+
+    expect(response).toMatchObject({
+      id: "sse-ok",
+      content: "hello",
+      usage: { inputTokens: 3, outputTokens: 2 }
+    });
+  });
+
   it("registers Anthropic and Gemini native adapters", async () => {
     vi.stubEnv("ANTHROPIC_TEST_KEY", "anthropic-test-key");
     vi.stubEnv("GEMINI_TEST_KEY", "gemini-test-key");
