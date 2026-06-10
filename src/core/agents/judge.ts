@@ -21,11 +21,11 @@ export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
   readonly role = "judge";
 
   async run(input: JudgeAgentInput): Promise<JudgeDecision> {
-    const debateBlock = blockingDebateDecision(input.debateSession, input.allowPartialCompletion, input.riskLevel);
-    if (debateBlock) return debateBlock;
     const acceptable = input.review.reviews
       .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
       .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
+    const debateBlock = blockingDebateDecision(input.debateSession, acceptable?.candidateId, input.allowPartialCompletion, input.riskLevel);
+    if (debateBlock) return debateBlock;
     if (!acceptable) {
       return {
         decision: input.review.reviews.some(hasCriticalConcern) ? "ask_user" : "request_revision",
@@ -66,10 +66,14 @@ export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
   }
 }
 
-function blockingDebateDecision(debateSession: DebateSession | undefined, allowPartialCompletion = true, riskLevel: RiskLevel | undefined): JudgeDecision | undefined {
-  const unresolved = debateSession?.unresolvedBlockingIssues ?? [];
+function blockingDebateDecision(debateSession: DebateSession | undefined, selectedCandidateId: string | undefined, allowPartialCompletion = true, riskLevel: RiskLevel | undefined): JudgeDecision | undefined {
+  const unresolvedIssues = (debateSession?.unresolvedIssues ?? []).filter((issue) =>
+    issue.blocking && (!issue.candidateId || issue.candidateId === selectedCandidateId)
+  );
+  const unresolved = unresolvedIssues.map((issue) => issue.title);
   if (!unresolved.length) return undefined;
-  const mayProceedPartial = allowPartialCompletion && riskLevel !== "high";
+  const hasGlobalBlockingIssue = unresolvedIssues.some((issue) => !issue.candidateId);
+  const mayProceedPartial = !hasGlobalBlockingIssue && allowPartialCompletion && riskLevel !== "high";
   if (mayProceedPartial) return undefined;
   return {
     decision: "request_revision",

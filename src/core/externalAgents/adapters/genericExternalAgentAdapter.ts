@@ -1,6 +1,7 @@
 import type { AgentRole } from "../../../schemas/agentTask.js";
 import type { ExternalOutputContract } from "../contracts/externalTaskEnvelope.js";
 import type { ExternalAgentAdapter, ExternalAgentNormalizationStrictness, ExternalAgentResponseMode } from "../externalAgentTypes.js";
+import type { ExternalAgentAdapterRuntime } from "./externalAgentAdapter.js";
 
 export type ExternalAgentNormalizationInput = {
   externalAgentId: string;
@@ -41,6 +42,40 @@ export function normalizeGenericExternalAgentResult(input: ExternalAgentNormaliz
   return { adapter: input.adapter, responseMode: input.responseMode, status, payload, warnings, summary };
 }
 
+export const genericExternalAgentAdapter: ExternalAgentAdapterRuntime = {
+  id: "generic",
+  supports: () => true,
+  buildPrompt: (input) => [
+    input.prompt,
+    "",
+    `TomorrowEdge role: ${input.role}`,
+    `Output contract: ${input.envelope.outputContract}`,
+    "Return a typed role result. Prefer JSON when possible.",
+    "Envelope:",
+    JSON.stringify(input.envelope, null, 2)
+  ].join("\n"),
+  normalizeOutput: normalizeGenericExternalAgentResult,
+  extractEvidence: (input) => {
+    const evidence: string[] = [];
+    const payload = asRecord(input.normalized.payload);
+    if (payload?.summary) evidence.push(`summary: ${String(payload.summary).slice(0, 240)}`);
+    if (input.normalized.status === "warning") evidence.push(`normalization warnings: ${input.normalized.warnings.join("; ")}`);
+    if (input.outputContract !== "freeform") evidence.push(`contract=${input.outputContract} status=${input.normalized.status}`);
+    return evidence;
+  },
+  detectFailure: (input) => ({
+    failed: input.normalized.status === "failed",
+    reason: input.normalized.warnings.join("; ") || undefined,
+    retryable: input.normalized.status === "failed",
+    category: input.normalized.status === "failed" ? "missing_contract" : undefined
+  }),
+  retryPolicy: ({ failure, attempt }) => ({
+    retry: Boolean(failure.retryable && attempt < 2),
+    reason: failure.reason ?? "generic adapter retry policy"
+  }),
+  estimateCost: estimateExternalCost
+};
+
 export function parseJsonish(value: string): unknown {
   const trimmed = value.trim();
   if (!trimmed) return value;
@@ -80,4 +115,18 @@ function outputMatchesContract(payload: unknown, contract: ExternalOutputContrac
   if (contract === "review") return Boolean(asRecord(object.review) || Array.isArray(object.reviews));
   if (contract === "judgment") return Boolean(asRecord(object.judgment) || typeof object.decision === "string");
   return false;
+}
+
+export function estimateExternalCost(rawPayload: unknown): { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number } {
+  const object = asRecord(rawPayload);
+  const usage = asRecord(object?.usage) ?? asRecord(object?.costUsage) ?? asRecord(object?.cost);
+  const inputTokens = numberOrUndefined(usage?.inputTokens ?? usage?.promptTokens ?? usage?.prompt_tokens);
+  const outputTokens = numberOrUndefined(usage?.outputTokens ?? usage?.completionTokens ?? usage?.completion_tokens);
+  const totalTokens = numberOrUndefined(usage?.totalTokens ?? usage?.total_tokens) ?? (inputTokens !== undefined || outputTokens !== undefined ? (inputTokens ?? 0) + (outputTokens ?? 0) : undefined);
+  const estimatedCostUsd = numberOrUndefined(usage?.estimatedCostUsd ?? usage?.costUsd ?? usage?.usd);
+  return { inputTokens, outputTokens, totalTokens, estimatedCostUsd };
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }

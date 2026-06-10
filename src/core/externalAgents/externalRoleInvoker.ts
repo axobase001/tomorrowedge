@@ -4,7 +4,7 @@ import type { ExternalAgentProfile } from "./externalAgentTypes.js";
 import { ExternalAgentProcessClient, type ExternalAgentTool } from "./externalAgentProcess.js";
 import { runCommandExternalAgent } from "./runners/commandExternalAgentRunner.js";
 import type { ExternalOutputContract, ExternalTaskEnvelope } from "./contracts/externalTaskEnvelope.js";
-import { normalizeExternalAgentResponse } from "./adapters/registry.js";
+import { buildExternalAgentPrompt, detectExternalAgentFailure, estimateExternalAgentCost, extractExternalAgentEvidence, normalizeExternalAgentResponse } from "./adapters/registry.js";
 
 export type ExternalRoleInvocation = {
   externalAgentId: string;
@@ -32,15 +32,21 @@ export async function invokeExternalRole(input: {
   outputContract?: ExternalOutputContract;
 }): Promise<ExternalRoleInvocation> {
   const envelope = buildTaskEnvelope(input);
+  const adaptedPrompt = buildExternalAgentPrompt({
+    profile: input.profile,
+    role: input.role,
+    envelope,
+    prompt: input.prompt
+  });
   if (!input.profile.command) {
-    return runConfiguredExternalProfile(input, envelope);
+    return runConfiguredExternalProfile(input, envelope, adaptedPrompt);
   }
   if (input.profile.command && !input.profile.autoStart) {
     const result = await runCommandExternalAgent({
       cwd: input.cwd,
       profile: input.profile,
       role: input.role,
-      task: input.prompt,
+      task: adaptedPrompt,
       context: envelope,
       ledger: input.ledger
     });
@@ -58,7 +64,8 @@ export async function invokeExternalRole(input: {
 
   const requestRef = input.ledger.writeArtifact("external_requests", JSON.stringify({
     role: input.role,
-    prompt: input.prompt,
+    prompt: adaptedPrompt,
+    originalPrompt: input.prompt,
     context: envelope
   }, null, 2), "json");
   input.ledger.append({
@@ -80,7 +87,7 @@ export async function invokeExternalRole(input: {
     const toolName = input.toolName ?? chooseExternalTool(tools);
     const result = await client.callTool(toolName, {
       role: input.role,
-      prompt: input.prompt,
+      prompt: adaptedPrompt,
       context: envelope,
       outputContract: envelope.outputContract
     });
@@ -156,10 +163,11 @@ function runConfiguredExternalProfile(input: {
   ledger: EventLedger;
   toolName?: string;
   outputContract?: ExternalOutputContract;
-}, envelope: ExternalTaskEnvelope): ExternalRoleInvocation {
+}, envelope: ExternalTaskEnvelope, adaptedPrompt: string): ExternalRoleInvocation {
   const requestRef = input.ledger.writeArtifact("external_requests", JSON.stringify({
     role: input.role,
-    prompt: input.prompt,
+    prompt: adaptedPrompt,
+    originalPrompt: input.prompt,
     context: envelope
   }, null, 2), "json");
   input.ledger.append({
@@ -232,6 +240,59 @@ function normalizeExternalPayload(input: {
     warnings: normalized.warnings,
     summary: normalized.summary
   });
+  const cost = estimateExternalAgentCost(input.profile, rawPayload);
+  if (cost.inputTokens !== undefined || cost.outputTokens !== undefined || cost.totalTokens !== undefined || cost.estimatedCostUsd !== undefined) {
+    input.ledger.append({
+      type: "external_agent_cost_usage",
+      phase: phaseForRole(input.role),
+      role: input.role,
+      provider: `external:${input.profile.id}`,
+      model: input.profile.name,
+      externalAgentId: input.profile.id,
+      inputTokens: cost.inputTokens,
+      outputTokens: cost.outputTokens,
+      totalTokens: cost.totalTokens,
+      estimatedCostUsd: cost.estimatedCostUsd
+    });
+  }
+  const evidence = extractExternalAgentEvidence({
+    profile: input.profile,
+    role: input.role,
+    outputContract: envelope.outputContract,
+    rawPayload,
+    normalized
+  });
+  if (evidence.length) {
+    input.ledger.append({
+      type: "evidence_update",
+      phase: phaseForRole(input.role),
+      role: input.role,
+      provider: `external:${input.profile.id}`,
+      model: input.profile.name,
+      evidence
+    });
+  }
+  const failure = detectExternalAgentFailure({
+    profile: input.profile,
+    role: input.role,
+    outputContract: envelope.outputContract,
+    rawPayload,
+    normalized
+  });
+  if (failure.failed) {
+    input.ledger.append({
+      type: "external_agent_error",
+      phase: phaseForRole(input.role),
+      role: input.role,
+      provider: `external:${input.profile.id}`,
+      model: input.profile.name,
+      externalAgentId: input.profile.id,
+      error: `normalization failed: ${failure.reason ?? "external adapter detected a role output failure"}`
+    });
+    if (input.profile.normalizationStrictness === "strict" || input.profile.strictJson) {
+      throw new Error(`External ${input.role} output failed ${normalized.adapter} adapter contract: ${failure.reason ?? "invalid typed role output"}`);
+    }
+  }
   if (normalized.status === "failed") {
     throw new Error(`External ${input.role} output failed ${normalized.adapter} normalization: ${normalized.warnings.join("; ") || "invalid typed role output"}`);
   }

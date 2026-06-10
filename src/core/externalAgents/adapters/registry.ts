@@ -1,9 +1,33 @@
 import type { AgentRole } from "../../../schemas/agentTask.js";
-import type { ExternalOutputContract } from "../contracts/externalTaskEnvelope.js";
+import type { ExternalOutputContract, ExternalTaskEnvelope } from "../contracts/externalTaskEnvelope.js";
 import type { ExternalAgentAdapter, ExternalAgentProfile } from "../externalAgentTypes.js";
-import { normalizeClaudeCodeExternalAgentResult } from "./claudeCodeExternalAgentAdapter.js";
-import { normalizeCodexExternalAgentResult } from "./codexExternalAgentAdapter.js";
-import { normalizeGenericExternalAgentResult, type ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
+import { claudeCodeExternalAgentAdapter } from "./claudeCodeExternalAgentAdapter.js";
+import { codexExternalAgentAdapter } from "./codexExternalAgentAdapter.js";
+import type { ExternalAgentAdapterRuntime, ExternalAgentCostEstimate, ExternalAgentFailure } from "./externalAgentAdapter.js";
+import { genericExternalAgentAdapter } from "./genericExternalAgentAdapter.js";
+import type { ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
+
+const adapters: ExternalAgentAdapterRuntime[] = [
+  codexExternalAgentAdapter,
+  claudeCodeExternalAgentAdapter,
+  genericExternalAgentAdapter
+];
+
+export function resolveExternalAgentAdapter(profile: ExternalAgentProfile): ExternalAgentAdapterRuntime {
+  const adapterId: ExternalAgentAdapter = profile.adapter ?? inferAdapter(profile.id, profile.name);
+  return adapters.find((adapter) => adapter.id === adapterId && adapter.supports(profile))
+    ?? adapters.find((adapter) => adapter.id === adapterId)
+    ?? genericExternalAgentAdapter;
+}
+
+export function buildExternalAgentPrompt(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  envelope: ExternalTaskEnvelope;
+  prompt: string;
+}): string {
+  return resolveExternalAgentAdapter(input.profile).buildPrompt(input);
+}
 
 export function normalizeExternalAgentResponse(input: {
   profile: ExternalAgentProfile;
@@ -11,21 +35,43 @@ export function normalizeExternalAgentResponse(input: {
   outputContract: ExternalOutputContract;
   rawPayload: unknown;
 }): ExternalAgentNormalizationResult {
-  const adapter: ExternalAgentAdapter = input.profile.adapter ?? inferAdapter(input.profile.id, input.profile.name);
+  const adapter = resolveExternalAgentAdapter(input.profile);
   const responseMode = input.profile.responseMode ?? (input.profile.strictJson ? "json" : "mixed");
-  const normalizationInput = {
+  return adapter.normalizeOutput({
     externalAgentId: input.profile.id,
-    adapter,
+    adapter: adapter.id,
     responseMode,
     role: input.role,
     outputContract: input.outputContract,
     rawPayload: input.rawPayload,
     strictJson: input.profile.strictJson,
-    normalizationStrictness: input.profile.normalizationStrictness
-  };
-  if (adapter === "codex") return normalizeCodexExternalAgentResult(normalizationInput);
-  if (adapter === "claude_code") return normalizeClaudeCodeExternalAgentResult(normalizationInput);
-  return normalizeGenericExternalAgentResult(normalizationInput);
+    normalizationStrictness: input.profile.normalizationStrictness,
+    profile: input.profile
+  });
+}
+
+export function extractExternalAgentEvidence(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  outputContract: ExternalOutputContract;
+  rawPayload: unknown;
+  normalized: ExternalAgentNormalizationResult;
+}): string[] {
+  return resolveExternalAgentAdapter(input.profile).extractEvidence(input);
+}
+
+export function detectExternalAgentFailure(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  outputContract: ExternalOutputContract;
+  rawPayload: unknown;
+  normalized: ExternalAgentNormalizationResult;
+}): ExternalAgentFailure {
+  return resolveExternalAgentAdapter(input.profile).detectFailure(input);
+}
+
+export function estimateExternalAgentCost(profile: ExternalAgentProfile, rawPayload: unknown): ExternalAgentCostEstimate {
+  return resolveExternalAgentAdapter(profile).estimateCost(rawPayload);
 }
 
 function inferAdapter(id: string, name: string): ExternalAgentAdapter {

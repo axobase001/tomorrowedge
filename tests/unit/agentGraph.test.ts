@@ -394,6 +394,7 @@ describe("offline agent graph", () => {
     const config = {
       ...defaultConfig,
       debate: { ...defaultConfig.debate, max_candidates: 1 },
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 8 },
       external_agents: {
         ...defaultConfig.external_agents,
         codex: {
@@ -579,18 +580,22 @@ describe("offline agent graph", () => {
     }));
   });
 
-  it("blocks live advisory before model calls when budget is exceeded", async () => {
+  it("records routing max-cost preflight as an estimate while BudgetGate governs live advisory invocation", async () => {
     process.env.MOCK_INPUT_PRICE_PER_MTOK = "1000";
     process.env.MOCK_OUTPUT_PRICE_PER_MTOK = "1000";
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
-    const config = { ...defaultConfig, routing: { ...defaultConfig.routing, max_cost_usd: 0.001 } };
+    const config = {
+      ...defaultConfig,
+      routing: { ...defaultConfig.routing, max_cost_usd: 0.001 },
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 8, max_cost_usd: 100 }
+    };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
 
     expect(state.budgetStatus?.status).toBe("blocked");
     expect(state.budgetStatuses.map((status) => status.status)).toContain("blocked");
-    expect(state.modelNotes).toEqual([]);
-    expect(state.usageSummary.totalTokens).toBe(0);
-    expect(state.events.some((event) => event.type === "budget_decision" && event.status === "blocked")).toBe(true);
+    expect(state.modelNotes.length).toBeGreaterThan(0);
+    expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
+    expect(state.events.some((event) => event.type === "budget_decision" && event.invocationKind === "live_advisory" && event.status === "allowed")).toBe(true);
   });
 
   it("restricted access blocks live advisory before cloud/model calls", async () => {
@@ -660,6 +665,54 @@ describe("offline agent graph", () => {
     expect(state.changedFiles).toEqual([]);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_a" && event.phase === "coding")).toBe(true);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_b" && event.phase === "coding")).toBe(true);
+  });
+
+  it("blocks live patch through the unified model invocation budget gate", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { livePatch: true, accessMode: "full" });
+
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "budget_decision",
+      invocationKind: "live_patch",
+      status: "blocked"
+    }));
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+  });
+
+  it("blocks live advisory through the unified model invocation budget gate", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true, accessMode: "full" });
+
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "budget_decision",
+      invocationKind: "live_advisory",
+      status: "blocked"
+    }));
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+  });
+
+  it("blocks pre-judge model debate through the unified model invocation budget gate", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true, accessMode: "full" });
+
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "budget_decision",
+      invocationKind: "pre_judge_debate",
+      status: "blocked"
+    }));
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
   });
 
   it("skips duplicate post-judge live advisory when live patch already selected a candidate", async () => {

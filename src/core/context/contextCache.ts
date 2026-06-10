@@ -40,7 +40,28 @@ async function explorerKey(cwd: string, plan: Plan): Promise<string> {
   const fingerprint = (await indexRepository(cwd))
     .map((file) => `${file.path}:${file.sizeBytes}:${Math.round(file.mtimeMs)}:${file.risk}`)
     .join("|");
-  return JSON.stringify({ cwd, plan, fingerprint });
+  return JSON.stringify({ cwd, plan: stablePlanForExplorer(plan), fingerprint });
+}
+
+function stablePlanForExplorer(plan: Plan): unknown {
+  return {
+    goal: plan.goal,
+    riskLevel: plan.riskLevel,
+    taskType: plan.taskType,
+    workflowKind: plan.workflowKind,
+    requiresPatchWorkflow: plan.requiresPatchWorkflow,
+    allowedPhases: plan.allowedPhases ?? [],
+    acceptanceCriteria: plan.acceptanceCriteria ?? [],
+    constraints: plan.constraints,
+    expectedFiles: plan.expectedFiles ?? [],
+    verificationCommands: plan.verificationCommands ?? [],
+    debateRecommended: plan.debateRecommended,
+    steps: plan.steps.map((step) => ({
+      id: step.id,
+      title: step.title,
+      detail: step.detail
+    }))
+  };
 }
 
 function setBounded<T>(cache: Map<string, T>, key: string, value: T): void {

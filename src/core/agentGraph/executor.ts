@@ -18,7 +18,7 @@ import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
 import { buildAdvisoryPlans, runLiveAdvisory, runLiveAdvisoryForRoles } from "../model/modelAdvisory.js";
-import { estimateCostUsd, preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
+import { estimateCostUsd, estimateTextTokens, preflightBudget, summarizeModelUsage } from "../model/costAccounting.js";
 import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
@@ -49,15 +49,15 @@ import { buildTestEvidence } from "../evidence/testEvidence.js";
 import { buildReviewEvidence } from "../evidence/reviewEvidence.js";
 import { buildJudgeEvidence } from "../evidence/judgeEvidence.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
-import { validateEvidenceDependencies, type EvidenceDependencyGap } from "../evidence/evidenceDependency.js";
+import { validateEvidenceDependencies, validateEvidenceForTaskNode, type EvidenceDependencyGap } from "../evidence/evidenceDependency.js";
 import { computeTraceCompleteness } from "../diagnostics/traceCompleteness.js";
 import { buildRoleRoutingDecision } from "../roleRouting/roleRoutingPolicy.js";
 import { allocateStrongAgentCall } from "../budget/budgetAllocator.js";
-import { canFallbackWhenBudgetBlocked, commitRoleCall, createBudgetRuntimeState, evaluateModelCallInvocation, evaluateRoleInvocation, releaseRoleCall, reserveRoleCall, type BudgetGateDecision } from "../budget/budgetGate.js";
+import { canFallbackWhenBudgetBlocked, commitRoleCall, createBudgetRuntimeState, evaluateModelCallInvocation, evaluateRoleInvocation, releaseRoleCall, reserveRoleCall, type BudgetGateDecision, type BudgetReservation, type ModelInvocationKind } from "../budget/budgetGate.js";
 import type { RouteAssignment } from "../routing/policies.js";
 import type { EventPhase, ObservedOutcome, OutcomeMismatchType, OutcomePredictionEvent, OutcomeTarget, PredictedOutcome, ShellRunEvent, TomorrowEdgeEvent } from "../events/eventTypes.js";
 import { buildRoleGraph } from "../orchestration/roleGraph.js";
-import { createRoleGraphExecutionState, markRoleNodeResult, markRoleNodeRunning, readyRoleNodes, shouldStopRoleGraph } from "../orchestration/roleGraphScheduler.js";
+import { beginRoleNode, blockRoleNode, completeRoleNode, createRoleGraphExecutionState, markRoleNodeResult, markRoleNodeRunning, readyRoleNodes, shouldStopRoleGraph, skipRoleNode } from "../orchestration/roleGraphScheduler.js";
 import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
 import { getCachedContextSelection, getCachedPlan, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
 import {
@@ -729,7 +729,6 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     allowedPhases: state.objectiveContract?.allowedPhases
   });
   state.roleGraphExecution = createRoleGraphExecutionState(state.roleGraph);
-  recordRoleNodeExecutionResult(state, ledger, "planner", "success", "planner produced contract-bound role graph and task graph");
   state.plan.taskGraph = state.plan.taskGraph ?? buildTaskGraph({
     plan: state.plan,
     contract: state.objectiveContract,
@@ -750,6 +749,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
       reason: repairedValidation.ok ? "Invalid planner taskGraph was repaired by native builder." : "TaskGraph validation failed after repair."
     });
   }
+  recordRoleNodeExecutionResult(state, ledger, "planner", "success", "planner produced contract-bound role graph and task graph");
   recordTaskGraphEvent(state, ledger);
   const rerouteChanges = router.rerouteAfterPlan(plan, { hasImageInputs: imagePaths.length > 0 });
   if (rerouteChanges.length) {
@@ -939,14 +939,24 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
           allowParallelRoles
         };
         const patchPlans = await buildLivePatchPlans(livePatchInput);
-        const budgetStatus = setBudgetStatus(state, preflightBudget(
-          patchPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-          config.routing.max_cost_usd
-        ));
-        recordLiveBudgetDecisions(ledger, "coding", patchPlans, budgetStatus);
-        if (budgetStatus.status === "blocked") return { candidates: [], notes: [] };
-        const livePatchResult = await runLivePatchCandidates(livePatchInput);
-        return { candidates: livePatchResult.candidates, notes: livePatchResult.notes };
+        const budgetScope = beginModelInvocationBudgetScope({
+          config,
+          state,
+          ledger,
+          invocation: "live_patch",
+          phase: "coding",
+          label: "live patch",
+          plans: patchPlans
+        });
+        if (!budgetScope) return { candidates: [], notes: [] };
+        try {
+          const livePatchResult = await runLivePatchCandidates(livePatchInput);
+          commitModelInvocationBudgetScope(state, budgetScope, livePatchResult.notes);
+          return { candidates: livePatchResult.candidates, notes: livePatchResult.notes };
+        } catch (error) {
+          releaseModelInvocationBudgetScope(state, budgetScope.reservations, error instanceof Error ? error.message : String(error));
+          throw error;
+        }
       }
     });
   } else if (options.livePatch && !access.cloudAllowed) {
@@ -1039,6 +1049,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
     candidates: state.candidates,
     evidencePackets: state.evidencePackets
   }))) return;
+  if (!enforceTaskNodeGate(state, ledger, state.plan?.riskLevel === "high" ? "security_review" : "review_patch")) return;
   state.review = await runAgentState(state, ledger, router, "reviewer", async () => {
     if (!externalReviewer) return reviewer.run({ candidates: state.candidates, evidencePackets: state.evidencePackets, redTeam: options.redTeamReview });
     const result = await invokeExternalRole({
@@ -1092,6 +1103,7 @@ async function runReviewAndJudgePhase(runtime: OfflineGraphRuntime, state: Agent
     review: state.review,
     evidencePackets: state.evidencePackets
   }))) return;
+  if (!enforceTaskNodeGate(state, ledger, "judge_patch")) return;
 
   const judge = new JudgeAgent();
   const externalJudge = externalProfileForRole(router, externalAgents, "judge");
@@ -1168,13 +1180,24 @@ async function runLiveAdvisoryPhase(runtime: OfflineGraphRuntime, state: AgentGr
       governance: state.taskGovernance
     };
     const advisoryPlans = buildAdvisoryPlans(advisoryInput);
-    const budgetStatus = setBudgetStatus(state, preflightBudget(
-      advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-      config.routing.max_cost_usd
-    ));
-    recordLiveBudgetDecisions(ledger, "planning", advisoryPlans, budgetStatus);
-    if (budgetStatus.status !== "blocked") {
-      const advisoryNotes = await runLiveAdvisory(advisoryInput);
+    const budgetScope = beginModelInvocationBudgetScope({
+      config,
+      state,
+      ledger,
+      invocation: "live_advisory",
+      phase: "planning",
+      label: "live advisory",
+      plans: advisoryPlans
+    });
+    if (budgetScope) {
+      let advisoryNotes: ModelNote[] = [];
+      try {
+        advisoryNotes = await runLiveAdvisory(advisoryInput);
+        commitModelInvocationBudgetScope(state, budgetScope, advisoryNotes);
+      } catch (error) {
+        releaseModelInvocationBudgetScope(state, budgetScope.reservations, error instanceof Error ? error.message : String(error));
+        throw error;
+      }
       state.modelNotes.push(...advisoryNotes);
       refreshUsageSummary(state);
       recordModelNoteEvents(ledger, advisoryNotes, state.usageSummary);
@@ -1199,6 +1222,7 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
     judge: state.judge,
     evidencePackets: state.evidencePackets
   }))) return;
+  if (!enforceTaskNodeGate(state, ledger, "apply_patch")) return;
   if (state.judge?.decision === "select" && state.judge.selectedCandidateId && !contractAllowsPatchMutation(state, ledger, "patch")) return;
   if (options.dryRun && state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
@@ -1219,6 +1243,7 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
       applied: false,
       error: "dryRun=true; selected patch was recorded but not applied."
     });
+    recordRoleNodeExecutionResult(state, ledger, "runner", "success", "dryRun=true recorded selected patch without mutating files", [], undefined, "patch_runner");
     if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", "dryRun=true; selected patch was recorded but not applied.");
   } else if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
     const selected = state.candidates.find((candidate) => candidate.candidateId === state.judge!.selectedCandidateId);
@@ -1242,6 +1267,9 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
           status: "waiting_for_user",
           summary: error instanceof Error ? error.message : String(error)
         });
+        if (isApprovalRequiredError(error)) {
+          recordRoleNodeExecutionResult(state, ledger, "runner", "skipped", `patch_runner awaits user approval: ${message}`, [], undefined, "patch_runner");
+        }
       }
     } else {
       const reason = selected
@@ -1252,6 +1280,7 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
         : undefined;
       ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: state.judge.selectedCandidateId, filesChanged: [], diffRef: undefined, undoSnapshotIds: [], applied: false, error: reason });
       if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", reason);
+      recordRoleNodeExecutionResult(state, ledger, "runner", "blocked", reason, [], reason, "patch_runner");
     }
   }
 }
@@ -1265,12 +1294,21 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
   let shellRuns = 0;
   let repairAttempts = 0;
   const failureOccurrences = new Map<string, number>();
+  if (!state.changedFiles.length || !testCommands.length) {
+    if (!enforceTaskNodeGate(state, ledger, "verify_patch")) return;
+    const reason = !state.changedFiles.length
+      ? "test_runner skipped because no patch was applied in this workflow path."
+      : "test_runner skipped because no verification command was available.";
+    recordRoleNodeExecutionResult(state, ledger, "runner", "skipped", reason, [], undefined, "test_runner");
+    return;
+  }
   if (state.changedFiles.length && testCommands.length) {
     try {
       for (const testCommand of testCommands) {
         if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
         if (!contractAllowsShell(state, ledger)) return;
         if (!canRunShell(config, state, shellRuns, ledger)) return;
+        if (!enforceTaskNodeGate(state, ledger, "verify_patch")) return;
         shellRuns += 1;
         const shellPrediction = recordShellPrediction(ledger, testCommand, state.repairCandidates.length ? "Validate the repaired patch." : "Validate the selected patch.");
         const rawResult = await runAgentState(state, ledger, router, "runner", () => runTestCommand(cwd, testCommand, shellExecutionOptions(config, access)), "offline");
@@ -1364,6 +1402,9 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
         }
       }
     } catch (error) {
+      if (isApprovalRequiredError(error)) {
+        recordRoleNodeExecutionResult(state, ledger, "runner", "skipped", `test_runner awaits user approval: ${error instanceof Error ? error.message : String(error)}`, [], undefined, "test_runner");
+      }
       ledger.append({ type: "shell_run", phase: "shell", role: "runner", provider: "local_tool", model: "shell", command: testCommands.join(" && "), cwd, error: error instanceof Error ? error.message : String(error) });
       state.agents.push({
         id: "approval_shell",
@@ -1721,6 +1762,7 @@ async function finalizeBlockedByEvidenceGate(runtime: OfflineGraphRuntime, state
 
 async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<AgentGraphState> {
   const { cwd, ledger, router } = runtime;
+  skipOptionalReadOnlyGovernanceNodes(state, ledger);
   const result = await runAgentState(state, ledger, router, "summarizer", () =>
     buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
   , "offline");
@@ -1757,6 +1799,19 @@ async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentG
   await appendFinalSummaryEvents(state, ledger, runtime);
   await releaseExternalAgentProcessPool();
   return state;
+}
+
+function skipOptionalReadOnlyGovernanceNodes(state: AgentGraphState, ledger: EventLedger): void {
+  if (!state.roleGraphExecution) return;
+  if (state.roleGraphExecution.graph.workflowKind !== "read_only" && state.roleGraphExecution.graph.workflowKind !== "advisory") return;
+  for (const role of ["reviewer", "judge"] as AgentRole[]) {
+    const node = state.roleGraphExecution.graph.nodes.find((item) => item.role === role);
+    if (!node || node.required) continue;
+    const status = state.roleGraphExecution.nodes[node.id]?.status;
+    if (status === "pending" || status === "ready" || status === "running") {
+      recordRoleNodeExecutionResult(state, ledger, role, "skipped", `${role} skipped for read-only finalization; no governed advisory was requested`);
+    }
+  }
 }
 
 type UserReplyGeneration = {
@@ -2402,16 +2457,26 @@ async function maybeRunGovernedReadOnlyAdvisory(input: {
     governance
   };
   const advisoryPlans = buildAdvisoryPlans(advisoryInput);
-  const budgetStatus = setBudgetStatus(input.state, preflightBudget(
-    advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-    input.config.routing.max_cost_usd
-  ));
-  recordLiveBudgetDecisions(input.ledger, "planning", advisoryPlans, budgetStatus);
-  if (budgetStatus.status === "blocked") {
-    input.ledger.append({ type: "autonomy_limit_reached", phase: "planning", status: "blocked_by_budget", reason: budgetStatus.reason });
+  const budgetScope = beginModelInvocationBudgetScope({
+    config: input.config,
+    state: input.state,
+    ledger: input.ledger,
+    invocation: "live_advisory",
+    phase: "planning",
+    label: "governed read-only advisory",
+    plans: advisoryPlans
+  });
+  if (!budgetScope) {
     return;
   }
-  const advisoryNotes = await runLiveAdvisory(advisoryInput);
+  let advisoryNotes: ModelNote[] = [];
+  try {
+    advisoryNotes = await runLiveAdvisory(advisoryInput);
+    commitModelInvocationBudgetScope(input.state, budgetScope, advisoryNotes);
+  } catch (error) {
+    releaseModelInvocationBudgetScope(input.state, budgetScope.reservations, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
   input.state.modelNotes.push(...advisoryNotes);
   refreshUsageSummary(input.state);
   recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
@@ -2525,21 +2590,32 @@ async function maybeRunPreJudgeModelDebate(input: {
   const roles: AgentRole[] = ["reviewer", "judge"];
   const advisoryPlans = buildAdvisoryPlans(advisoryInput).filter((plan) => roles.includes(plan.role));
   if (!advisoryPlans.length) return;
-  const budgetStatus = setBudgetStatus(input.state, preflightBudget(
-    advisoryPlans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
-    input.config.routing.max_cost_usd
-  ));
-  recordLiveBudgetDecisions(input.ledger, "planning", advisoryPlans, budgetStatus);
-  if (budgetStatus.status === "blocked") {
+  const budgetScope = beginModelInvocationBudgetScope({
+    config: input.config,
+    state: input.state,
+    ledger: input.ledger,
+    invocation: "pre_judge_debate",
+    phase: "judge",
+    label: "pre-judge model debate",
+    plans: advisoryPlans
+  });
+  if (!budgetScope) {
     input.ledger.append({
       type: "evidence_update",
       phase: "review",
       role: "reviewer",
-      evidence: [`pre-judge model debate blocked by budget: ${budgetStatus.reason}`]
+      evidence: ["pre-judge model debate blocked by unified budget gate"]
     });
     return;
   }
-  const notes = await runLiveAdvisoryForRoles(advisoryInput, roles);
+  let notes: ModelNote[] = [];
+  try {
+    notes = await runLiveAdvisoryForRoles(advisoryInput, roles);
+    commitModelInvocationBudgetScope(input.state, budgetScope, notes);
+  } catch (error) {
+    releaseModelInvocationBudgetScope(input.state, budgetScope.reservations, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
   input.state.modelNotes.push(...notes);
   refreshUsageSummary(input.state);
   recordModelNoteEvents(input.ledger, notes, input.state.usageSummary);
@@ -2631,6 +2707,7 @@ function recordDebateSessionEvents(state: AgentGraphState, ledger: EventLedger):
     acceptedClaims: session.acceptedClaims,
     rejectedClaims: session.rejectedClaims,
     unresolvedBlockingIssues: session.unresolvedBlockingIssues,
+    unresolvedIssues: session.unresolvedIssues,
     evidenceCoverageScore: session.evidenceCoverageScore,
     sessionRef: ledger.writeArtifact("debate_sessions", JSON.stringify(session, null, 2), "json")
   });
@@ -2643,17 +2720,18 @@ function recordRoleNodeExecutionResult(
   status: "success" | "failed" | "blocked" | "skipped",
   summary: string,
   artifacts: string[] = [],
-  error?: string
+  error?: string,
+  nodeId?: string
 ): void {
   if (!state.roleGraphExecution) return;
-  const execution = markRoleNodeResult(state.roleGraphExecution, {
-    role,
-    status,
-    summary,
-    artifacts,
-    evidence: summary ? [summary] : [],
-    error
-  });
+  const result = { nodeId, role, status, summary, artifacts, evidence: summary ? [summary] : [], error };
+  const execution = status === "success"
+    ? completeRoleNode(state.roleGraphExecution, role, { nodeId, summary, artifacts, evidence: summary ? [summary] : [], error }, nodeId)
+    : status === "blocked"
+      ? blockRoleNode(state.roleGraphExecution, role, summary, nodeId)
+      : status === "skipped"
+        ? skipRoleNode(state.roleGraphExecution, role, summary, nodeId)
+        : markRoleNodeResult(state.roleGraphExecution, result);
   if (!execution) return;
   ledger.append({
     type: "role_node_result",
@@ -2666,6 +2744,120 @@ function recordRoleNodeExecutionResult(
     evidence: execution.evidence,
     error
   });
+  updateTaskGraphForRoleNode(state, ledger, execution.nodeId, role, status, summary, artifacts, error);
+}
+
+function enforceTaskNodeGate(state: AgentGraphState, ledger: EventLedger, taskNodeId: string): boolean {
+  const taskNode = state.plan?.taskGraph?.nodes.find((node) => node.id === taskNodeId);
+  if (!taskNode) return true;
+  return enforceEvidenceGate(state, ledger, validateEvidenceForTaskNode({
+    role: taskNode.ownerRole,
+    taskNode,
+    taskGraph: state.plan?.taskGraph,
+    candidates: state.candidates,
+    review: state.review,
+    judge: state.judge,
+    evidencePackets: state.evidencePackets,
+    runResults: state.runResults,
+    changedFiles: state.changedFiles
+  }));
+}
+
+function updateTaskGraphForRoleNode(
+  state: AgentGraphState,
+  ledger: EventLedger,
+  roleNodeId: string,
+  role: AgentRole,
+  status: "success" | "failed" | "blocked" | "skipped",
+  summary: string,
+  artifacts: string[] = [],
+  error?: string
+): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph) return;
+  const taskStatus = status === "success" ? "done" : status === "failed" || status === "blocked" ? "blocked" : "skipped";
+  const candidates = graph.nodes.filter((node) => taskNodeMatchesRoleNode(node.id, node.kind, node.ownerRole, roleNodeId, role));
+  for (const node of candidates) {
+    if (taskStatus === "done" && !node.dependsOn.every((dependency) => graph.nodes.find((item) => item.id === dependency)?.status === "done" || graph.nodes.find((item) => item.id === dependency)?.status === "skipped")) {
+      continue;
+    }
+    node.status = taskStatus;
+    ledger.append({
+      type: "task_node_result",
+      phase: node.phase,
+      role: node.ownerRole,
+      taskNodeId: node.id,
+      roleNodeId,
+      status: taskStatus,
+      summary,
+      evidence: summary ? [summary, ...artifacts] : artifacts,
+      error
+    });
+  }
+  flushReadyTaskGraphNodes(state, ledger);
+}
+
+function markTaskNodesRunning(state: AgentGraphState, ledger: EventLedger, roleNodeId: string, role: AgentRole, summary: string): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph) return;
+  for (const node of graph.nodes.filter((item) => taskNodeMatchesRoleNode(item.id, item.kind, item.ownerRole, roleNodeId, role) && item.status === "pending")) {
+    node.status = "running";
+    ledger.append({
+      type: "task_node_result",
+      phase: node.phase,
+      role: node.ownerRole,
+      taskNodeId: node.id,
+      roleNodeId,
+      status: "running",
+      summary,
+      evidence: []
+    });
+  }
+}
+
+function taskNodeMatchesRoleNode(taskNodeId: string, kind: string, ownerRole: AgentRole, roleNodeId: string, role: AgentRole): boolean {
+  if (roleNodeId === "patch_runner") return kind === "apply_patch";
+  if (roleNodeId === "test_runner") return kind === "verify";
+  if (roleNodeId === "coder_a") return ownerRole === "coder_a" || kind === "patch";
+  if (roleNodeId === "coder_b") return ownerRole === "coder_b";
+  if (roleNodeId === "reviewer") return ownerRole === "reviewer" || kind === "review";
+  if (roleNodeId === "judge") return ownerRole === "judge" || kind === "judge";
+  if (roleNodeId === "explorer") return ownerRole === "explorer" || kind === "inspect" || taskNodeId === "inspect_context";
+  if (roleNodeId === "planner") return ownerRole === "planner" || kind === "design";
+  if (roleNodeId === "summarizer") return ownerRole === "summarizer" || kind === "summarize";
+  return ownerRole === role;
+}
+
+function flushReadyTaskGraphNodes(state: AgentGraphState, ledger: EventLedger): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph || !state.roleGraphExecution) return;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of graph.nodes) {
+      if (node.status !== "pending") continue;
+      if (!node.dependsOn.every((dependency) => {
+        const dep = graph.nodes.find((item) => item.id === dependency);
+        return dep?.status === "done" || dep?.status === "skipped";
+      })) continue;
+      const ownerDone = Object.values(state.roleGraphExecution.nodes).some((roleNode) =>
+        roleNode.role === node.ownerRole && (roleNode.status === "success" || roleNode.status === "skipped")
+      );
+      if (!ownerDone) continue;
+      if (node.kind === "apply_patch" || node.kind === "verify") continue;
+      node.status = "done";
+      changed = true;
+      ledger.append({
+        type: "task_node_result",
+        phase: node.phase,
+        role: node.ownerRole,
+        taskNodeId: node.id,
+        status: "done",
+        summary: `${node.id} completed after dependencies became available`,
+        evidence: []
+      });
+    }
+  }
 }
 
 type RunAgentStateOptions<T> = {
@@ -2731,8 +2923,8 @@ async function runAgentState<T>(
     });
     if (gate.action !== "allow") {
       state.budgetRuntime.blockedRoles[role] = gate.reason;
-      recordBlockedAgentRun(state, ledger, role, assignment, effectiveAgentKind, gate);
       if (options.budgetFallback) {
+        recordBlockedAgentRun(state, ledger, role, assignment, effectiveAgentKind, gate, false);
         ledger.append({
           type: "fallback_to_native",
           phase: phaseForRole(role),
@@ -2749,6 +2941,7 @@ async function runAgentState<T>(
           reason: "native fallback"
         }, options.budgetFallback);
       }
+      recordBlockedAgentRun(state, ledger, role, assignment, effectiveAgentKind, gate, true);
       throw new Error(`Budget blocked ${role}: ${gate.reason}`);
     }
   }
@@ -2762,6 +2955,11 @@ async function runAgentState<T>(
     startedAt: nowIso(),
     summary: assignment.reason
   };
+  const roleNodeExecution = state.roleGraphExecution ? beginRoleNode(state.roleGraphExecution, role) : undefined;
+  if (state.roleGraphExecution && !roleNodeExecution && state.roleGraphExecution.graph.nodes.some((node) => node.role === role && ["pending", "ready", "running"].includes(state.roleGraphExecution!.nodes[node.id]?.status ?? "pending"))) {
+    throw new WorkflowBlockedError(`RoleGraph blocked ${role}: dependencies are not satisfied for the next ${role} node.`);
+  }
+  if (roleNodeExecution) markTaskNodesRunning(state, ledger, roleNodeExecution.nodeId, role, `${role} started`);
   state.agents.push(agentState);
   const start = Date.now();
   const reservation = gate ? reserveRoleCall(state.budgetRuntime, gate) : undefined;
@@ -2917,7 +3115,7 @@ function recordAccessBlockedExternalAgent(state: AgentGraphState, ledger: EventL
   });
 }
 
-function recordBlockedAgentRun(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, agentKind: AgentRunState["agentKind"], gate: BudgetGateDecision): void {
+function recordBlockedAgentRun(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, agentKind: AgentRunState["agentKind"], gate: BudgetGateDecision, markRoleGraph = true): void {
   const agentState: AgentRunState = {
     id: `${role}_blocked_${state.agents.filter((agent) => agent.role === role).length + 1}`,
     role,
@@ -2932,7 +3130,7 @@ function recordBlockedAgentRun(state: AgentGraphState, ledger: EventLedger, role
   };
   state.agents.push(agentState);
   updateCapabilityStep(state, role, "blocked", gate.reason);
-  recordRoleNodeExecutionResult(state, ledger, role, "blocked", gate.reason, [], gate.reason);
+  if (markRoleGraph) recordRoleNodeExecutionResult(state, ledger, role, "blocked", gate.reason, [], gate.reason);
   ledger.append({
     type: "agent_run",
     phase: phaseForRole(role),
@@ -3531,6 +3729,103 @@ function setBudgetStatus(state: AgentGraphState, status: NonNullable<AgentGraphS
   state.budgetStatus = status;
   state.budgetStatuses.push(status);
   return status;
+}
+
+type ModelInvocationPlanForGate = {
+  role: AgentRole;
+  provider: string;
+  model: string;
+  prompt: string;
+  maxOutputTokens: number;
+};
+
+type ModelInvocationBudgetScope = {
+  reservations: BudgetReservation[];
+  decisions: BudgetGateDecision[];
+  preflight: ModelBudgetStatus;
+};
+
+function beginModelInvocationBudgetScope(input: {
+  config: TomorrowEdgeConfig;
+  state: AgentGraphState;
+  ledger: EventLedger;
+  invocation: ModelInvocationKind;
+  phase: "planning" | "coding" | "judge";
+  label: string;
+  plans: ModelInvocationPlanForGate[];
+  canFallback?: boolean;
+}): ModelInvocationBudgetScope | undefined {
+  const preflight = setBudgetStatus(input.state, preflightBudget(
+    input.plans.map((plan) => ({ provider: plan.provider, prompt: plan.prompt, maxOutputTokens: plan.maxOutputTokens })),
+    input.config.routing.max_cost_usd
+  ));
+  const reservations: BudgetReservation[] = [];
+  const decisions: BudgetGateDecision[] = [];
+  for (const plan of input.plans) {
+    const estimatedCostUsd = estimateCostUsd(plan.provider, {
+      inputTokens: estimateTextTokens(plan.prompt),
+      outputTokens: plan.maxOutputTokens
+    });
+    const decision = evaluateModelCallInvocation({
+      config: input.config,
+      runtime: input.state.budgetRuntime,
+      invocation: input.invocation,
+      role: plan.role,
+      assignment: {
+        role: plan.role,
+        provider: plan.provider,
+        model: plan.model,
+        reason: `${input.label} model invocation`
+      },
+      roleBudget: roleBudgetFor(input.config, plan.role),
+      estimatedCostUsd: policyBudgetEstimate(estimatedCostUsd, input.state.orchestrationPolicy, plan.role),
+      escalationSignals: policyEscalationSignals(input.state.orchestrationPolicy, input.state.plan?.riskLevel, [input.invocation, ...inferStrongAgentEscalationSignals(input.state.goal)]),
+      canFallback: input.canFallback ?? false
+    });
+    decisions.push(decision);
+    input.ledger.append({
+      type: "budget_decision",
+      phase: decision.phase,
+      role: plan.role,
+      provider: plan.provider,
+      model: plan.model,
+      status: decision.action === "allow" ? "allowed" : "blocked",
+      reason: `${decision.reason}${preflight.status === "blocked" ? ` Preflight estimate warning: ${preflight.reason}` : ""}`,
+      invocationKind: input.invocation,
+      budgetScope: decision.scope,
+      maxCostUsd: roleBudgetFor(input.config, plan.role)?.maxCostPerCallUsd ?? input.config.strong_agents.max_cost_usd,
+      estimatedCostUsd: decision.estimatedCostUsd,
+      strongAgentCallsUsed: input.state.budgetRuntime.strongAgentCallsUsed,
+      strongAgentCallsRemaining: decision.remainingCalls
+    });
+    if (decision.action !== "allow") {
+      input.state.budgetRuntime.blockedRoles[plan.role] = decision.reason;
+      releaseModelInvocationBudgetScope(input.state, reservations, decision.reason);
+      input.ledger.append({
+        type: "autonomy_limit_reached",
+        phase: input.phase,
+        role: plan.role,
+        status: "blocked_by_budget",
+        reason: `${input.label} blocked by unified budget gate: ${decision.reason}`
+      });
+      return undefined;
+    }
+    reservations.push(reserveRoleCall(input.state.budgetRuntime, decision));
+  }
+  return { reservations, decisions, preflight };
+}
+
+function commitModelInvocationBudgetScope(state: AgentGraphState, scope: ModelInvocationBudgetScope, notes?: ModelNote[]): void {
+  const successful = !notes || notes.some((note) => !note.error);
+  if (!successful) {
+    releaseModelInvocationBudgetScope(state, scope.reservations, "model invocation returned only error notes");
+    return;
+  }
+  for (const reservation of scope.reservations) commitRoleCall(state.budgetRuntime, reservation);
+}
+
+function releaseModelInvocationBudgetScope(state: AgentGraphState, reservations: BudgetReservation[], reason: string): void {
+  for (const reservation of reservations) releaseRoleCall(state.budgetRuntime, reservation, reason);
 }
 
 function recordLiveBudgetDecisions(

@@ -97,8 +97,9 @@ function patchGraph(workflowKind: RoleGraph["workflowKind"], highRisk: boolean, 
   nodes.push(
     node("reviewer", debate || highRisk ? ["coder_a", "coder_b"] : ["coder_a"], { required: highRisk, produces: ["review_evidence"], consumes: ["patch_candidate", "patch_evidence"] }),
     node("judge", ["reviewer"], { required: true, produces: ["judge_decision"], consumes: ["patch_candidate", "patch_evidence", "review_evidence"] }),
-    node("runner", ["judge"], { required: true, canFallback: false, produces: ["patch_apply", "test_evidence"], consumes: ["judge_decision"] }),
-    node("summarizer", ["runner"], { produces: ["summary"], consumes: ["patch_evidence", "review_evidence", "judge_decision", "test_evidence"] })
+    node("runner", ["judge"], { id: "patch_runner", required: true, canFallback: false, canSkip: true, produces: ["patch_apply"], consumes: ["judge_decision"] }),
+    node("runner", ["patch_runner"], { id: "test_runner", required: true, canFallback: false, canSkip: true, produces: ["test_evidence"], consumes: ["patch_apply"] }),
+    node("summarizer", ["test_runner"], { produces: ["summary"], consumes: ["patch_evidence", "review_evidence", "judge_decision", "patch_apply", "test_evidence"] })
   );
   return {
     workflowKind,

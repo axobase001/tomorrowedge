@@ -1,5 +1,7 @@
 import type { AccessMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { DebateIssue } from "../debate/debateProtocol.js";
+import type { TaskGraphNodeStatus } from "../planning/taskGraph.js";
 
 export type EventPhase =
   | "planning"
@@ -89,6 +91,7 @@ export type JudgeEvent = BaseEvent & {
   acceptedClaims?: string[];
   rejectedClaims?: string[];
   unresolvedBlockingIssues?: string[];
+  unresolvedIssueIds?: string[];
   evidenceCoverageScore?: number;
   decisionRef: string;
 };
@@ -339,6 +342,7 @@ export type DebateResolutionEvent = BaseEvent & {
   acceptedClaims: string[];
   rejectedClaims: string[];
   unresolvedBlockingIssues: string[];
+  unresolvedIssues?: DebateIssue[];
   evidenceCoverageScore: number;
   sessionRef: string;
 };
@@ -513,6 +517,16 @@ export type TaskGraphEvent = BaseEvent & {
   terminalNodeIds: string[];
 };
 
+export type TaskNodeResultEvent = BaseEvent & {
+  type: "task_node_result";
+  taskNodeId: string;
+  status: TaskGraphNodeStatus;
+  summary: string;
+  roleNodeId?: string;
+  evidence: string[];
+  error?: string;
+};
+
 export type RoleNodeResultEvent = BaseEvent & {
   type: "role_node_result";
   nodeId: string;
@@ -656,6 +670,7 @@ export type TomorrowEdgeEvent =
   | ScenarioProfileEvent
   | TraceRetrievalEvent
   | TaskGraphEvent
+  | TaskNodeResultEvent
   | RoleNodeResultEvent
   | ObjectiveContractEvent
   | ContractVerificationEvent

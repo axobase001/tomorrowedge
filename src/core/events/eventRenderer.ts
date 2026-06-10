@@ -112,6 +112,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `selected=${event.selectedTraceIds.length} rejected=${event.rejectedCount} mode=${event.policyMode}: ${event.summary}`;
     case "task_graph":
       return `nodes=${event.nodeCount} edges=${event.edgeCount} entry=${event.entryNodeIds.join(",") || "-"} terminal=${event.terminalNodeIds.join(",") || "-"}`;
+    case "task_node_result":
+      return `${event.taskNodeId} ${event.status}: ${event.summary}`;
     case "role_node_result":
       return `${event.nodeId} ${event.status}: ${event.summary}`;
     case "objective_contract":

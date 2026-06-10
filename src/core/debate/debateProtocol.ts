@@ -14,6 +14,16 @@ export type DebateClaim = {
   blocking?: boolean;
 };
 
+export type DebateIssue = {
+  id: string;
+  candidateId?: string;
+  title: string;
+  blocking: boolean;
+  status: "open" | "resolved" | "rejected";
+  requiredEvidence: string[];
+  relatedMoveIds: string[];
+};
+
 export type DebateMove = {
   id: string;
   round: number;
@@ -31,6 +41,8 @@ export type DebateSession = {
   maxRounds: number;
   moves: DebateMove[];
   claims: DebateClaim[];
+  issues: DebateIssue[];
+  unresolvedIssues: DebateIssue[];
   acceptedClaims: string[];
   rejectedClaims: string[];
   unresolvedBlockingIssues: string[];
