@@ -3,6 +3,8 @@ import type { Plan, PlanStep, RiskLevel, TaskType } from "../../schemas/plan.js"
 import { chatWithProviderFallback } from "../model/providerFallback.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { ModelRouter } from "../routing/router.js";
+import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
+import { parseTaskGraphCandidate } from "../planning/taskGraphValidator.js";
 
 export async function createModelBackedPlan(input: {
   goal: string;
@@ -31,10 +33,11 @@ export async function createModelBackedPlan(input: {
           content: [
             "You are TomorrowEdge's Planner.",
             "Create a structured engineering workflow plan for a multi-agent coding cockpit.",
-            "Return strict JSON only with keys: taskType, riskLevel, constraints, steps, verificationCommands, debateRecommended, reasonForDebate.",
+            "Return strict JSON only with keys: taskType, riskLevel, constraints, steps, taskGraph, verificationCommands, debateRecommended, reasonForDebate.",
             "taskType must be one of: bugfix, feature, refactor, test, docs, analysis, unknown.",
             "riskLevel must be one of: low, medium, high.",
             "steps must be an array of objects with id, title, detail. Use a variable number of task-specific steps.",
+            "taskGraph should contain nodes with id, title, detail, phase, roleHints, dependencies, requiredEvidence, expectedArtifacts.",
             "Use analysis for read-only inspection requests and avoid patch/test commands for analysis tasks."
           ].join("\n")
         },
@@ -70,6 +73,18 @@ export function parsePlannerResponse(goal: string, content?: string): Plan | und
     riskLevel,
     constraints,
     steps,
+    taskGraph: parseTaskGraphCandidate(object.taskGraph) ?? buildTaskGraph({
+      plan: {
+        goal,
+        taskType,
+        riskLevel,
+        constraints,
+        steps,
+        verificationCommands,
+        debateRecommended: typeof object.debateRecommended === "boolean" ? object.debateRecommended : riskLevel === "high",
+        reasonForDebate: typeof object.reasonForDebate === "string" && object.reasonForDebate.trim() ? object.reasonForDebate.trim() : undefined
+      }
+    }),
     verificationCommands,
     debateRecommended: typeof object.debateRecommended === "boolean" ? object.debateRecommended : riskLevel === "high",
     reasonForDebate: typeof object.reasonForDebate === "string" && object.reasonForDebate.trim() ? object.reasonForDebate.trim() : undefined

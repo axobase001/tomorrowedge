@@ -4,7 +4,7 @@ export type SelfIterationMode = "off" | "trace_guided" | "offline_evolution" | "
 
 export type OrchestrationPolicyGenome = {
   policyId: string;
-  schemaVersion: "orchestration-policy/v1";
+  schemaVersion: "orchestration-policy/v1" | "orchestration-policy/v2";
   contractPolicy: {
     contractDepth: "light" | "medium" | "strict";
     successCriteriaCount: number;
@@ -51,6 +51,23 @@ export type OrchestrationPolicyGenome = {
     allowPartialCompletion: boolean;
     escalateWhenAmbiguous: boolean;
   };
+  debatePolicy?: {
+    maxStructuredRounds: number;
+    requireClaimEvidence: boolean;
+    blockOnUnresolvedCritical: boolean;
+    allowPartialResolution: boolean;
+  };
+  taskGraphPolicy?: {
+    requireTaskGraph: boolean;
+    maxTaskNodes: number;
+    requireDependencyValidation: boolean;
+    stopOnInvalidGraph: boolean;
+  };
+  externalAgentPolicy?: {
+    adapterStrictness: "off" | "warn" | "strict";
+    requireTypedEnvelope: boolean;
+    maxNormalizationRetries: number;
+  };
   metadata: {
     createdAt: string;
     source: "default" | "mutated" | "selected" | "manual";
@@ -64,7 +81,7 @@ export type OrchestrationPolicyGenome = {
 export function defaultOrchestrationPolicy(now = new Date().toISOString()): OrchestrationPolicyGenome {
   return {
     policyId: "default_trace_guided_policy",
-    schemaVersion: "orchestration-policy/v1",
+    schemaVersion: "orchestration-policy/v2",
     contractPolicy: {
       contractDepth: "medium",
       successCriteriaCount: 3,
@@ -111,10 +128,40 @@ export function defaultOrchestrationPolicy(now = new Date().toISOString()): Orch
       allowPartialCompletion: true,
       escalateWhenAmbiguous: true
     },
+    debatePolicy: {
+      maxStructuredRounds: 3,
+      requireClaimEvidence: true,
+      blockOnUnresolvedCritical: true,
+      allowPartialResolution: true
+    },
+    taskGraphPolicy: {
+      requireTaskGraph: true,
+      maxTaskNodes: 16,
+      requireDependencyValidation: true,
+      stopOnInvalidGraph: true
+    },
+    externalAgentPolicy: {
+      adapterStrictness: "warn",
+      requireTypedEnvelope: true,
+      maxNormalizationRetries: 1
+    },
     metadata: {
       createdAt: now,
       source: "default",
       parentPolicyIds: []
     }
+  };
+}
+
+export function migratePolicyToV2(policy: OrchestrationPolicyGenome): OrchestrationPolicyGenome {
+  const base = defaultOrchestrationPolicy(policy.metadata.createdAt);
+  return {
+    ...base,
+    ...policy,
+    schemaVersion: "orchestration-policy/v2",
+    debatePolicy: { ...base.debatePolicy!, ...(policy.debatePolicy ?? {}) },
+    taskGraphPolicy: { ...base.taskGraphPolicy!, ...(policy.taskGraphPolicy ?? {}) },
+    externalAgentPolicy: { ...base.externalAgentPolicy!, ...(policy.externalAgentPolicy ?? {}) },
+    metadata: { ...base.metadata, ...policy.metadata }
   };
 }

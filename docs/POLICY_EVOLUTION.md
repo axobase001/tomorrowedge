@@ -18,6 +18,9 @@ Each policy genome is a structured set of orchestration preferences:
 - verification strictness
 - repair retry behavior
 - stop mode
+- Debate Protocol v2 policy
+- TaskGraph policy
+- external-agent adapter policy
 
 ## Runtime Status
 
@@ -69,6 +72,13 @@ objective traces and persists trace completeness for offline fitness scoring.
 Scenario-scoped runtime selection falls back to globally evolved selected
 policies when no scenario-specific policy exists, and trace retrieval artifacts
 include rejected candidates instead of only selected trace ids.
+
+As of `1.4.0`, the policy genome schema is `orchestration-policy/v2`.
+Stored v1 policies are migrated by adding default `debatePolicy`,
+`taskGraphPolicy`, and `externalAgentPolicy` fields. Policy evolution also
+records counterfactual replays and tournament results over trace sets. These
+events estimate how a policy would score against existing traces; they do not
+mutate safety boundaries, execute code, or rewrite the native executor.
 
 ## Fitness
 

@@ -48,6 +48,40 @@ Changelog: newest changes first, grouped by release and by change type.
   recorded session state. Synthetic winner, hidden-test, cost, and strong-agent
   call claims were removed when not measured.
 
+## [1.4.0] - 2026-06-11
+
+1.4.0 introduces the Adaptive Orchestration Runtime.
+
+### Added
+
+- Plans now carry a validated `TaskGraph`, with native, contract-derived, and
+  model-backed planner paths repairing or rebuilding invalid task graphs before
+  runtime handoff.
+- Role execution now has a `RoleGraphScheduler` state and `role_node_result`
+  events, so planner/coder/reviewer/judge/runner outcomes are visible as graph
+  node results instead of only linear agent logs.
+- Evidence dependency validation now records `evidence_gap` events for reviewer,
+  judge, runner, repairer, and summarizer handoffs.
+- Debate Protocol v2 adds structured debate moves, accepted/rejected claims,
+  unresolved blocking issues, evidence coverage score, and `debate_resolution`
+  events. Native judge decisions block unresolved critical issues unless policy
+  allows bounded partial completion.
+- Policy evolution now includes counterfactual replay and tournament scoring
+  events over objective-action-feedback traces.
+- External agent profiles can declare `adapter`, `responseMode`, `strictJson`,
+  `workingTreeMode`, and normalization strictness. Generic, Codex, and Claude
+  Code adapters normalize command/MCP/configured-profile outputs and record
+  `external_agent_normalization` events.
+- Budget governance now exposes `evaluateModelCallInvocation` for
+  `model_planner`, `live_patch`, `live_advisory`, and `pre_judge_debate`
+  invocation checks.
+
+### Changed
+
+- The default Orchestration Policy Genome schema is now
+  `orchestration-policy/v2`; stored v1 policies are migrated with default
+  debate, task-graph, and external-agent policy fields.
+
 ## [1.3.10] - 2026-06-10
 
 1.3.10 corrects the answer-first runtime path from 1.3.8: user-facing

@@ -3,6 +3,10 @@ export type JudgeDecision = {
   decision: "select" | "request_revision" | "ask_user" | "abort";
   reason: string;
   borrowIdeasFromOtherCandidates?: string[];
+  acceptedClaims?: string[];
+  rejectedClaims?: string[];
+  unresolvedBlockingIssues?: string[];
+  evidenceCoverageScore?: number;
   confidence: number;
   requiredUserDecision?: string;
 };

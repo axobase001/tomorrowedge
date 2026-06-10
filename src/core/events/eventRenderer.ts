@@ -66,8 +66,16 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.externalAgentId} error: ${event.error}`;
     case "external_agent_cost_usage":
       return `${event.externalAgentId} tokens=${event.totalTokens ?? ((event.inputTokens ?? 0) + (event.outputTokens ?? 0))}${event.estimatedCostUsd === undefined ? "" : ` cost=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "external_agent_normalization":
+      return `${event.externalAgentId} adapter=${event.adapter} ${event.status}: ${event.summary}`;
     case "evidence_update":
       return `${event.evidence.length} evidence item(s)`;
+    case "evidence_gap":
+      return `${event.blocking ? "blocking" : "nonblocking"} missing=${event.missing.join(",")}: ${event.reason}`;
+    case "debate_move":
+      return `${event.debateSessionId} r${event.round} ${event.speaker}/${event.moveType}: ${event.summary}`;
+    case "debate_resolution":
+      return `${event.resolution} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
     case "summary":
       return `result=${event.result}`;
     case "autonomy_limit_reached":
@@ -83,7 +91,7 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "evidence_packet":
       return `${event.evidencePhase} ${event.verificationStatus}: ${event.summary}`;
     case "budget_decision":
-      return `${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
+      return `${event.invocationKind ? `${event.invocationKind} ` : ""}${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "budget_preview":
       return `preview ${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "workflow_stop_reason":
@@ -102,6 +110,10 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.scenarioType}/${event.workflowKind} ambiguity=${event.ambiguityLevel} risks=${event.riskSignals.join(",") || "-"} deliverable=${event.expectedDeliverable}`;
     case "trace_retrieval":
       return `selected=${event.selectedTraceIds.length} rejected=${event.rejectedCount} mode=${event.policyMode}: ${event.summary}`;
+    case "task_graph":
+      return `nodes=${event.nodeCount} edges=${event.edgeCount} entry=${event.entryNodeIds.join(",") || "-"} terminal=${event.terminalNodeIds.join(",") || "-"}`;
+    case "role_node_result":
+      return `${event.nodeId} ${event.status}: ${event.summary}`;
     case "objective_contract":
       return `${event.contractId} ${event.scenarioType}/${event.workflowKind} risk=${event.riskLevel} source=${event.source}: ${event.localObjective}`;
     case "contract_verification":
@@ -114,6 +126,10 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.parentPolicyId} -> ${event.policyId}`;
     case "policy_evolution":
       return `evaluated=${event.evaluatedCount} selected=${event.selectedPolicyIds.join(",") || "-"}`;
+    case "policy_counterfactual_replay":
+      return `${event.policyId} trace=${event.traceId} simulated=${event.simulatedStatus} delta=${event.fitnessDelta}`;
+    case "policy_tournament_result":
+      return `winner=${event.winnerPolicyId} policies=${event.evaluatedPolicies} traces=${event.traceCount}`;
     case "objective_trace_written":
       return `${event.traceId} status=${event.outcomeStatus} evidence=${event.evidenceScore}`;
   }
@@ -148,6 +164,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("predictionRef" in event && event.predictionRef) refs.push(event.predictionRef);
   if ("observationRef" in event && event.observationRef) refs.push(event.observationRef);
   if ("artifactRef" in event && event.artifactRef) refs.push(event.artifactRef);
+  if ("graphRef" in event && event.graphRef) refs.push(event.graphRef);
   if ("profileRef" in event && event.profileRef) refs.push(event.profileRef);
   if ("contractRef" in event && event.contractRef) refs.push(event.contractRef);
   if ("verificationRef" in event && event.verificationRef) refs.push(event.verificationRef);
@@ -155,6 +172,9 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("fitnessRef" in event && event.fitnessRef) refs.push(event.fitnessRef);
   if ("mutationRef" in event && event.mutationRef) refs.push(event.mutationRef);
   if ("evolutionRef" in event && event.evolutionRef) refs.push(event.evolutionRef);
+  if ("replayRef" in event && event.replayRef) refs.push(event.replayRef);
+  if ("tournamentRef" in event && event.tournamentRef) refs.push(event.tournamentRef);
+  if ("sessionRef" in event && event.sessionRef) refs.push(event.sessionRef);
   if ("traceRef" in event && event.traceRef) refs.push(event.traceRef);
   return refs;
 }

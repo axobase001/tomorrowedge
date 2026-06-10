@@ -39,6 +39,32 @@ export type RoleBudgetInput = {
   maxCallsPerTask?: number;
 };
 
+export type ModelInvocationKind = "model_planner" | "live_patch" | "live_advisory" | "pre_judge_debate";
+
+export function evaluateModelCallInvocation(input: {
+  config: TomorrowEdgeConfig;
+  runtime: BudgetRuntimeState;
+  invocation: ModelInvocationKind;
+  role: AgentRole;
+  assignment: RouteAssignment;
+  roleBudget?: RoleBudgetInput;
+  estimatedCostUsd?: number;
+  escalationSignals?: string[];
+  canFallback?: boolean;
+}): BudgetGateDecision {
+  return evaluateRoleInvocation({
+    config: input.config,
+    runtime: input.runtime,
+    role: input.role,
+    phase: phaseForInvocation(input.invocation),
+    assignment: input.assignment,
+    roleBudget: input.roleBudget,
+    estimatedCostUsd: input.estimatedCostUsd,
+    escalationSignals: [...new Set([input.invocation, ...(input.escalationSignals ?? [])])],
+    canFallback: input.canFallback
+  });
+}
+
 export function createBudgetRuntimeState(): BudgetRuntimeState {
   return {
     strongAgentCallsUsed: 0,
@@ -138,4 +164,10 @@ export function nativeFallbackAssignment(role: AgentRole, assignment: RouteAssig
 
 export function canFallbackWhenBudgetBlocked(role: AgentRole): boolean {
   return ["planner", "coder_a", "reviewer", "judge"].includes(role);
+}
+
+function phaseForInvocation(invocation: ModelInvocationKind): EventPhase {
+  if (invocation === "live_patch") return "coding";
+  if (invocation === "pre_judge_debate") return "judge";
+  return "planning";
 }

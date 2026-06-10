@@ -6,3 +6,5 @@ export type DebateRound = {
   evidence: string[];
   riskRaised?: string;
 };
+
+export type { DebateClaim, DebateMove, DebateSession } from "../core/debate/debateProtocol.js";
