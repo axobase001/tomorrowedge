@@ -26,7 +26,17 @@ export async function classifyTaskGovernance(input: {
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
+  modelDisabled?: boolean;
 }): Promise<TaskGovernanceDecision> {
+  if (input.modelDisabled) {
+    const decision = conservativeGovernanceFallback(input.plan, input.workflowIntent, "Governance model call blocked before invocation.");
+    return {
+      ...decision,
+      provider: "local_governance_fallback",
+      model: "conservative",
+      fallbackUsed: true
+    };
+  }
   const assignment = input.localOnly ? { provider: "mock", model: "mock-balanced" } : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
     config: input.config,

@@ -4,6 +4,7 @@ import { runTestCommand } from "../../core/verifier/testRunner.js";
 import { evidenceFromRun } from "../../core/verifier/evidenceMatcher.js";
 import { SummarizerAgent } from "../../core/agents/summarizer.js";
 import { restoreLatestUndoSnapshot } from "../../core/patch/undoManager.js";
+import { loadConfig } from "../../config/configLoader.js";
 
 export type TuiActionResult = {
   graph: AgentGraphState;
@@ -46,7 +47,12 @@ export async function approveTestCommand(cwd: string, graph: AgentGraphState): P
   if (!command) return { graph, message: "当前没有建议的测试命令。" };
   if (!graph.changedFiles.length) return { graph, message: "请先应用补丁，再运行测试。" };
 
-  const result = await runTestCommand(cwd, command, true);
+  const config = loadConfig(cwd);
+  const result = await runTestCommand(cwd, command, {
+    approved: true,
+    policy: config.shell.policy ?? (graph.access.mode === "full" ? "unrestricted" : "verification_allowlist"),
+    verificationAllowlist: config.shell.verification_allowlist
+  });
   const nextGraph = await refreshSummary({
     ...graph,
     runResults: [...graph.runResults, result],

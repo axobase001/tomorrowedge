@@ -36,8 +36,10 @@ export function KeyRoleManager({
   onTestProvider,
   onListProviderModels
 }: KeyRoleManagerProps) {
-  const providers = useMemo(() => setupStatus?.providers.filter((provider) => provider.authRequired) ?? [], [setupStatus]);
+  const roleProviders = useMemo(() => setupStatus?.providers ?? [], [setupStatus]);
+  const providers = useMemo(() => roleProviders.filter((provider) => provider.authRequired), [roleProviders]);
   const providerIds = providers.map((provider) => provider.id);
+  const roleProviderIds = roleProviders.map((provider) => provider.id);
   const externalAgents = setupStatus?.externalAgents ?? [];
   const selectedKeyProvider = setupStatus?.selectedProvider && providers.some((item) => item.id === setupStatus.selectedProvider)
     ? setupStatus.selectedProvider
@@ -159,7 +161,9 @@ export function KeyRoleManager({
                 }
               }} data-testid="keymgr-refresh-models">{t("keymgr.refreshModels")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || !normalizedProvider || !selectedProvider} onClick={() => onTestProvider(normalizedProvider)} data-testid="keymgr-test-key">{t("keymgr.test")}</button>
-              <button type="button" className="te-quiet-button" disabled={busy || !selectedProvider?.keyConfigured} onClick={() => onDeleteProviderKey(normalizedProvider)} data-testid="keymgr-delete-key">{t("keymgr.removeKey")}</button>
+              <button type="button" className="te-quiet-button" disabled={busy || !selectedProvider?.keyConfigured} onClick={() => {
+                if (window.confirm(t("keymgr.removeKeyPrompt"))) onDeleteProviderKey(normalizedProvider);
+              }} data-testid="keymgr-delete-key">{t("keymgr.removeKey")}</button>
             </div>
             {catalogMessage ? <p className="te-setup-message" data-testid="keymgr-models-message">{catalogMessage}</p> : null}
           </section>
@@ -170,8 +174,8 @@ export function KeyRoleManager({
               {assignments.map((assignment) => (
                 <div key={assignment.role} className="te-role-row">
                   <strong>{assignment.role}</strong>
-                  <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, providers, assignment.model) }))}>
-                    {roleProviderOptions(providerIds, externalAgents, assignment.provider).map((item) => (
+                  <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, roleProviders, assignment.model) }))}>
+                    {roleProviderOptions(roleProviderIds, externalAgents, assignment.provider).map((item) => (
                       <option key={item} value={item}>{labelProvider(item, externalAgents)}</option>
                     ))}
                   </select>
@@ -228,7 +232,7 @@ export function roleProviderOptions(providerIds: string[], externalAgents: Cockp
     "auto",
     ...providerIds,
     ...externalAgents.map((agent) => agent.provider),
-    currentProvider.startsWith("external:") ? currentProvider : ""
+    currentProvider && currentProvider !== "auto" ? currentProvider : ""
   ].filter(Boolean))];
 }
 

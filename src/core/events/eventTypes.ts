@@ -316,7 +316,7 @@ export type AccessModeEvent = BaseEvent & {
 
 export type AutonomyLimitEvent = BaseEvent & {
   type: "autonomy_limit_reached";
-  status: "blocked_by_budget" | "blocked_by_iteration_limit" | "blocked_by_time_limit";
+  status: "blocked_by_budget" | "blocked_by_iteration_limit" | "blocked_by_time_limit" | "blocked_by_access_mode";
   reason: string;
 };
 

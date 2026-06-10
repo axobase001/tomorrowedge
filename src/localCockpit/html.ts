@@ -711,7 +711,11 @@ async function loadViewModel(id) {
 }
 
 async function runWorkflow() {
-  const goal = el("goal").value.trim() || "fix failing test";
+  const goal = el("goal").value.trim();
+  if (!goal) {
+    renderEmpty("Describe a task before starting a workflow.");
+    return;
+  }
   el("run").disabled = true;
   renderEmpty("Task submitted. Waiting for live events...");
   const response = await fetch(withToken("/api/runs"), {

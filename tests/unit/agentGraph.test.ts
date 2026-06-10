@@ -345,6 +345,83 @@ describe("offline agent graph", () => {
     }
   }, 15_000);
 
+  it("blocks external core invocation in restricted access mode", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-role-external-mcp-server.mjs")],
+          autoStart: true,
+          roles: ["core"],
+          capabilities: ["core"],
+          requestTimeoutMs: 10_000
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        core: { provider: "external:codex", model: "auto" }
+      }
+    };
+
+    const state = await runOfflineGraph(cwd, "fix failing test", config, {
+      accessMode: "restricted"
+    });
+
+    expect(state.events.some((event) => event.type === "external_agent_call" && event.role === "core")).toBe(false);
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "agent_run",
+      role: "core",
+      provider: "external:codex",
+      status: "blocked"
+    }));
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "autonomy_limit_reached",
+      role: "core",
+      status: "blocked_by_access_mode"
+    }));
+  });
+
+  it("enforces external allowedRoles before executing a routed role", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const config = {
+      ...defaultConfig,
+      debate: { ...defaultConfig.debate, max_candidates: 1 },
+      external_agents: {
+        ...defaultConfig.external_agents,
+        codex: {
+          ...defaultConfig.external_agents.codex,
+          enabled: true,
+          command: process.execPath,
+          args: [path.join(process.cwd(), "tests", "fixtures", "mock-role-external-mcp-server.mjs")],
+          autoStart: true,
+          roles: ["reviewer"],
+          capabilities: ["review"],
+          requestTimeoutMs: 10_000
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        coder_a: { provider: "external:codex", model: "auto" }
+      }
+    };
+
+    const state = await runOfflineGraph(cwd, "fix failing test", config);
+
+    expect(state.events.some((event) => event.type === "external_agent_call" && event.role === "coder_a")).toBe(false);
+    expect(state.agents.find((agent) => agent.role === "coder_a")).toMatchObject({
+      provider: "local_tool",
+      model: "native_coder_a",
+      agentKind: "offline",
+      status: "success"
+    });
+    expect(state.candidates[0]?.agentId).toBe("coder_a");
+  });
+
   it("records unparseable external role payloads before falling back to native agents", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
@@ -390,6 +467,21 @@ describe("offline agent graph", () => {
     expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
     expect(state.changedFiles).toEqual([]);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "planner" && event.status !== "blocked")).toBe(true);
+  });
+
+  it("includes direct provider model_call usage in the workflow usage summary", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, {
+      fixtureMode: true
+    });
+    const successfulModelCalls = state.events.filter((event) => event.type === "model_call" && event.status === "success" && event.inputTokens);
+
+    expect(successfulModelCalls.length).toBeGreaterThan(0);
+    expect(state.usageSummary.totalTokens).toBeGreaterThan(0);
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "cost_usage",
+      totalTokens: expect.any(Number)
+    }));
   });
 
   it("blocks live advisory before model calls when budget is exceeded", async () => {

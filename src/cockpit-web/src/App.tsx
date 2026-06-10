@@ -100,13 +100,14 @@ export function App({
   onOpenDrawer,
   onCloseDrawer
 }: AppProps) {
+  const canRun = goal.trim().length > 0 && !busy;
   return (
     <main className="te-shell" data-testid="cockpit-shell">
-      <TopBar viewModel={viewModel} busy={busy} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
+      <TopBar viewModel={viewModel} busy={busy} canRun={canRun} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
       <section className="te-grid" data-testid="cockpit-grid">
         <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} t={t} onSelectSession={onSelectSession} onNewTask={onNewTask} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <WorkflowPanel viewModel={viewModel} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
-        <TelemetryPanel telemetry={viewModel.telemetry} t={t} />
+        <TelemetryPanel telemetry={viewModel.telemetry} t={t} onOpenDetails={onOpenDrawer} />
       </section>
       <BottomTraceSheet trace={viewModel.trace} t={t} />
       <ComposerPanel

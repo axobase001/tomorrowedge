@@ -215,6 +215,10 @@ function CockpitWebRoot() {
       setStatusMessage(t("status.workflowBusy"));
       return;
     }
+    if (!goal.trim()) {
+      setStatusMessage(t("composer.empty"));
+      return;
+    }
     setBusy(true);
     const setupReady = Boolean(setupStatus && !setupStatus.needsSetup);
     const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget });

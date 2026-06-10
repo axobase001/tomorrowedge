@@ -5,6 +5,7 @@ import { supportedLanguages, translateKnownValue } from "../i18n.js";
 export function TopBar({
   viewModel,
   busy,
+  canRun,
   language,
   t,
   onLanguageChange,
@@ -14,6 +15,7 @@ export function TopBar({
 }: {
   viewModel: CockpitViewModel;
   busy: boolean;
+  canRun: boolean;
   language: GuiLanguage;
   t: Translator;
   onLanguageChange: (language: GuiLanguage) => void;
@@ -52,7 +54,7 @@ export function TopBar({
         <span className="te-chip te-chip-blue">{viewModel.accessMode === "full" ? t("topbar.fullAutonomy") : viewModel.accessMode}</span>
         <span className="te-chip">{viewModel.sessionId ?? "latest"}</span>
         <button type="button" disabled={busy} onClick={onOpenKeys} aria-label={t("topbar.openKeys")} data-testid="topbar-keys">{t("topbar.keys")}</button>
-        <button type="button" disabled={busy} onClick={onRun} aria-label={t("topbar.runWorkflow")}>{t("topbar.run")}</button>
+        <button type="button" disabled={!canRun} onClick={onRun} aria-label={t("topbar.runWorkflow")}>{t("topbar.run")}</button>
         <button type="button" disabled={busy} onClick={onRefresh} aria-label={t("topbar.refreshSessions")}>{t("topbar.refresh")}</button>
       </div>
     </header>

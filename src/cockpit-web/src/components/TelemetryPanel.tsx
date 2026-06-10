@@ -1,7 +1,7 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
 
-export function TelemetryPanel({ telemetry, t }: { telemetry: CockpitTelemetry; t: Translator }) {
+export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: CockpitTelemetry; t: Translator; onOpenDetails?: () => void }) {
   const routes = [
     telemetry.plannerModel && `planner: ${telemetry.plannerModel}`,
     telemetry.coderModel && `coder: ${telemetry.coderModel}`,
@@ -28,7 +28,9 @@ export function TelemetryPanel({ telemetry, t }: { telemetry: CockpitTelemetry; 
       <Metric label={t("telemetry.agents")} value={t("telemetry.agentsValue", { done: telemetry.completed, waiting: telemetry.waiting })} />
       <Metric label={t("telemetry.latency")} value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
       <Metric label={t("telemetry.risk")} value={telemetry.latestRiskLevel ?? "-"} />
-      <a>{t("telemetry.details")}</a>
+      <button type="button" className="te-link-button" onClick={onOpenDetails} aria-label={t("telemetry.details")} data-testid="telemetry-details">
+        {t("telemetry.details")}
+      </button>
     </aside>
   );
 }

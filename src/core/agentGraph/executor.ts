@@ -25,7 +25,7 @@ import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } f
 import { buildDebateRounds, buildModelDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
-import type { ModelBudgetStatus, ModelNote } from "../../schemas/modelNote.js";
+import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { RunResult } from "../../schemas/evidence.js";
@@ -36,6 +36,7 @@ import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole, releaseExternalAgentProcessPool } from "../externalAgents/externalRoleInvoker.js";
+import type { ExternalRoleInvocation } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
 import { createModelBackedPlan } from "../goal/modelPlanner.js";
 import { classifyTaskGovernance } from "../goal/taskGovernance.js";
@@ -451,9 +452,14 @@ function selfIterationMode(config: TomorrowEdgeConfig): SelfIterationMode {
 }
 
 async function runExternalCorePhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
-  const { access, conversationTarget, cwd, externalAgents, goal, ledger, router } = runtime;
+  const { access, config, conversationTarget, cwd, externalAgents, goal, ledger, router } = runtime;
   const externalCore = externalProfileForRole(router, externalAgents, "core");
   if (externalCore) {
+    const assignment = router.assignmentFor("core");
+    if (!access.cloudAllowed) {
+      recordAccessBlockedExternalAgent(state, ledger, "core", assignment, `External core blocked by access mode: ${access.mode}.`);
+      return;
+    }
     const coreResult = await runAgentState(state, ledger, router, "core", () =>
       invokeExternalRole({
         cwd,
@@ -463,7 +469,18 @@ async function runExternalCorePhase(runtime: OfflineGraphRuntime, state: AgentGr
         context: { goal, routing: state.routing, access: state.access, conversationTarget },
         ledger
       }),
-      "external"
+      {
+        agentKind: "external",
+        config,
+        budgetFallback: async (): Promise<ExternalRoleInvocation> => ({
+          externalAgentId: externalCore.id,
+          role: "core",
+          attempts: 0,
+          summary: "Native planner used because external core was budget-blocked.",
+          payload: await new PlannerAgent().run({ goal: [targetPromptPrefix(conversationTarget), goal].filter(Boolean).join("\n\n") })
+        }),
+        budgetFallbackLabel: "native planner"
+      }
     );
     const corePlan = normalizeExternalPlan(coreResult.payload, goal);
     if (corePlan) state.plan = corePlan;
@@ -511,7 +528,7 @@ async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphSta
           budgetFallbackLabel: "native vision"
         });
         state.modelNotes.push(liveVision.note);
-        state.usageSummary = summarizeModelUsage(state.modelNotes);
+        refreshUsageSummary(state);
         recordModelNoteEvents(ledger, [liveVision.note], state.usageSummary);
         state.visualSpec = liveVision.spec;
       }
@@ -583,7 +600,10 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   } : "offline");
   state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract, policy) : state.plan ?? contractPlan;
   if (!externalPlanner && !planFromExternalCore && !cachedPlan && state.plan && workflowIntent.requiresPatchWorkflow) {
-    const modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
+    const plannerModelAllowed = canUseGovernanceModel(runtime, state, "planner", plannerGoal, 900, "model-backed planner");
+    const modelPlan = plannerModelAllowed
+      ? await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed })
+      : { provider: "local_planner_fallback", model: "native", fallbackUsed: true, error: "Model-backed planner blocked before invocation by budget or access policy." };
     if (modelPlan.plan) {
       state.plan = state.objectiveContract
         ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints]) }, state.objectiveContract, policy)
@@ -613,7 +633,17 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
   state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
   if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract, policy);
-  state.taskGovernance = await classifyTaskGovernance({ goal, plan: state.plan, workflowIntent, config, router, ledger, localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed });
+  const governanceModelAllowed = canUseGovernanceModel(runtime, state, "planner", goal, 360, "task governance");
+  state.taskGovernance = await classifyTaskGovernance({
+    goal,
+    plan: state.plan,
+    workflowIntent,
+    config,
+    router,
+    ledger,
+    localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed,
+    modelDisabled: !governanceModelAllowed
+  });
   ledger.append({
     type: "task_governance",
     phase: "planning",
@@ -803,7 +833,7 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
     for (const candidate of result.value.candidates) recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
     if (result.value.notes.length) {
       state.modelNotes.push(...result.value.notes);
-      state.usageSummary = summarizeModelUsage(state.modelNotes);
+      refreshUsageSummary(state);
       recordModelNoteEvents(ledger, result.value.notes, state.usageSummary);
     }
   }
@@ -926,7 +956,7 @@ async function runLiveAdvisoryPhase(runtime: OfflineGraphRuntime, state: AgentGr
     if (budgetStatus.status !== "blocked") {
       const advisoryNotes = await runLiveAdvisory(advisoryInput);
       state.modelNotes.push(...advisoryNotes);
-      state.usageSummary = summarizeModelUsage(state.modelNotes);
+      refreshUsageSummary(state);
       recordModelNoteEvents(ledger, advisoryNotes, state.usageSummary);
     }
   } else if (options.liveAdvisory && !access.cloudAllowed) {
@@ -1192,7 +1222,9 @@ function externalProfileForRole(router: ModelRouter, registry: ExternalAgentRegi
   const assignment = router.getPlan().assignments.find((item) => item.role === role);
   const externalAgentId = assignment ? externalAgentIdFromProvider(assignment.provider) : undefined;
   if (!externalAgentId) return undefined;
-  return registry.get(externalAgentId);
+  const profile = registry.get(externalAgentId);
+  if (!profile?.allowedRoles.includes(role)) return undefined;
+  return profile;
 }
 
 function normalizeExternalPlan(payload: unknown, goal: string): Plan | undefined {
@@ -1438,8 +1470,18 @@ async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentG
 
 async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
   if (!state.finalSummary) throw new Error("Cannot finalize workflow without a final summary.");
+  refreshUsageSummary(state);
   const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
   applyPolicyStopDecision(state, computeProjectedTraceCompleteness(ledger.events, workflowKind, state.plan));
+  ledger.append({
+    type: "cost_usage",
+    phase: "summary",
+    role: "summarizer",
+    inputTokens: state.usageSummary.inputTokens,
+    outputTokens: state.usageSummary.outputTokens,
+    totalTokens: state.usageSummary.totalTokens,
+    estimatedCostUsd: state.usageSummary.estimatedCostUsd
+  });
   ledger.append({
     type: "summary",
     phase: "summary",
@@ -1946,7 +1988,7 @@ async function maybeRunGovernedReadOnlyAdvisory(input: {
   }
   const advisoryNotes = await runLiveAdvisory(advisoryInput);
   input.state.modelNotes.push(...advisoryNotes);
-  input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
+  refreshUsageSummary(input.state);
   recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
 }
 
@@ -2009,7 +2051,7 @@ async function maybeRunPreJudgeModelDebate(input: {
   }
   const notes = await runLiveAdvisoryForRoles(advisoryInput, roles);
   input.state.modelNotes.push(...notes);
-  input.state.usageSummary = summarizeModelUsage(input.state.modelNotes);
+  refreshUsageSummary(input.state);
   recordModelNoteEvents(input.ledger, notes, input.state.usageSummary);
   const startRound = Math.max(1, ...input.state.debateRounds.map((round) => round.round + 1));
   const modelRounds = buildModelDebateRounds(notes, input.state.candidates, startRound);
@@ -2039,8 +2081,16 @@ async function runAgentState<T>(
   fn: () => Promise<T>,
   optionsOrAgentKind?: AgentRunState["agentKind"] | RunAgentStateOptions<T>
 ): Promise<T> {
-  const assignment = router.assignmentFor(role);
   const options: RunAgentStateOptions<T> = typeof optionsOrAgentKind === "string" ? { agentKind: optionsOrAgentKind } : optionsOrAgentKind ?? {};
+  const rawAssignment = router.assignmentFor(role);
+  const assignment = rawAssignment.provider.startsWith("external:") && options.agentKind === "offline"
+    ? {
+        role,
+        provider: "local_tool",
+        model: `native_${role}`,
+        reason: `External route ${rawAssignment.provider}/${rawAssignment.model} is unavailable or not allowed for ${role}; using native ${role}. ${rawAssignment.reason}`
+      }
+    : rawAssignment;
   const effectiveAgentKind = options.agentKind ?? determineAgentKind(assignment.provider);
   if (!contractRoleAllowed(state.objectiveContract, role)) {
     const reason = `Objective contract does not allow role ${role}.`;
@@ -2158,6 +2208,93 @@ async function runAgentState<T>(
 
 function shouldGateInvocation(agentKind: AgentRunState["agentKind"]): boolean {
   return agentKind === "live" || agentKind === "external";
+}
+
+function refreshUsageSummary(state: AgentGraphState): ModelUsageSummary {
+  state.usageSummary = summarizeGraphModelUsage(state);
+  return state.usageSummary;
+}
+
+function summarizeGraphModelUsage(state: AgentGraphState): ModelUsageSummary {
+  const usage = summarizeModelUsage(state.modelNotes);
+  let inputTokens = usage.inputTokens;
+  let outputTokens = usage.outputTokens;
+  let estimatedCostUsd = usage.estimatedCostUsd ?? 0;
+  let hasCost = usage.estimatedCostUsd !== undefined;
+  const noteSignatures = new Map<string, number>();
+  for (const note of state.modelNotes) {
+    if (!note.usage) continue;
+    const signature = modelUsageSignature(note.role, note.provider, note.model, note.usage.inputTokens, note.usage.outputTokens);
+    noteSignatures.set(signature, (noteSignatures.get(signature) ?? 0) + 1);
+  }
+  for (const event of state.events) {
+    if (event.type !== "model_call" || event.status !== "success") continue;
+    const eventInputTokens = event.inputTokens ?? 0;
+    const eventOutputTokens = event.outputTokens ?? 0;
+    const signature = event.role
+      ? modelUsageSignature(event.role, event.provider ?? "", event.model ?? "", eventInputTokens, eventOutputTokens)
+      : undefined;
+    const duplicateNoteCount = signature ? noteSignatures.get(signature) ?? 0 : 0;
+    if (duplicateNoteCount > 0) {
+      noteSignatures.set(signature!, duplicateNoteCount - 1);
+      continue;
+    }
+    inputTokens += eventInputTokens;
+    outputTokens += eventOutputTokens;
+    const eventCost = event.estimatedCostUsd ?? estimateCostUsd(event.provider ?? "", {
+      inputTokens: eventInputTokens,
+      outputTokens: eventOutputTokens
+    });
+    if (eventCost !== undefined) {
+      estimatedCostUsd += eventCost;
+      hasCost = true;
+    }
+  }
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    estimatedCostUsd: hasCost ? Math.round(estimatedCostUsd * 1_000_000) / 1_000_000 : undefined
+  };
+}
+
+function modelUsageSignature(role: AgentRole, provider: string, model: string, inputTokens: number, outputTokens: number): string {
+  return `${role}|${provider}|${model}|${inputTokens}|${outputTokens}`;
+}
+
+function recordAccessBlockedExternalAgent(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, reason: string): void {
+  const agentState: AgentRunState = {
+    id: `${role}_access_blocked_${state.agents.filter((agent) => agent.role === role).length + 1}`,
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    status: "blocked",
+    agentKind: "external",
+    startedAt: nowIso(),
+    endedAt: nowIso(),
+    elapsedMs: 0,
+    summary: reason
+  };
+  state.agents.push(agentState);
+  updateCapabilityStep(state, role, "blocked", reason);
+  ledger.append({
+    type: "agent_run",
+    phase: phaseForRole(role),
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    agentKind: "external",
+    status: "blocked",
+    runId: agentState.id,
+    error: reason
+  });
+  ledger.append({
+    type: "autonomy_limit_reached",
+    phase: phaseForRole(role),
+    role,
+    status: "blocked_by_access_mode",
+    reason
+  });
 }
 
 function recordBlockedAgentRun(state: AgentGraphState, ledger: EventLedger, role: AgentRole, assignment: RouteAssignment, agentKind: AgentRunState["agentKind"], gate: BudgetGateDecision): void {
@@ -2792,6 +2929,41 @@ function recordLiveBudgetDecisions(
       estimatedCostUsd: status.estimatedCostUsd
     });
   }
+}
+
+function canUseGovernanceModel(runtime: OfflineGraphRuntime, state: AgentGraphState, role: AgentRole, prompt: string, maxOutputTokens: number, label: string): boolean {
+  if (!runtime.access.cloudAllowed) {
+    runtime.ledger.append({
+      type: "autonomy_limit_reached",
+      phase: phaseForRole(role),
+      role,
+      status: "blocked_by_access_mode",
+      reason: `${label} blocked by access mode: ${runtime.access.mode}.`
+    });
+    return false;
+  }
+  const assignment = runtime.router.assignmentFor(role);
+  const budgetStatus = preflightBudget(
+    [{ provider: assignment.provider, prompt, maxOutputTokens }],
+    runtime.config.routing.max_cost_usd
+  );
+  if (state.budgetStatus?.status === "blocked") {
+    state.budgetStatuses.push(budgetStatus);
+  } else {
+    setBudgetStatus(state, budgetStatus);
+  }
+  recordLiveBudgetDecisions(runtime.ledger, "planning", [assignment], budgetStatus);
+  if (budgetStatus.status === "blocked") {
+    runtime.ledger.append({
+      type: "autonomy_limit_reached",
+      phase: phaseForRole(role),
+      role,
+      status: "blocked_by_budget",
+      reason: `${label} blocked before model invocation: ${budgetStatus.reason}`
+    });
+    return false;
+  }
+  return true;
 }
 
 function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState, ledger: EventLedger, startedAtMs: number, phase: "shell" | "repair" | "summary" | "coding"): boolean {

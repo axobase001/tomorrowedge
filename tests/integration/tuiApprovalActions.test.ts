@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
+import { writeConfig } from "../../src/config/configLoader.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { approveSelectedPatch, approveTestCommand, undoLatestPatch } from "../../src/tui/state/approvalActions.js";
 
@@ -66,5 +67,20 @@ describe("TUI approval actions", () => {
     expect(sourceAfterUndo).toContain("return a + b");
     expect(blockedUndo.graph).toBe(restrictedApplied);
     expect(blockedUndo.message).toContain("restricted");
+  }, 15_000);
+
+  it("honors configured shell policy and verification allowlist in TUI shell approval", async () => {
+    const config = {
+      ...defaultConfig,
+      shell: {
+        policy: "verification_allowlist" as const,
+        verification_allowlist: ["node"]
+      }
+    };
+    await writeConfig(tempRoot, config);
+    const initial = await runOfflineGraph(tempRoot, "fix failing test", config, { provider: "fixture" });
+    const applied = await approveSelectedPatch(tempRoot, initial);
+
+    await expect(approveTestCommand(tempRoot, applied.graph)).rejects.toThrow(/Shell command blocked/);
   }, 15_000);
 });

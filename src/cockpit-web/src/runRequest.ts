@@ -10,6 +10,8 @@ export type CockpitRunRequestInput = {
 };
 
 export function buildCockpitRunRequest({ goal, accessMode, setupReady, runMode = "auto", target = "core" }: CockpitRunRequestInput): CockpitRunRequest {
+  const trimmedGoal = goal.trim();
+  if (!trimmedGoal) throw new Error("goal_required");
   const effectiveRunMode = normalizeRunMode(runMode);
   const useLiveModels = effectiveRunMode === "live"
     || (effectiveRunMode === "auto" && setupReady && accessMode !== "restricted");
@@ -17,7 +19,7 @@ export function buildCockpitRunRequest({ goal, accessMode, setupReady, runMode =
     || (effectiveRunMode === "auto" && !useLiveModels);
   const fullAutonomy = accessMode === "full";
   return {
-    goal: goal.trim() || "fix failing test",
+    goal: trimmedGoal,
     accessMode,
     runMode: effectiveRunMode,
     fixtureMode: useFixture,

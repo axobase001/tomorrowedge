@@ -12,6 +12,9 @@
   --te-success: #2f9d68;
   --te-warning: #b7791f;
   --te-danger: #c94a4a;
+  --te-control-bg: #ffffff;
+  --te-panel-gradient-start: #ffffff;
+  --te-panel-gradient-end: #f8fbfd;
   --te-mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --te-sans: Inter, "Segoe UI", system-ui, sans-serif;
 }
@@ -31,6 +34,9 @@
     --te-success: #66c98f;
     --te-warning: #e0b15a;
     --te-danger: #ef7f7f;
+    --te-control-bg: #151d24;
+    --te-panel-gradient-start: #151d24;
+    --te-panel-gradient-end: #1c2730;
   }
 }
 
@@ -48,15 +54,23 @@ button {
   min-height: 30px;
   border: 1px solid var(--te-border);
   border-radius: 5px;
-  background: #fff;
+  background: var(--te-control-bg);
   color: var(--te-deep-blue);
   cursor: pointer;
 }
 button:disabled { cursor: wait; opacity: 0.6; }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--te-blue);
+  outline-offset: 2px;
+}
 input, textarea, select {
   border: 1px solid var(--te-border);
   border-radius: 5px;
-  background: #fff;
+  background: var(--te-control-bg);
   color: var(--te-text);
 }
 
@@ -720,6 +734,15 @@ input, textarea, select {
 .te-quiet-button {
   background: transparent;
   color: var(--te-muted);
+}
+.te-link-button {
+  justify-self: end;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--te-deep-blue);
+  font: 12px var(--te-mono);
 }
 .te-setup-message {
   margin: 12px 0 0;

@@ -465,7 +465,7 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
   const approvals: CockpitApproval[] = [];
   const selected = selectedCandidate(state);
   const latestRun = state.runResults.at(-1);
-  if (selected && hasActionablePatchCandidate(selected) && (!state.changedFiles.length || waiting)) {
+  if (selected && hasActionablePatchCandidate(selected) && !hasPendingReReviewRequest(state) && (!state.changedFiles.length || waiting)) {
     const isRepair = selected.approach === "repair";
     approvals.push({
       id: `patch:${selected.candidateId}`,
@@ -493,6 +493,12 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
     });
   }
   return approvals;
+}
+
+function hasPendingReReviewRequest(state: AgentGraphState): boolean {
+  const reviewEvents = state.events.filter((event) => event.type === "review_decision");
+  const lastReview = reviewEvents.at(-1);
+  return lastReview?.recommendation === "re_review_requested";
 }
 
 function hasActionablePatchCandidate(candidate: ReturnType<typeof selectedCandidate>): boolean {

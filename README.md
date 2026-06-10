@@ -107,8 +107,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.3.4`。
+当前版本：`1.3.5`。
 
+- `1.3.5` clears a GUI/runtime governance sweep: empty GUI top-bar runs are rejected, Telemetry details opens the drawer, no-auth local providers remain assignable, Re-review clears stale patch approvals, TUI shell approval honors `shell.policy`, external agent `allowedRoles` and restricted-mode core gates are enforced, planner/governance model calls pass through budget preflight, and direct provider `model_call` usage is included in cost/token telemetry.
 - `1.3.4` adds the governed skills and human-seeded tool-pack foundation: skill manifests, built-in workflow/workspace/code/GitHub/web/document/data/API packs, lifecycle/validation gates, inert candidate proposals from traces, tool/skill routing policy, structured objective-trace tool usage, and `tedge skills` commands.
 - `1.3.3` closes the next self-iteration audit gap: selected draft PR work expands policy genome mutation/routing coverage; objective traces now preserve bounded policy attribution and trace completeness; scenario-scoped runtime selection falls back to global evolved policies; trace retrieval records real rejected candidates instead of hardcoded zero.
 - `1.3.2` polishes the 1.3 runtime release: README now has one top-level definition and the self-iterating orchestration section appears before differentiation; `planningPolicy.allowParallelRoles=false` disables optional parallel candidate/debate branches; trace retrieval now applies `tracePolicy` recency, success/failure, stale, same-scenario, and same-workflow weighting.
@@ -560,7 +561,14 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.3.4`.
+Current version: `1.3.5`.
+
+`1.3.5` clears a GUI/runtime governance sweep: empty GUI top-bar runs are
+rejected, Telemetry details opens the drawer, no-auth local providers remain
+assignable, Re-review clears stale patch approvals, TUI shell approval honors
+`shell.policy`, external agent `allowedRoles` and restricted-mode core gates are
+enforced, planner/governance model calls pass through budget preflight, and
+direct provider `model_call` usage is included in cost/token telemetry.
 
 `1.3.4` adds the governed skills and human-seeded tool-pack foundation: skill
 manifests, built-in workflow/workspace/code/GitHub/web/document/data/API packs,

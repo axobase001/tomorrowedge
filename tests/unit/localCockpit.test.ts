@@ -364,6 +364,31 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("clears the active patch approval when re-review is requested", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-rereview-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "request_re_review", feedback: "please review again" })
+      });
+      const payload = await response.json() as { viewModel: { currentApproval?: unknown; approvalHistory: Array<{ action: string }> } };
+
+      expect(response.status).toBe(200);
+      expect(payload.viewModel.currentApproval).toBeUndefined();
+      expect(payload.viewModel.approvalHistory).toContainEqual(expect.objectContaining({
+        action: "revision_requested"
+      }));
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("returns invalid_json for malformed JSON request bodies", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-json-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -1042,6 +1067,27 @@ describe("local cockpit server", () => {
       });
 
       expect(response.status).toBe(413);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects empty run goals instead of starting a default patch workflow", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-empty-run-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "   " })
+      });
+      const payload = await response.json() as { error: string };
+      const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((item) => item.json()) as unknown[];
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("goal_required");
+      expect(sessions).toEqual([]);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

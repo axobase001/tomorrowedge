@@ -7,6 +7,30 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-06-10
+
+1.3.5 clears a high-priority GUI/runtime governance issue batch focused on
+approval UX, provider telemetry, shell policy enforcement, and external-agent
+budget boundaries.
+
+### Changed
+
+- Empty GUI top-bar runs are now rejected instead of silently starting the
+  default fixture workflow.
+- The Telemetry details control now opens the shared detail drawer, and the
+  key/role manager keeps no-auth local providers available for role assignment.
+- Re-review requests now clear the active patch approval instead of leaving the
+  same candidate ready to approve.
+- TUI shell approval now honors configured `shell.policy` and
+  `verification_allowlist`.
+- External `core` invocations are blocked in restricted mode, external
+  `allowedRoles` are enforced before role execution, and planner/governance
+  model calls now pass through budget preflight before invocation.
+- Usage summaries now include direct provider-layer `model_call` token usage,
+  so governance calls appear in cost/token telemetry and final cost events.
+- GUI controls gained shared focus styling and the key deletion flow now asks
+  for confirmation.
+
 ## [1.3.4] - 2026-06-10
 
 1.3.4 introduces the governed skills and human-seeded tool-pack foundation for

@@ -88,6 +88,14 @@ describe("cockpit web React surface", () => {
     });
   });
 
+  it("does not synthesize a default workflow for empty GUI goals", () => {
+    expect(() => buildCockpitRunRequest({ goal: "   ", accessMode: "partial", setupReady: true })).toThrow("goal_required");
+    const html = renderApp(sampleViewModel(), { goal: "" });
+
+    expect(html).toContain("data-testid=\"composer-validation-hint\"");
+    expect(html).toContain("disabled=\"\"");
+  });
+
   it("lets GUI runs explicitly choose target role and run mode", () => {
     expect(buildCockpitRunRequest({ goal: "review patch", accessMode: "partial", setupReady: true, runMode: "offline", target: "reviewer" })).toMatchObject({
       runMode: "offline",
@@ -194,6 +202,19 @@ describe("cockpit web React surface", () => {
       roles: ["reviewer"],
       capabilities: ["review"]
     }], "auto")).toEqual(["auto", "openrouter", "external:codex"]);
+  });
+
+  it("keeps no-auth local providers available for GUI role assignment", () => {
+    expect(roleProviderOptions(["openrouter", "ollama", "fixture"], [], "ollama")).toContain("ollama");
+    expect(roleProviderOptions(["openrouter"], [], "ollama")).toContain("ollama");
+  });
+
+  it("renders telemetry details as an accessible drawer button", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("data-testid=\"telemetry-details\"");
+    expect(html).toContain("<button");
+    expect(html).not.toContain("<a>details &gt;</a>");
   });
 
   it("renders shared session source and fixture metadata", () => {

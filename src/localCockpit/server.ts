@@ -235,7 +235,8 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const body = await readJsonBody(request);
       const { prefs, memoryHints, config } = await resolveRuntimeConfig(cwd);
       const sessionId = `session_${randomBytes(8).toString("hex")}`;
-      const goal = typeof body.goal === "string" && body.goal.trim() ? body.goal : "fix failing test";
+      const goal = typeof body.goal === "string" ? body.goal.trim() : "";
+      if (!goal) throw new HttpError(400, "goal_required", "Run requires a non-empty goal.");
       const requestedRunMode = parseRunMode(body.runMode);
       const accessMode = parseAccessMode(body.accessMode) ?? prefs.accessMode ?? config.project.access_mode;
       const runFlags = resolveRunFlags(requestedRunMode, body, config);
