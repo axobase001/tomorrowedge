@@ -97,16 +97,18 @@ function normalizeCodexOutput(input: ExternalAgentOutputInput): ExternalAgentNor
   if (input.role === "coder_a" || input.role === "coder_b" || input.role === "repairer") {
     const candidate = candidateFromPayload(payload) ?? candidateFromRawDiff(input.rawPayload, input.role);
     if (candidate) {
+      const diffRef = artifactRefFromPayload(payload, ["diffRef", "patchRef", "artifactRef"]);
       const candidateWarnings = warnings.filter((warning) => !warning.includes("payload does not satisfy outputContract=patch"));
-      payload = { summary: candidate.summary, candidate };
+      payload = { summary: candidate.summary, candidate: diffRef ? { ...candidate, diffRef } : candidate, diffRef };
       return { ...generic, status: candidateWarnings.length ? "warning" : "success", warnings: candidateWarnings, payload, summary: candidate.summary || `Codex normalized ${input.role} patch candidate.` };
     }
     warnings.push("Codex patch output did not include candidate/unifiedDiff.");
   } else if (input.role === "reviewer") {
     const review = reviewFromPayload(payload);
     if (review) {
+      const reviewRef = artifactRefFromPayload(payload, ["reviewRef", "artifactRef"]);
       const issues = issuesFromPayload(payload, review);
-      payload = { summary: summaryFromPayload(payload, "Codex reviewer normalized review output."), review, issues };
+      payload = { summary: summaryFromPayload(payload, "Codex reviewer normalized review output."), review, issues, reviewRef };
       return { ...generic, status: warnings.length ? "warning" : "success", warnings, payload, summary: summaryFromPayload(payload, "Codex reviewer normalized review output.") };
     }
     warnings.push("Codex reviewer output did not include review/reviews.");
@@ -149,9 +151,9 @@ function extractCodexEvidence(input: ExternalAgentEvidenceInput): string[] {
 function extractCodexEvidencePackets(input: ExternalAgentEvidenceInput): EvidencePacket[] {
   const packets: EvidencePacket[] = [];
   const candidate = candidateFromPayload(input.normalized.payload);
-  if (candidate) packets.push(buildPatchEvidence(candidate));
+  if (candidate) packets.push(buildPatchEvidence(candidate, artifactRefFromPayload(input.normalized.payload, ["diffRef", "patchRef", "artifactRef"])));
   const review = reviewFromPayload(input.normalized.payload);
-  if (review) packets.push(buildReviewEvidence(review));
+  if (review) packets.push(buildReviewEvidence(review, artifactRefFromPayload(input.normalized.payload, ["reviewRef", "artifactRef"])));
   return packets;
 }
 
@@ -306,6 +308,18 @@ function stringOrUndefined(value: unknown): string | undefined {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function artifactRefFromPayload(payload: unknown, keys: string[]): string | undefined {
+  const object = asRecord(payload);
+  const candidate = asRecord(object?.candidate);
+  const review = asRecord(object?.review);
+  for (const key of keys) {
+    const value = object?.[key] ?? candidate?.[key] ?? review?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  const artifacts = Array.isArray(object?.artifacts) ? object.artifacts : [];
+  return artifacts.find((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function isDefined<T>(value: T | undefined): value is T {

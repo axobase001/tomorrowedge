@@ -86,6 +86,8 @@ export type CockpitTelemetry = {
   latestRiskLevel?: "low" | "medium" | "high";
   decisionConfidence?: number;
   fallbackCount: number;
+  realBudgetDecisions: number;
+  simulatedBudgetDecisions: number;
   budgetUsedPercent?: number;
   budgetRemainingUsd?: number;
   roleCosts?: Array<{

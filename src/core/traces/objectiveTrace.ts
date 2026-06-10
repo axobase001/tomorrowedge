@@ -109,6 +109,8 @@ export type ObjectiveTraceV1 = {
   traceCompleteness?: {
     score: number;
     missing: string[];
+    intentionallySkipped?: string[];
+    blockedByApproval?: string[];
   };
   outcome: {
     finalStatus: "success" | "partial" | "failure" | "unsafe" | "aborted";

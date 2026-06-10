@@ -19,6 +19,7 @@ export type BuildTaskGraphFromContractInput = {
   workflowKind: WorkflowKind;
   planSteps: PlanStep[];
   contract?: ObjectiveContractV1;
+  roleGraph?: RoleGraph;
   riskLevel: RiskLevel;
   taskType: TaskType;
   verificationCommands?: string[];
@@ -51,6 +52,7 @@ export function buildTaskGraph(input: BuildTaskGraphInput): TaskGraph {
     workflowKind: input.plan.workflowKind ?? input.contract?.workflowKind ?? workflowKindFromPlan(input.plan),
     planSteps: input.plan.steps.length ? input.plan.steps : fallbackPlanSteps(input.plan),
     contract: input.contract,
+    roleGraph: input.roleGraph,
     riskLevel: input.plan.riskLevel,
     taskType: input.plan.taskType,
     verificationCommands: input.plan.verificationCommands,
@@ -149,6 +151,41 @@ function askUserSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
 
 function patchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
   const criteria = input.contract?.successCriteria ?? input.planSteps.map((step) => step.title);
+  const patchNodes: NodeSpec[] = [
+    {
+      id: "produce_patch",
+      kind: "patch",
+      title: "Produce patch candidate",
+      objective: "Generate one or more candidate diffs without applying them.",
+      phase: "coding",
+      ownerRole: "coder_a",
+      dependsOn: ["design_patch"],
+      requiredInputs: [evidence("reasoning", "patch_design", "Patch design", true)],
+      expectedOutputs: [output("patch", "patch_candidate", "Patch candidate diff")],
+      mutationAllowed: false,
+      canRunInParallel: input.policy?.planningPolicy.allowParallelRoles !== false,
+      stopIfFails: true,
+      acceptanceCriteria: criteria
+    }
+  ];
+  if (shouldIncludeAlternativePatchTask(input)) {
+    patchNodes.push({
+      id: "produce_patch_alt",
+      kind: "patch",
+      title: "Produce alternative patch candidate",
+      objective: "Generate an alternative candidate diff without applying it.",
+      phase: "coding",
+      ownerRole: "coder_b",
+      dependsOn: ["design_patch"],
+      requiredInputs: [evidence("reasoning", "patch_design", "Patch design", true)],
+      expectedOutputs: [output("patch", "patch_candidate_alt", "Alternative patch candidate diff")],
+      mutationAllowed: false,
+      canRunInParallel: true,
+      stopIfFails: false,
+      acceptanceCriteria: criteria
+    });
+  }
+  const patchNodeIds = patchNodes.map((node) => node.id);
   return [
     {
       id: "inspect_context",
@@ -174,21 +211,7 @@ function patchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
       stopIfFails: true,
       acceptanceCriteria: criteria
     },
-    {
-      id: "produce_patch",
-      kind: "patch",
-      title: "Produce patch candidate",
-      objective: "Generate one or more candidate diffs without applying them.",
-      phase: "coding",
-      ownerRole: "coder_a",
-      dependsOn: ["design_patch"],
-      requiredInputs: [evidence("reasoning", "patch_design", "Patch design", true)],
-      expectedOutputs: [output("patch", "patch_candidate", "Patch candidate diff")],
-      mutationAllowed: false,
-      canRunInParallel: input.policy?.planningPolicy.allowParallelRoles !== false,
-      stopIfFails: true,
-      acceptanceCriteria: criteria
-    },
+    ...patchNodes,
     {
       id: "review_patch",
       kind: "review",
@@ -196,7 +219,7 @@ function patchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
       objective: "Review candidate correctness, risk, regressions, and evidence coverage.",
       phase: "review",
       ownerRole: "reviewer",
-      dependsOn: ["produce_patch"],
+      dependsOn: patchNodeIds,
       requiredInputs: [evidence("diff", "patch_candidate", "Patch candidate diff", true)],
       expectedOutputs: [output("review", "review_decision", "Review report")],
       stopIfFails: true,
@@ -262,6 +285,7 @@ function patchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
 }
 
 function highRiskPatchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] {
+  const patchNodeIds = candidatePatchNodeIds(input);
   const securityReview: NodeSpec = {
     id: "security_review",
     kind: "review",
@@ -269,7 +293,7 @@ function highRiskPatchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] 
     objective: "High-risk contracts require explicit risk, security, and regression review before judge.",
     phase: "review",
     ownerRole: "reviewer",
-    dependsOn: ["produce_patch"],
+    dependsOn: patchNodeIds,
     requiredInputs: [
       evidence("diff", "patch_candidate", "Patch candidate diff", true),
       evidence("reasoning", "risk_map", "Risk map", false)
@@ -284,7 +308,7 @@ function highRiskPatchSpecs(input: BuildTaskGraphFromContractInput): NodeSpec[] 
   ].map((node): NodeSpec => {
     if (node.id === "inspect_context") return node;
     if (node.id === "design_patch") return node;
-    if (node.id === "produce_patch") return { ...node, dependsOn: ["design_patch", "risk_map"] };
+    if (patchNodeIds.includes(node.id)) return { ...node, dependsOn: ["design_patch", "risk_map"] };
     if (node.id === "judge_patch") return { ...node, dependsOn: ["security_review"] };
     return node;
   });
@@ -446,6 +470,15 @@ function riskBoundariesForWorkflow(workflowKind: WorkflowKind, riskLevel: RiskLe
 function strongerRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
   const rank: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
   return rank[b] >= rank[a] ? b : a;
+}
+
+function shouldIncludeAlternativePatchTask(input: BuildTaskGraphFromContractInput): boolean {
+  if (input.policy?.planningPolicy.allowParallelRoles === false) return false;
+  return Boolean(input.roleGraph?.nodes.some((node) => node.id === "coder_b"));
+}
+
+function candidatePatchNodeIds(input: BuildTaskGraphFromContractInput): string[] {
+  return shouldIncludeAlternativePatchTask(input) ? ["produce_patch", "produce_patch_alt"] : ["produce_patch"];
 }
 
 function stableId(value: string): string {

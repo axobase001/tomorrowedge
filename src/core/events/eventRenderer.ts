@@ -77,7 +77,7 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "debate_move":
       return `${event.debateSessionId} r${event.round} ${event.speaker}/${event.moveType}: ${event.summary}`;
     case "debate_resolution":
-      return `${event.resolution} selected=${event.selectedCandidateId ?? "-"} selectedResolution=${event.selectedCandidateResolution ?? "-"} global=${event.globalResolution ?? "-"} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
+      return `${event.resolution} selected=${event.selectedCandidateId ?? "-"} selectedResolution=${event.selectedCandidateResolution ?? "-"} global=${event.globalResolution ?? "-"} issues selected=${event.selectedIssueCount ?? 0} global=${event.globalIssueCount ?? 0} nonSelected=${event.nonSelectedIssueCount ?? 0} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
     case "summary":
       return `result=${event.result}`;
     case "autonomy_limit_reached":
@@ -93,7 +93,7 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "evidence_packet":
       return `${event.evidencePhase} ${event.verificationStatus}: ${event.summary}`;
     case "budget_decision":
-      return `${event.invocationKind ? `${event.invocationKind} ` : ""}${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
+      return `${event.invocationKind ? `${event.invocationKind} ` : ""}${event.status}${event.simulated ? " simulated" : event.realProvider ? " real" : ""}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "budget_preview":
       return `preview ${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "workflow_stop_reason":
@@ -101,7 +101,7 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "fallback_to_native":
       return `${event.fallbackRole} fallback: ${event.reason}`;
     case "trace_completeness":
-      return `score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}`;
+      return `score=${event.score}${event.missing.length ? ` missing=${event.missing.join(",")}` : ""}${event.blockedByApproval?.length ? ` blockedByApproval=${event.blockedByApproval.join(",")}` : ""}${event.intentionallySkipped?.length ? ` skipped=${event.intentionallySkipped.join(",")}` : ""}`;
     case "agent_cache":
       return `${event.cache} cache ${event.status}: ${event.keyHint}`;
     case "memory_retrieval":

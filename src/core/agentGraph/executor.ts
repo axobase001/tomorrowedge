@@ -93,7 +93,8 @@ import { evolvePoliciesOffline } from "../orchestrationPolicy/policyEvolution.js
 import { simulatePolicyOnTrace } from "../orchestrationPolicy/policyCounterfactual.js";
 import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
 import { parseTaskGraphCandidate, validateTaskGraph } from "../planning/taskGraphValidator.js";
-import { nextReadyTaskNodes, readyTaskNodesForRoleNode, taskGraphAllowsRoleNode } from "../planning/taskGraphScheduler.js";
+import { nextReadyTaskNodes, readyTaskNodeForRoleNode, readyTaskNodesForRoleNode, taskGraphAllowsRoleNode } from "../planning/taskGraphScheduler.js";
+import type { TaskGraph, TaskGraphNode } from "../planning/taskGraph.js";
 import { buildDebateSession } from "../debate/debateSessionBuilder.js";
 import { loadSkillRegistry } from "../skills/skillRegistry.js";
 import { routeToolsAndSkills } from "../skills/toolSkillRouter.js";
@@ -756,18 +757,21 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     workflowKind: state.workflowKind,
     riskLevel: plan.riskLevel,
     highRisk: plan.riskLevel === "high",
-    debate: parallelRolesAllowed(state) && Boolean(plan.debateRecommended || config.debate.enabled),
+    debate: parallelRolesAllowed(state) && Boolean(plan.debateRecommended || config.debate.enabled) && config.debate.max_candidates > 1,
     allowParallelRoles: parallelRolesAllowed(state),
     allowedRoles: state.objectiveContract?.allowedRoles,
     allowedPhases: state.objectiveContract?.allowedPhases
   });
   state.roleGraphExecution = createRoleGraphExecutionState(state.roleGraph);
-  state.plan.taskGraph = state.plan.taskGraph ?? buildTaskGraph({
+  const nativeTaskGraph = buildTaskGraph({
     plan: state.plan,
     contract: state.objectiveContract,
     roleGraph: state.roleGraph,
     policy
   });
+  if (!state.plan.taskGraph || !taskGraphMatchesRoleGraph(state.plan.taskGraph, state.roleGraph)) {
+    state.plan.taskGraph = nativeTaskGraph;
+  }
   const taskGraphValidation = validateTaskGraph(state.plan.taskGraph);
   if (!taskGraphValidation.ok) {
     const repairedTaskGraph = buildTaskGraph({ plan: state.plan, contract: state.objectiveContract, roleGraph: state.roleGraph, policy });
@@ -848,8 +852,16 @@ async function runExplorationPhase(runtime: OfflineGraphRuntime, state: AgentGra
 }
 
 async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
+  if (!state.roleGraphExecution) {
+    await runCandidatePhase(runtime, state);
+    await runReviewAndJudgePhase(runtime, state);
+    await runPostJudgeAdvisoryIfNeeded(runtime, state);
+    await runPatchApplicationPhase(runtime, state);
+    await runVerificationAndRepairPhase(runtime, state);
+    return;
+  }
   while (!state.workflowBlockedReason) {
-    const ready = state.roleGraphExecution ? readyRoleNodes(state.roleGraphExecution) : [];
+    const ready = readyRoleNodes(state.roleGraphExecution);
     if (state.roleGraphExecution && shouldStopRoleGraph(state.roleGraphExecution) && state.roleGraphExecution.stopReason !== "role graph complete") {
       state.workflowBlockedReason = state.roleGraphExecution.stopReason;
       runtime.ledger.append({
@@ -861,30 +873,20 @@ async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: Ag
       });
       return;
     }
-    if (!state.roleGraphExecution) {
-      await runCandidatePhase(runtime, state);
-      await runReviewAndJudgePhase(runtime, state);
-      await runPostJudgeAdvisoryIfNeeded(runtime, state);
-      await runPatchApplicationPhase(runtime, state);
-      await runVerificationAndRepairPhase(runtime, state);
-      return;
-    }
-    const executable = ready.find((node) => taskGraphAllowsRoleNode(state.plan?.taskGraph, node));
-    if (!executable) {
-      if (ready.some((node) => node.id === "summarizer")) return;
+    const execution = await executeReadyRoleGraphNodes(runtime, state);
+    if (execution.deferSummarizer) return;
+    if (!execution.executed) {
       if (ready.length) {
         const taskReady = state.plan?.taskGraph ? nextReadyTaskNodes(state.plan.taskGraph).map((node) => node.id).join(", ") : "none";
         blockScheduledWorkflow(runtime, state, ready[0]!.role, `RoleGraphScheduler stopped: ready role nodes cannot run because TaskGraph has no matching ready action. readyRoles=${ready.map((node) => node.id).join(", ")} readyTasks=${taskReady}`);
       }
       return;
     }
-    if (executable.id === "summarizer") return;
-    await executeReadyRoleGraphNode(runtime, state, executable);
-    if (!state.workflowBlockedReason && executable.role === "coder_a" && state.candidates.length === 0 && !ready.some((node) => node.role === "coder_b")) {
+    if (!state.workflowBlockedReason && execution.executedRoles.includes("coder_a") && state.candidates.length === 0 && !ready.some((node) => node.role === "coder_b")) {
       blockScheduledWorkflow(runtime, state, "coder_a", "RoleGraphScheduler stopped: coder_a produced no patch candidates.");
       return;
     }
-    if (!state.workflowBlockedReason && executable.id === "judge") {
+    if (!state.workflowBlockedReason && execution.executedNodeIds.includes("judge")) {
       await runPostJudgeAdvisoryIfNeeded(runtime, state);
     }
     if (state.roleGraphExecution && shouldStopRoleGraph(state.roleGraphExecution) && state.roleGraphExecution.stopReason === "role graph complete") {
@@ -894,6 +896,35 @@ async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: Ag
       break;
     }
   }
+}
+
+async function executeReadyRoleGraphNodes(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<{ executed: number; executedNodeIds: string[]; executedRoles: AgentRole[]; deferSummarizer: boolean }> {
+  if (!state.roleGraphExecution) return { executed: 0, executedNodeIds: [], executedRoles: [], deferSummarizer: false };
+  const graph = state.plan?.taskGraph;
+  const ready = readyRoleNodes(state.roleGraphExecution);
+  const summarizerReady = ready.some((node) => node.id === "summarizer" && (!graph || readyTaskNodeForRoleNode(graph, node)));
+  const runnable = ready
+    .filter((node) => node.id !== "summarizer")
+    .map((node) => ({ node, taskNode: readyTaskNodeForRoleNode(graph, node) }))
+    .filter((entry): entry is { node: RoleNode; taskNode: TaskGraphNode } => Boolean(entry.taskNode));
+  if (!runnable.length) return { executed: 0, executedNodeIds: [], executedRoles: [], deferSummarizer: summarizerReady };
+
+  const candidateEntries = runnable.filter((entry) => (entry.node.id === "coder_a" || entry.node.id === "coder_b") && entry.taskNode.kind === "patch");
+  const livePatchPrimaryEntry = runtime.options.livePatch && runtime.access.cloudAllowed
+    ? candidateEntries.find((entry) => entry.node.id === "coder_a")
+    : undefined;
+  const batch = livePatchPrimaryEntry
+    ? [livePatchPrimaryEntry]
+    : candidateEntries.length > 1 && parallelRolesAllowed(state)
+    ? candidateEntries
+    : [runnable[0]!];
+  await Promise.all(batch.map((entry) => executeReadyTaskNode(runtime, state, entry.taskNode, entry.node)));
+  return {
+    executed: batch.length,
+    executedNodeIds: batch.map((entry) => entry.node.id),
+    executedRoles: batch.map((entry) => entry.node.role),
+    deferSummarizer: false
+  };
 }
 
 async function executeReadyRoleGraphNode(runtime: OfflineGraphRuntime, state: AgentGraphState, node: RoleNode): Promise<void> {
@@ -914,30 +945,52 @@ async function executeReadyRoleGraphNode(runtime: OfflineGraphRuntime, state: Ag
       evidence: [`RoleGraph node ${node.id} executing TaskGraph node(s): ${readyTasks.join(", ")}`]
     });
   }
-  if (node.id === "coder_a" || node.id === "coder_b") {
-    await runCoderRoleNode(runtime, state, node.role as "coder_a" | "coder_b");
+  const taskNode = readyTaskNodeForRoleNode(state.plan?.taskGraph, node);
+  if (!taskNode) throw new WorkflowBlockedError(`TaskGraph refused to execute ${node.id}: no ready task node was available.`);
+  await executeReadyTaskNode(runtime, state, taskNode, node);
+}
+
+async function executeReadyTaskNode(runtime: OfflineGraphRuntime, state: AgentGraphState, taskNode: TaskGraphNode, roleNode: RoleNode): Promise<void> {
+  if (!state.roleGraphExecution) return;
+  runtime.ledger.append({
+    type: "evidence_update",
+    phase: taskNode.phase,
+    role: taskNode.ownerRole,
+    evidence: [`RoleGraph node ${roleNode.id} dispatches TaskGraph node ${taskNode.id} (${taskNode.kind})`]
+  });
+  markTaskNodesRunning(state, runtime.ledger, roleNode.id, roleNode.role, `${roleNode.id} executing ${taskNode.id}`);
+  if (taskNode.kind === "patch") {
+    if (roleNode.id !== "coder_a" && roleNode.id !== "coder_b") throw new WorkflowBlockedError(`TaskGraph patch node ${taskNode.id} cannot be executed by ${roleNode.id}.`);
+    await runCoderRoleNode(runtime, state, roleNode.id);
     return;
   }
-  if (node.id === "reviewer") {
+  if (taskNode.kind === "review") {
     await runReviewerRoleNode(runtime, state);
     return;
   }
-  if (node.id === "judge") {
+  if (taskNode.kind === "judge") {
     await runJudgeRoleNode(runtime, state);
     return;
   }
-  if (node.id === "patch_runner") {
+  if (taskNode.kind === "apply_patch") {
     await runPatchApplicationPhase(runtime, state);
     return;
   }
-  if (node.id === "test_runner") {
+  if (taskNode.kind === "verify") {
     await runVerificationAndRepairPhase(runtime, state);
     return;
   }
-  if (node.id === "summarizer") {
+  if (taskNode.kind === "inspect") {
+    if (!state.contextSelection) await runExplorationPhase(runtime, state);
+    else recordRoleNodeExecutionResult(state, runtime.ledger, "explorer", "success", "explorer context selection already available", [], undefined, roleNode.id);
     return;
   }
-  throw new WorkflowBlockedError(`RoleGraph has no executable action for node ${node.id}.`);
+  if (taskNode.kind === "design" || taskNode.kind === "analyze") {
+    recordRoleNodeExecutionResult(state, runtime.ledger, taskNode.ownerRole, "success", `${taskNode.title} satisfied by prior ${taskNode.ownerRole} output`, [], undefined, roleNode.id);
+    return;
+  }
+  if (taskNode.kind === "summarize") return;
+  throw new WorkflowBlockedError(`TaskGraph has no executable action for node ${taskNode.id} (${taskNode.kind}).`);
 }
 
 async function runPostJudgeAdvisoryIfNeeded(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
@@ -2131,6 +2184,8 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     role: "summarizer",
     score: state.traceCompleteness.score,
     missing: state.traceCompleteness.missing,
+    intentionallySkipped: state.traceCompleteness.intentionallySkipped,
+    blockedByApproval: state.traceCompleteness.blockedByApproval,
     workflowKind
   });
   await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
@@ -2340,7 +2395,12 @@ function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntim
       implicitSignals: implicitFeedbackSignals(state)
     },
     traceCompleteness: state.traceCompleteness
-      ? { score: state.traceCompleteness.score, missing: state.traceCompleteness.missing }
+      ? {
+        score: state.traceCompleteness.score,
+        missing: state.traceCompleteness.missing,
+        intentionallySkipped: state.traceCompleteness.intentionallySkipped,
+        blockedByApproval: state.traceCompleteness.blockedByApproval
+      }
       : undefined,
     outcome: {
       finalStatus,
@@ -2863,6 +2923,10 @@ function recordDebateSessionEvents(state: AgentGraphState, ledger: EventLedger):
   const nonSelectedIssueCount = session.unresolvedIssues.filter((issue) =>
     issue.candidateId && issue.candidateId !== selectedCandidateId
   ).length;
+  const selectedIssueCount = session.unresolvedIssues.filter((issue) =>
+    selectedCandidateId && issue.candidateId === selectedCandidateId
+  ).length;
+  const globalIssueCount = session.unresolvedIssues.filter((issue) => !issue.candidateId).length;
   for (const move of session.moves.slice(0, 24)) {
     ledger.append({
       type: "debate_move",
@@ -2888,6 +2952,8 @@ function recordDebateSessionEvents(state: AgentGraphState, ledger: EventLedger):
     selectedCandidateId,
     selectedCandidateResolution,
     globalResolution: session.globalResolution.resolution,
+    selectedIssueCount,
+    globalIssueCount,
     nonSelectedIssueCount,
     acceptedClaims: session.acceptedClaims,
     rejectedClaims: session.rejectedClaims,
@@ -3003,7 +3069,7 @@ function markTaskNodesRunning(state: AgentGraphState, ledger: EventLedger, roleN
 function taskNodeMatchesRoleNode(taskNodeId: string, kind: string, ownerRole: AgentRole, roleNodeId: string, role: AgentRole): boolean {
   if (roleNodeId === "patch_runner") return kind === "apply_patch";
   if (roleNodeId === "test_runner") return kind === "verify";
-  if (roleNodeId === "coder_a") return ownerRole === "coder_a" || kind === "patch";
+  if (roleNodeId === "coder_a") return ownerRole === "coder_a";
   if (roleNodeId === "coder_b") return ownerRole === "coder_b";
   if (roleNodeId === "reviewer") return ownerRole === "reviewer" || kind === "review";
   if (roleNodeId === "judge") return ownerRole === "judge" || kind === "judge";
@@ -3011,6 +3077,12 @@ function taskNodeMatchesRoleNode(taskNodeId: string, kind: string, ownerRole: Ag
   if (roleNodeId === "planner") return ownerRole === "planner" || kind === "design";
   if (roleNodeId === "summarizer") return ownerRole === "summarizer" || kind === "summarize";
   return ownerRole === role;
+}
+
+function taskGraphMatchesRoleGraph(taskGraph: TaskGraph, roleGraph: { nodes: RoleNode[] }): boolean {
+  const roleGraphHasCoderB = roleGraph.nodes.some((node) => node.id === "coder_b");
+  const taskGraphHasCoderB = taskGraph.nodes.some((node) => node.id === "produce_patch_alt" && node.ownerRole === "coder_b");
+  return roleGraphHasCoderB === taskGraphHasCoderB;
 }
 
 function flushReadyTaskGraphNodes(state: AgentGraphState, ledger: EventLedger): void {
@@ -3092,6 +3164,7 @@ async function runAgentState<T>(
     })
     : undefined;
   if (gate) {
+    const providerReality = budgetProviderReality(assignment.provider);
     ledger.append({
       type: "budget_decision",
       phase: gate.phase,
@@ -3104,7 +3177,9 @@ async function runAgentState<T>(
       maxCostUsd: roleBudgetFor(options.config!, role)?.maxCostPerCallUsd ?? options.config!.strong_agents.max_cost_usd,
       estimatedCostUsd: gate.estimatedCostUsd,
       strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
-      strongAgentCallsRemaining: gate.remainingCalls
+      strongAgentCallsRemaining: gate.remainingCalls,
+      realProvider: providerReality.realProvider,
+      simulated: providerReality.simulated
     });
     if (gate.action !== "allow") {
       state.budgetRuntime.blockedRoles[role] = gate.reason;
@@ -3974,6 +4049,7 @@ function beginModelInvocationBudgetScope(input: {
       canFallback: input.canFallback ?? false
     });
     decisions.push(decision);
+    const providerReality = budgetProviderReality(plan.provider);
     input.ledger.append({
       type: "budget_decision",
       phase: decision.phase,
@@ -3987,7 +4063,9 @@ function beginModelInvocationBudgetScope(input: {
       maxCostUsd: roleBudgetFor(input.config, plan.role)?.maxCostPerCallUsd ?? input.config.strong_agents.max_cost_usd,
       estimatedCostUsd: decision.estimatedCostUsd,
       strongAgentCallsUsed: input.state.budgetRuntime.strongAgentCallsUsed,
-      strongAgentCallsRemaining: decision.remainingCalls
+      strongAgentCallsRemaining: decision.remainingCalls,
+      realProvider: providerReality.realProvider,
+      simulated: providerReality.simulated
     });
     if (decision.action !== "allow") {
       input.state.budgetRuntime.blockedRoles[plan.role] = decision.reason;
@@ -4063,6 +4141,7 @@ function recordLiveBudgetDecisions(
   status: ModelBudgetStatus
 ): void {
   for (const plan of plans) {
+    const providerReality = budgetProviderReality(plan.provider);
     ledger.append({
       type: "budget_decision",
       phase,
@@ -4073,7 +4152,9 @@ function recordLiveBudgetDecisions(
       reason: status.reason,
       budgetScope: "efficient",
       maxCostUsd: status.maxCostUsd,
-      estimatedCostUsd: status.estimatedCostUsd
+      estimatedCostUsd: status.estimatedCostUsd,
+      realProvider: providerReality.realProvider,
+      simulated: providerReality.simulated
     });
   }
 }
@@ -4122,6 +4203,7 @@ function canUseGovernanceModel(runtime: OfflineGraphRuntime, state: AgentGraphSt
     escalationSignals: policyEscalationSignals(state.orchestrationPolicy, state.plan?.riskLevel, inferStrongAgentEscalationSignals(state.goal)),
     canFallback: false
   });
+  const providerReality = budgetProviderReality(assignment.provider);
   runtime.ledger.append({
     type: "budget_decision",
     phase: invocationGate.phase,
@@ -4135,7 +4217,9 @@ function canUseGovernanceModel(runtime: OfflineGraphRuntime, state: AgentGraphSt
     maxCostUsd: roleBudgetFor(runtime.config, role)?.maxCostPerCallUsd ?? runtime.config.strong_agents.max_cost_usd,
     estimatedCostUsd: invocationGate.estimatedCostUsd,
     strongAgentCallsUsed: state.budgetRuntime.strongAgentCallsUsed,
-    strongAgentCallsRemaining: invocationGate.remainingCalls
+    strongAgentCallsRemaining: invocationGate.remainingCalls,
+    realProvider: providerReality.realProvider,
+    simulated: providerReality.simulated
   });
   if (invocationGate.action !== "allow") {
     runtime.ledger.append({
@@ -4182,6 +4266,16 @@ function inferStrongAgentEscalationSignals(goal: string): string[] {
   if (/\b(high risk|risky|dangerous|production|database|migration)\b/.test(normalized)) signals.push("high_risk_patch");
   if (/\b(disagree|disagreement|debate|tie-break|judge)\b/.test(normalized)) signals.push("reviewer_disagreement");
   return signals;
+}
+
+function budgetProviderReality(provider: string): { realProvider: boolean; simulated: boolean } {
+  const normalized = provider.toLowerCase();
+  const simulated = normalized === "mock"
+    || normalized === "fixture"
+    || normalized === "local_tool"
+    || normalized.startsWith("fixture:")
+    || normalized.startsWith("mock:");
+  return { realProvider: !simulated, simulated };
 }
 
 function phaseForRole(role: AgentRole) {

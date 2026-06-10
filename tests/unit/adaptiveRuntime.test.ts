@@ -6,7 +6,7 @@ import { createBudgetRuntimeState, evaluateModelCallInvocation } from "../../src
 import { buildDebateSession } from "../../src/core/debate/debateSessionBuilder.js";
 import type { DebateSession } from "../../src/core/debate/debateProtocol.js";
 import { validateEvidenceDependencies } from "../../src/core/evidence/evidenceDependency.js";
-import { normalizeExternalAgentResponse } from "../../src/core/externalAgents/adapters/registry.js";
+import { extractExternalAgentEvidencePackets, normalizeExternalAgentResponse } from "../../src/core/externalAgents/adapters/registry.js";
 import { JudgeAgent } from "../../src/core/agents/judge.js";
 import { simulatePolicyOnTrace, runPolicyTournament } from "../../src/core/orchestrationPolicy/policyCounterfactual.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
@@ -97,7 +97,7 @@ describe("adaptive orchestration runtime", () => {
     ]));
   });
 
-  it("builds a debate session that blocks unresolved reviewer concerns", () => {
+  it("keeps ordinary security concerns candidate-scoped by default", () => {
     const session = buildDebateSession({
       sessionId: "debate_test",
       maxRounds: 2,
@@ -132,10 +132,59 @@ describe("adaptive orchestration runtime", () => {
       }
     });
 
+    expect(session.globalResolution.resolution).toBe("selectable");
+    expect(session.resolution).toBe("selectable");
+    expect(session.unresolvedBlockingIssues).not.toContain("token validation not covered");
+    expect(session.candidateResolutions.candidate_a?.resolution).toBe("request_revision");
+    expect(session.unresolvedIssues[0]).toMatchObject({ title: "token validation not covered", candidateId: "candidate_a", blocking: true });
+  });
+
+  it("does not let candidate_b local security concerns block candidate_a", () => {
+    const session = buildDebateSession({
+      sessionId: "debate_local_security",
+      maxRounds: 2,
+      evidencePackets: [],
+      debateRounds: [],
+      candidates: [
+        patchCandidate("candidate_a", "coder_a", "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-a\n+b\n"),
+        patchCandidate("candidate_b", "coder_b", "--- a/auth.ts\n+++ b/auth.ts\n@@ -1 +1 @@\n-old\n+new\n")
+      ],
+      review: {
+        mode: "standard",
+        overallRecommendation: "accept candidate_a, revise candidate_b",
+        reviews: [
+          reviewItem("candidate_a", "accept", 94, 10),
+          { ...reviewItem("candidate_b", "revise", 55, 80), securityConcerns: ["candidate_b does not validate nonce replay"] }
+        ]
+      }
+    });
+
+    expect(session.resolution).toBe("selectable");
+    expect(session.globalResolution.resolution).toBe("selectable");
+    expect(session.candidateResolutions.candidate_a?.resolution).toBe("selectable");
+    expect(session.candidateResolutions.candidate_b?.resolution).toBe("request_revision");
+  });
+
+  it("keeps credential leakage security concerns global", () => {
+    const session = buildDebateSession({
+      sessionId: "debate_global_secret",
+      maxRounds: 2,
+      evidencePackets: [],
+      debateRounds: [],
+      candidates: [patchCandidate("candidate_a", "coder_a", "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-a\n+b\n")],
+      review: {
+        mode: "standard",
+        overallRecommendation: "revise",
+        reviews: [{
+          ...reviewItem("candidate_a", "revise", 60, 90),
+          securityConcerns: ["credential secret leakage risk in shared auth boundary"]
+        }]
+      }
+    });
+
     expect(session.globalResolution.resolution).toBe("request_revision");
     expect(session.resolution).toBe("request_revision");
-    expect(session.unresolvedBlockingIssues).toContain("token validation not covered");
-    expect(session.unresolvedIssues[0]).toMatchObject({ title: "token validation not covered", blocking: true });
+    expect(session.unresolvedIssues[0]).toMatchObject({ candidateId: undefined, title: "credential secret leakage risk in shared auth boundary" });
   });
 
   it("lets a good selected candidate ignore candidate-scoped issues on a rejected alternative", async () => {
@@ -394,6 +443,55 @@ describe("adaptive orchestration runtime", () => {
     expect(normalized.status).toBe("success");
     expect(payload.judgment?.decision).toBe("request_revision");
     expect(payload.judgment?.unresolvedIssueIds).toEqual(["issue_a"]);
+  });
+
+  it("keeps external Codex and Claude evidence packets linked to stable artifact refs", () => {
+    const codexProfile = { id: "codex", name: "Codex", transport: "mcp" as const, adapter: "codex" as const, capabilities: [], allowedRoles: ["coder_a", "reviewer"], trustLevel: "high" as const };
+    const claudeProfile = { id: "claude_code", name: "Claude Code", transport: "mcp" as const, adapter: "claude_code" as const, capabilities: [], allowedRoles: ["judge"], trustLevel: "high" as const };
+    const codexPatch = normalizeExternalAgentResponse({
+      profile: codexProfile,
+      role: "coder_a",
+      outputContract: "patch",
+      rawPayload: {
+        summary: "patch with ref",
+        candidate: {
+          candidateId: "codex_patch_ref",
+          agentId: "coder_a",
+          approach: "minimal_patch",
+          summary: "patch with ref",
+          filesChanged: ["index.js"],
+          unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-a\n+b\n",
+          diffRef: "artifacts/diffs/codex.patch",
+          testPlan: ["npm test"],
+          knownTradeoffs: [],
+          estimatedRisk: "low"
+        }
+      }
+    });
+    const codexReview = normalizeExternalAgentResponse({
+      profile: codexProfile,
+      role: "reviewer",
+      outputContract: "review",
+      rawPayload: {
+        summary: "review with ref",
+        reviewRef: "artifacts/reviews/codex.json",
+        review: { mode: "standard", reviews: [reviewItem("codex_patch_ref", "accept", 90, 10)], overallRecommendation: "accept" }
+      }
+    });
+    const claudeJudge = normalizeExternalAgentResponse({
+      profile: claudeProfile,
+      role: "judge",
+      outputContract: "judgment",
+      rawPayload: {
+        summary: "judge with ref",
+        decisionRef: "artifacts/judge/claude.json",
+        judgment: { decision: "select", selectedCandidateId: "codex_patch_ref", reason: "best candidate", confidence: 0.8 }
+      }
+    });
+
+    expect(extractExternalAgentEvidencePackets({ profile: codexProfile, role: "coder_a", outputContract: "patch", rawPayload: {}, normalized: codexPatch })[0]?.supportingArtifacts).toContain("artifacts/diffs/codex.patch");
+    expect(extractExternalAgentEvidencePackets({ profile: codexProfile, role: "reviewer", outputContract: "review", rawPayload: {}, normalized: codexReview })[0]?.supportingArtifacts).toContain("artifacts/reviews/codex.json");
+    expect(extractExternalAgentEvidencePackets({ profile: claudeProfile, role: "judge", outputContract: "judgment", rawPayload: {}, normalized: claudeJudge })[0]?.supportingArtifacts).toContain("artifacts/judge/claude.json");
   });
 
   it("fails strict external adapter output instead of silently accepting malformed role payload", () => {

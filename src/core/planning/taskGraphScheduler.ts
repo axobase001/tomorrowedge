@@ -24,16 +24,20 @@ export function taskNodeActionId(node: TaskGraphNode): string {
 
 export function readyTaskNodesForRoleNode(graph: TaskGraph | undefined, roleNode: RoleNode): TaskGraphNode[] {
   if (!graph) return [];
-  return nextReadyTaskNodes(graph).filter((node) => taskNodeActionId(node) === roleNode.id || node.ownerRole === roleNode.role && taskNodeActionId(node) === roleNode.role);
+  return nextReadyTaskNodes(graph).filter((node) => taskNodeMatchesRoleNode(node, roleNode));
+}
+
+export function readyTaskNodeForRoleNode(graph: TaskGraph | undefined, roleNode: RoleNode): TaskGraphNode | undefined {
+  return readyTaskNodesForRoleNode(graph, roleNode)[0];
 }
 
 export function taskGraphAllowsRoleNode(graph: TaskGraph | undefined, roleNode: RoleNode): boolean {
   if (!graph) return true;
-  return readyTaskNodesForRoleNode(graph, roleNode).length > 0 || roleNodeCanRunWithoutTaskNode(roleNode);
+  return readyTaskNodesForRoleNode(graph, roleNode).length > 0;
 }
 
-export function roleNodeCanRunWithoutTaskNode(roleNode: RoleNode): boolean {
-  return roleNode.id === "coder_b";
+export function taskNodeMatchesRoleNode(node: TaskGraphNode, roleNode: RoleNode): boolean {
+  return taskNodeActionId(node) === roleNode.id;
 }
 
 export function roleForTaskNode(node: TaskGraphNode): AgentRole {

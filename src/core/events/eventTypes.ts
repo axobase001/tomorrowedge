@@ -353,6 +353,8 @@ export type DebateResolutionEvent = BaseEvent & {
   selectedCandidateId?: string;
   selectedCandidateResolution?: "selectable" | "request_revision" | "needs_user";
   globalResolution?: "selectable" | "request_revision" | "needs_user";
+  selectedIssueCount?: number;
+  globalIssueCount?: number;
   nonSelectedIssueCount?: number;
   acceptedClaims: string[];
   rejectedClaims: string[];
@@ -443,6 +445,8 @@ export type BudgetDecisionEvent = BaseEvent & {
   estimatedCostUsd?: number;
   strongAgentCallsUsed?: number;
   strongAgentCallsRemaining?: number;
+  realProvider?: boolean;
+  simulated?: boolean;
 };
 
 export type BudgetPreviewEvent = BaseEvent & {
@@ -473,6 +477,8 @@ export type TraceCompletenessEvent = BaseEvent & {
   type: "trace_completeness";
   score: number;
   missing: string[];
+  intentionallySkipped?: string[];
+  blockedByApproval?: string[];
   workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
 };
 
