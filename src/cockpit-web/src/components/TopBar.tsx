@@ -48,7 +48,7 @@ export function TopBar({
         {viewModel.telemetry.savedUsd !== undefined && viewModel.telemetry.savedUsd > 0 && (
           <span className="te-chip te-chip-green" title="累计节省 (跨 session)">
             💰 省 {viewModel.telemetry.savingsPercent ?? 0}%
-            {viewModel.telemetry.cumulativeSavedUsd !== undefined && viewModel.telemetry.cumulativeSavedUsd > viewModel.telemetry.savedUsd
+            {viewModel.telemetry.cumulativeSavedUsd !== undefined && viewModel.telemetry.cumulativeSavedUsd >= viewModel.telemetry.savedUsd
               ? ` · 累计 $${viewModel.telemetry.cumulativeSavedUsd.toFixed(2)}`
               : ""}
           </span>
