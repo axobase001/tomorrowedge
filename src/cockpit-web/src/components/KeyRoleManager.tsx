@@ -8,6 +8,7 @@ import type {
   CockpitSetupStatus
 } from "../api.js";
 import type { Translator } from "../i18n.js";
+import { EmptyState, LoadingState } from "./StateNotice.js";
 
 type KeyRoleManagerProps = {
   setupStatus?: CockpitSetupStatus;
@@ -56,6 +57,7 @@ export function KeyRoleManager({
   const [apiKey, setApiKey] = useState("");
   const [catalogModels, setCatalogModels] = useState<CockpitProviderModelOption[]>([]);
   const [catalogMessage, setCatalogMessage] = useState("");
+  const [catalogBusy, setCatalogBusy] = useState(false);
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
 
   useEffect(() => {
@@ -108,7 +110,7 @@ export function KeyRoleManager({
           <section className="te-keymgr-body">
             <p>{t("keymgr.keysIntro")}</p>
             <div className="te-keymgr-provider-list">
-              {providers.map((item) => (
+              {providers.length ? providers.map((item) => (
                 <article key={item.id} className={item.id === normalizedProvider ? "selected" : ""}>
                   <button type="button" className="te-provider-pick" onClick={() => setProvider(item.id)}>
                     <strong>{labelProvider(item.id)}</strong>
@@ -116,7 +118,9 @@ export function KeyRoleManager({
                   </button>
                   <span className={item.keyConfigured ? "te-chip te-chip-green" : "te-chip te-chip-red"}>{item.keyConfigured ? item.keySource : t("keymgr.missing")}</span>
                 </article>
-              ))}
+              )) : (
+                <EmptyState title={t("state.noProviders")} detail={t("state.noProvidersDetail")} testId="keymgr-providers-empty-state" />
+              )}
             </div>
             <div className="te-keymgr-form">
               <label>
@@ -156,14 +160,17 @@ export function KeyRoleManager({
                 onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey: apiKey || undefined });
                 setApiKey("");
               }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
-              <button type="button" className="te-quiet-button" disabled={busy || !normalizedProvider} onClick={async () => {
+              <button type="button" className="te-quiet-button" disabled={busy || catalogBusy || !normalizedProvider} onClick={async () => {
                 setCatalogMessage(t("keymgr.loadingModels"));
+                setCatalogBusy(true);
                 try {
                   const options = await onListProviderModels(normalizedProvider);
                   setCatalogModels(options);
                   setCatalogMessage(options.length ? t("keymgr.modelsLoaded", { count: String(options.length) }) : t("keymgr.noModelsFound"));
                 } catch (error) {
                   setCatalogMessage(t("keymgr.modelsFailed", { message: error instanceof Error ? error.message : String(error) }));
+                } finally {
+                  setCatalogBusy(false);
                 }
               }} data-testid="keymgr-refresh-models">{t("keymgr.refreshModels")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || !normalizedProvider || !selectedProvider} onClick={() => onTestProvider(normalizedProvider)} data-testid="keymgr-test-key">{t("keymgr.test")}</button>
@@ -171,13 +178,15 @@ export function KeyRoleManager({
                 if (window.confirm(t("keymgr.removeKeyPrompt"))) onDeleteProviderKey(normalizedProvider);
               }} data-testid="keymgr-delete-key">{t("keymgr.removeKey")}</button>
             </div>
+            {catalogBusy ? <LoadingState label={t("keymgr.loadingModels")} testId="keymgr-models-loading" /> : null}
+            {busy ? <LoadingState label={t("state.keyManagerBusy")} testId="keymgr-busy-state" /> : null}
             {catalogMessage ? <p className="te-setup-message" data-testid="keymgr-models-message">{catalogMessage}</p> : null}
           </section>
         ) : (
           <section className="te-keymgr-body">
             <p>{t("keymgr.rolesIntro")}</p>
             <div className="te-role-list" data-testid="keymgr-role-list">
-              {assignments.map((assignment) => (
+              {assignments.length ? assignments.map((assignment) => (
                 <div key={assignment.role} className="te-role-row">
                   <strong>{assignment.role}</strong>
                   <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, roleProviders, assignment.model) }))}>
@@ -199,11 +208,14 @@ export function KeyRoleManager({
                   </select>
                   <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
                 </div>
-              ))}
+              )) : (
+                <EmptyState title={t("state.noRoleAssignments")} detail={t("state.noRoleAssignmentsDetail")} testId="keymgr-roles-empty-state" />
+              )}
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={busy || !assignments.length} onClick={() => onSaveRoleAssignments(assignments)} data-testid="keymgr-save-roles">{t("keymgr.saveRoles")}</button>
             </div>
+            {busy ? <LoadingState label={t("state.keyManagerBusy")} testId="keymgr-roles-busy-state" /> : null}
           </section>
         )}
         {message ? <p className="te-setup-message" data-testid="keymgr-message">{message}</p> : null}

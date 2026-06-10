@@ -1,6 +1,7 @@
 import type { CockpitTaskSummary } from "../../../cockpit/contracts.js";
 import type { CockpitSessionSummary } from "../api.js";
 import type { Translator } from "../i18n.js";
+import { EmptyState } from "./StateNotice.js";
 import { StatusChip } from "./StatusChip.js";
 
 export function TaskListPanel({
@@ -47,13 +48,15 @@ export function TaskListPanel({
         </div>
       ) : null}
       <div className="te-task-list">
-        {tasks.map((task) => (
+        {tasks.length ? tasks.map((task) => (
           <article key={task.id} className={task.selected ? "selected" : ""} data-testid="task-card">
             <div><strong title={task.title}>{task.title}</strong><StatusChip status={task.status} t={t} /></div>
             <p>{task.reminder}</p>
             <small>{task.updatedAt}</small>
           </article>
-        ))}
+        )) : (
+          <EmptyState title={t("state.noTasks")} detail={t("state.noTasksDetail")} testId="task-empty-state" />
+        )}
       </div>
     </aside>
   );

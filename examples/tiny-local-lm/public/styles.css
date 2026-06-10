@@ -1,14 +1,27 @@
 :root {
   color-scheme: dark;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #101214;
-  color: #e9eef2;
+  --lm-bg: #101214;
+  --lm-bg-deep: #0c0f12;
+  --lm-surface: rgba(18, 22, 26, 0.92);
+  --lm-border: #2b333b;
+  --lm-border-strong: #38424b;
+  --lm-text: #e9eef2;
+  --lm-text-soft: #dce6eb;
+  --lm-muted: #8ea2b0;
+  --lm-muted-strong: #b9c4cc;
+  --lm-accent: #c7d7e2;
+  --lm-accent-ink: #0c0f12;
+  --lm-focus: #89a9c4;
+  --lm-glow: rgba(47, 113, 163, 0.18);
+  background: var(--lm-bg);
+  color: var(--lm-text);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 20% 0%, rgba(47, 113, 163, 0.18), transparent 34%), #101214;
+  background: radial-gradient(circle at 20% 0%, var(--lm-glow), transparent 34%), var(--lm-bg);
 }
 
 .shell {
@@ -21,15 +34,15 @@ body {
 }
 
 .panel {
-  border: 1px solid #2b333b;
+  border: 1px solid var(--lm-border);
   border-radius: 8px;
-  background: rgba(18, 22, 26, 0.92);
+  background: var(--lm-surface);
   padding: 20px;
 }
 
 .eyebrow {
   margin: 0 0 6px;
-  color: #89a9c4;
+  color: var(--lm-focus);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -50,17 +63,17 @@ label {
   display: grid;
   gap: 8px;
   margin-bottom: 16px;
-  color: #b9c4cc;
+  color: var(--lm-muted-strong);
   font-size: 14px;
 }
 
 textarea,
 input,
 button {
-  border: 1px solid #38424b;
+  border: 1px solid var(--lm-border-strong);
   border-radius: 6px;
-  background: #0c0f12;
-  color: #e9eef2;
+  background: var(--lm-bg-deep);
+  color: var(--lm-text);
   font: inherit;
 }
 
@@ -87,10 +100,17 @@ input[type="range"] {
 button {
   width: 100%;
   padding: 11px 14px;
-  background: #c7d7e2;
-  color: #0c0f12;
+  background: var(--lm-accent);
+  color: var(--lm-accent-ink);
   cursor: pointer;
   font-weight: 650;
+}
+
+textarea:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--lm-focus);
+  outline-offset: 2px;
 }
 
 button:disabled {
@@ -108,12 +128,12 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.55;
-  color: #dce6eb;
+  color: var(--lm-text-soft);
 }
 
 .meta {
   margin: 16px 0 0;
-  color: #8ea2b0;
+  color: var(--lm-muted);
   font-size: 13px;
 }
 

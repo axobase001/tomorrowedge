@@ -15,6 +15,24 @@
   --te-control-bg: #ffffff;
   --te-panel-gradient-start: #ffffff;
   --te-panel-gradient-end: #f8fbfd;
+  --te-soft: #f7fbfd;
+  --te-selected: rgba(238, 245, 248, 0.52);
+  --te-border-soft: rgba(215, 228, 234, 0.72);
+  --te-backdrop: rgba(11, 18, 24, 0.42);
+  --te-backdrop-soft: rgba(0, 0, 0, 0.25);
+  --te-shadow: rgba(45, 70, 90, 0.12);
+  --te-modal-shadow: rgba(21, 34, 44, 0.24);
+  --te-mark-red: #d81f0d;
+  --te-mark-ink: #050505;
+  --te-mark-cyan: #25d7e8;
+  --te-chip-blue-bg: #eaf5fb;
+  --te-chip-blue-border: #b9d7e8;
+  --te-chip-green-bg: #f0faf4;
+  --te-chip-green-border: #bfe2cf;
+  --te-chip-amber-bg: #fff9eb;
+  --te-chip-amber-border: #ead6a8;
+  --te-chip-red-bg: #fff4f4;
+  --te-chip-red-border: #efc2c2;
   --te-mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --te-sans: Inter, "Segoe UI", system-ui, sans-serif;
 }
@@ -37,6 +55,18 @@
     --te-control-bg: #151d24;
     --te-panel-gradient-start: #151d24;
     --te-panel-gradient-end: #1c2730;
+    --te-soft: #1a242c;
+    --te-selected: rgba(121, 184, 220, 0.12);
+    --te-border-soft: rgba(66, 81, 92, 0.72);
+    --te-backdrop: rgba(4, 9, 13, 0.64);
+    --te-backdrop-soft: rgba(0, 0, 0, 0.45);
+    --te-shadow: rgba(0, 0, 0, 0.28);
+    --te-modal-shadow: rgba(0, 0, 0, 0.42);
+    --te-mark-ink: #e7eef4;
+    --te-chip-blue-bg: transparent;
+    --te-chip-green-bg: transparent;
+    --te-chip-amber-bg: transparent;
+    --te-chip-red-bg: transparent;
   }
 }
 
@@ -89,7 +119,7 @@ input, textarea, select {
   margin: 0 -10px;
   padding: 6px 16px;
   border-bottom: 1px solid var(--te-border);
-  background: rgba(255, 255, 255, 0.94);
+  background: color-mix(in srgb, var(--te-surface) 94%, transparent);
 }
 .te-brand, .te-topbar-status {
   display: flex;
@@ -123,7 +153,7 @@ input, textarea, select {
   top: 2px;
   width: 34px;
   height: 8px;
-  background: #d81f0d;
+  background: var(--te-mark-red);
   clip-path: polygon(8px 0, 34px 0, 26px 8px, 0 8px);
 }
 .te-mark-stem {
@@ -132,7 +162,7 @@ input, textarea, select {
   top: 11px;
   width: 11px;
   height: 15px;
-  background: #050505;
+  background: var(--te-mark-ink);
   clip-path: polygon(0 0, 11px 5px, 11px 12px, 0 15px);
 }
 .te-mark-trace {
@@ -141,7 +171,7 @@ input, textarea, select {
   bottom: 0;
   width: 14px;
   height: 2px;
-  background: #25d7e8;
+  background: var(--te-mark-cyan);
 }
 
 .te-grid {
@@ -165,7 +195,7 @@ input, textarea, select {
   gap: 8px;
   padding: 0 12px;
   border-bottom: 1px solid var(--te-border);
-  background: linear-gradient(180deg, #fff, #f8fbfd);
+  background: linear-gradient(180deg, var(--te-panel-gradient-start), var(--te-panel-gradient-end));
 }
 .te-panel h2, .te-panel h3 { margin: 0; }
 .te-panel h2 { font-size: 15px; }
@@ -194,13 +224,13 @@ input, textarea, select {
 }
 .te-task-list article {
   border: 1px solid transparent;
-  border-bottom-color: rgba(215, 228, 234, 0.7);
+  border-bottom-color: var(--te-border-soft);
   border-radius: 4px;
   padding: 8px 7px;
 }
 .te-task-list article.selected {
-  border-color: rgba(111, 175, 210, 0.36);
-  background: rgba(238, 245, 248, 0.52);
+  border-color: color-mix(in srgb, var(--te-blue) 36%, transparent);
+  background: var(--te-selected);
 }
 .te-task-list article div {
   min-width: 0;
@@ -247,7 +277,7 @@ input, textarea, select {
   gap: 6px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--te-border);
-  background: #fbfdfe;
+  background: var(--te-soft);
 }
 .te-spine span {
   min-width: 0;
@@ -267,7 +297,7 @@ input, textarea, select {
   padding: 16px;
   border: 1px solid var(--te-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--te-surface);
 }
 .te-main p, .te-approval p {
   color: var(--te-muted);
@@ -283,7 +313,7 @@ input, textarea, select {
   min-height: 120px;
   margin: 12px 0 0;
   padding: 12px;
-  border: 1px solid rgba(215, 228, 234, 0.72);
+  border: 1px solid var(--te-border-soft);
   border-radius: 5px;
   background: var(--te-alt);
   color: var(--te-text);
@@ -302,7 +332,7 @@ input, textarea, select {
   max-height: 220px;
   margin-top: 8px;
   padding: 10px;
-  border: 1px solid rgba(215, 228, 234, 0.72);
+  border: 1px solid var(--te-border-soft);
   border-radius: 5px;
   background: var(--te-surface);
 }
@@ -323,7 +353,7 @@ input, textarea, select {
   gap: 10px;
   margin: 0 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(215, 228, 234, 0.6);
+  border-bottom: 1px solid var(--te-border-soft);
 }
 .te-metric span {
   color: var(--te-muted);
@@ -349,7 +379,7 @@ input, textarea, select {
   padding: 5px 10px;
   border: 1px solid var(--te-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--te-surface);
 }
 .te-trace div {
   min-width: 0;
@@ -365,6 +395,46 @@ input, textarea, select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.te-empty-state,
+.te-loading-state {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 10px;
+  border: 1px dashed var(--te-border);
+  border-radius: 6px;
+  background: var(--te-soft);
+  color: var(--te-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.te-empty-state strong,
+.te-loading-state strong {
+  color: var(--te-text);
+  font-size: 12px;
+}
+.te-empty-state span {
+  overflow-wrap: anywhere;
+}
+.te-loading-state {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.te-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--te-border);
+  border-top-color: var(--te-blue);
+  border-radius: 999px;
+  animation: te-spin 700ms linear infinite;
+}
+.te-spine .te-empty-state,
+.te-trace .te-empty-state {
+  grid-column: 1 / -1;
+  padding: 6px 8px;
+}
+@keyframes te-spin { to { transform: rotate(360deg); } }
 .te-composer {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr) repeat(3, minmax(112px, 150px)) minmax(0, 220px) auto;
@@ -426,7 +496,7 @@ input, textarea, select {
   border: 1px solid var(--te-border);
   border-radius: 5px;
   color: var(--te-muted);
-  background: #fff;
+  background: var(--te-surface);
   font: 11px var(--te-mono);
   white-space: nowrap;
 }
@@ -435,15 +505,15 @@ input, textarea, select {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.te-chip-blue { border-color: #b9d7e8; color: var(--te-deep-blue); background: #eaf5fb; }
-.te-chip-green { border-color: #bfe2cf; color: var(--te-success); background: #f0faf4; }
-.te-chip-amber { border-color: #ead6a8; color: var(--te-warning); background: #fff9eb; }
-.te-chip-red { border-color: #efc2c2; color: var(--te-danger); background: #fff4f4; }
+.te-chip-blue { border-color: var(--te-chip-blue-border); color: var(--te-deep-blue); background: var(--te-chip-blue-bg); }
+.te-chip-green { border-color: var(--te-chip-green-border); color: var(--te-success); background: var(--te-chip-green-bg); }
+.te-chip-amber { border-color: var(--te-chip-amber-border); color: var(--te-warning); background: var(--te-chip-amber-bg); }
+.te-chip-red { border-color: var(--te-chip-red-border); color: var(--te-danger); background: var(--te-chip-red-bg); }
 
 .te-drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--te-backdrop-soft);
   z-index: 49;
   animation: te-fade-in 120ms ease;
 }
@@ -458,9 +528,9 @@ input, textarea, select {
   height: 100vh;
   padding: 0 14px 14px;
   overflow: auto;
-  background: #fff;
+  background: var(--te-surface);
   border-left: 1px solid var(--te-border);
-  box-shadow: -20px 0 50px rgba(45, 70, 90, 0.12);
+  box-shadow: -20px 0 50px var(--te-shadow);
   z-index: 60;
   animation: te-slide-in 160ms ease;
 }
@@ -475,7 +545,7 @@ input, textarea, select {
   margin: 0 -14px 12px;
   padding: 0 14px;
   border-bottom: 1px solid var(--te-border);
-  background: #fff;
+  background: var(--te-surface);
 }
 .te-artifact-list {
   display: grid;
@@ -520,7 +590,7 @@ input, textarea, select {
   padding: 1px 5px;
   border: 1px solid var(--te-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--te-surface);
 }
 .te-memory-card a {
   min-width: 0;
@@ -541,7 +611,7 @@ input, textarea, select {
   border-left: 3px solid var(--te-border-strong);
   border-radius: 5px;
   padding: 7px 9px;
-  background: rgba(238, 245, 248, 0.42);
+  background: var(--te-selected);
 }
 .te-error-loop-item.failed,
 .te-error-loop-item.blocked,
@@ -566,7 +636,7 @@ input, textarea, select {
   padding: 1px 5px;
   border: 1px solid var(--te-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--te-surface);
   color: var(--te-muted);
   font: 11px var(--te-mono);
 }
@@ -585,7 +655,7 @@ input, textarea, select {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(11, 18, 24, 0.42);
+  background: var(--te-backdrop);
 }
 .te-setup-card,
 .te-keymgr-card {
@@ -595,7 +665,7 @@ input, textarea, select {
   border: 1px solid var(--te-border);
   border-radius: 7px;
   background: var(--te-surface);
-  box-shadow: 0 24px 70px rgba(21, 34, 44, 0.24);
+  box-shadow: 0 24px 70px var(--te-modal-shadow);
   padding: 16px;
 }
 .te-setup-card header,
@@ -663,7 +733,7 @@ input, textarea, select {
   background: var(--te-alt);
 }
 .te-keymgr-provider-list article.selected {
-  border-color: rgba(111, 175, 210, 0.72);
+  border-color: var(--te-blue);
 }
 .te-provider-pick {
   min-width: 0;
@@ -852,7 +922,7 @@ input, textarea, select {
     color: var(--te-text);
   }
   .te-topbar {
-    background: rgba(21, 29, 36, 0.96);
+    background: color-mix(in srgb, var(--te-surface) 96%, transparent);
   }
   .te-panel > header, .te-workflow > header, .te-telemetry > header, .te-spine {
     background: var(--te-alt);

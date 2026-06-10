@@ -45,6 +45,55 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("te-drawer open");
   });
 
+  it("renders explicit empty states for blank cockpit sections", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      tasks: [],
+      workflow: [],
+      routes: [],
+      trace: [],
+      artifacts: [],
+      approvalHistory: [],
+      capabilities: [],
+      roleGraph: undefined,
+      rawEvents: [],
+      memoryInfluence: undefined,
+      errorLoopTimeline: undefined
+    });
+
+    expect(html).toContain("data-testid=\"task-empty-state\"");
+    expect(html).toContain("data-testid=\"workflow-empty-state\"");
+    expect(html).toContain("data-testid=\"telemetry-routes-empty-state\"");
+    expect(html).toContain("data-testid=\"trace-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-memory-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-error-loop-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-approval-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-capabilities-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-routes-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-role-graph-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-artifacts-empty-state\"");
+    expect(html).toContain("data-testid=\"drawer-raw-events-empty-state\"");
+  });
+
+  it("renders loading affordances while cockpit actions are busy", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      currentApproval: {
+        id: "patch:fixture_candidate_a",
+        kind: "patch",
+        title: "Waiting for patch approval",
+        status: "waiting",
+        candidateId: "fixture_candidate_a",
+        filesChanged: ["index.js"],
+        summary: "Patch candidate needs approval."
+      }
+    }, { busy: true, keyManagerOpen: true, setupVisible: true });
+
+    expect(html).toContain("data-testid=\"approval-loading-state\"");
+    expect(html).toContain("data-testid=\"keymgr-busy-state\"");
+    expect(html).toContain("data-testid=\"setup-loading-state\"");
+  });
+
   it("renders completed sessions as answer-first with workflow detail collapsed", () => {
     const html = renderApp({
       ...sampleViewModel(),
@@ -472,15 +521,27 @@ describe("cockpit web React surface", () => {
   it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
     const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
     const fallback = renderCockpitHtml();
+    const tinyLmCss = readFileSync(path.join(process.cwd(), "examples", "tiny-local-lm", "public", "styles.css"), "utf8");
+    const sampleCss = readFileSync(path.join(process.cwd(), "tests", "fixtures", "sample-repo-react-ui", "src", "style.css"), "utf8");
+    const siteCss = readFileSync(path.join(process.cwd(), "docs", "site", "tomorrowedge.css"), "utf8");
 
     expect(tokens).toContain("prefers-color-scheme: dark");
+    expect(tokens).toContain("button:focus-visible");
+    expect(tokens).toContain("--te-mark-red");
+    expect(tokens).toContain(".te-empty-state");
+    expect(tinyLmCss).toContain("--lm-bg");
+    expect(tinyLmCss).toContain("button:focus-visible");
+    expect(sampleCss).toContain("--sample-bg");
+    expect(sampleCss).toContain("button:focus-visible");
+    expect(siteCss).toContain("--focus-ring");
+    expect(siteCss).toContain("button:focus-visible");
     expect(fallback).toContain("prefers-color-scheme: dark");
     expect(fallback).not.toContain("min-width: 1080px");
     expect(fallback).not.toContain("min-width: 980px");
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean }> = {}): string {
   const language = overrides.language ?? "en";
   const t = createTranslator(language);
   return renderToStaticMarkup(
@@ -492,7 +553,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       accessMode: "partial",
       runMode: "auto",
       conversationTarget: "core",
-      busy: false,
+      busy: overrides.busy ?? false,
       statusMessage: overrides.statusMessage,
       setupStatus: {
         needsSetup: true,
@@ -526,7 +587,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
         ]
       },
       setupVisible: overrides.setupVisible ?? false,
-      setupBusy: false,
+      setupBusy: overrides.busy ?? false,
       keyManagerOpen: overrides.keyManagerOpen ?? false,
       drawerOpen: true,
       language,

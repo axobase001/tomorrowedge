@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CockpitProviderConnectionResult, CockpitSetupRequest, CockpitSetupStatus } from "../api.js";
 import type { Translator } from "../i18n.js";
+import { EmptyState, LoadingState } from "./StateNotice.js";
 
 type SetupWizardProps = {
   setupStatus?: CockpitSetupStatus;
@@ -64,6 +65,7 @@ export function SetupWizard({
         <p>
           {t("setup.intro")}
         </p>
+        {!providers.length ? <EmptyState title={t("state.noProviders")} detail={t("state.noProvidersDetail")} testId="setup-providers-empty-state" /> : null}
         <div className="te-setup-grid">
           <label>
             <span>{t("setup.provider")}</span>
@@ -104,6 +106,7 @@ export function SetupWizard({
           </button>
           <span className="te-chip">{t("setup.routingAfter")}</span>
         </div>
+        {busy ? <LoadingState label={t("state.setupBusy")} testId="setup-loading-state" /> : null}
         {message ? <p className="te-setup-message" data-testid="setup-message">{message}</p> : null}
         {connectionResult ? (
           <p className="te-setup-message" data-testid="setup-connection">

@@ -1,5 +1,6 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
+import { EmptyState } from "./StateNotice.js";
 
 export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: CockpitTelemetry; t: Translator; onOpenDetails?: () => void }) {
   const routes = [
@@ -12,7 +13,7 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
   return (
     <aside className="te-panel te-telemetry" data-testid="telemetry-panel">
       <header><h2>{t("telemetry.title")}</h2><span className="te-chip">{t("telemetry.fallback", { count: telemetry.fallbackCount })}</span></header>
-      {routes.length > 0 && (
+      {routes.length > 0 ? (
         <div data-testid="telemetry-routing">
           {routes.map((route) => (
             <div key={route} className="te-metric">
@@ -21,6 +22,8 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
             </div>
           ))}
         </div>
+      ) : (
+        <EmptyState title={t("state.noRoutes")} detail={t("state.noRoutesDetail")} testId="telemetry-routes-empty-state" />
       )}
       <Metric label={t("telemetry.cost")} value={`${money(telemetry.currentCostUsd)} / ${money(telemetry.budgetUsd)}`} />
       <Metric label={t("telemetry.tokens")} value={compact(telemetry.totalTokens)} />

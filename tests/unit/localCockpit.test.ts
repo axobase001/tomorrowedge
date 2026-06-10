@@ -182,10 +182,14 @@ describe("local cockpit server", () => {
       expect(renamed.viewModel?.goal).toBe("renamed smoke session");
       expect(afterRename.state.goal).toBe("renamed smoke session");
 
-      const deleted = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, { method: "DELETE" });
+      const missingConfirmation = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, { method: "DELETE" });
+      const confirmationError = await missingConfirmation.json() as { error: string };
+      const deleted = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}&confirmed=true`, { method: "DELETE" });
       const sessions = await deleted.json() as Array<{ sessionId: string }>;
       const missing = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`);
 
+      expect(missingConfirmation.status).toBe(400);
+      expect(confirmationError.error).toBe("delete_session_confirmation_required");
       expect(deleted.status).toBe(200);
       expect(sessions.some((session) => session.sessionId === state.sessionId)).toBe(false);
       expect(missing.status).toBe(404);
@@ -602,10 +606,14 @@ describe("local cockpit server", () => {
       expect(secretsFile).toContain("encrypted_file");
       expect(secretsFile).not.toContain("test-panel-openrouter-key");
 
-      const deleteResponse = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, { method: "DELETE" });
+      const missingConfirmation = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, { method: "DELETE" });
+      const confirmationError = await missingConfirmation.json() as { error: string };
+      const deleteResponse = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}&confirmed=true`, { method: "DELETE" });
       const afterDelete = await deleteResponse.json() as { providers: Array<{ id: string; enabled: boolean; keyConfigured: boolean }> };
       const secretsFileAfterDelete = await readOptionalFile(path.join(cwd, ".tomorrowedge", "secrets.enc"));
 
+      expect(missingConfirmation.status).toBe(400);
+      expect(confirmationError.error).toBe("delete_key_confirmation_required");
       expect(deleteResponse.status).toBe(200);
       expect(afterDelete.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
         enabled: false,

@@ -16,6 +16,9 @@
   --terminal-soft: #191b18;
   --terminal-text: #e7e3d8;
   --terminal-muted: #88867e;
+  --white: #ffffff;
+  --near-black: #0b0f12;
+  --focus-ring: var(--cyan);
   --max: 1500px;
 }
 
@@ -56,6 +59,12 @@ body::before {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 img {
@@ -158,7 +167,7 @@ img {
   min-width: 182px;
   height: 56px;
   background: var(--red);
-  color: #fff;
+  color: var(--white);
   font-size: 13px;
   font-weight: 800;
   text-transform: uppercase;
@@ -289,7 +298,7 @@ h1 span,
   min-height: 62px;
   border: 1px solid var(--red);
   background: var(--red);
-  color: #fff;
+  color: var(--white);
   font-size: 13px;
   font-weight: 900;
   text-transform: uppercase;
@@ -339,7 +348,7 @@ h1 span,
   display: grid;
   place-items: center;
   background: var(--red);
-  color: #fff;
+  color: var(--white);
   font-size: 22px;
   transform: rotate(-45deg);
 }

@@ -124,7 +124,7 @@ export async function saveCockpitProviderKey(request: CockpitProviderKeyRequest,
 }
 
 export async function deleteCockpitProviderKey(provider: string, options: CockpitApiOptions): Promise<CockpitSetupStatus> {
-  const response = await fetch(apiUrl(`/api/setup/keys/${encodeURIComponent(provider)}`, options), {
+  const response = await fetch(apiUrl(`/api/setup/keys/${encodeURIComponent(provider)}?confirmed=true`, options), {
     method: "DELETE",
     headers: apiHeaders(options)
   });
@@ -175,7 +175,7 @@ export async function renameCockpitSession(sessionId: string, goal: string, opti
 }
 
 export async function deleteCockpitSession(sessionId: string, options: CockpitApiOptions): Promise<CockpitSessionSummary[]> {
-  const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}`, options), {
+  const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}?confirmed=true`, options), {
     method: "DELETE",
     headers: apiHeaders(options)
   });

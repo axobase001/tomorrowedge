@@ -163,6 +163,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       return sendJson(response, 200, status);
     }
     if (request.method === "DELETE" && setupKeyMatch) {
+      requireDestructiveConfirmation(url, "delete_key_confirmation_required", "Provider key deletion requires confirmed=true.");
       const status = await toSetupHttpResult(() => deleteCockpitProviderKey(cwd, decodeURIComponent(setupKeyMatch[1])));
       return sendJson(response, 200, status);
     }
@@ -201,6 +202,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       });
     }
     if (request.method === "DELETE" && sessionMatch) {
+      requireDestructiveConfirmation(url, "delete_session_confirmation_required", "Session deletion requires confirmed=true.");
       const sessionId = await resolveMutableSessionId(cwd, decodeURIComponent(sessionMatch[1]));
       await deleteSession(cwd, sessionId);
       const sessions = await listSessions(cwd);
@@ -575,6 +577,12 @@ function parseRunMode(value: unknown): CockpitRunMode {
 
 function isMutatingMethod(method?: string): boolean {
   return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+}
+
+function requireDestructiveConfirmation(url: URL, code: string, message: string): void {
+  if (url.searchParams.get("confirmed") !== "true") {
+    throw new HttpError(400, code, message);
+  }
 }
 
 function parseExternalAgentRegistration(value: Record<string, unknown>): ExternalAgentRegistrationInput & { sessionId: string } {

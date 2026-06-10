@@ -1,8 +1,14 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
+import { EmptyState } from "./StateNotice.js";
 
 export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: CockpitViewModel; open: boolean; t: Translator; onClose: () => void }) {
   if (!open) return null;
+  const approvalHistoryText = formatApprovalHistory(viewModel);
+  const capabilityText = formatCapabilities(viewModel);
+  const routeText = formatRoutes(viewModel);
+  const roleGraphText = formatRoleGraph(viewModel);
+  const rawEventsText = viewModel.rawEvents.length ? JSON.stringify(viewModel.rawEvents.slice(-40), null, 2) : "";
   return (
     <>
       <div className="te-drawer-backdrop" onClick={onClose} data-testid="drawer-backdrop" />
@@ -18,19 +24,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <h3>{t("drawer.orchestrationPolicy")}</h3>
       <pre>{formatOrchestrationPolicy(viewModel)}</pre>
       <h3>{t("drawer.approvalHistory")}</h3>
-      <pre>{viewModel.approvalHistory.map((item) => [
-        `${item.timestamp} ${item.approvalId} ${item.kind}/${item.status}`,
-        `action=${item.action} actor=${item.actor} source=${item.source}`,
-        item.blocksProgress ? "blocks=workflow progress is waiting on this approval" : "blocks=-",
-        item.command ? `command=${item.command}` : undefined,
-        item.candidateId ? `candidate=${item.candidateId}` : undefined,
-        item.filesChanged.length ? `files=${item.filesChanged.join(", ")}` : undefined,
-        item.diffRef ? `diff=${item.diffRef}` : undefined,
-        item.stdoutRef ? `stdout=${item.stdoutRef}` : undefined,
-        item.stderrRef ? `stderr=${item.stderrRef}` : undefined,
-        item.undoSnapshotIds?.length ? `undo=${item.undoSnapshotIds.join(", ")}` : undefined,
-        `filters=${item.filterTags.join(", ")}`
-      ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
+      {approvalHistoryText ? <pre>{approvalHistoryText}</pre> : <EmptyState title={t("state.noApprovalHistory")} testId="drawer-approval-empty-state" />}
       <h3>{t("drawer.memoryInfluence")}</h3>
       <div className="te-memory-list" data-testid="drawer-memory-influence">
         {viewModel.memoryInfluence?.cards.length ? viewModel.memoryInfluence.cards.map((card) => (
@@ -44,7 +38,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
             {card.alignment.length ? <p>alignment={card.alignment.slice(0, 3).join(" | ")}</p> : null}
             {card.artifactRef ? <a href={artifactHref(viewModel.sessionId, card.artifactRef)} target="_blank" rel="noreferrer">{card.artifactRef}</a> : null}
           </section>
-        )) : <span>-</span>}
+        )) : <EmptyState title={t("state.noMemory")} detail={t("state.noMemoryDetail")} testId="drawer-memory-empty-state" />}
       </div>
       <h3>{t("drawer.errorLoopTimeline")}</h3>
       <div className="te-error-loop-list" data-testid="drawer-error-loop-timeline">
@@ -65,35 +59,59 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
               </section>
             ))}
           </>
-        ) : <span>-</span>}
+        ) : <EmptyState title={t("state.noErrorLoop")} detail={t("state.noErrorLoopDetail")} testId="drawer-error-loop-empty-state" />}
       </div>
       <h3>{t("drawer.capabilityDashboard")}</h3>
-      <pre>{viewModel.capabilities.map((capability) => [
-        `${capability.label} [${capability.status}]`,
-        `category=${capability.category}`,
-        `readiness=${capability.readiness}`,
-        `refs=${capability.refs.join(", ")}`
-      ].join("\n")).join("\n\n") || "-"}</pre>
+      {capabilityText ? <pre>{capabilityText}</pre> : <EmptyState title={t("state.noCapabilities")} testId="drawer-capabilities-empty-state" />}
       <h3>{t("drawer.diff")}</h3>
       <pre>{viewModel.main.diff || t("drawer.noDiff")}</pre>
       <h3>{t("drawer.routes")}</h3>
-      <pre>{viewModel.routes.map((route) => [
-        `${route.role} -> ${route.provider}/${route.model}`,
-        route.reason ? `because ${route.reason}` : undefined
-      ].filter(Boolean).join("\n")).join("\n\n") || "-"}</pre>
+      {routeText ? <pre>{routeText}</pre> : <EmptyState title={t("state.noRouteDetails")} detail={t("state.noRoutesDetail")} testId="drawer-routes-empty-state" />}
       <h3>{t("drawer.roleGraph")}</h3>
-      <pre>{formatRoleGraph(viewModel)}</pre>
+      {roleGraphText ? <pre>{roleGraphText}</pre> : <EmptyState title={t("state.noRoleGraph")} testId="drawer-role-graph-empty-state" />}
       <h3>{t("drawer.artifacts")}</h3>
       <div className="te-artifact-list" data-testid="drawer-artifacts">
         {viewModel.artifacts.length ? viewModel.artifacts.map((artifact) => (
           <a key={artifact.ref} href={artifactHref(viewModel.sessionId, artifact.ref)} target="_blank" rel="noreferrer">{artifact.ref}</a>
-        )) : <span>-</span>}
+        )) : <EmptyState title={t("state.noArtifacts")} detail={t("state.noArtifactsDetail")} testId="drawer-artifacts-empty-state" />}
       </div>
       <h3>{t("drawer.rawEvents")}</h3>
-      <pre>{JSON.stringify(viewModel.rawEvents.slice(-40), null, 2)}</pre>
+      {rawEventsText ? <pre>{rawEventsText}</pre> : <EmptyState title={t("state.noRawEvents")} testId="drawer-raw-events-empty-state" />}
     </aside>
     </>
   );
+}
+
+function formatApprovalHistory(viewModel: CockpitViewModel): string {
+  return viewModel.approvalHistory.map((item) => [
+    `${item.timestamp} ${item.approvalId} ${item.kind}/${item.status}`,
+    `action=${item.action} actor=${item.actor} source=${item.source}`,
+    item.blocksProgress ? "blocks=workflow progress is waiting on this approval" : "blocks=-",
+    item.command ? `command=${item.command}` : undefined,
+    item.candidateId ? `candidate=${item.candidateId}` : undefined,
+    item.filesChanged.length ? `files=${item.filesChanged.join(", ")}` : undefined,
+    item.diffRef ? `diff=${item.diffRef}` : undefined,
+    item.stdoutRef ? `stdout=${item.stdoutRef}` : undefined,
+    item.stderrRef ? `stderr=${item.stderrRef}` : undefined,
+    item.undoSnapshotIds?.length ? `undo=${item.undoSnapshotIds.join(", ")}` : undefined,
+    `filters=${item.filterTags.join(", ")}`
+  ].filter(Boolean).join("\n")).join("\n\n");
+}
+
+function formatCapabilities(viewModel: CockpitViewModel): string {
+  return viewModel.capabilities.map((capability) => [
+    `${capability.label} [${capability.status}]`,
+    `category=${capability.category}`,
+    `readiness=${capability.readiness}`,
+    `refs=${capability.refs.join(", ")}`
+  ].join("\n")).join("\n\n");
+}
+
+function formatRoutes(viewModel: CockpitViewModel): string {
+  return viewModel.routes.map((route) => [
+    `${route.role} -> ${route.provider}/${route.model}`,
+    route.reason ? `because ${route.reason}` : undefined
+  ].filter(Boolean).join("\n")).join("\n\n");
 }
 
 function artifactHref(sessionId: string | undefined, ref: string): string {
@@ -102,7 +120,7 @@ function artifactHref(sessionId: string | undefined, ref: string): string {
 
 function formatRoleGraph(viewModel: CockpitViewModel): string {
   const graph = viewModel.roleGraph;
-  if (!graph) return "-";
+  if (!graph) return "";
   const nodes = graph.nodes.map((node) => [
     `${node.id} (${node.role}) ${node.required ? "required" : "optional"}`,
     `after=${node.dependencies.join(", ") || "-"}`,

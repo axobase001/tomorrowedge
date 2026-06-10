@@ -2,6 +2,7 @@ import type { CockpitApprovalIntent, CockpitViewModel } from "../../../cockpit/c
 import type { Translator } from "../i18n.js";
 import { translateKnownValue } from "../i18n.js";
 import { ApprovalPanel } from "./ApprovalPanel.js";
+import { EmptyState, LoadingState } from "./StateNotice.js";
 import { StatusChip } from "./StatusChip.js";
 
 export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: { viewModel: CockpitViewModel; busy: boolean; t: Translator; onApproval: (action: CockpitApprovalIntent["action"]) => void; onOpenDrawer: () => void }) {
@@ -19,10 +20,13 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         </div>
       </header>
       <nav className="te-spine" data-testid="workflow-spine">
-        {viewModel.workflow.map((step) => (
+        {viewModel.workflow.length ? viewModel.workflow.map((step) => (
           <span key={step.id} className={step.status}>{step.label}</span>
-        ))}
+        )) : (
+          <EmptyState title={t("state.noWorkflow")} detail={t("state.noWorkflowDetail")} testId="workflow-empty-state" />
+        )}
       </nav>
+      {busy && !viewModel.currentApproval ? <LoadingState label={t("state.workflowUpdating")} testId="workflow-loading-state" /> : null}
       {isActive && (
         <div className="te-workflow-status" data-testid="workflow-current-agent">
           {runningAgent
