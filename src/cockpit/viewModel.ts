@@ -689,9 +689,10 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
   if (state.finalSummary) {
     const failed = state.finalSummary.result === "failed" || state.finalSummary.result === "aborted";
     return {
-      title: failed ? "Failure diagnosis" : "Workflow complete",
+      title: failed ? "Failure diagnosis" : "Answer",
       subtitle: state.finalSummary.result,
-      body: failed ? failureBody(state) : completedBody(state),
+      body: state.finalSummary.userReply ?? (failed ? "The workflow stopped before producing a user-facing answer." : completedAnswerFallback(state)),
+      supportingDetail: failed ? failureBody(state) : completedBody(state),
       filesChanged: state.changedFiles,
       testStatus: state.runResults.at(-1)?.success ? "passed" : state.runResults.length ? "failed" : "not_run"
     };
@@ -703,6 +704,16 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return { title: "Plan and route", subtitle: `${state.routing.mode} route`, body: state.plan.steps.map((item) => `- ${item.title}`).join("\n"), filesChanged: [] };
   }
   return { title: "Workflow running", subtitle: state.goal, body: "Collecting context and generating candidate changes.", filesChanged: [] };
+}
+
+function completedAnswerFallback(state: AgentGraphState): string {
+  const summary = state.finalSummary;
+  if (!summary) return "";
+  if (summary.changedFiles.length) {
+    return `Done. I prepared changes in ${summary.changedFiles.join(", ")}.`;
+  }
+  const usefulEvidence = summary.evidence.find((item) => item.trim() && !/artifact|offline graph completed/i.test(item));
+  return usefulEvidence ?? "The task completed without file changes.";
 }
 
 function completedBody(state: AgentGraphState): string {

@@ -246,6 +246,38 @@ describe("offline agent graph", () => {
     }
   });
 
+  it("returns a user-facing reply for a simple conversational prompt", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "hello", defaultConfig);
+
+    expect(state.finalSummary?.result).toBe("completed");
+    expect(state.finalSummary?.userReply).toContain("Hello");
+    expect(state.finalSummary?.userReply).not.toContain("Read-only request completed without patch generation.");
+    expect(state.candidates).toEqual([]);
+  });
+
+  it("returns a user-facing answer for general knowledge read-only questions", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "prove that a finite division ring is a field", defaultConfig);
+
+    expect(state.finalSummary?.result).toBe("completed");
+    expect(state.finalSummary?.userReply?.toLowerCase()).toContain("finite division ring is a field");
+    expect(state.finalSummary?.userReply).not.toContain("Selected context:");
+    expect(state.events.some((event) => event.type === "model_call" && event.role === "summarizer" && event.status === "success")).toBe(true);
+    expect(state.candidates).toEqual([]);
+  });
+
+  it("returns a user-facing repository summary for read-only repo questions", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const state = await runOfflineGraph(cwd, "summarize this repository without editing files", defaultConfig, { fixtureMode: true });
+
+    expect(state.finalSummary?.result).toBe("completed");
+    expect(state.finalSummary?.userReply).toContain("I completed a read-only pass");
+    expect(state.finalSummary?.userReply).not.toContain("Result:");
+    expect(state.finalSummary?.evidence.join("\n")).toContain("No file writes");
+    expect(state.candidates).toEqual([]);
+  });
+
   it("keeps natural-language inspect requests from becoming fake missing paths", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "inspect provider setup flow for actionable bug; do not edit files", defaultConfig, { fixtureMode: true });

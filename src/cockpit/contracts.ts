@@ -282,6 +282,7 @@ export type CockpitViewModel = {
     title: string;
     subtitle: string;
     body: string;
+    supportingDetail?: string;
     diff?: string;
     filesChanged: string[];
     riskLevel?: "low" | "medium" | "high";

@@ -11,6 +11,17 @@ export class MockProvider implements ModelProvider {
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const last = stringifyContent(req.messages.at(-1)?.content ?? "");
+    if (req.metadata?.tomorrowedgeTask === "user_reply") {
+      return {
+        id: "mock-user-reply",
+        model: req.model,
+        content: createMockUserReply(last),
+        usage: {
+          inputTokens: estimateTokens(req.messages.map((m) => stringifyContent(m.content)).join("\n")),
+          outputTokens: 96
+        }
+      };
+    }
     if (req.metadata?.tomorrowedgeTask === "workflow_intent") {
       return {
         id: "mock-workflow-intent",
@@ -142,6 +153,29 @@ function classifyMockWorkflowIntent(text: string) {
     confidence: 0.4,
     reason: "Mock intent model found the command ambiguous."
   };
+}
+
+function createMockUserReply(prompt: string): string {
+  const request = extractUserRequest(prompt);
+  if (/^(hi|hello|hey|morning|good morning|good evening|你好|嗨|早|早上好|晚上好)[!！.\s]*$/i.test(request)) {
+    return "Hello. I am TomorrowEdge, your local multi-agent coding cockpit. Tell me the task, constraints, and access mode you want, and I can route it through the workflow.";
+  }
+  if (/finite division ring|division ring.*field|有限.*除环.*域|除环.*域/i.test(request)) {
+    return [
+      "A finite division ring is a field.",
+      "",
+      "Sketch: let D be a finite division ring and let Z be its center. Wedderburn's little theorem says every finite division ring is commutative. One standard proof studies maximal subfields and the conjugation action of D*; the class equation forces the multiplicative group to have a cyclic structure incompatible with a noncommutative finite division ring. Therefore multiplication in D is commutative, so D is a finite field."
+    ].join("\n");
+  }
+  if (/^(what|why|how|explain|prove|summarize|describe)\b|^(什么|为什么|怎么|解释|证明|总结|概括)/i.test(request)) {
+    return `Direct answer: ${request}\n\nThis offline mock route can only provide a compact deterministic answer. Configure a live provider for a deeper model-backed explanation.`;
+  }
+  return `I completed a read-only answer pass for: ${request || "the request"}. No files were changed and no shell commands were run.`;
+}
+
+function extractUserRequest(prompt: string): string {
+  const match = /User request:\s*\n([\s\S]*?)(?:\n\nWorkflow kind:|\nWorkflow kind:|$)/i.exec(prompt);
+  return (match?.[1] ?? prompt).trim();
 }
 
 function stringifyContent(content: ChatRequest["messages"][number]["content"]): string {

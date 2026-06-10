@@ -7,6 +7,24 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-06-10
+
+1.3.8 makes the Cockpit answer-first for read-only, chat-style, and governed
+advisory tasks.
+
+### Changed
+
+- Completed Cockpit tasks now carry a `userReply` in the final summary, so the
+  main panel can show the requested answer instead of workflow bookkeeping.
+- Read-only and `ask_user` workflows can use the configured summarizer provider
+  for natural-language answers, with deterministic local fallbacks for fixture
+  and no-provider runs.
+- Governed read-only reasoning tasks now record reviewer/judge advisory
+  evidence and an evidence packet, so strict policy thresholds do not downgrade
+  correct answer-only workflows just because no patch exists.
+- The GUI main panel now prioritizes `Answer` content and moves task, changed
+  files, verification, and evidence details into collapsible supporting detail.
+
 ## [1.3.7] - 2026-06-10
 
 1.3.7 clears the next GUI/runtime issue sweep around model selection,

@@ -45,6 +45,27 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("te-drawer open");
   });
 
+  it("renders completed sessions as answer-first with workflow detail collapsed", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: "Hello. I am TomorrowEdge.",
+        supportingDetail: "Task: hello\nResult:\n- workflow evidence",
+        filesChanged: []
+      }
+    });
+
+    expect(html).toContain("Hello. I am TomorrowEdge.");
+    expect(html).toContain("te-main-answer");
+    expect(html).toContain("te-main-support");
+    expect(html).toContain("Task: hello");
+  });
+
   it("renders self-iteration contract, trace, and policy sections in the drawer", () => {
     const html = renderApp(sampleViewModel(), { drawerOpen: true });
 

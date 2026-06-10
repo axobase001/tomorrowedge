@@ -427,6 +427,8 @@ export function markLiveRunFailed(state: AgentGraphState, error: string): AgentG
     finalSummary: {
       task: state.goal,
       result: "failed",
+      userReply: `I could not complete the workflow. ${error}`,
+      userReplySource: "local",
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
       evidence: state.events.length ? [`${state.events.length} event(s) recorded before workflow failure`] : [],

@@ -22,13 +22,14 @@ import { estimateCostUsd, preflightBudget, summarizeModelUsage } from "../model/
 import { buildAccessPolicy, describeAccessPolicy } from "../permissions/accessPolicy.js";
 import { buildLivePatchPlans, runLivePatchCandidates } from "../model/livePatchGenerator.js";
 import { buildVisionCostPrompt, estimateVisionInputTokens, runLiveVisionSpec } from "../model/liveVisionSpec.js";
+import { chatWithProviderFallback } from "../model/providerFallback.js";
 import { buildDebateRounds, buildModelDebateRounds } from "../debate/debateEngine.js";
 import { buildCapabilityRoute } from "../capabilities/capabilityStitching.js";
 import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
 import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
-import type { RunResult } from "../../schemas/evidence.js";
+import type { FinalSummary, RunResult } from "../../schemas/evidence.js";
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import { resolveConversationTarget, targetPromptPrefix } from "../conversation/conversationTargets.js";
@@ -1422,11 +1423,14 @@ async function finalizeState(runtime: OfflineGraphRuntime, state: AgentGraphStat
       }),
       "offline"
     );
+    state.finalSummary = ensureFinalSummaryUserReply(state.finalSummary);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     state.finalSummary = {
       task: state.goal,
       result: state.runResults.some((result) => !result.success) ? "partially_completed" : "completed",
+      userReply: `I finished the workflow, but the summarizer failed before it could produce a polished answer. ${state.changedFiles.length ? `Changed files: ${state.changedFiles.join(", ")}.` : "No files were changed."}`,
+      userReplySource: "local",
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
       evidence: ["summarizer failed; fallback summary generated", ...state.runResults.map(evidenceFromRun)],
@@ -1444,6 +1448,8 @@ async function finalizeBlockedByContract(runtime: OfflineGraphRuntime, state: Ag
   state.finalSummary = {
     task: state.goal,
     result: "aborted",
+    userReply: `I blocked this task before execution because the Objective Contract failed verification. ${reason}`,
+    userReplySource: "local",
     changedFiles: [],
     testsRun: [],
     evidence: [
@@ -1476,16 +1482,29 @@ async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentG
     buildReadOnlyTaskResult(cwd, state.plan!, state.contextSelection)
   , "offline");
   const evidenceRef = ledger.writeArtifact("summaries", result.artifactText);
+  const reply = await buildReadOnlyUserReply(runtime, state, result);
+  const replyRef = ledger.writeArtifact("summaries", reply.text);
   ledger.append({
     type: "evidence_update",
     phase: "summary",
     role: "summarizer",
-    evidence: result.evidence.slice(0, 3),
+    evidence: [`user-facing reply generated (${reply.source})`, ...result.evidence.slice(0, 2)],
     evidenceRef
+  });
+  ledger.append({
+    type: "evidence_update",
+    phase: "summary",
+    role: "summarizer",
+    provider: reply.provider,
+    model: reply.model,
+    evidence: [reply.text],
+    evidenceRef: replyRef
   });
   state.finalSummary = {
     task: state.goal,
     result: "completed",
+    userReply: reply.text,
+    userReplySource: reply.source,
     changedFiles: [],
     testsRun: [],
     evidence: result.evidence,
@@ -1497,11 +1516,112 @@ async function finalizeReadOnlyState(runtime: OfflineGraphRuntime, state: AgentG
   return state;
 }
 
+type UserReplyGeneration = {
+  text: string;
+  source: NonNullable<FinalSummary["userReplySource"]>;
+  provider?: string;
+  model?: string;
+};
+
+async function buildReadOnlyUserReply(
+  runtime: OfflineGraphRuntime,
+  state: AgentGraphState,
+  result: Awaited<ReturnType<typeof buildReadOnlyTaskResult>>
+): Promise<UserReplyGeneration> {
+  const local: UserReplyGeneration = { text: result.userReply, source: result.userReplySource };
+  if (runtime.options.fixtureMode || runtime.options.provider === "fixture") return local;
+  const assignment = runtime.router.assignmentFor("summarizer");
+  if (assignment.provider === "fixture" || assignment.provider === "local_tool" || assignment.provider.startsWith("external:")) return local;
+
+  const providerResult = await chatWithProviderFallback({
+    config: runtime.config,
+    router: runtime.router,
+    role: "summarizer",
+    provider: assignment.provider,
+    model: assignment.model,
+    ledger: runtime.ledger,
+    buildRequest: (model) => ({
+      model,
+      temperature: 0.2,
+      maxCompletionTokens: 900,
+      responseFormat: { type: "text" },
+      metadata: { tomorrowedgeTask: "user_reply" },
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are TomorrowEdge's user-facing answer writer.",
+            "Answer the user's request directly and concisely.",
+            "Do not lead with internal workflow, telemetry, routing, or trace details.",
+            "If local evidence is insufficient, say that clearly and provide the best actionable handoff.",
+            "Do not claim that files were edited, shell commands were run, or tests passed unless the evidence says so."
+          ].join("\n")
+        },
+        {
+          role: "user",
+          content: [
+            `User request:\n${state.goal}`,
+            "",
+            `Workflow kind: ${state.workflowKind ?? state.plan?.workflowKind ?? "read_only"}`,
+            `Selected context summary: ${state.contextSelection?.contextSummary ?? "none"}`,
+            "",
+            "Local read-only evidence preview:",
+            clipForPrompt(result.artifactText, 3500)
+          ].join("\n")
+        }
+      ]
+    })
+  });
+  const modelText = extractUserReplyText(providerResult.response?.content);
+  if (modelText) {
+    return {
+      text: modelText,
+      source: "model",
+      provider: providerResult.provider,
+      model: providerResult.model
+    };
+  }
+  if (result.userReplySource === "handoff" && providerResult.error) {
+    return {
+      text: `${result.userReply}\n\nProvider answer attempt failed: ${providerResult.error}`,
+      source: "handoff",
+      provider: providerResult.provider,
+      model: providerResult.model
+    };
+  }
+  return local;
+}
+
+function extractUserReplyText(content?: string): string | undefined {
+  const trimmed = content?.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>;
+      for (const key of ["userReply", "answer", "reply", "summary"]) {
+        const value = record[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+      }
+    }
+  } catch {
+    // Plain text is the preferred provider output for user-facing replies.
+  }
+  return trimmed.replace(/^```(?:\w+)?\s*/i, "").replace(/\s*```$/i, "").trim();
+}
+
+function clipForPrompt(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n... omitted ${value.length - maxChars} character(s)`;
+}
+
 async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLedger, runtime: OfflineGraphRuntime): Promise<void> {
   if (!state.finalSummary) throw new Error("Cannot finalize workflow without a final summary.");
+  state.finalSummary = ensureFinalSummaryUserReply(state.finalSummary);
   refreshUsageSummary(state);
   const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
   applyPolicyStopDecision(state, computeProjectedTraceCompleteness(ledger.events, workflowKind, state.plan));
+  state.finalSummary = ensureFinalSummaryUserReply(state.finalSummary);
   ledger.append({
     type: "cost_usage",
     phase: "summary",
@@ -1535,6 +1655,28 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     workflowKind
   });
   await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
+}
+
+function ensureFinalSummaryUserReply(summary: FinalSummary): FinalSummary {
+  if (summary.userReply?.trim()) return summary;
+  return {
+    ...summary,
+    userReply: fallbackUserReply(summary),
+    userReplySource: "local"
+  };
+}
+
+function fallbackUserReply(summary: FinalSummary): string {
+  if (summary.result === "failed" || summary.result === "aborted") {
+    const reason = summary.risksRemaining[0] ?? summary.evidence[0] ?? "The workflow stopped before completing the requested task.";
+    return `I could not complete the task safely. ${reason}`;
+  }
+  if (summary.changedFiles.length) {
+    const verification = summary.testsRun.length ? ` Verification: ${summary.testsRun.join(", ")}.` : " Verification was not run.";
+    return `Done. I prepared changes in ${summary.changedFiles.join(", ")}.${verification}`;
+  }
+  const usefulEvidence = summary.evidence.find((item) => item.trim() && !/artifact|offline graph completed/i.test(item));
+  return usefulEvidence ?? "I completed the task, but no file changes or verification commands were needed.";
 }
 
 function computeProjectedTraceCompleteness(events: TomorrowEdgeEvent[], workflowKind: ReturnType<typeof inferWorkflowKindFromEvents>, plan?: Plan) {
@@ -2019,6 +2161,71 @@ async function maybeRunGovernedReadOnlyAdvisory(input: {
   input.state.modelNotes.push(...advisoryNotes);
   refreshUsageSummary(input.state);
   recordModelNoteEvents(input.ledger, advisoryNotes, input.state.usageSummary);
+  recordGovernedReadOnlyAdvisoryEvidence(input.state, input.ledger, advisoryNotes);
+}
+
+function recordGovernedReadOnlyAdvisoryEvidence(state: AgentGraphState, ledger: EventLedger, notes: ModelNote[]): void {
+  const reviewerNote = notes.find((note) => note.role === "reviewer" && !note.error && note.content.trim());
+  const judgeNote = notes.find((note) => note.role === "judge" && !note.error && note.content.trim());
+  const supportingArtifacts: string[] = [];
+  if (reviewerNote) {
+    const reviewRef = ledger.writeArtifact("reviews", reviewerNote.content);
+    supportingArtifacts.push(reviewRef);
+    ledger.append({
+      type: "review_decision",
+      phase: "review",
+      role: "reviewer",
+      provider: reviewerNote.provider,
+      model: reviewerNote.model,
+      reviewRef,
+      recommendation: "read_only_review_complete"
+    });
+  }
+  if (judgeNote) {
+    const decisionRef = ledger.writeArtifact("judgments", judgeNote.content);
+    supportingArtifacts.push(decisionRef);
+    ledger.append({
+      type: "judge_decision",
+      phase: "judge",
+      role: "judge",
+      provider: judgeNote.provider,
+      model: judgeNote.model,
+      decision: "accept_read_only_answer",
+      reason: clipForPrompt(judgeNote.content, 600),
+      confidence: 0.75,
+      decisionRef
+    });
+  }
+  if (!supportingArtifacts.length) return;
+  const packet: EvidencePacket = {
+    id: makeId("evidence_readonly"),
+    phase: reviewerNote ? "review" : "judge",
+    summary: "Governed read-only advisory evidence recorded for a user-facing answer.",
+    claims: [
+      "The workflow remained read-only.",
+      "Reviewer/judge advisory evidence was collected before final answer presentation."
+    ],
+    supportingArtifacts,
+    riskSignals: state.taskGovernance?.reasoningSensitivity === "high" ? ["high reasoning sensitivity"] : [],
+    verificationStatus: "partial",
+    modelVisibleText: [
+      "Read-only advisory evidence:",
+      reviewerNote?.content,
+      judgeNote?.content
+    ].filter(Boolean).join("\n\n")
+  };
+  state.evidencePackets.push(packet);
+  ledger.append({
+    type: "evidence_packet",
+    phase: "review",
+    role: "reviewer",
+    packetId: packet.id,
+    evidencePhase: packet.phase,
+    summary: packet.summary,
+    verificationStatus: packet.verificationStatus,
+    supportingArtifacts,
+    packetRef: ledger.writeArtifact("evidence", JSON.stringify(packet, null, 2), "json")
+  });
 }
 
 function normalizeCandidateAgentOrder(state: AgentGraphState, startIndex: number, labels: string[]): void {

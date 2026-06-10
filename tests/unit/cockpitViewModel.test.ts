@@ -316,6 +316,8 @@ describe("cockpit view model", () => {
       finalSummary: {
         task: "inspect repository",
         result: "completed",
+        userReply: "The repository contains a small JavaScript package with one failing test target.",
+        userReplySource: "model",
         changedFiles: [],
         testsRun: [],
         evidence: ["Read-only request completed."],
@@ -326,6 +328,10 @@ describe("cockpit view model", () => {
 
     expect(vm.currentApproval).toBeUndefined();
     expect(vm.status).toBe("done");
+    expect(vm.main.title).toBe("Answer");
+    expect(vm.main.body).toContain("small JavaScript package");
+    expect(vm.main.body).not.toContain("Read-only request completed.");
+    expect(vm.main.supportingDetail).toContain("Read-only request completed.");
     expect(vm.approvalHistory.some((item) => item.kind === "patch" && item.status === "waiting")).toBe(false);
   });
 

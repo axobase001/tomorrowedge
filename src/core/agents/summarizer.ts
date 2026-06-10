@@ -25,6 +25,8 @@ export class SummarizerAgent extends BaseAgent<{ plan: Plan; changedFiles: strin
     return {
       task: input.plan.goal,
       result,
+      userReply: buildUserReply(input, result),
+      userReplySource: "local",
       changedFiles: input.changedFiles,
       testsRun: input.testsRun,
       evidence: input.evidence,
@@ -32,4 +34,16 @@ export class SummarizerAgent extends BaseAgent<{ plan: Plan; changedFiles: strin
       suggestedCommitMessage: `Implement ${input.plan.taskType} task`
     };
   }
+}
+
+function buildUserReply(input: { plan: Plan; changedFiles: string[]; testsRun: string[]; evidence: string[] }, result: FinalSummary["result"]): string {
+  if (result === "failed") {
+    const failure = input.evidence.find((item) => item.startsWith("Command failed:")) ?? "Verification failed.";
+    return `I could not complete the requested change safely. ${failure}`;
+  }
+  if (input.changedFiles.length) {
+    const verification = input.testsRun.length ? ` Verification: ${input.testsRun.join(", ")}.` : " Verification was not run.";
+    return `Done. I prepared changes in ${input.changedFiles.join(", ")}.${verification}`;
+  }
+  return "I completed the workflow without applying file changes.";
 }

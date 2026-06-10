@@ -279,6 +279,33 @@ input, textarea, select {
   white-space: pre-wrap;
   font: 12px/1.5 var(--te-mono);
 }
+.te-main-answer {
+  min-height: 120px;
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 1px solid rgba(215, 228, 234, 0.72);
+  border-radius: 5px;
+  background: var(--te-alt);
+  color: var(--te-text);
+  font: 13px/1.55 var(--te-sans) !important;
+}
+.te-main-support {
+  margin-top: 12px;
+  color: var(--te-muted);
+}
+.te-main-support summary {
+  cursor: pointer;
+  font: 12px var(--te-mono);
+  color: var(--te-deep-blue);
+}
+.te-main-support pre {
+  max-height: 220px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid rgba(215, 228, 234, 0.72);
+  border-radius: 5px;
+  background: var(--te-surface);
+}
 .te-approval header, .te-approval footer {
   display: flex;
   align-items: center;

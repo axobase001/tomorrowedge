@@ -309,6 +309,8 @@ function withAbortSummary(state: AgentGraphState, reason: string): AgentGraphSta
     finalSummary: {
       task: state.goal,
       result: "aborted",
+      userReply: `I stopped this workflow because the approval was not granted: ${reason}`,
+      userReplySource: "local",
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
       evidence: [reason],
@@ -324,6 +326,8 @@ function withFailureSummary(state: AgentGraphState, reason: string): AgentGraphS
     finalSummary: {
       task: state.goal,
       result: "failed",
+      userReply: `I could not complete the approved action safely. ${reason}`,
+      userReplySource: "local",
       changedFiles: state.changedFiles,
       testsRun: state.runResults.map((result) => result.command),
       evidence: [reason],

@@ -36,7 +36,13 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         <article className="te-main" data-testid="main-view">
           <h3>{translateKnownValue(t, viewModel.main.title)}</h3>
           <p>{translateKnownValue(t, viewModel.main.subtitle)}</p>
-          <pre>{viewModel.main.diff ?? viewModel.main.body}</pre>
+          <pre className="te-main-answer">{viewModel.main.diff ?? viewModel.main.body}</pre>
+          {viewModel.main.supportingDetail ? (
+            <details className="te-main-support">
+              <summary>{t("workflow.details")}</summary>
+              <pre>{viewModel.main.supportingDetail}</pre>
+            </details>
+          ) : null}
         </article>
       )}
     </section>
