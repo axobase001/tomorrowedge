@@ -19,7 +19,6 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
   const usedPct = telemetry.budgetUsedPercent ?? 0;
   const showGolden = savedPct !== undefined && savedPct > 50;
   const badgeColor = showGolden ? GOLD_COLOR : SAVED_COLOR;
-  const progressColor = usedPct > 75 ? DANGER_COLOR : usedPct > 50 ? WARN_COLOR : SAVED_COLOR;
   const chipClass = showGolden ? "te-chip-golden" : usedPct > 75 ? "te-chip-red" : "te-chip-green";
 
   return (
