@@ -1,12 +1,13 @@
 import type { Plan, PlanStep, RiskLevel } from "../../schemas/plan.js";
 import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import { planStepLimit, shouldPolicyRequireJudge, shouldPolicyRequireReviewer } from "../orchestrationPolicy/runtimePolicy.js";
+import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
 import type { ObjectiveContractV1 } from "./objectiveContract.js";
 
 export function contractToPlan(contract: ObjectiveContractV1, policy?: OrchestrationPolicyGenome): Plan {
   const patchLike = contract.workflowKind !== "read_only" && contract.workflowKind !== "advisory" && contract.workflowKind !== "ask_user";
   const allowParallelRoles = policy?.planningPolicy.allowParallelRoles !== false;
-  return {
+  const plan: Plan = {
     goal: contract.goal,
     taskType: contract.taskType,
     riskLevel: contract.riskLevel,
@@ -28,12 +29,13 @@ export function contractToPlan(contract: ObjectiveContractV1, policy?: Orchestra
     ),
     reasonForDebate: allowParallelRoles ? debateReason(contract, policy, patchLike) : undefined
   };
+  return { ...plan, taskGraph: buildTaskGraph({ plan, contract, policy }) };
 }
 
 export function overlayPlanWithContract(plan: Plan, contract: ObjectiveContractV1, policy?: OrchestrationPolicyGenome): Plan {
   const contractPlan = contractToPlan(contract, policy);
   const workflowKind = effectiveWorkflowKind(plan, contract);
-  return {
+  const merged: Plan = {
     ...plan,
     goal: plan.goal || contract.goal,
     taskType: effectiveTaskType(plan, contract),
@@ -48,6 +50,7 @@ export function overlayPlanWithContract(plan: Plan, contract: ObjectiveContractV
     debateRecommended: policy?.planningPolicy.allowParallelRoles === false ? false : plan.debateRecommended || contractPlan.debateRecommended,
     reasonForDebate: policy?.planningPolicy.allowParallelRoles === false ? undefined : plan.reasonForDebate ?? contractPlan.reasonForDebate
   };
+  return { ...merged, taskGraph: buildTaskGraph({ plan: merged, contract, policy }) };
 }
 
 function effectiveWorkflowKind(plan: Plan, contract: ObjectiveContractV1): Plan["workflowKind"] {

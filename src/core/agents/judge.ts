@@ -1,14 +1,28 @@
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
+import type { RiskLevel } from "../../schemas/plan.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import type { DebateRound } from "../../schemas/debate.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
+import type { DebateSession } from "../debate/debateProtocol.js";
 import { BaseAgent } from "./baseAgent.js";
 
-export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }, JudgeDecision> {
+export type JudgeAgentInput = {
+  candidates: PatchCandidate[];
+  review: ReviewReport;
+  evidencePackets?: EvidencePacket[];
+  debateRounds?: DebateRound[];
+  debateSession?: DebateSession;
+  allowPartialCompletion?: boolean;
+  riskLevel?: RiskLevel;
+};
+
+export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
   readonly role = "judge";
 
-  async run(input: { candidates: PatchCandidate[]; review: ReviewReport; evidencePackets?: EvidencePacket[]; debateRounds?: DebateRound[] }): Promise<JudgeDecision> {
+  async run(input: JudgeAgentInput): Promise<JudgeDecision> {
+    const debateBlock = blockingDebateDecision(input.debateSession, input.allowPartialCompletion, input.riskLevel);
+    if (debateBlock) return debateBlock;
     const acceptable = input.review.reviews
       .filter((review) => (review.recommendation === "accept" || review.recommendation === "accept_with_minor_change") && !hasBlockingConcern(review))
       .sort((a, b) => b.correctnessScore - a.correctnessScore || a.riskScore - b.riskScore)[0];
@@ -16,6 +30,10 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
       return {
         decision: input.review.reviews.some(hasCriticalConcern) ? "ask_user" : "request_revision",
         reason: `No candidate cleared reviewer blocking concerns for safe automatic application.${debateSuffix(input.debateRounds)}`,
+        acceptedClaims: input.debateSession?.acceptedClaims,
+        rejectedClaims: input.debateSession?.rejectedClaims,
+        unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+        evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
         confidence: 0.62
       };
     }
@@ -24,6 +42,10 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
       return {
         decision: "ask_user",
         reason: `Red-team review found a critical issue: ${criticalFinding.title}.`,
+        acceptedClaims: input.debateSession?.acceptedClaims,
+        rejectedClaims: input.debateSession?.rejectedClaims,
+        unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+        evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
         confidence: 0.7,
         requiredUserDecision: "Approve, reject, or request a revised candidate after reviewing the critical red-team finding."
       };
@@ -35,9 +57,29 @@ export class JudgeAgent extends BaseAgent<{ candidates: PatchCandidate[]; review
       selectedCandidateId: acceptable.candidateId,
       decision: "select",
       reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}${debateEvidence}`,
+      acceptedClaims: input.debateSession?.acceptedClaims,
+      rejectedClaims: input.debateSession?.rejectedClaims,
+      unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+      evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
       confidence: 0.78
     };
   }
+}
+
+function blockingDebateDecision(debateSession: DebateSession | undefined, allowPartialCompletion = true, riskLevel: RiskLevel | undefined): JudgeDecision | undefined {
+  const unresolved = debateSession?.unresolvedBlockingIssues ?? [];
+  if (!unresolved.length) return undefined;
+  const mayProceedPartial = allowPartialCompletion && riskLevel !== "high";
+  if (mayProceedPartial) return undefined;
+  return {
+    decision: "request_revision",
+    reason: `Debate Protocol v2 found unresolved blocking issue(s): ${unresolved.slice(0, 3).join("; ")}.`,
+    acceptedClaims: debateSession?.acceptedClaims,
+    rejectedClaims: debateSession?.rejectedClaims,
+    unresolvedBlockingIssues: unresolved,
+    evidenceCoverageScore: debateSession?.evidenceCoverageScore,
+    confidence: 0.72
+  };
 }
 
 function debateSuffix(rounds?: DebateRound[]): string {

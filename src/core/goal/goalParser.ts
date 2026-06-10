@@ -1,4 +1,5 @@
 import type { Plan, TaskType } from "../../schemas/plan.js";
+import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
 
 export function parseGoalToPlan(goal: string): Plan {
   const lower = goal.toLowerCase();
@@ -7,7 +8,7 @@ export function parseGoalToPlan(goal: string): Plan {
   const riskSignals = inferRiskSignals(goal);
   const highRisk = riskSignals.length > 0;
   const steps = buildPlanSteps(taskType, highRisk, goal);
-  return {
+  const plan: Plan = {
     goal,
     constraints,
     riskLevel: highRisk ? "high" : constraints.length > 0 ? "medium" : "low",
@@ -17,6 +18,7 @@ export function parseGoalToPlan(goal: string): Plan {
     debateRecommended: highRisk,
     reasonForDebate: highRisk ? `Task appears to touch high-risk behavior: ${riskSignals.join(", ")}.` : undefined
   };
+  return { ...plan, taskGraph: buildTaskGraph({ plan }) };
 }
 
 function inferTaskType(lower: string): TaskType {

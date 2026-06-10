@@ -88,11 +88,13 @@ describe("governed workflow execution", () => {
 
     const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
     const reviewerBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "reviewer");
-    const plannerRoleBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope !== "efficient");
+    const plannerRoleBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope !== "efficient" && !event.invocationKind);
+    const plannerModelBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.invocationKind);
     const plannerGovernanceBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope === "efficient");
     const judgeBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "judge");
 
     expect(reviewerBudget).toMatchObject({ status: "blocked", budgetScope: "per_role" });
+    expect(plannerModelBudget).toMatchObject({ status: "allowed" });
     expect(plannerGovernanceBudget).toBeTruthy();
     expect(plannerRoleBudget).toBeUndefined();
     expect(judgeBudget).toBeUndefined();

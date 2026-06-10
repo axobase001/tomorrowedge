@@ -86,6 +86,10 @@ export type JudgeEvent = BaseEvent & {
   selectedCandidateId?: string;
   reason: string;
   confidence: number;
+  acceptedClaims?: string[];
+  rejectedClaims?: string[];
+  unresolvedBlockingIssues?: string[];
+  evidenceCoverageScore?: number;
   decisionRef: string;
 };
 
@@ -292,10 +296,51 @@ export type ExternalAgentCostUsageEvent = BaseEvent & {
   estimatedCostUsd?: number;
 };
 
+export type ExternalAgentNormalizationEvent = BaseEvent & {
+  type: "external_agent_normalization";
+  externalAgentId: string;
+  adapter: "generic" | "codex" | "claude_code";
+  responseMode: "json" | "text" | "mixed";
+  status: "success" | "warning" | "failed";
+  warnings: string[];
+  summary: string;
+};
+
 export type EvidenceEvent = BaseEvent & {
   type: "evidence_update";
   evidence: string[];
   evidenceRef?: string;
+};
+
+export type EvidenceGapEvent = BaseEvent & {
+  type: "evidence_gap";
+  missing: string[];
+  blocking: boolean;
+  reason: string;
+};
+
+export type DebateMoveEvent = BaseEvent & {
+  type: "debate_move";
+  debateSessionId: string;
+  moveId: string;
+  round: number;
+  speaker: string;
+  moveType: "claim" | "challenge" | "rebuttal" | "concession" | "resolution";
+  targetCandidateId?: string;
+  summary: string;
+  evidenceRefs: string[];
+  riskSignal?: string;
+};
+
+export type DebateResolutionEvent = BaseEvent & {
+  type: "debate_resolution";
+  debateSessionId: string;
+  resolution: "selectable" | "request_revision" | "needs_user";
+  acceptedClaims: string[];
+  rejectedClaims: string[];
+  unresolvedBlockingIssues: string[];
+  evidenceCoverageScore: number;
+  sessionRef: string;
 };
 
 export type SummaryEvent = BaseEvent & {
@@ -373,6 +418,7 @@ export type BudgetDecisionEvent = BaseEvent & {
   type: "budget_decision";
   status: "allowed" | "blocked" | "warn";
   reason: string;
+  invocationKind?: "model_planner" | "live_patch" | "live_advisory" | "pre_judge_debate";
   budgetScope?: "global_strong_pool" | "per_role" | "efficient";
   maxCostUsd?: number;
   estimatedCostUsd?: number;
@@ -458,6 +504,25 @@ export type TraceRetrievalEvent = BaseEvent & {
   artifactRef?: string;
 };
 
+export type TaskGraphEvent = BaseEvent & {
+  type: "task_graph";
+  graphRef: string;
+  nodeCount: number;
+  edgeCount: number;
+  entryNodeIds: string[];
+  terminalNodeIds: string[];
+};
+
+export type RoleNodeResultEvent = BaseEvent & {
+  type: "role_node_result";
+  nodeId: string;
+  status: "success" | "failed" | "blocked" | "skipped";
+  summary: string;
+  artifacts: string[];
+  evidence: string[];
+  error?: string;
+};
+
 export type ObjectiveContractEvent = BaseEvent & {
   type: "objective_contract";
   contractId: string;
@@ -513,6 +578,24 @@ export type PolicyEvolutionEvent = BaseEvent & {
   evolutionRef: string;
 };
 
+export type PolicyCounterfactualReplayEvent = BaseEvent & {
+  type: "policy_counterfactual_replay";
+  policyId: string;
+  traceId: string;
+  simulatedStatus: "success" | "partial" | "failure" | "unsafe" | "aborted";
+  fitnessDelta: number;
+  summary: string;
+  replayRef: string;
+};
+
+export type PolicyTournamentResultEvent = BaseEvent & {
+  type: "policy_tournament_result";
+  winnerPolicyId: string;
+  evaluatedPolicies: number;
+  traceCount: number;
+  tournamentRef: string;
+};
+
 export type ObjectiveTraceWrittenEvent = BaseEvent & {
   type: "objective_trace_written";
   traceId: string;
@@ -549,7 +632,11 @@ export type TomorrowEdgeEvent =
   | ExternalAgentJudgmentEvent
   | ExternalAgentErrorEvent
   | ExternalAgentCostUsageEvent
+  | ExternalAgentNormalizationEvent
   | EvidenceEvent
+  | EvidenceGapEvent
+  | DebateMoveEvent
+  | DebateResolutionEvent
   | SummaryEvent
   | AccessModeEvent
   | AutonomyLimitEvent
@@ -568,12 +655,16 @@ export type TomorrowEdgeEvent =
   | MemoryPolicyEvent
   | ScenarioProfileEvent
   | TraceRetrievalEvent
+  | TaskGraphEvent
+  | RoleNodeResultEvent
   | ObjectiveContractEvent
   | ContractVerificationEvent
   | OrchestrationPolicySelectedEvent
   | OrchestrationPolicyScoredEvent
   | PolicyMutationEvent
   | PolicyEvolutionEvent
+  | PolicyCounterfactualReplayEvent
+  | PolicyTournamentResultEvent
   | ObjectiveTraceWrittenEvent;
 
 export type EventArtifact = {

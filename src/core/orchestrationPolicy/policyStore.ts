@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ScenarioType } from "../scenarios/scenarioTypes.js";
-import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome } from "./orchestrationPolicy.js";
+import { defaultOrchestrationPolicy, migratePolicyToV2, type OrchestrationPolicyGenome } from "./orchestrationPolicy.js";
 
 export async function loadBestPolicy(cwd: string, scenarioType?: ScenarioType): Promise<OrchestrationPolicyGenome> {
   const policies = await readPolicies(cwd);
@@ -23,7 +23,11 @@ export async function readPolicies(cwd: string): Promise<OrchestrationPolicyGeno
   if (!text) return [];
   try {
     const parsed = JSON.parse(text) as OrchestrationPolicyGenome[];
-    return Array.isArray(parsed) ? parsed.filter((item) => item.schemaVersion === "orchestration-policy/v1").map(normalizePolicy) : [];
+    return Array.isArray(parsed)
+      ? parsed
+        .filter((item) => item.schemaVersion === "orchestration-policy/v1" || item.schemaVersion === "orchestration-policy/v2")
+        .map(normalizePolicy)
+      : [];
   } catch {
     return [];
   }
@@ -38,18 +42,22 @@ function bestPolicy(policies: OrchestrationPolicyGenome[]): OrchestrationPolicyG
 }
 
 function normalizePolicy(policy: OrchestrationPolicyGenome): OrchestrationPolicyGenome {
-  const base = defaultOrchestrationPolicy(policy.metadata.createdAt);
+  const migrated = migratePolicyToV2(policy);
+  const base = defaultOrchestrationPolicy(migrated.metadata.createdAt);
   return {
     ...base,
-    ...policy,
-    contractPolicy: { ...base.contractPolicy, ...policy.contractPolicy },
-    tracePolicy: { ...base.tracePolicy, ...policy.tracePolicy },
-    planningPolicy: { ...base.planningPolicy, ...policy.planningPolicy },
-    routingPolicy: { ...base.routingPolicy, ...policy.routingPolicy },
-    toolRoutingPolicy: { ...base.toolRoutingPolicy, ...(policy as Partial<OrchestrationPolicyGenome>).toolRoutingPolicy },
-    verificationPolicy: { ...base.verificationPolicy, ...policy.verificationPolicy },
-    repairPolicy: { ...base.repairPolicy, ...policy.repairPolicy },
-    stopPolicy: { ...base.stopPolicy, ...policy.stopPolicy },
-    metadata: { ...base.metadata, ...policy.metadata }
+    ...migrated,
+    contractPolicy: { ...base.contractPolicy, ...migrated.contractPolicy },
+    tracePolicy: { ...base.tracePolicy, ...migrated.tracePolicy },
+    planningPolicy: { ...base.planningPolicy, ...migrated.planningPolicy },
+    routingPolicy: { ...base.routingPolicy, ...migrated.routingPolicy },
+    toolRoutingPolicy: { ...base.toolRoutingPolicy, ...migrated.toolRoutingPolicy },
+    verificationPolicy: { ...base.verificationPolicy, ...migrated.verificationPolicy },
+    repairPolicy: { ...base.repairPolicy, ...migrated.repairPolicy },
+    stopPolicy: { ...base.stopPolicy, ...migrated.stopPolicy },
+    debatePolicy: { ...base.debatePolicy!, ...migrated.debatePolicy },
+    taskGraphPolicy: { ...base.taskGraphPolicy!, ...migrated.taskGraphPolicy },
+    externalAgentPolicy: { ...base.externalAgentPolicy!, ...migrated.externalAgentPolicy },
+    metadata: { ...base.metadata, ...migrated.metadata }
   };
 }

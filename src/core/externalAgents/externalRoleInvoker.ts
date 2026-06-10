@@ -4,6 +4,7 @@ import type { ExternalAgentProfile } from "./externalAgentTypes.js";
 import { ExternalAgentProcessClient, type ExternalAgentTool } from "./externalAgentProcess.js";
 import { runCommandExternalAgent } from "./runners/commandExternalAgentRunner.js";
 import type { ExternalOutputContract, ExternalTaskEnvelope } from "./contracts/externalTaskEnvelope.js";
+import { normalizeExternalAgentResponse } from "./adapters/registry.js";
 
 export type ExternalRoleInvocation = {
   externalAgentId: string;
@@ -44,12 +45,13 @@ export async function invokeExternalRole(input: {
       ledger: input.ledger
     });
     if (!result.ok) throw new Error(result.error ?? "External command runner failed.");
-    const payload = parseJsonish(result.stdout) ?? { summary: result.summary, stdout: result.stdout };
+    const rawPayload = parseJsonish(result.stdout) ?? { summary: result.summary, stdout: result.stdout };
+    const normalized = normalizeExternalPayload(input, envelope, rawPayload);
     return {
       externalAgentId: input.profile.id,
       role: input.role,
-      payload,
-      summary: result.summary,
+      payload: normalized.payload,
+      summary: normalized.summary,
       attempts: 1
     };
   }
@@ -83,7 +85,8 @@ export async function invokeExternalRole(input: {
       outputContract: envelope.outputContract
     });
     if (!result.ok) throw new Error(result.error ?? "External MCP tool call failed.");
-    const payload = unwrapMcpToolResult(result.result);
+    const rawPayload = unwrapMcpToolResult(result.result);
+    const normalized = normalizeExternalPayload(input, envelope, rawPayload);
     const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(result.result, null, 2), "json");
     input.ledger.append({
       type: "external_agent_call",
@@ -105,13 +108,13 @@ export async function invokeExternalRole(input: {
       model: input.profile.name,
       externalAgentId: input.profile.id,
       resultRef: responseRef,
-      summary: summarizePayload(payload, `External MCP process returned ${toolName}.`)
+      summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`)
     });
     return {
       externalAgentId: input.profile.id,
       role: input.role,
-      payload,
-      summary: summarizePayload(payload, `External MCP process returned ${toolName}.`),
+      payload: normalized.payload,
+      summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`),
       attempts: result.attempts
     };
   } catch (error) {
@@ -170,9 +173,10 @@ function runConfiguredExternalProfile(input: {
     status: "start",
     requestRef
   });
-  const payload = configuredProfilePayload(input.profile, input.role, envelope);
-  const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(payload, null, 2), "json");
-  const summary = summarizePayload(payload, `Configured external agent profile ${input.profile.id} produced a typed mock result.`);
+  const rawPayload = configuredProfilePayload(input.profile, input.role, envelope);
+  const normalized = normalizeExternalPayload(input, envelope, rawPayload);
+  const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(normalized.payload, null, 2), "json");
+  const summary = normalized.summary || summarizePayload(normalized.payload, `Configured external agent profile ${input.profile.id} produced a typed mock result.`);
   input.ledger.append({
     type: "external_agent_call",
     phase: phaseForRole(input.role),
@@ -198,10 +202,37 @@ function runConfiguredExternalProfile(input: {
   return {
     externalAgentId: input.profile.id,
     role: input.role,
-    payload,
+    payload: normalized.payload,
     summary,
     attempts: 1
   };
+}
+
+function normalizeExternalPayload(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  ledger: EventLedger;
+}, envelope: ExternalTaskEnvelope, rawPayload: unknown): ReturnType<typeof normalizeExternalAgentResponse> {
+  const normalized = normalizeExternalAgentResponse({
+    profile: input.profile,
+    role: input.role,
+    outputContract: envelope.outputContract,
+    rawPayload
+  });
+  input.ledger.append({
+    type: "external_agent_normalization",
+    phase: phaseForRole(input.role),
+    role: input.role,
+    provider: `external:${input.profile.id}`,
+    model: input.profile.name,
+    externalAgentId: input.profile.id,
+    adapter: normalized.adapter,
+    responseMode: normalized.responseMode,
+    status: normalized.status,
+    warnings: normalized.warnings,
+    summary: normalized.summary
+  });
+  return normalized;
 }
 
 export async function releaseExternalAgentProcessPool(): Promise<void> {
