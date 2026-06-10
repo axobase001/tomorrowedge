@@ -2,6 +2,9 @@ import type { JudgeDecision } from "../../../schemas/judge.js";
 import type { Plan } from "../../../schemas/plan.js";
 import type { ReviewReport } from "../../../schemas/review.js";
 import { makeId } from "../../../utils/ids.js";
+import { buildJudgeEvidence } from "../../evidence/judgeEvidence.js";
+import { buildReviewEvidence } from "../../evidence/reviewEvidence.js";
+import type { EvidencePacket } from "../../evidence/evidencePacket.js";
 import { parseTaskGraphCandidate, validateTaskGraph } from "../../planning/taskGraphValidator.js";
 import type { ExternalAgentAdapterRuntime, ExternalAgentEvidenceInput, ExternalAgentOutputInput, ExternalAgentPromptInput } from "./externalAgentAdapter.js";
 import { estimateExternalCost, normalizeGenericExternalAgentResult, type ExternalAgentNormalizationInput, type ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
@@ -12,6 +15,7 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentAdapterRuntime = {
   buildPrompt: buildClaudePrompt,
   normalizeOutput: normalizeClaudeOutput,
   extractEvidence: extractClaudeEvidence,
+  extractEvidencePackets: extractClaudeEvidencePackets,
   detectFailure: (input) => {
     if (input.normalized.status === "failed") {
       return { failed: true, reason: input.normalized.warnings.join("; ") || "Claude Code output failed typed normalization.", retryable: true, category: "malformed_output" };
@@ -133,6 +137,15 @@ function extractClaudeEvidence(input: ExternalAgentEvidenceInput): string[] {
   }
   if (input.normalized.warnings.length) evidence.push(`claude_normalization_warnings=${input.normalized.warnings.join("; ")}`);
   return evidence;
+}
+
+function extractClaudeEvidencePackets(input: ExternalAgentEvidenceInput): EvidencePacket[] {
+  const packets: EvidencePacket[] = [];
+  const review = reviewFromPayload(input.normalized.payload);
+  if (review) packets.push(buildReviewEvidence(review));
+  const judgment = judgmentFromPayload(input.normalized.payload);
+  if (judgment) packets.push(buildJudgeEvidence(judgment));
+  return packets;
 }
 
 function planFromPayload(payload: unknown): Plan | undefined {

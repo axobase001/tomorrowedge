@@ -1,4 +1,5 @@
 import type { AgentRole } from "../../../schemas/agentTask.js";
+import type { EvidencePacket } from "../../evidence/evidencePacket.js";
 import type { ExternalOutputContract, ExternalTaskEnvelope } from "../contracts/externalTaskEnvelope.js";
 import type { ExternalAgentAdapter, ExternalAgentProfile } from "../externalAgentTypes.js";
 import type { ExternalAgentNormalizationInput, ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
@@ -48,6 +49,7 @@ export type ExternalAgentAdapterRuntime = {
   buildPrompt(input: ExternalAgentPromptInput): string;
   normalizeOutput(input: ExternalAgentOutputInput): ExternalAgentNormalizationResult;
   extractEvidence(input: ExternalAgentEvidenceInput): string[];
+  extractEvidencePackets?(input: ExternalAgentEvidenceInput): EvidencePacket[];
   detectFailure(input: ExternalAgentEvidenceInput): ExternalAgentFailure;
   retryPolicy(input: { role: AgentRole; failure: ExternalAgentFailure; attempt: number }): ExternalAgentRetryPolicy;
   estimateCost(rawPayload: unknown): ExternalAgentCostEstimate;

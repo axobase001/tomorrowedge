@@ -1,3 +1,5 @@
+import type { DebateIssue } from "../core/debate/debateProtocol.js";
+
 export type JudgeDecision = {
   selectedCandidateId?: string;
   decision: "select" | "request_revision" | "ask_user" | "abort";
@@ -7,6 +9,9 @@ export type JudgeDecision = {
   rejectedClaims?: string[];
   unresolvedBlockingIssues?: string[];
   unresolvedIssueIds?: string[];
+  selectedCandidateBlockingIssues?: DebateIssue[];
+  globalBlockingIssues?: DebateIssue[];
+  nonSelectedCandidateIssues?: DebateIssue[];
   evidenceCoverageScore?: number;
   confidence: number;
   requiredUserDecision?: string;

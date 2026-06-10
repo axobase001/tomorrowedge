@@ -3,7 +3,8 @@ import type { ExternalOutputContract, ExternalTaskEnvelope } from "../contracts/
 import type { ExternalAgentAdapter, ExternalAgentProfile } from "../externalAgentTypes.js";
 import { claudeCodeExternalAgentAdapter } from "./claudeCodeExternalAgentAdapter.js";
 import { codexExternalAgentAdapter } from "./codexExternalAgentAdapter.js";
-import type { ExternalAgentAdapterRuntime, ExternalAgentCostEstimate, ExternalAgentFailure } from "./externalAgentAdapter.js";
+import type { ExternalAgentAdapterRuntime, ExternalAgentCostEstimate, ExternalAgentFailure, ExternalAgentRetryPolicy } from "./externalAgentAdapter.js";
+import type { EvidencePacket } from "../../evidence/evidencePacket.js";
 import { genericExternalAgentAdapter } from "./genericExternalAgentAdapter.js";
 import type { ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
 
@@ -60,6 +61,16 @@ export function extractExternalAgentEvidence(input: {
   return resolveExternalAgentAdapter(input.profile).extractEvidence(input);
 }
 
+export function extractExternalAgentEvidencePackets(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  outputContract: ExternalOutputContract;
+  rawPayload: unknown;
+  normalized: ExternalAgentNormalizationResult;
+}): EvidencePacket[] {
+  return resolveExternalAgentAdapter(input.profile).extractEvidencePackets?.(input) ?? [];
+}
+
 export function detectExternalAgentFailure(input: {
   profile: ExternalAgentProfile;
   role: AgentRole;
@@ -68,6 +79,15 @@ export function detectExternalAgentFailure(input: {
   normalized: ExternalAgentNormalizationResult;
 }): ExternalAgentFailure {
   return resolveExternalAgentAdapter(input.profile).detectFailure(input);
+}
+
+export function externalAgentRetryPolicy(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  failure: ExternalAgentFailure;
+  attempt: number;
+}): ExternalAgentRetryPolicy {
+  return resolveExternalAgentAdapter(input.profile).retryPolicy(input);
 }
 
 export function estimateExternalAgentCost(profile: ExternalAgentProfile, rawPayload: unknown): ExternalAgentCostEstimate {

@@ -36,6 +36,14 @@ export type DebateMove = {
   riskSignal?: string;
 };
 
+export type DebateResolutionStatus = "selectable" | "request_revision" | "needs_user";
+
+export type DebateCandidateResolution = {
+  resolution: DebateResolutionStatus;
+  unresolvedBlockingIssues: string[];
+  unresolvedIssues: DebateIssue[];
+};
+
 export type DebateSession = {
   sessionId: string;
   maxRounds: number;
@@ -45,7 +53,13 @@ export type DebateSession = {
   unresolvedIssues: DebateIssue[];
   acceptedClaims: string[];
   rejectedClaims: string[];
+  candidateResolutions: Record<string, DebateCandidateResolution>;
+  globalResolution: DebateCandidateResolution;
+  /**
+   * Compatibility view for older trace readers. It contains only global blocking
+   * issues and no longer treats losing-candidate issues as workflow-wide.
+   */
   unresolvedBlockingIssues: string[];
   evidenceCoverageScore: number;
-  resolution: "selectable" | "request_revision" | "needs_user";
+  resolution: DebateResolutionStatus;
 };

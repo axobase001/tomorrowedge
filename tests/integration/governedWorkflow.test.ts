@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
+import os from "node:os";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 
@@ -59,7 +61,8 @@ describe("governed workflow execution", () => {
   }, 15_000);
 
   it("enforces reviewer role budget without consuming planner or judge role budgets", async () => {
-    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-governed-budget-"));
     const config = {
       ...defaultConfig,
       debate: { ...defaultConfig.debate, max_candidates: 1 },
@@ -86,18 +89,23 @@ describe("governed workflow execution", () => {
       }
     };
 
-    const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
-    const reviewerBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "reviewer");
-    const plannerRoleBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope !== "efficient" && !event.invocationKind);
-    const plannerModelBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.invocationKind);
-    const plannerGovernanceBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope === "efficient");
-    const judgeBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "judge");
+    try {
+      await cp(source, cwd, { recursive: true });
+      const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
+      const reviewerBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "reviewer");
+      const plannerRoleBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.budgetScope !== "efficient" && !event.invocationKind);
+      const plannerModelBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.invocationKind === "model_planner");
+      const plannerGovernanceBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "planner" && event.invocationKind === "task_governance");
+      const judgeBudget = state.events.find((event) => event.type === "budget_decision" && event.role === "judge");
 
-    expect(reviewerBudget).toMatchObject({ status: "blocked", budgetScope: "per_role" });
-    expect(plannerModelBudget).toMatchObject({ status: "allowed" });
-    expect(plannerGovernanceBudget).toBeTruthy();
-    expect(plannerRoleBudget).toBeUndefined();
-    expect(judgeBudget).toBeUndefined();
-    expect(state.review).toBeTruthy();
+      expect(reviewerBudget).toMatchObject({ status: "blocked", budgetScope: "per_role" });
+      expect(plannerModelBudget).toMatchObject({ status: "allowed" });
+      expect(plannerGovernanceBudget).toMatchObject({ status: "allowed" });
+      expect(plannerRoleBudget).toBeUndefined();
+      expect(judgeBudget).toBeUndefined();
+      expect(state.review).toBeTruthy();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   }, 15_000);
 });

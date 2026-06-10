@@ -2,6 +2,9 @@ import type { PatchCandidate } from "../../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../../schemas/review.js";
 import { makeId } from "../../../utils/ids.js";
 import type { DebateIssue } from "../../debate/debateProtocol.js";
+import { buildPatchEvidence } from "../../evidence/patchEvidence.js";
+import { buildReviewEvidence } from "../../evidence/reviewEvidence.js";
+import type { EvidencePacket } from "../../evidence/evidencePacket.js";
 import type { ExternalAgentAdapterRuntime, ExternalAgentEvidenceInput, ExternalAgentOutputInput, ExternalAgentPromptInput } from "./externalAgentAdapter.js";
 import { estimateExternalCost, normalizeGenericExternalAgentResult, type ExternalAgentNormalizationInput, type ExternalAgentNormalizationResult } from "./genericExternalAgentAdapter.js";
 
@@ -11,6 +14,7 @@ export const codexExternalAgentAdapter: ExternalAgentAdapterRuntime = {
   buildPrompt: buildCodexPrompt,
   normalizeOutput: normalizeCodexOutput,
   extractEvidence: extractCodexEvidence,
+  extractEvidencePackets: extractCodexEvidencePackets,
   detectFailure: (input) => {
     if (input.normalized.status === "failed") {
       return { failed: true, reason: input.normalized.warnings.join("; ") || "Codex output failed typed normalization.", retryable: true, category: "malformed_output" };
@@ -140,6 +144,15 @@ function extractCodexEvidence(input: ExternalAgentEvidenceInput): string[] {
   for (const issue of issues) evidence.push(`debate_issue:${issue.id}:${issue.candidateId ?? "global"}:${issue.title}`);
   if (input.normalized.warnings.length) evidence.push(`codex_normalization_warnings=${input.normalized.warnings.join("; ")}`);
   return evidence;
+}
+
+function extractCodexEvidencePackets(input: ExternalAgentEvidenceInput): EvidencePacket[] {
+  const packets: EvidencePacket[] = [];
+  const candidate = candidateFromPayload(input.normalized.payload);
+  if (candidate) packets.push(buildPatchEvidence(candidate));
+  const review = reviewFromPayload(input.normalized.payload);
+  if (review) packets.push(buildReviewEvidence(review));
+  return packets;
 }
 
 function candidateFromPayload(payload: unknown): PatchCandidate | undefined {
