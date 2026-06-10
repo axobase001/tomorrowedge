@@ -11,13 +11,19 @@ describe("quality-cost-trace benchmark", () => {
       const result = await runQualityCostTraceBenchmark(cwd, { format: "markdown" });
       const report = await readFile(result.reportPath, "utf8");
 
-      expect(result.winner).toBe("tomorrowedge");
+      expect(result.winner).toBeNull();
       expect(result.strategies).toHaveLength(3);
+      expect(result.strategies.every((strategy) => strategy.sessionId.startsWith("session_"))).toBe(true);
+      expect(result.strategies.every((strategy) => strategy.eventCount > 0)).toBe(true);
+      expect(result.strategies.find((strategy) => strategy.id === "cheap-single")?.testsFailed).toBeGreaterThan(0);
+      expect(result.strategies.find((strategy) => strategy.id === "tomorrowedge")?.repairRounds).toBeGreaterThan(0);
       expect(report).toContain("Quality-Cost-Trace Benchmark");
-      expect(report).toContain("WARNING: This is a deterministic product demo");
-      expect(report).toContain("no real provider calls are made");
-      expect(report).toContain("not a live provider leaderboard claim");
-      expect(report).toContain("TomorrowEdge heterogeneous cockpit");
+      expect(report).toContain("WARNING: This is an audited deterministic fixture comparison");
+      expect(report).toContain("no real provider calls");
+      expect(report).toContain("hidden-test leaderboard claims");
+      expect(report).toContain("not measured");
+      expect(report).toContain("Winner: not ranked");
+      expect(report).toContain("TomorrowEdge repair-loop fixture route");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

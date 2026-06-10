@@ -43,6 +43,10 @@ Changelog: newest changes first, grouped by release and by change type.
   transfer metadata, runtime/commit/fixture-hash manifest fields, model-visible
   versus evaluator-only memory exports, fail-fast leakage checks, cohort metrics
   with variance and CI95, and explicit insufficient-data flags.
+- `tedge benchmark` now executes deterministic fixture workflows and derives
+  pass/fail, repair, trace, event, artifact, and elapsed-time metrics from
+  recorded session state. Synthetic winner, hidden-test, cost, and strong-agent
+  call claims were removed when not measured.
 
 ## [1.3.10] - 2026-06-10
 
