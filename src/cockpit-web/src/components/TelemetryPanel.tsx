@@ -1,14 +1,16 @@
+import { useState } from "react";
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
+import { ReceiptModal } from "./ReceiptModal.js";
 
 const SAVED_COLOR = "#2f9d68";
 const DANGER_COLOR = "#c94a4a";
 const WARN_COLOR = "#e0b15a";
 const GOLD_COLOR = "#d4a843";
 
-export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: CockpitTelemetry; t: Translator; onOpenDetails?: () => void }) {
+export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetry: CockpitTelemetry; t: Translator; goal?: string; onOpenDetails?: () => void }) {
+  const [showReceipt, setShowReceipt] = useState(false);
   const routes = [
-    telemetry.plannerModel && `planner: ${telemetry.plannerModel}`,
     telemetry.coderModel && `coder: ${telemetry.coderModel}`,
     telemetry.reviewerModel && `reviewer: ${telemetry.reviewerModel}`,
     telemetry.judgeModel && `judge: ${telemetry.judgeModel}`,
@@ -105,9 +107,19 @@ export function TelemetryPanel({ telemetry, t, onOpenDetails }: { telemetry: Coc
         </div>
       )}
 
-      <button type="button" className="te-link-button" onClick={onOpenDetails} aria-label={t("telemetry.details")} data-testid="telemetry-details">
-        {t("telemetry.details")}
-      </button>
+      <div style={{ display: "flex", gap: 6, margin: "6px 12px 0" }}>
+        <button type="button" className="te-link-button" onClick={onOpenDetails} aria-label={t("telemetry.details")} data-testid="telemetry-details" style={{ flex: 1 }}>
+          {t("telemetry.details")}
+        </button>
+        {telemetry.savedUsd !== undefined && telemetry.savedUsd > 0 && (
+          <button type="button" className="te-link-button" onClick={() => setShowReceipt(true)} style={{ flex: 1, textAlign: "center" }}>
+            🧾 小票
+          </button>
+        )}
+      </div>
+      {showReceipt && (
+        <ReceiptModal telemetry={telemetry} goal={goal} t={t} onDismiss={() => setShowReceipt(false)} />
+      )}
     </aside>
   );
 }

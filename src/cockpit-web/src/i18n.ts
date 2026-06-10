@@ -167,7 +167,9 @@ const messages = {
     "view.liveSession": "Live session",
     "view.connected": "Connected",
     "view.disconnected": "Disconnected",
-    "view.running": "Running"
+    "view.running": "Running",
+    "receipt.dismiss": "Close",
+    "receipt.title": "📋 Cost Receipt"
   },
   zh: {
     "topbar.language": "语言",
@@ -330,7 +332,9 @@ const messages = {
     "view.liveSession": "实时会话",
     "view.connected": "已连接",
     "view.disconnected": "已断开",
-    "view.running": "运行中"
+    "view.running": "运行中",
+    "receipt.dismiss": "关闭",
+    "receipt.title": "📋 费用小票"
   }
 } as const;
 
