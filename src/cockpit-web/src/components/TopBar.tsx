@@ -45,6 +45,14 @@ export function TopBar({
         </span>
         {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">{t("topbar.fixture")}</span> : null}
         {viewModel.sessionMeta.stale ? <span className="te-chip">{t("topbar.snapshot")}</span> : null}
+        {viewModel.telemetry.savedUsd !== undefined && viewModel.telemetry.savedUsd > 0 && (
+          <span className="te-chip te-chip-green" title="累计节省 (跨 session)">
+            💰 省 {viewModel.telemetry.savingsPercent ?? 0}%
+            {viewModel.telemetry.cumulativeSavedUsd !== undefined && viewModel.telemetry.cumulativeSavedUsd > viewModel.telemetry.savedUsd
+              ? ` · 累计 $${viewModel.telemetry.cumulativeSavedUsd.toFixed(2)}`
+              : ""}
+          </span>
+        )}
         <label className="te-language-control">
           <span>{t("topbar.language")}</span>
           <select value={language} onChange={(event) => onLanguageChange(event.target.value as GuiLanguage)} data-testid="language-selector" aria-label={t("topbar.language")}>
