@@ -161,6 +161,9 @@ describe("objective trace memory and policy evolution", () => {
     expect(changes(variants, base, (item) => item.routingPolicy.routingPreference)).toBe(true);
     expect(changes(variants, base, (item) => item.routingPolicy.reviewerThreshold)).toBe(true);
     expect(changes(variants, base, (item) => item.routingPolicy.judgeThreshold)).toBe(true);
+    expect(changes(variants, base, (item) => item.toolRoutingPolicy.preference)).toBe(true);
+    expect(variants.every((item) => item.toolRoutingPolicy.allowCandidateSkills === false)).toBe(true);
+    expect(variants.every((item) => item.toolRoutingPolicy.requireValidation === true)).toBe(true);
     expect(changes(variants, base, (item) => item.verificationPolicy.verificationStrictness)).toBe(true);
     expect(changes(variants, base, (item) => item.verificationPolicy.requireEvidencePacket)).toBe(true);
     expect(changes(variants, base, (item) => item.verificationPolicy.requireCommandValidationForPatch)).toBe(true);

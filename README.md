@@ -78,6 +78,8 @@ tedge trace list --scenario debugging --limit 20
 tedge policy inspect
 tedge policy evolve --offline --generations 2 --population 4 --elite 2
 tedge policy eval
+tedge skills list
+tedge skills propose --min-support 2 --write
 ```
 
 Docs:
@@ -86,6 +88,7 @@ Docs:
 - [Trace Memory](docs/TRACE_MEMORY.md)
 - [Self-Iterating Orchestration](docs/SELF_ITERATING_ORCHESTRATION.md)
 - [Policy Evolution](docs/POLICY_EVOLUTION.md)
+- [Governed Skills And Tool Packs](docs/SKILLS_AND_TOOL_PACKS.md)
 
 ## 差异化
 
@@ -104,8 +107,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.3.3`。
+当前版本：`1.3.4`。
 
+- `1.3.4` adds the governed skills and human-seeded tool-pack foundation: skill manifests, built-in workflow/workspace/code/GitHub/web/document/data/API packs, lifecycle/validation gates, inert candidate proposals from traces, tool/skill routing policy, structured objective-trace tool usage, and `tedge skills` commands.
 - `1.3.3` closes the next self-iteration audit gap: selected draft PR work expands policy genome mutation/routing coverage; objective traces now preserve bounded policy attribution and trace completeness; scenario-scoped runtime selection falls back to global evolved policies; trace retrieval records real rejected candidates instead of hardcoded zero.
 - `1.3.2` polishes the 1.3 runtime release: README now has one top-level definition and the self-iterating orchestration section appears before differentiation; `planningPolicy.allowParallelRoles=false` disables optional parallel candidate/debate branches; trace retrieval now applies `tracePolicy` recency, success/failure, stale, same-scenario, and same-workflow weighting.
 - `1.3.1` integrates the Orchestration Policy Genome into the runtime path: policy fields now affect contract depth, plan-step evidence binding, role routing, verification strictness, repair limits, stop decisions, and contract tool/action gates.
@@ -302,6 +306,10 @@ tedge contract inspect latest
 tedge policy inspect
 tedge policy evolve --offline
 tedge policy eval
+tedge skills packs
+tedge skills list
+tedge skills propose --min-support 2 --write
+tedge skills validate path/to/skill.json
 tedge export latest --format markdown
 tedge export latest --brief
 tedge export latest --format json --include-artifacts
@@ -552,7 +560,13 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.3.3`.
+Current version: `1.3.4`.
+
+`1.3.4` adds the governed skills and human-seeded tool-pack foundation: skill
+manifests, built-in workflow/workspace/code/GitHub/web/document/data/API packs,
+lifecycle/validation gates, inert candidate proposals from traces, tool/skill
+routing policy, structured objective-trace tool usage, and `tedge skills`
+commands.
 
 `1.3.3` closes the next self-iteration audit gap: selected draft PR work expands
 policy genome mutation/routing coverage; objective traces now preserve bounded
@@ -913,6 +927,10 @@ tedge mcp agents --diagnose
 tedge replay latest
 tedge trace latest
 tedge trace latest --verbose
+tedge skills packs
+tedge skills list
+tedge skills propose --min-support 2 --write
+tedge skills validate path/to/skill.json
 tedge export latest --format markdown
 tedge export latest --brief
 tedge export latest --format json --include-artifacts

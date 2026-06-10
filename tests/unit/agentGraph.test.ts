@@ -73,6 +73,7 @@ describe("offline agent graph", () => {
       "contract_verification",
       "orchestration_policy_selected",
       "routing_decision",
+      "tool_skill_routing",
       "budget_preview",
       "artifact_projection",
       "context_projection",

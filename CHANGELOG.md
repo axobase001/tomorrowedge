@@ -7,6 +7,24 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-06-10
+
+1.3.4 introduces the governed skills and human-seeded tool-pack foundation for
+controlled skill evolution.
+
+### Added
+
+- Governed skills and tool packs: `SkillManifestV1`, built-in `workflow_recipes`,
+  `workspace_fs`, `code_intelligence`, `git_github`, `web_research`,
+  `document_knowledge`, `data_database`, and `api_integration` packs,
+  project-local `.tomorrowedge/skills/*.json` loading, lifecycle transitions,
+  validation reports, inert candidate proposals from objective traces,
+  `tedge skills` commands, and structured objective-trace tool usage.
+- `toolRoutingPolicy` in the Orchestration Policy Genome, with bounded mutation
+  and scoring for safe, trace-score, and minimal-permission tool/skill routing
+  preferences. Policy mutation does not enable candidate skills or weaken
+  validation requirements.
+
 ## [1.3.3] - 2026-06-10
 
 1.3.3 hardens the self-iteration runtime audit loop after the next policy/trace

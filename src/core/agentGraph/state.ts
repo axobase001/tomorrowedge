@@ -25,6 +25,7 @@ import type { ScenarioProfile } from "../scenarios/scenarioTypes.js";
 import type { ObjectiveContractV1, ContractVerificationResult } from "../contracts/objectiveContract.js";
 import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
 import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
+import type { ToolSkillRouteDecision } from "../skills/toolSkillRouter.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -54,6 +55,7 @@ export type AgentGraphState = {
   contractVerification?: ContractVerificationResult;
   retrievedObjectiveTraces?: ObjectiveTraceV1[];
   orchestrationPolicy?: OrchestrationPolicyGenome;
+  toolSkillRoutes?: ToolSkillRouteDecision[];
   objectiveTrace?: ObjectiveTraceV1;
   failureMemory?: FailureMemoryInfluenceState;
   budgetRuntime: BudgetRuntimeState;

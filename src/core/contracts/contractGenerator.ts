@@ -260,8 +260,9 @@ function allowedRolesFor(suggested: AgentRole[], workflowKind: WorkflowKind, ris
 }
 
 function allowedToolsFor(workflowKind: WorkflowKind, accessMode: AccessMode): string[] {
-  const tools = new Set(["repo_index", "file_read", "grep", "model_chat", "event_ledger"]);
+  const tools = new Set(["repo_index", "file_read", "grep", "git_status", "model_chat", "event_ledger"]);
   if (accessMode !== "restricted" && (workflowKind === "patch" || workflowKind === "vision_patch" || workflowKind === "repair")) {
+    tools.add("patch_candidate");
     tools.add("patch_apply");
     tools.add("shell");
     tools.add("undo");

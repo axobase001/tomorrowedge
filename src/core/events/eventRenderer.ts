@@ -74,6 +74,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.status}: ${event.reason}`;
     case "routing_decision":
       return `${event.assignedRole} -> ${event.assignedProvider}/${event.assignedModel}: ${event.reason}`;
+    case "tool_skill_routing":
+      return `selected=${event.selectedSkillIds.length} skipped=${event.skippedCount} blocked=${event.blockedCount} preference=${event.preference}: ${event.summary}`;
     case "context_projection":
       return `${event.projectedArtifacts.length}/${event.selectedArtifacts.length} artifact views tokens~${event.tokenEstimate} omitted=${event.omittedBytes}`;
     case "artifact_projection":

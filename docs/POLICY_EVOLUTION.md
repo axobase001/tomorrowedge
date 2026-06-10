@@ -14,6 +14,7 @@ Each policy genome is a structured set of orchestration preferences:
 - trace retrieval top-k
 - parallel role preference
 - routing preference
+- tool/skill routing preference
 - verification strictness
 - repair retry behavior
 - stop mode
@@ -30,6 +31,8 @@ to docs or trace metadata:
 - `routingPolicy`, `verificationPolicy`, `repairPolicy`, and `stopPolicy`
   influence routing tags, verification strictness, repair budgets, and final
   stop decisions.
+- `toolRoutingPolicy` influences governed tool/skill selection preference
+  without granting new permissions or enabling unvalidated candidate skills.
 
 As of `1.3.2`, the remaining policy knobs in this section are also wired:
 
@@ -49,14 +52,17 @@ access modes, hide model calls, or bypass the event ledger.
 
 Offline mutation uses a bounded operator set that covers every runtime-wired
 genome group: contract depth, trace weighting, planning shape, parallel-role
-policy, routing preference, reviewer/judge thresholds, verification strictness,
-repair retries, and stop behavior. The default population size matches this
+policy, routing preference, governed tool/skill routing preference,
+reviewer/judge thresholds, verification strictness, repair retries, and stop
+behavior. The default population size matches this
 operator set so `tedge policy evolve --offline` explores the documented genome
 surface before selecting elites.
 
 When a selected policy changes `routingPolicy.routingPreference`, the runtime
 rebuilds subsequent role assignments before planner/coder/reviewer execution.
 Privacy/local routing locks and explicit role overrides remain hard boundaries.
+Tool routing policy can rank stable/validated skills differently, but it cannot
+route blocked, rejected, deprecated, or unvalidated candidate skills by default.
 
 As of `1.3.3`, the audit loop also records policy attribution in compact
 objective traces and persists trace completeness for offline fitness scoring.

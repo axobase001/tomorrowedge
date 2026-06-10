@@ -29,6 +29,11 @@ export type OrchestrationPolicyGenome = {
     reviewerThreshold: "low" | "medium" | "high";
     judgeThreshold: "medium" | "high";
   };
+  toolRoutingPolicy: {
+    preference: "safe" | "trace_score" | "minimal_permissions";
+    allowCandidateSkills: boolean;
+    requireValidation: boolean;
+  };
   verificationPolicy: {
     verificationStrictness: "light" | "medium" | "strict";
     requireEvidencePacket: boolean;
@@ -83,6 +88,11 @@ export function defaultOrchestrationPolicy(now = new Date().toISOString()): Orch
       routingPreference: "balanced",
       reviewerThreshold: "medium",
       judgeThreshold: "high"
+    },
+    toolRoutingPolicy: {
+      preference: "safe",
+      allowCandidateSkills: false,
+      requireValidation: true
     },
     verificationPolicy: {
       verificationStrictness: "medium",

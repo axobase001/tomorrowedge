@@ -112,6 +112,11 @@ function policyAlignmentForTrace(policy: OrchestrationPolicyGenome, trace: Objec
   if (policy.planningPolicy.requirePlanStepEvidenceBinding) score += trace.evidenceSummary.evidenceScore >= 75 ? 8 : -8;
   if (policy.routingPolicy.routingPreference === "quality") score += highRisk ? 12 : success ? 2 : -2;
   if (policy.routingPolicy.routingPreference === "cheap") score += highRisk ? -12 : trace.costSummary.estimatedCostUsd && trace.costSummary.estimatedCostUsd > 0.2 ? 10 : 3;
+  if (policy.toolRoutingPolicy.preference === "safe") score += trace.toolUsage?.some((usage) => usage.outcome === "blocked" || usage.permissionIntents.includes("write") || usage.permissionIntents.includes("shell")) ? 4 : 8;
+  if (policy.toolRoutingPolicy.preference === "trace_score") score += trace.toolUsage?.length ? 7 : -4;
+  if (policy.toolRoutingPolicy.preference === "minimal_permissions") score += trace.toolUsage?.every((usage) => usage.permissionIntents.length <= 1) ? 7 : -5;
+  if (policy.toolRoutingPolicy.allowCandidateSkills) score -= 10;
+  if (!policy.toolRoutingPolicy.requireValidation) score -= 18;
   if (policy.stopPolicy.allowPartialCompletion) score += partial ? 10 : 0;
   if (!policy.stopPolicy.allowPartialCompletion && partial) score -= 16;
   if (policy.stopPolicy.stopMode === "evidence_strict") score += traceCompletenessScore >= 90 && !missingEvidence ? 12 : -14;
@@ -133,6 +138,8 @@ function riskPenaltyForPolicy(policy: OrchestrationPolicyGenome, trace: Objectiv
   let penalty = trace.contractVerification.violations.length ? 35 : 0;
   if (policy.verificationPolicy.verificationStrictness === "strict" && (evidenceScore < 90 || traceCompletenessScore < 90)) penalty += 20;
   if (policy.contractPolicy.contractDepth === "light" && trace.contract.riskLevel === "high") penalty += 18;
+  if (!policy.toolRoutingPolicy.requireValidation) penalty += 15;
+  if (policy.toolRoutingPolicy.allowCandidateSkills && trace.contract.riskLevel !== "low") penalty += 12;
   if (!policy.stopPolicy.allowPartialCompletion && trace.outcome.finalStatus === "partial") penalty += 12;
   if (policy.repairPolicy.maxRepairRounds < trace.repairSummary.repairAttempts) penalty += 20;
   return penalty;

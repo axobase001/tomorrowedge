@@ -329,6 +329,16 @@ export type RoutingDecisionEvent = BaseEvent & {
   policyTags: string[];
 };
 
+export type ToolSkillRoutingEvent = BaseEvent & {
+  type: "tool_skill_routing";
+  selectedSkillIds: string[];
+  skippedCount: number;
+  blockedCount: number;
+  preference: "safe" | "trace_score" | "minimal_permissions";
+  summary: string;
+  artifactRef?: string;
+};
+
 export type ContextProjectionEvent = BaseEvent & {
   type: "context_projection";
   selectedArtifacts: string[];
@@ -544,6 +554,7 @@ export type TomorrowEdgeEvent =
   | AccessModeEvent
   | AutonomyLimitEvent
   | RoutingDecisionEvent
+  | ToolSkillRoutingEvent
   | ContextProjectionEvent
   | ArtifactProjectionEvent
   | EvidencePacketEvent

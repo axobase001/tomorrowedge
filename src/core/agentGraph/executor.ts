@@ -86,6 +86,8 @@ import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome, type SelfIt
 import { loadBestPolicy, savePolicyScore } from "../orchestrationPolicy/policyStore.js";
 import { evaluatePolicyFitness, policyWithFitness } from "../orchestrationPolicy/policyEvaluator.js";
 import { evolvePoliciesOffline } from "../orchestrationPolicy/policyEvolution.js";
+import { loadSkillRegistry } from "../skills/skillRegistry.js";
+import { routeToolsAndSkills } from "../skills/toolSkillRouter.js";
 import {
   applyPolicyToContract,
   contractPhaseAllowed,
@@ -402,6 +404,31 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     violations: verification.violations,
     repairs: verification.repairs,
     verificationRef: ledger.writeArtifact("contract_verifications", JSON.stringify(verification, null, 2), "json")
+  });
+
+  const skillRegistry = await loadSkillRegistry(cwd);
+  const toolSkillRoutes = routeToolsAndSkills({
+    registry: skillRegistry.registry,
+    contract,
+    scenarioProfile,
+    accessMode: access.mode,
+    policy
+  });
+  state.toolSkillRoutes = toolSkillRoutes;
+  const selectedSkillIds = toolSkillRoutes.filter((route) => route.selected).map((route) => route.skillId);
+  ledger.append({
+    type: "tool_skill_routing",
+    phase: "routing",
+    role: "planner",
+    selectedSkillIds,
+    skippedCount: toolSkillRoutes.filter((route) => route.status === "skipped").length,
+    blockedCount: toolSkillRoutes.filter((route) => route.status === "blocked").length,
+    preference: policy.toolRoutingPolicy.preference,
+    summary: selectedSkillIds.length ? `Selected ${selectedSkillIds.length} governed tool/skill route(s).` : "No governed tool/skill route selected.",
+    artifactRef: ledger.writeArtifact("tool_skill_routing", JSON.stringify({
+      registryErrors: skillRegistry.errors,
+      routes: toolSkillRoutes
+    }, null, 2), "json")
   });
 }
 
@@ -1588,6 +1615,7 @@ function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntim
       shellRuns: state.runResults.length,
       filesTouched: state.changedFiles
     },
+    toolUsage: buildToolUsageForTrace(state),
     evidenceSummary: {
       evidencePacketRefs: evidenceRefs,
       requiredEvidenceSatisfied,
@@ -1629,6 +1657,93 @@ function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntim
   };
 }
 
+function buildToolUsageForTrace(state: AgentGraphState): NonNullable<ObjectiveTraceV1["toolUsage"]> {
+  const selectedSkills = new Map((state.toolSkillRoutes ?? []).filter((route) => route.selected).map((route) => [route.skillId, route]));
+  const usage: NonNullable<ObjectiveTraceV1["toolUsage"]> = [];
+  for (const event of state.events) {
+    if (event.type === "context_select") {
+      usage.push({
+        toolId: "repo_index",
+        skillId: selectedSkillForTool(selectedSkills, "repo_index"),
+        version: "1.0.0",
+        phase: event.phase,
+        role: event.role,
+        permissionIntents: ["read"],
+        outcome: "success",
+        artifactRefs: [],
+        pathRefs: event.selectedFiles
+      });
+    }
+    if (event.type === "file_read") {
+      usage.push({
+        toolId: "file_read",
+        skillId: selectedSkillForTool(selectedSkills, "file_read"),
+        version: "1.0.0",
+        phase: event.phase,
+        role: event.role,
+        permissionIntents: ["read"],
+        outcome: "success",
+        artifactRefs: [],
+        pathRefs: [event.path]
+      });
+    }
+    if (event.type === "patch_candidate") {
+      usage.push({
+        toolId: "patch_candidate",
+        skillId: selectedSkillForTool(selectedSkills, "patch_candidate"),
+        version: "1.0.0",
+        phase: event.phase,
+        role: event.role,
+        permissionIntents: ["write"],
+        outcome: "success",
+        artifactRefs: event.diffRef ? [event.diffRef] : [],
+        pathRefs: event.filesChanged
+      });
+    }
+    if (event.type === "patch_apply") {
+      usage.push({
+        toolId: "patch_apply",
+        skillId: selectedSkillForTool(selectedSkills, "patch_apply"),
+        version: "1.0.0",
+        phase: event.phase,
+        role: event.role,
+        permissionIntents: ["write"],
+        outcome: event.applied ? "success" : event.error ? "failure" : "blocked",
+        artifactRefs: [event.diffRef],
+        pathRefs: event.filesChanged
+      });
+    }
+    if (event.type === "shell_run") {
+      usage.push({
+        toolId: "shell",
+        skillId: selectedSkillForTool(selectedSkills, "shell") ?? shellSkillForCommand(event.command),
+        version: "1.0.0",
+        phase: event.phase,
+        role: event.role,
+        permissionIntents: ["shell"],
+        outcome: event.success === true ? "success" : event.success === false ? "failure" : event.error ? "blocked" : "unknown",
+        artifactRefs: [event.stdoutRef, event.stderrRef].filter((item): item is string => Boolean(item)),
+        command: event.command,
+        durationMs: event.durationMs,
+        exitCode: event.exitCode
+      });
+    }
+  }
+  return usage;
+}
+
+function selectedSkillForTool(selectedSkills: Map<string, { requiredTools: string[]; skillId: string }>, toolId: string): string | undefined {
+  return [...selectedSkills.values()].find((route) => route.skillId === toolId || route.requiredTools.includes(toolId))?.skillId;
+}
+
+function shellSkillForCommand(command: string): string {
+  const normalized = command.toLowerCase();
+  if (normalized.includes("lint")) return "code.run_lint";
+  if (normalized.includes("typecheck") || normalized.includes("tsc")) return "code.run_typecheck";
+  if (normalized.includes("test") || normalized.includes("vitest") || normalized.includes("pytest")) return "code.run_tests";
+  return "shell";
+}
+
 function policySummaryForTrace(policy?: OrchestrationPolicyGenome): ObjectiveTraceV1["policySummary"] {
   if (!policy) return undefined;
   return {
@@ -1649,6 +1764,9 @@ function policySummaryForTrace(policy?: OrchestrationPolicyGenome): ObjectiveTra
     routingPreference: policy.routingPolicy.routingPreference,
     reviewerThreshold: policy.routingPolicy.reviewerThreshold,
     judgeThreshold: policy.routingPolicy.judgeThreshold,
+    toolRoutingPreference: policy.toolRoutingPolicy.preference,
+    allowCandidateSkills: policy.toolRoutingPolicy.allowCandidateSkills,
+    requireSkillValidation: policy.toolRoutingPolicy.requireValidation,
     verificationStrictness: policy.verificationPolicy.verificationStrictness,
     maxRepairRounds: policy.repairPolicy.maxRepairRounds,
     stopMode: policy.stopPolicy.stopMode,

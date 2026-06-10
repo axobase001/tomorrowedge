@@ -88,6 +88,30 @@ const policyMutationOperators: PolicyMutationOperator[] = [
     }
   },
   {
+    name: "tool_routing_safe",
+    apply: (policy) => {
+      policy.toolRoutingPolicy.preference = "safe";
+      policy.toolRoutingPolicy.allowCandidateSkills = false;
+      policy.toolRoutingPolicy.requireValidation = true;
+    }
+  },
+  {
+    name: "tool_routing_trace_score",
+    apply: (policy) => {
+      policy.toolRoutingPolicy.preference = "trace_score";
+      policy.toolRoutingPolicy.allowCandidateSkills = false;
+      policy.toolRoutingPolicy.requireValidation = true;
+    }
+  },
+  {
+    name: "tool_routing_minimal_permissions",
+    apply: (policy) => {
+      policy.toolRoutingPolicy.preference = "minimal_permissions";
+      policy.toolRoutingPolicy.allowCandidateSkills = false;
+      policy.toolRoutingPolicy.requireValidation = true;
+    }
+  },
+  {
     name: "verification_strict",
     apply: (policy) => {
       policy.verificationPolicy.verificationStrictness = "strict";

@@ -23,10 +23,28 @@ export type ObjectiveTracePolicySummary = {
   routingPreference: OrchestrationPolicyGenome["routingPolicy"]["routingPreference"];
   reviewerThreshold: OrchestrationPolicyGenome["routingPolicy"]["reviewerThreshold"];
   judgeThreshold: OrchestrationPolicyGenome["routingPolicy"]["judgeThreshold"];
+  toolRoutingPreference: OrchestrationPolicyGenome["toolRoutingPolicy"]["preference"];
+  allowCandidateSkills: boolean;
+  requireSkillValidation: boolean;
   verificationStrictness: OrchestrationPolicyGenome["verificationPolicy"]["verificationStrictness"];
   maxRepairRounds: number;
   stopMode: OrchestrationPolicyGenome["stopPolicy"]["stopMode"];
   allowPartialCompletion: boolean;
+};
+
+export type ObjectiveTraceToolUsage = {
+  toolId: string;
+  skillId?: string;
+  version?: string;
+  phase: EventPhase;
+  role?: AgentRole;
+  permissionIntents: string[];
+  outcome: "success" | "failure" | "blocked" | "skipped" | "unknown";
+  artifactRefs: string[];
+  command?: string;
+  pathRefs?: string[];
+  durationMs?: number;
+  exitCode?: number;
 };
 
 export type ObjectiveTraceV1 = {
@@ -57,6 +75,7 @@ export type ObjectiveTraceV1 = {
     shellRuns: number;
     filesTouched: string[];
   };
+  toolUsage?: ObjectiveTraceToolUsage[];
   evidenceSummary: {
     evidencePacketRefs: string[];
     requiredEvidenceSatisfied: string[];

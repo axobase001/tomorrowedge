@@ -23,7 +23,7 @@ export async function readPolicies(cwd: string): Promise<OrchestrationPolicyGeno
   if (!text) return [];
   try {
     const parsed = JSON.parse(text) as OrchestrationPolicyGenome[];
-    return Array.isArray(parsed) ? parsed.filter((item) => item.schemaVersion === "orchestration-policy/v1") : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => item.schemaVersion === "orchestration-policy/v1").map(normalizePolicy) : [];
   } catch {
     return [];
   }
@@ -35,4 +35,21 @@ function policyFile(cwd: string): string {
 
 function bestPolicy(policies: OrchestrationPolicyGenome[]): OrchestrationPolicyGenome | undefined {
   return [...policies].sort((a, b) => (b.metadata.fitness ?? 0) - (a.metadata.fitness ?? 0))[0];
+}
+
+function normalizePolicy(policy: OrchestrationPolicyGenome): OrchestrationPolicyGenome {
+  const base = defaultOrchestrationPolicy(policy.metadata.createdAt);
+  return {
+    ...base,
+    ...policy,
+    contractPolicy: { ...base.contractPolicy, ...policy.contractPolicy },
+    tracePolicy: { ...base.tracePolicy, ...policy.tracePolicy },
+    planningPolicy: { ...base.planningPolicy, ...policy.planningPolicy },
+    routingPolicy: { ...base.routingPolicy, ...policy.routingPolicy },
+    toolRoutingPolicy: { ...base.toolRoutingPolicy, ...(policy as Partial<OrchestrationPolicyGenome>).toolRoutingPolicy },
+    verificationPolicy: { ...base.verificationPolicy, ...policy.verificationPolicy },
+    repairPolicy: { ...base.repairPolicy, ...policy.repairPolicy },
+    stopPolicy: { ...base.stopPolicy, ...policy.stopPolicy },
+    metadata: { ...base.metadata, ...policy.metadata }
+  };
 }

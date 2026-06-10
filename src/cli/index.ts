@@ -29,6 +29,7 @@ import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, 
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 import { recipesCommand } from "./commands/recipes.js";
 import { experimentErrorLoopCommand } from "./commands/experiment.js";
+import { skillsCandidatesCommand, skillsInspectCommand, skillsListCommand, skillsPacksCommand, skillsProposeCommand, skillsValidateCommand } from "./commands/skills.js";
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -97,6 +98,14 @@ program
 
 program.command("targets").description("List natural-language conversation targets").action(() => targetsCommand(cwd));
 program.command("recipes").description("List built-in coding workflow recipes").action(() => recipesCommand());
+
+const skills = program.command("skills").description("Inspect governed skills, tool packs, and inert candidate proposals");
+skills.command("list").description("List registered skills").option("--json", "print raw JSON").option("--scenario <type>", "filter by scenario type").option("--access-mode <mode>", "filter by access mode").action((options: { json?: boolean; scenario?: string; accessMode?: "restricted" | "partial" | "full" }) => skillsListCommand(cwd, options));
+skills.command("packs").description("List registered skill/tool packs").option("--json", "print raw JSON").action((options: { json?: boolean }) => skillsPacksCommand(cwd, options));
+skills.command("inspect").description("Inspect a skill manifest and lifecycle history").argument("<skill-id>", "skill id").option("--version <version>", "specific version").option("--json", "print raw JSON").action((skillId: string, options: { version?: string; json?: boolean }) => skillsInspectCommand(cwd, skillId, options));
+skills.command("propose").description("Mine stored objective traces for inert candidate skill proposals").option("--min-support <n>", "minimum trace support", "2").option("--write", "write proposals to .tomorrowedge/candidate-skills.jsonl").option("--json", "print raw JSON").action((options: { minSupport?: string; write?: boolean; json?: boolean }) => skillsProposeCommand(cwd, options));
+skills.command("candidates").description("List stored candidate skill proposals").option("--json", "print raw JSON").action((options: { json?: boolean }) => skillsCandidatesCommand(cwd, options));
+skills.command("validate").description("Validate a skill manifest without enabling it").argument("<manifest-path>", "manifest JSON path").option("--access-mode <mode>", "validation access mode", "restricted").option("--json", "print raw JSON").action((manifestPath: string, options: { accessMode?: "restricted" | "partial" | "full"; json?: boolean }) => skillsValidateCommand(cwd, manifestPath, options));
 
 program.command("ask").description("Record a non-mutating directed natural-language message").argument("<message>", "message to route").option("--to <target>", "core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core").option("--headless", "print JSON instead of a compact summary").action((message: string, options: { to?: string; headless?: boolean }) => askCommand(cwd, message, options));
 
