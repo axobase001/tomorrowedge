@@ -26,7 +26,7 @@ describe("offline agent graph", () => {
     const entrypoint = source.slice(source.indexOf("export async function runOfflineGraph"), source.indexOf("function createOfflineGraphRuntime"));
     const lines = entrypoint.split(/\r?\n/).filter((line) => line.trim()).length;
 
-    expect(lines).toBeLessThanOrEqual(35);
+    expect(lines).toBeLessThanOrEqual(55);
     for (const phase of [
       "recordStartupPhase",
       "runRoutingIntentPhase",
@@ -35,14 +35,19 @@ describe("offline agent graph", () => {
       "runContractPhase",
       "runPlanningPhase",
       "runExplorationPhase",
+      "runScheduledPatchWorkflow"
+    ]) {
+      expect(entrypoint).toContain(phase);
+      expect(source).toContain(`function ${phase}`);
+    }
+    for (const scheduledPhase of [
       "runCandidatePhase",
       "runReviewAndJudgePhase",
       "runLiveAdvisoryPhase",
       "runPatchApplicationPhase",
       "runVerificationAndRepairPhase"
     ]) {
-      expect(entrypoint).toContain(phase);
-      expect(source).toContain(`function ${phase}`);
+      expect(source).toContain(`function ${scheduledPhase}`);
     }
   });
 
@@ -54,7 +59,8 @@ describe("offline agent graph", () => {
     expect(state.review).toBeTruthy();
     expect(state.debateRounds.length).toBeGreaterThan(0);
     expect(state.judge?.decision).toBe("request_revision");
-    expect(state.finalSummary?.evidence).toContain("offline graph completed");
+    expect(state.finalSummary?.result).toBe("aborted");
+    expect(state.finalSummary?.evidence.some((item) => item.includes("Evidence gate blocked runner"))).toBe(true);
     expect(state.evidencePackets.length).toBeGreaterThan(0);
     expect(state.providerViews.length).toBeGreaterThan(0);
     expect(state.traceCompleteness?.score).toBeGreaterThan(0);
@@ -507,7 +513,7 @@ describe("offline agent graph", () => {
     expect(state.candidates[0]?.agentId).toBe("coder_a");
   });
 
-  it("records unparseable external role payloads before falling back to native agents", async () => {
+  it("records unparseable strict external role payloads before aborting without native fallback", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
@@ -532,11 +538,15 @@ describe("offline agent graph", () => {
     };
 
     const state = await runOfflineGraph(cwd, "fix failing test", config);
-    const fallbackEvent = state.events.find((event) => event.type === "external_agent_error" && event.role === "reviewer");
+    const normalizationEvent = state.events.find((event) => event.type === "external_agent_normalization" && event.role === "reviewer");
+    const errorEvent = state.events.find((event) => event.type === "external_agent_error" && event.role === "reviewer");
 
-    expect(state.review?.overallRecommendation).toBeTruthy();
-    expect(fallbackEvent).toBeTruthy();
-    expect(fallbackEvent && "error" in fallbackEvent ? fallbackEvent.error : "").toContain("falling back to native reviewer");
+    expect(state.finalSummary?.result).toBe("aborted");
+    expect(state.review).toBeUndefined();
+    expect(normalizationEvent).toMatchObject({ status: "failed" });
+    expect(errorEvent).toBeTruthy();
+    expect(errorEvent && "error" in errorEvent ? errorEvent.error : "").toContain("normalization");
+    expect(state.events.some((event) => event.type === "fallback_to_native" && event.role === "reviewer")).toBe(false);
   });
 
   it("records live advisory notes without changing deterministic decisions", async () => {

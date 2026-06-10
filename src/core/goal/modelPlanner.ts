@@ -3,6 +3,7 @@ import type { Plan, PlanStep, RiskLevel, TaskType } from "../../schemas/plan.js"
 import { chatWithProviderFallback } from "../model/providerFallback.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { ModelRouter } from "../routing/router.js";
+import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
 import { parseTaskGraphCandidate } from "../planning/taskGraphValidator.js";
 
@@ -33,11 +34,14 @@ export async function createModelBackedPlan(input: {
           content: [
             "You are TomorrowEdge's Planner.",
             "Create a structured engineering workflow plan for a multi-agent coding cockpit.",
-            "Return strict JSON only with keys: taskType, riskLevel, constraints, steps, taskGraph, verificationCommands, debateRecommended, reasonForDebate.",
+            "Return strict JSON only with keys: taskType, riskLevel, workflowKind, constraints, steps, taskGraph, verificationCommands, debateRecommended, reasonForDebate.",
             "taskType must be one of: bugfix, feature, refactor, test, docs, analysis, unknown.",
             "riskLevel must be one of: low, medium, high.",
+            "workflowKind must be one of: read_only, patch, repair, vision_patch, advisory, ask_user.",
             "steps must be an array of objects with id, title, detail. Use a variable number of task-specific steps.",
-            "taskGraph should contain nodes with id, title, detail, phase, roleHints, dependencies, requiredEvidence, expectedArtifacts.",
+            "taskGraph must use schemaVersion=task-graph/v1 and contain nodes with id, kind, title, objective, phase, ownerRole, dependsOn, requiredInputs, expectedOutputs, mutationAllowed, canRunInParallel, stopIfFails, acceptanceCriteria.",
+            "For patch workflows include inspect_context -> design_patch -> produce_patch -> review_patch -> judge_patch -> apply_patch -> verify_patch -> summarize.",
+            "For read_only workflows include inspect_context -> summarize_findings and no mutationAllowed nodes.",
             "Use analysis for read-only inspection requests and avoid patch/test commands for analysis tasks."
           ].join("\n")
         },
@@ -61,6 +65,7 @@ export function parsePlannerResponse(goal: string, content?: string): Plan | und
   if (!object) return undefined;
   const taskType = parseTaskType(object.taskType);
   const riskLevel = parseRiskLevel(object.riskLevel);
+  const workflowKind = parseWorkflowKind(object.workflowKind);
   const steps = parseSteps(object.steps);
   if (!taskType || !riskLevel || !steps.length) return undefined;
   const constraints = Array.isArray(object.constraints) ? object.constraints.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) : [];
@@ -71,6 +76,8 @@ export function parsePlannerResponse(goal: string, content?: string): Plan | und
     goal,
     taskType,
     riskLevel,
+    workflowKind,
+    requiresPatchWorkflow: workflowKind ? !["read_only", "advisory", "ask_user"].includes(workflowKind) : undefined,
     constraints,
     steps,
     taskGraph: parseTaskGraphCandidate(object.taskGraph) ?? buildTaskGraph({
@@ -78,6 +85,8 @@ export function parsePlannerResponse(goal: string, content?: string): Plan | und
         goal,
         taskType,
         riskLevel,
+        workflowKind,
+        requiresPatchWorkflow: workflowKind ? !["read_only", "advisory", "ask_user"].includes(workflowKind) : undefined,
         constraints,
         steps,
         verificationCommands,
@@ -113,6 +122,10 @@ function parseTaskType(value: unknown): TaskType | undefined {
 
 function parseRiskLevel(value: unknown): RiskLevel | undefined {
   return value === "low" || value === "medium" || value === "high" ? value : undefined;
+}
+
+function parseWorkflowKind(value: unknown): WorkflowKind | undefined {
+  return value === "read_only" || value === "patch" || value === "repair" || value === "vision_patch" || value === "advisory" || value === "ask_user" ? value : undefined;
 }
 
 function parseSteps(value: unknown): PlanStep[] {

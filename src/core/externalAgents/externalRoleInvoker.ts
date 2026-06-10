@@ -232,6 +232,9 @@ function normalizeExternalPayload(input: {
     warnings: normalized.warnings,
     summary: normalized.summary
   });
+  if (normalized.status === "failed") {
+    throw new Error(`External ${input.role} output failed ${normalized.adapter} normalization: ${normalized.warnings.join("; ") || "invalid typed role output"}`);
+  }
   return normalized;
 }
 

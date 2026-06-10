@@ -60,6 +60,7 @@ export type AgentGraphState = {
   orchestrationPolicy?: OrchestrationPolicyGenome;
   toolSkillRoutes?: ToolSkillRouteDecision[];
   objectiveTrace?: ObjectiveTraceV1;
+  workflowBlockedReason?: string;
   failureMemory?: FailureMemoryInfluenceState;
   budgetRuntime: BudgetRuntimeState;
   budgetStatus?: ModelBudgetStatus;
