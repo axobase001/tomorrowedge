@@ -47,6 +47,23 @@ The safety boundary cannot be mutated. A policy variant may become stricter,
 cheaper, or more evidence-hungry, but it cannot grant forbidden tools, weaken
 access modes, hide model calls, or bypass the event ledger.
 
+Offline mutation uses a bounded operator set that covers every runtime-wired
+genome group: contract depth, trace weighting, planning shape, parallel-role
+policy, routing preference, reviewer/judge thresholds, verification strictness,
+repair retries, and stop behavior. The default population size matches this
+operator set so `tedge policy evolve --offline` explores the documented genome
+surface before selecting elites.
+
+When a selected policy changes `routingPolicy.routingPreference`, the runtime
+rebuilds subsequent role assignments before planner/coder/reviewer execution.
+Privacy/local routing locks and explicit role overrides remain hard boundaries.
+
+As of `1.3.3`, the audit loop also records policy attribution in compact
+objective traces and persists trace completeness for offline fitness scoring.
+Scenario-scoped runtime selection falls back to globally evolved selected
+policies when no scenario-specific policy exists, and trace retrieval artifacts
+include rejected candidates instead of only selected trace ids.
+
 ## Fitness
 
 Stored objective traces are scored with:

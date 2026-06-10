@@ -62,6 +62,8 @@ describe("offline agent graph", () => {
     expect(state.objectiveContract?.workflowKind).toBe("patch");
     expect(state.contractVerification?.status).toMatch(/passed|repaired|downgraded/);
     expect(state.objectiveTrace?.outcome.finalStatus).toBeTruthy();
+    expect(state.objectiveTrace?.policySummary?.policyId).toBe(state.orchestrationPolicy?.policyId);
+    expect(state.objectiveTrace?.traceCompleteness?.score).toBe(state.traceCompleteness?.score);
     expect(state.orchestrationPolicy?.policyId).toBeTruthy();
     expect(state.routing.assignments.some((assignment) => assignment.role === "vision")).toBe(false);
     expect(state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
@@ -146,6 +148,42 @@ describe("offline agent graph", () => {
       expect(state.agents.map((agent) => agent.role)).not.toContain("coder_b");
       expect(state.roleGraph?.nodes.map((node) => node.role)).not.toContain("coder_b");
       expect(state.debateRounds).toHaveLength(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("applies selected routingPreference to runtime route assignments", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-policy-routing-"));
+    await cp(source, cwd, { recursive: true });
+    const base = defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z");
+    await savePolicyScore(cwd, {
+      ...base,
+      policyId: "cheap_policy_route",
+      routingPolicy: { ...base.routingPolicy, routingPreference: "cheap" },
+      metadata: { ...base.metadata, source: "selected" as const, fitness: 999, scenarioType: "debugging" as const }
+    });
+    const config = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" },
+        deepseek: { ...defaultConfig.providers.deepseek, enabled: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com" }
+      }
+    };
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
+
+      expect(state.orchestrationPolicy?.policyId).toBe("cheap_policy_route");
+      expect(state.routing.assignments.find((assignment) => assignment.role === "planner")?.provider).toBe("deepseek");
+      expect(state.events.some((event) =>
+        event.type === "routing_decision"
+        && event.phase === "planning"
+        && event.role === "planner"
+        && event.assignedProvider === "deepseek"
+        && event.policyTags.includes("policy:cheap")
+      )).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

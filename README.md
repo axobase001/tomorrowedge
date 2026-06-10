@@ -6,7 +6,7 @@
 
 明日边缘是一个 **面向用户场景的自迭代 Agent 编排层 GUI/runtime**：它以 **多模型强治理** 和 **多 Agent 工作流编排** 为核心，通过 **Objective Contract、objective-action-feedback trace 与 Orchestration Policy Genome** 把编排策略本身变成可审计、可评分、可离线改进的运行时对象。
 
-它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents 和人类授权组织成一个可监督、可审计、可回滚的软件工程工作流。
+它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents、人类授权、目标契约、证据验证和执行反馈组织成一个可监督、可审计、可回滚、可迭代的软件工程工作流。
 
 ```text
 Full autonomy, full visibility.
@@ -104,8 +104,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.3.2`。
+当前版本：`1.3.3`。
 
+- `1.3.3` closes the next self-iteration audit gap: selected draft PR work expands policy genome mutation/routing coverage; objective traces now preserve bounded policy attribution and trace completeness; scenario-scoped runtime selection falls back to global evolved policies; trace retrieval records real rejected candidates instead of hardcoded zero.
 - `1.3.2` polishes the 1.3 runtime release: README now has one top-level definition and the self-iterating orchestration section appears before differentiation; `planningPolicy.allowParallelRoles=false` disables optional parallel candidate/debate branches; trace retrieval now applies `tracePolicy` recency, success/failure, stale, same-scenario, and same-workflow weighting.
 - `1.3.1` integrates the Orchestration Policy Genome into the runtime path: policy fields now affect contract depth, plan-step evidence binding, role routing, verification strictness, repair limits, stop decisions, and contract tool/action gates.
 - `1.3.0` introduces the contract-first self-iterating orchestration layer: Objective Contracts before planning, objective-action-feedback trace memory after runs, trace-guided policy scoring, offline policy evolution, and GUI/CLI inspection surfaces for contract, trace, and policy state.
@@ -551,7 +552,13 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.3.2`.
+Current version: `1.3.3`.
+
+`1.3.3` closes the next self-iteration audit gap: selected draft PR work expands
+policy genome mutation/routing coverage; objective traces now preserve bounded
+policy attribution and trace completeness; scenario-scoped runtime selection
+falls back to global evolved policies; trace retrieval records real rejected
+candidates instead of hardcoded zero.
 
 `1.3.2` polishes the 1.3 runtime release: README now has one top-level
 definition and the self-iterating orchestration section appears before

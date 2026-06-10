@@ -8,6 +8,12 @@ import { scoreTraceUtility } from "./traceScorer.js";
 export type TraceRetrievalPolicy = Pick<OrchestrationPolicyGenome["tracePolicy"],
   "preferRecent" | "preferSuccessTraces" | "preferFailureTraces" | "avoidStaleTraces">;
 
+export type TraceRetrievalDiagnostics = {
+  selected: ObjectiveTraceV1[];
+  rejected: Array<{ traceId: string; score: number; reason: "score_filtered" | "topk_overflow" }>;
+  consideredCount: number;
+};
+
 export async function addTrace(cwd: string, trace: ObjectiveTraceV1): Promise<void> {
   const traces = await readTraces(cwd, { limit: 10_000, newestFirst: false });
   const next = [...traces.filter((item) => item.traceId !== trace.traceId), trace].slice(-1000);
@@ -39,13 +45,34 @@ export async function retrieveSimilar(
   topK = 3,
   tracePolicy?: TraceRetrievalPolicy
 ): Promise<ObjectiveTraceV1[]> {
+  return (await retrieveSimilarWithDiagnostics(cwd, goal, scenarioProfile, topK, tracePolicy)).selected;
+}
+
+export async function retrieveSimilarWithDiagnostics(
+  cwd: string,
+  goal: string,
+  scenarioProfile: ScenarioProfile,
+  topK = 3,
+  tracePolicy?: TraceRetrievalPolicy
+): Promise<TraceRetrievalDiagnostics> {
   const traces = await readTraces(cwd, { limit: 200, newestFirst: true });
-  return traces
+  const scored = traces
     .map((trace) => ({ trace, score: scoreTraceForRetrieval(trace, goal, scenarioProfile, tracePolicy) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || b.trace.createdAt.localeCompare(a.trace.createdAt))
-    .slice(0, topK)
-    .map((item) => item.trace);
+    .sort((a, b) => b.score - a.score || b.trace.createdAt.localeCompare(a.trace.createdAt));
+  const eligible = scored.filter((item) => item.score > 0);
+  const selected = eligible.slice(0, topK);
+  const selectedIds = new Set(selected.map((item) => item.trace.traceId));
+  return {
+    selected: selected.map((item) => item.trace),
+    rejected: scored
+      .filter((item) => !selectedIds.has(item.trace.traceId))
+      .map((item) => ({
+        traceId: item.trace.traceId,
+        score: item.score,
+        reason: item.score <= 0 ? "score_filtered" : "topk_overflow"
+      })),
+    consideredCount: scored.length
+  };
 }
 
 export function scoreTraceForRetrieval(

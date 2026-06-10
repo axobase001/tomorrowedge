@@ -149,14 +149,14 @@ export const configSchema = z.object({
     mode: selfIterationModeSchema.default("trace_guided"),
     allow_policy_mutation: z.boolean().default(false),
     allow_offline_evolution: z.boolean().default(true),
-    max_policy_variants: z.number().int().min(1).max(32).default(8),
+    max_policy_variants: z.number().int().min(1).max(32).default(15),
     elite_retention: z.number().int().min(1).max(8).default(2)
   }).default({
     enabled: true,
     mode: "trace_guided",
     allow_policy_mutation: false,
     allow_offline_evolution: true,
-    max_policy_variants: 8,
+    max_policy_variants: 15,
     elite_retention: 2
   }),
   failure_memory: z.object({

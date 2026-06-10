@@ -5,8 +5,10 @@ import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome } from "./or
 
 export async function loadBestPolicy(cwd: string, scenarioType?: ScenarioType): Promise<OrchestrationPolicyGenome> {
   const policies = await readPolicies(cwd);
+  if (!policies.length) return defaultOrchestrationPolicy();
   const scoped = scenarioType ? policies.filter((policy) => policy.metadata.scenarioType === scenarioType) : policies;
-  return scoped.sort((a, b) => (b.metadata.fitness ?? 0) - (a.metadata.fitness ?? 0))[0] ?? defaultOrchestrationPolicy();
+  const global = scenarioType ? policies.filter((policy) => !policy.metadata.scenarioType) : [];
+  return bestPolicy(scoped) ?? bestPolicy(global) ?? defaultOrchestrationPolicy();
 }
 
 export async function savePolicyScore(cwd: string, policy: OrchestrationPolicyGenome): Promise<void> {
@@ -31,3 +33,6 @@ function policyFile(cwd: string): string {
   return path.join(cwd, ".tomorrowedge", "orchestration-policies.json");
 }
 
+function bestPolicy(policies: OrchestrationPolicyGenome[]): OrchestrationPolicyGenome | undefined {
+  return [...policies].sort((a, b) => (b.metadata.fitness ?? 0) - (a.metadata.fitness ?? 0))[0];
+}

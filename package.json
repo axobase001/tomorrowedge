@@ -1,7 +1,7 @@
 {
   "name": "tomorrowedge",
-  "version": "1.3.2",
-  "description": "A local GUI client for full-access multi-model coding agents.",
+  "version": "1.3.3",
+  "description": "A contract-first, self-iterating orchestration GUI/runtime for multi-model, multi-agent coding workflows.",
   "type": "module",
   "bin": {
     "tedge": "./dist/cli/index.js"

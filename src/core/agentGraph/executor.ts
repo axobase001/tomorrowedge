@@ -80,7 +80,7 @@ import { generateNativeObjectiveContract } from "../contracts/contractGenerator.
 import { verifyAndRepairContract } from "../contracts/contractVerifier.js";
 import { contractToPlan, overlayPlanWithContract } from "../contracts/contractToPlan.js";
 import { renderObjectiveContractArtifact } from "../contracts/contractArtifacts.js";
-import { retrieveSimilar, addTrace } from "../traces/traceStore.js";
+import { retrieveSimilarWithDiagnostics, addTrace } from "../traces/traceStore.js";
 import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
 import { defaultOrchestrationPolicy, type OrchestrationPolicyGenome, type SelfIterationMode } from "../orchestrationPolicy/orchestrationPolicy.js";
 import { loadBestPolicy, savePolicyScore } from "../orchestrationPolicy/policyStore.js";
@@ -292,7 +292,7 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
 }
 
 async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
-  const { access, config, cwd, goal, imagePaths, ledger } = runtime;
+  const { access, config, cwd, goal, imagePaths, ledger, router } = runtime;
   const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: access.mode, hasImageInputs: imagePaths.length > 0 });
   state.scenarioProfile = scenarioProfile;
   ledger.append({
@@ -323,24 +323,41 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     stopMode: policy.stopPolicy.stopMode,
     policyRef: ledger.writeArtifact("policies", JSON.stringify(policy, null, 2), "json")
   });
+  const policyRouteChanges = router.applyPolicyRoutingPreference(policy);
+  if (policyRouteChanges.length) {
+    state.routing = routingForState(router, imagePaths.length > 0);
+    for (const change of policyRouteChanges) {
+      recordRoutingAndBudgetPreview(config, state, ledger, {
+        ...change.to,
+        reason: `${change.reason}; previous route was ${change.from.provider}/${change.from.model}`
+      }, goal, "planning");
+    }
+  }
 
-  const retrievedTraces = policyMode === "off" ? [] : await retrieveSimilar(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK, policy.tracePolicy);
+  const retrieval = policyMode === "off"
+    ? { selected: [], rejected: [], consideredCount: 0 }
+    : await retrieveSimilarWithDiagnostics(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK, policy.tracePolicy);
+  const retrievedTraces = retrieval.selected;
   state.retrievedObjectiveTraces = retrievedTraces;
   ledger.append({
     type: "trace_retrieval",
     phase: "memory",
     role: "planner",
     selectedTraceIds: retrievedTraces.map((trace) => trace.traceId),
-    rejectedCount: 0,
+    rejectedCount: retrieval.rejected.length,
     policyMode,
     summary: retrievedTraces.length ? `Retrieved ${retrievedTraces.length} objective-action-feedback trace(s).` : "No similar objective trace found.",
-    artifactRef: ledger.writeArtifact("objective_trace_retrieval", JSON.stringify(retrievedTraces.map((trace) => ({
-      traceId: trace.traceId,
-      scenarioType: trace.scenarioProfile.scenarioType,
-      workflowKind: trace.planSummary.workflowKind,
-      finalStatus: trace.outcome.finalStatus,
-      lessons: trace.outcome.lessons
-    })), null, 2), "json")
+    artifactRef: ledger.writeArtifact("objective_trace_retrieval", JSON.stringify({
+      consideredCount: retrieval.consideredCount,
+      selected: retrievedTraces.map((trace) => ({
+        traceId: trace.traceId,
+        scenarioType: trace.scenarioProfile.scenarioType,
+        workflowKind: trace.planSummary.workflowKind,
+        finalStatus: trace.outcome.finalStatus,
+        lessons: trace.outcome.lessons
+      })),
+      rejected: retrieval.rejected
+    }, null, 2), "json")
   });
 
   const generatedBaseline = generateNativeObjectiveContract({
@@ -1550,6 +1567,7 @@ function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntim
     createdAt: nowIso(),
     goal: state.goal,
     scenarioProfile,
+    policySummary: policySummaryForTrace(state.orchestrationPolicy),
     contract,
     contractVerification: verification,
     planSummary: {
@@ -1600,11 +1618,41 @@ function buildObjectiveTrace(state: AgentGraphState, runtime: OfflineGraphRuntim
     feedback: {
       implicitSignals: implicitFeedbackSignals(state)
     },
+    traceCompleteness: state.traceCompleteness
+      ? { score: state.traceCompleteness.score, missing: state.traceCompleteness.missing }
+      : undefined,
     outcome: {
       finalStatus,
       failureType: finalStatus === "success" ? undefined : workflowStopReason(state),
       lessons: objectiveTraceLessons(state, missingEvidence)
     }
+  };
+}
+
+function policySummaryForTrace(policy?: OrchestrationPolicyGenome): ObjectiveTraceV1["policySummary"] {
+  if (!policy) return undefined;
+  return {
+    policyId: policy.policyId,
+    schemaVersion: policy.schemaVersion,
+    source: policy.metadata.source,
+    scenarioType: policy.metadata.scenarioType,
+    mutation: policy.metadata.mutation,
+    fitness: policy.metadata.fitness,
+    contractDepth: policy.contractPolicy.contractDepth,
+    traceTopK: policy.tracePolicy.traceTopK,
+    preferRecent: policy.tracePolicy.preferRecent,
+    preferSuccessTraces: policy.tracePolicy.preferSuccessTraces,
+    preferFailureTraces: policy.tracePolicy.preferFailureTraces,
+    avoidStaleTraces: policy.tracePolicy.avoidStaleTraces,
+    maxStepsMode: policy.planningPolicy.maxStepsMode,
+    allowParallelRoles: policy.planningPolicy.allowParallelRoles,
+    routingPreference: policy.routingPolicy.routingPreference,
+    reviewerThreshold: policy.routingPolicy.reviewerThreshold,
+    judgeThreshold: policy.routingPolicy.judgeThreshold,
+    verificationStrictness: policy.verificationPolicy.verificationStrictness,
+    maxRepairRounds: policy.repairPolicy.maxRepairRounds,
+    stopMode: policy.stopPolicy.stopMode,
+    allowPartialCompletion: policy.stopPolicy.allowPartialCompletion
   };
 }
 

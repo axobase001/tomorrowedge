@@ -1,2 +1,1 @@
-export { retrieveSimilar, sampleByScenario, sampleFailures, sampleRecent, sampleSuccesses } from "./traceStore.js";
-
+export { retrieveSimilar, retrieveSimilarWithDiagnostics, sampleByScenario, sampleFailures, sampleRecent, sampleSuccesses } from "./traceStore.js";

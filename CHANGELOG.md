@@ -7,6 +7,28 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-06-10
+
+1.3.3 hardens the self-iteration runtime audit loop after the next policy/trace
+issue sweep.
+
+### Changed
+
+- Policy genome mutation now covers the wider runtime-wired operator set from
+  the audited draft PR, including contract, trace, planning, routing,
+  verification, repair, and stop policy families.
+- Selected `routingPolicy.routingPreference` changes now rebuild runtime role
+  assignments before execution while preserving privacy/local locks and explicit
+  role overrides.
+- Scenario-scoped runtime policy selection now falls back to globally evolved
+  selected policies when no scenario-specific policy exists.
+- Objective traces now preserve bounded policy attribution and persisted trace
+  completeness so offline fitness can audit which policy produced a run.
+- Trace retrieval now records real rejected candidates and rejection reasons in
+  the event artifact instead of hardcoding `rejectedCount: 0`.
+- `package.json` now describes TomorrowEdge as a contract-first,
+  self-iterating orchestration GUI/runtime.
+
 ## [1.3.2] - 2026-06-10
 
 1.3.2 polishes the 1.3 runtime release by making the README narrative sharper

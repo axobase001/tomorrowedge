@@ -20,7 +20,7 @@ export function evaluatePolicyFitness(policy: OrchestrationPolicyGenome, trace: 
   const successScore = trace.outcome.finalStatus === "success" ? 100 : trace.outcome.finalStatus === "partial" ? 55 : trace.outcome.finalStatus === "failure" ? 20 : 0;
   const contractQualityScore = scoreContractQuality(trace.contract, trace.contractVerification);
   const evidenceScore = trace.evidenceSummary.evidenceScore;
-  const traceCompletenessScore = state?.traceCompleteness?.score ?? 70;
+  const traceCompletenessScore = traceCompletenessScoreForTrace(trace, state);
   const repairRecoveryScore = repairScoreForPolicy(policy, trace);
   const policyAlignmentScore = policyAlignmentForTrace(policy, trace, traceCompletenessScore);
   const costPenalty = costPenaltyForPolicy(policy, trace);
@@ -49,6 +49,11 @@ export function evaluatePolicyFitness(policy: OrchestrationPolicyGenome, trace: 
     instabilityPenalty,
     finalFitness
   };
+}
+
+function traceCompletenessScoreForTrace(trace: ObjectiveTraceV1, state?: AgentGraphState): number {
+  const score = state?.traceCompleteness?.score ?? trace.traceCompleteness?.score ?? trace.evidenceSummary.evidenceScore;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 export function aggregatePolicyFitness(policy: OrchestrationPolicyGenome, traces: ObjectiveTraceV1[], state?: AgentGraphState): PolicyFitness {
