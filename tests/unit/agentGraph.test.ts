@@ -554,7 +554,15 @@ describe("offline agent graph", () => {
     delete process.env.MOCK_INPUT_PRICE_PER_MTOK;
     delete process.env.MOCK_OUTPUT_PRICE_PER_MTOK;
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
-    const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { liveAdvisory: true });
+    const config = {
+      ...defaultConfig,
+      strong_agents: {
+        ...defaultConfig.strong_agents,
+        max_calls_per_task: 10,
+        max_cost_usd: 10
+      }
+    };
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
 
     expect(state.modelNotes.map((note) => note.kind)).toEqual(["review_advice", "judge_advice", "plan_advice", "implementation_advice", "review_advice", "judge_advice"]);
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
@@ -713,6 +721,56 @@ describe("offline agent graph", () => {
       status: "blocked"
     }));
     expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+  });
+
+  it("routes model planner and task governance through the unified model invocation budget gate", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-budget-gate-"));
+    try {
+      await cp(source, cwd, { recursive: true });
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
+
+      expect(state.events).toContainEqual(expect.objectContaining({
+        type: "budget_decision",
+        invocationKind: "model_planner",
+        status: "allowed"
+      }));
+      expect(state.events).toContainEqual(expect.objectContaining({
+        type: "budget_decision",
+        invocationKind: "task_governance",
+        status: "allowed"
+      }));
+      expect(state.budgetRuntime.strongAgentCallsUsed).toBeGreaterThanOrEqual(1);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks task governance model calls when the strong-agent call budget is exhausted", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-budget-gate-blocked-"));
+    const config = {
+      ...defaultConfig,
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+    };
+    try {
+      await cp(source, cwd, { recursive: true });
+      const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
+
+      expect(state.events).toContainEqual(expect.objectContaining({
+        type: "budget_decision",
+        invocationKind: "model_planner",
+        status: "blocked"
+      }));
+      expect(state.events).toContainEqual(expect.objectContaining({
+        type: "budget_decision",
+        invocationKind: "task_governance",
+        status: "blocked"
+      }));
+      expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("skips duplicate post-judge live advisory when live patch already selected a candidate", async () => {

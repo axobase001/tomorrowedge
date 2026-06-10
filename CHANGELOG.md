@@ -63,18 +63,20 @@ Changelog: newest changes first, grouped by release and by change type.
 - Evidence dependency validation now records `evidence_gap` events for reviewer,
   judge, runner, repairer, and summarizer handoffs.
 - Debate Protocol v2 adds structured debate moves, accepted/rejected claims,
-  unresolved blocking issues, evidence coverage score, and `debate_resolution`
-  events. Native judge decisions block unresolved critical issues unless policy
-  allows bounded partial completion.
-- Policy evolution now includes counterfactual replay and tournament scoring
-  events over objective-action-feedback traces.
+  candidate-scoped unresolved blocking issues, global blocking issues, selected
+  candidate resolution, evidence coverage score, and `debate_resolution`
+  events. Native judge decisions block unresolved critical issues only when they
+  are global or attached to the selected candidate unless policy allows bounded
+  partial completion.
+- Policy evolution now includes counterfactual replay and trace-level
+  tournament scoring events over objective-action-feedback traces.
 - External agent profiles can declare `adapter`, `responseMode`, `strictJson`,
   `workingTreeMode`, and normalization strictness. Generic, Codex, and Claude
   Code adapters normalize command/MCP/configured-profile outputs and record
   `external_agent_normalization` events.
 - Budget governance now exposes `evaluateModelCallInvocation` for
-  `model_planner`, `live_patch`, `live_advisory`, and `pre_judge_debate`
-  invocation checks.
+  `model_planner`, `task_governance`, `live_patch`, `live_advisory`, and
+  `pre_judge_debate` invocation checks.
 - External agent adapters now expose a role-aware runtime interface for prompt
   construction, output normalization, evidence extraction, failure detection,
   retry policy, and cost estimation.
@@ -84,10 +86,12 @@ Changelog: newest changes first, grouped by release and by change type.
 - The default Orchestration Policy Genome schema is now
   `orchestration-policy/v2`; stored v1 policies are migrated with default
   debate, task-graph, and external-agent policy fields.
-- Patch workflows now run through the RoleGraphScheduler for candidate,
-  review, judge, runner, and verification/repair phases. Blocking evidence
-  gaps stop the workflow with `workflow_stop_reason` instead of being recorded
-  as passive trace metadata.
+- Patch workflows now use RoleGraph-gated phased execution for candidate,
+  review, judge, runner, and verification/repair phases. Ready role nodes are
+  checked against TaskGraph actions before they can mark progress, while the
+  native executor still owns phase sequencing. Blocking evidence gaps stop the
+  workflow with `workflow_stop_reason` instead of being recorded as passive
+  trace metadata.
 - Planner cache keys now include access mode, workflow intent, allowed phases,
   allowed roles, and allowed tools, preventing restricted/read-only workflows
   from reusing earlier patch-capable plans.
@@ -102,16 +106,18 @@ Changelog: newest changes first, grouped by release and by change type.
   and patch workflows distinguish `patch_runner` from `test_runner`.
 - Debate Protocol v2 unresolved issues are candidate-scoped. A losing
   candidate with no diff no longer blocks a good selected candidate unless the
-  issue is global.
+  issue is global; judge events now separate selected-candidate, global, and
+  non-selected candidate issues.
 - TaskGraph nodes now receive runtime status updates via `task_node_result`
-  events, and apply/verify nodes validate their dependencies before being
-  marked done.
-- Policy counterfactual replay now records decision-level changes such as
+  events, and role execution, apply, and verify nodes validate their
+  dependencies before being marked done.
+- Policy counterfactual replay now records trace-level decision changes such as
   reviewer/judge requirements, parallel candidate permission, debate, repair,
   early stop, external strong-agent preference, and unresolved issue blocking.
-- Live patch, live advisory, and pre-judge debate model calls now use the
-  BudgetGate reserve/invoke/commit-or-release lifecycle. `routing.max_cost_usd`
-  remains a preflight estimate; governance decisions come from BudgetGate.
+- Model-backed planner, task governance, live patch, live advisory, and
+  pre-judge debate model calls now use the BudgetGate
+  reserve/invoke/commit-or-release lifecycle. `routing.max_cost_usd` remains a
+  preflight estimate; governance decisions come from BudgetGate.
 - Explorer cache keys now project stable plan intent instead of runtime
   TaskGraph status, so graph execution state no longer invalidates reusable
   context selections.
@@ -124,6 +130,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - External-agent normalization errors now record explicit
   `external_agent_error` events before the workflow aborts or safely falls
   back according to strictness.
+- Strict external Codex/Claude role calls can retry malformed typed output once
+  under adapter policy, record `external_agent_retry`, and attach extracted
+  EvidencePackets to the run instead of accepting opaque final text.
 
 ## [1.3.10] - 2026-06-10
 

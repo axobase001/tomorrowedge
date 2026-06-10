@@ -132,6 +132,7 @@ describe("adaptive orchestration runtime", () => {
       }
     });
 
+    expect(session.globalResolution.resolution).toBe("request_revision");
     expect(session.resolution).toBe("request_revision");
     expect(session.unresolvedBlockingIssues).toContain("token validation not covered");
     expect(session.unresolvedIssues[0]).toMatchObject({ title: "token validation not covered", blocking: true });
@@ -158,6 +159,9 @@ describe("adaptive orchestration runtime", () => {
 
     expect(decision.decision).toBe("select");
     expect(decision.selectedCandidateId).toBe("candidate_a");
+    expect(decision.unresolvedBlockingIssues).toEqual([]);
+    expect(decision.selectedCandidateBlockingIssues).toEqual([]);
+    expect(decision.nonSelectedCandidateIssues?.[0]).toMatchObject({ candidateId: "candidate_b" });
   });
 
   it("requests revision when the selected candidate has an unresolved blocking issue", async () => {
@@ -178,6 +182,7 @@ describe("adaptive orchestration runtime", () => {
 
     expect(decision.decision).toBe("request_revision");
     expect(decision.reason).toContain("candidate_a lacks verifier evidence");
+    expect(decision.selectedCandidateBlockingIssues?.[0]).toMatchObject({ candidateId: "candidate_a" });
   });
 
   it("blocks all candidates on unresolved global security issues", async () => {
@@ -198,6 +203,33 @@ describe("adaptive orchestration runtime", () => {
 
     expect(decision.decision).toBe("request_revision");
     expect(decision.reason).toContain("global secret leakage risk");
+    expect(decision.globalBlockingIssues?.[0]).toMatchObject({ id: "global_secret" });
+  });
+
+  it("keeps debate session resolution selectable when only a non-selected candidate has unresolved issues", async () => {
+    const session = buildDebateSession({
+      sessionId: "debate_non_selected_issue",
+      maxRounds: 2,
+      evidencePackets: [],
+      debateRounds: [],
+      candidates: [
+        patchCandidate("candidate_a", "coder_a", "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-a\n+b\n"),
+        patchCandidate("candidate_b", "coder_b", "")
+      ],
+      review: {
+        mode: "standard",
+        overallRecommendation: "accept candidate_a; revise candidate_b",
+        reviews: [
+          reviewItem("candidate_a", "accept", 92, 15),
+          { ...reviewItem("candidate_b", "revise", 20, 80), regressionConcerns: ["candidate_b has no diff"] }
+        ]
+      }
+    });
+
+    expect(session.resolution).toBe("selectable");
+    expect(session.globalResolution.resolution).toBe("selectable");
+    expect(session.candidateResolutions.candidate_a?.resolution).toBe("selectable");
+    expect(session.candidateResolutions.candidate_b?.resolution).toBe("request_revision");
   });
 
   it("normalizes external Codex and Claude Code outputs through adapters", () => {
@@ -435,31 +467,56 @@ function reviewItem(candidateId: string, recommendation: "accept" | "revise", co
   };
 }
 
+function patchCandidate(candidateId: string, agentId: "coder_a" | "coder_b", unifiedDiff: string) {
+  return {
+    candidateId,
+    agentId,
+    approach: agentId === "coder_b" ? "alternative" as const : "minimal_patch" as const,
+    summary: `${candidateId} summary`,
+    filesChanged: unifiedDiff ? ["index.js"] : [],
+    unifiedDiff,
+    testPlan: [],
+    knownTradeoffs: [],
+    estimatedRisk: "low" as const
+  };
+}
+
 function debateSessionWithIssues(issues: Array<{ id: string; candidateId?: string; title: string }>): DebateSession {
+  const normalizedIssues = issues.map((issue) => ({
+    ...issue,
+    blocking: true,
+    status: "open" as const,
+    requiredEvidence: ["evidence"],
+    relatedMoveIds: []
+  }));
+  const globalIssues = normalizedIssues.filter((issue) => !issue.candidateId);
+  const candidateIds = [...new Set(normalizedIssues.map((issue) => issue.candidateId).filter((id): id is string => Boolean(id)))];
   return {
     sessionId: "debate_candidate_scope",
     maxRounds: 2,
     moves: [],
     claims: [],
-    issues: issues.map((issue) => ({
-      ...issue,
-      blocking: true,
-      status: "open" as const,
-      requiredEvidence: ["evidence"],
-      relatedMoveIds: []
-    })),
-    unresolvedIssues: issues.map((issue) => ({
-      ...issue,
-      blocking: true,
-      status: "open" as const,
-      requiredEvidence: ["evidence"],
-      relatedMoveIds: []
-    })),
+    issues: normalizedIssues,
+    unresolvedIssues: normalizedIssues,
     acceptedClaims: [],
     rejectedClaims: [],
-    unresolvedBlockingIssues: issues.map((issue) => issue.title),
+    candidateResolutions: Object.fromEntries(candidateIds.map((candidateId) => {
+      const candidateIssues = normalizedIssues.filter((issue) => issue.candidateId === candidateId);
+      const blocking = [...globalIssues, ...candidateIssues];
+      return [candidateId, {
+        resolution: blocking.length ? "request_revision" as const : "selectable" as const,
+        unresolvedBlockingIssues: blocking.map((issue) => issue.title),
+        unresolvedIssues: blocking
+      }];
+    })),
+    globalResolution: {
+      resolution: globalIssues.length ? "request_revision" as const : "selectable" as const,
+      unresolvedBlockingIssues: globalIssues.map((issue) => issue.title),
+      unresolvedIssues: globalIssues
+    },
+    unresolvedBlockingIssues: globalIssues.map((issue) => issue.title),
     evidenceCoverageScore: 50,
-    resolution: "request_revision"
+    resolution: globalIssues.length ? "request_revision" : "selectable"
   };
 }
 

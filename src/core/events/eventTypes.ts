@@ -92,6 +92,9 @@ export type JudgeEvent = BaseEvent & {
   rejectedClaims?: string[];
   unresolvedBlockingIssues?: string[];
   unresolvedIssueIds?: string[];
+  selectedCandidateBlockingIssues?: DebateIssue[];
+  globalBlockingIssues?: DebateIssue[];
+  nonSelectedCandidateIssues?: DebateIssue[];
   evidenceCoverageScore?: number;
   decisionRef: string;
 };
@@ -290,6 +293,14 @@ export type ExternalAgentErrorEvent = BaseEvent & {
   error: string;
 };
 
+export type ExternalAgentRetryEvent = BaseEvent & {
+  type: "external_agent_retry";
+  externalAgentId: string;
+  attempt: number;
+  reason: string;
+  retryPromptRef?: string;
+};
+
 export type ExternalAgentCostUsageEvent = BaseEvent & {
   type: "external_agent_cost_usage";
   externalAgentId: string;
@@ -339,6 +350,10 @@ export type DebateResolutionEvent = BaseEvent & {
   type: "debate_resolution";
   debateSessionId: string;
   resolution: "selectable" | "request_revision" | "needs_user";
+  selectedCandidateId?: string;
+  selectedCandidateResolution?: "selectable" | "request_revision" | "needs_user";
+  globalResolution?: "selectable" | "request_revision" | "needs_user";
+  nonSelectedIssueCount?: number;
   acceptedClaims: string[];
   rejectedClaims: string[];
   unresolvedBlockingIssues: string[];
@@ -422,7 +437,7 @@ export type BudgetDecisionEvent = BaseEvent & {
   type: "budget_decision";
   status: "allowed" | "blocked" | "warn";
   reason: string;
-  invocationKind?: "model_planner" | "live_patch" | "live_advisory" | "pre_judge_debate";
+  invocationKind?: "model_planner" | "task_governance" | "live_patch" | "live_advisory" | "pre_judge_debate";
   budgetScope?: "global_strong_pool" | "per_role" | "efficient";
   maxCostUsd?: number;
   estimatedCostUsd?: number;
@@ -645,6 +660,7 @@ export type TomorrowEdgeEvent =
   | ExternalAgentReviewEvent
   | ExternalAgentJudgmentEvent
   | ExternalAgentErrorEvent
+  | ExternalAgentRetryEvent
   | ExternalAgentCostUsageEvent
   | ExternalAgentNormalizationEvent
   | EvidenceEvent

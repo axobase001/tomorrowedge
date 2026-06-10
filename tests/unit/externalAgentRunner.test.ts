@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
 import { diagnoseExternalAgentProfile, resolveExternalAgentWorkingDirectory } from "../../src/core/externalAgents/externalAgentDiagnostics.js";
@@ -121,6 +121,64 @@ describe("external agent runners", () => {
       await releaseExternalAgentProcessPool();
       await rm(temp, { recursive: true, force: true });
     }
+  });
+
+  it("retries malformed strict Codex patch output once and accepts a valid second response", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "tedge-external-retry-"));
+    const counter = path.join(temp, "count.txt");
+    const ledger = createEventLedger("full", "session_external_retry");
+    const script = [
+      "const fs = require('fs');",
+      "const p = process.env.TEDGE_RETRY_COUNTER;",
+      "let n = 0;",
+      "try { n = Number(fs.readFileSync(p, 'utf8')) || 0; } catch {}",
+      "n += 1;",
+      "fs.writeFileSync(p, String(n));",
+      "if (n === 1) { console.log('not-json'); process.exit(0); }",
+      "console.log(JSON.stringify({ summary: 'valid second patch', candidate: { candidateId: 'retry_candidate', agentId: 'coder_a', approach: 'minimal_patch', summary: 'valid second patch', filesChanged: ['index.js'], unifiedDiff: '--- a/index.js\\n+++ b/index.js\\n@@ -1 +1 @@\\n-a\\n+b\\n', testPlan: ['npm test'], knownTradeoffs: [], estimatedRisk: 'low' } }));"
+    ].join("\n");
+    const profile: ExternalAgentProfile = {
+      ...profileFor("codex_retry"),
+      adapter: "codex",
+      command: process.execPath,
+      args: ["-e", script],
+      env: { TEDGE_RETRY_COUNTER: counter },
+      autoStart: false,
+      allowedRoles: ["coder_a"],
+      capabilities: ["coding"],
+      strictJson: true,
+      normalizationStrictness: "strict"
+    };
+
+    try {
+      await writeFile(counter, "0", "utf8");
+      const result = await invokeExternalRole({ cwd: process.cwd(), profile, role: "coder_a", prompt: "patch", ledger });
+
+      expect(result.attempts).toBe(2);
+      expect(result.payload).toMatchObject({ candidate: { candidateId: "retry_candidate" } });
+      expect(result.evidencePackets.some((packet) => packet.phase === "patch")).toBe(true);
+      expect(ledger.events).toContainEqual(expect.objectContaining({ type: "external_agent_retry", role: "coder_a", attempt: 2 }));
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
+  });
+
+  it("aborts strict external output after the retry is still invalid", async () => {
+    const ledger = createEventLedger("full", "session_external_retry_fail");
+    const profile: ExternalAgentProfile = {
+      ...profileFor("codex_retry_fail"),
+      adapter: "codex",
+      command: process.execPath,
+      args: ["-e", "console.log('not-json')"],
+      autoStart: false,
+      allowedRoles: ["coder_a"],
+      capabilities: ["coding"],
+      strictJson: true,
+      normalizationStrictness: "strict"
+    };
+
+    await expect(invokeExternalRole({ cwd: process.cwd(), profile, role: "coder_a", prompt: "patch", ledger })).rejects.toThrow("after retry");
+    expect(ledger.events).toContainEqual(expect.objectContaining({ type: "external_agent_retry", role: "coder_a", attempt: 2 }));
   });
 
   it("fails probe before spawning when the configured command is missing", async () => {

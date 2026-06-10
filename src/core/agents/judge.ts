@@ -4,7 +4,7 @@ import type { RiskLevel } from "../../schemas/plan.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import type { DebateRound } from "../../schemas/debate.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
-import type { DebateSession } from "../debate/debateProtocol.js";
+import type { DebateIssue, DebateSession } from "../debate/debateProtocol.js";
 import { BaseAgent } from "./baseAgent.js";
 
 export type JudgeAgentInput = {
@@ -27,24 +27,32 @@ export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
     const debateBlock = blockingDebateDecision(input.debateSession, acceptable?.candidateId, input.allowPartialCompletion, input.riskLevel);
     if (debateBlock) return debateBlock;
     if (!acceptable) {
+      const issueSummary = debateIssueSummary(input.debateSession, undefined);
       return {
         decision: input.review.reviews.some(hasCriticalConcern) ? "ask_user" : "request_revision",
         reason: `No candidate cleared reviewer blocking concerns for safe automatic application.${debateSuffix(input.debateRounds)}`,
         acceptedClaims: input.debateSession?.acceptedClaims,
         rejectedClaims: input.debateSession?.rejectedClaims,
-        unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+        unresolvedBlockingIssues: issueSummary.blockingTitles,
+        selectedCandidateBlockingIssues: issueSummary.selectedCandidateBlockingIssues,
+        globalBlockingIssues: issueSummary.globalBlockingIssues,
+        nonSelectedCandidateIssues: issueSummary.nonSelectedCandidateIssues,
         evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
         confidence: 0.62
       };
     }
     const criticalFinding = acceptable.redTeamFindings.find((finding) => finding.severity === "critical");
     if (criticalFinding) {
+      const issueSummary = debateIssueSummary(input.debateSession, acceptable.candidateId);
       return {
         decision: "ask_user",
         reason: `Red-team review found a critical issue: ${criticalFinding.title}.`,
         acceptedClaims: input.debateSession?.acceptedClaims,
         rejectedClaims: input.debateSession?.rejectedClaims,
-        unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+        unresolvedBlockingIssues: issueSummary.blockingTitles,
+        selectedCandidateBlockingIssues: issueSummary.selectedCandidateBlockingIssues,
+        globalBlockingIssues: issueSummary.globalBlockingIssues,
+        nonSelectedCandidateIssues: issueSummary.nonSelectedCandidateIssues,
         evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
         confidence: 0.7,
         requiredUserDecision: "Approve, reject, or request a revised candidate after reviewing the critical red-team finding."
@@ -53,13 +61,17 @@ export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
     const redTeamSuffix = input.review.mode === "red_team" ? " Red-team findings were included in the decision." : "";
     const evidenceSuffix = input.evidencePackets?.length ? ` Evidence packets considered=${input.evidencePackets.length}.` : "";
     const debateEvidence = debateSuffix(input.debateRounds?.filter((round) => round.targetCandidateId === acceptable.candidateId));
+    const issueSummary = debateIssueSummary(input.debateSession, acceptable.candidateId);
     return {
       selectedCandidateId: acceptable.candidateId,
       decision: "select",
       reason: `Selected the highest scoring acceptable candidate.${redTeamSuffix}${evidenceSuffix}${debateEvidence}`,
       acceptedClaims: input.debateSession?.acceptedClaims,
       rejectedClaims: input.debateSession?.rejectedClaims,
-      unresolvedBlockingIssues: input.debateSession?.unresolvedBlockingIssues,
+      unresolvedBlockingIssues: issueSummary.blockingTitles,
+      selectedCandidateBlockingIssues: issueSummary.selectedCandidateBlockingIssues,
+      globalBlockingIssues: issueSummary.globalBlockingIssues,
+      nonSelectedCandidateIssues: issueSummary.nonSelectedCandidateIssues,
       evidenceCoverageScore: input.debateSession?.evidenceCoverageScore,
       confidence: 0.78
     };
@@ -67,12 +79,11 @@ export class JudgeAgent extends BaseAgent<JudgeAgentInput, JudgeDecision> {
 }
 
 function blockingDebateDecision(debateSession: DebateSession | undefined, selectedCandidateId: string | undefined, allowPartialCompletion = true, riskLevel: RiskLevel | undefined): JudgeDecision | undefined {
-  const unresolvedIssues = (debateSession?.unresolvedIssues ?? []).filter((issue) =>
-    issue.blocking && (!issue.candidateId || issue.candidateId === selectedCandidateId)
-  );
-  const unresolved = unresolvedIssues.map((issue) => issue.title);
+  const issueSummary = debateIssueSummary(debateSession, selectedCandidateId);
+  const unresolvedIssues = [...issueSummary.globalBlockingIssues, ...issueSummary.selectedCandidateBlockingIssues];
+  const unresolved = issueSummary.blockingTitles;
   if (!unresolved.length) return undefined;
-  const hasGlobalBlockingIssue = unresolvedIssues.some((issue) => !issue.candidateId);
+  const hasGlobalBlockingIssue = issueSummary.globalBlockingIssues.length > 0;
   const mayProceedPartial = !hasGlobalBlockingIssue && allowPartialCompletion && riskLevel !== "high";
   if (mayProceedPartial) return undefined;
   return {
@@ -81,8 +92,32 @@ function blockingDebateDecision(debateSession: DebateSession | undefined, select
     acceptedClaims: debateSession?.acceptedClaims,
     rejectedClaims: debateSession?.rejectedClaims,
     unresolvedBlockingIssues: unresolved,
+    unresolvedIssueIds: unresolvedIssues.map((issue) => issue.id),
+    selectedCandidateBlockingIssues: issueSummary.selectedCandidateBlockingIssues,
+    globalBlockingIssues: issueSummary.globalBlockingIssues,
+    nonSelectedCandidateIssues: issueSummary.nonSelectedCandidateIssues,
     evidenceCoverageScore: debateSession?.evidenceCoverageScore,
     confidence: 0.72
+  };
+}
+
+function debateIssueSummary(debateSession: DebateSession | undefined, selectedCandidateId: string | undefined): {
+  selectedCandidateBlockingIssues: DebateIssue[];
+  globalBlockingIssues: DebateIssue[];
+  nonSelectedCandidateIssues: DebateIssue[];
+  blockingTitles: string[];
+} {
+  const unresolved = debateSession?.unresolvedIssues ?? [];
+  const globalBlockingIssues = unresolved.filter((issue) => issue.blocking && !issue.candidateId);
+  const selectedCandidateBlockingIssues = selectedCandidateId
+    ? unresolved.filter((issue) => issue.blocking && issue.candidateId === selectedCandidateId)
+    : [];
+  const nonSelectedCandidateIssues = unresolved.filter((issue) => issue.candidateId && issue.candidateId !== selectedCandidateId);
+  return {
+    selectedCandidateBlockingIssues,
+    globalBlockingIssues,
+    nonSelectedCandidateIssues,
+    blockingTitles: [...globalBlockingIssues, ...selectedCandidateBlockingIssues].map((issue) => issue.title)
   };
 }
 

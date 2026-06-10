@@ -1,10 +1,13 @@
 import type { AgentRole } from "../../schemas/agentTask.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { ExternalAgentProfile } from "./externalAgentTypes.js";
-import { ExternalAgentProcessClient, type ExternalAgentTool } from "./externalAgentProcess.js";
+import { ExternalAgentProcessClient, type ExternalAgentProcessResult, type ExternalAgentTool } from "./externalAgentProcess.js";
 import { runCommandExternalAgent } from "./runners/commandExternalAgentRunner.js";
 import type { ExternalOutputContract, ExternalTaskEnvelope } from "./contracts/externalTaskEnvelope.js";
-import { buildExternalAgentPrompt, detectExternalAgentFailure, estimateExternalAgentCost, extractExternalAgentEvidence, normalizeExternalAgentResponse } from "./adapters/registry.js";
+import { buildExternalAgentPrompt, detectExternalAgentFailure, estimateExternalAgentCost, externalAgentRetryPolicy, extractExternalAgentEvidence, extractExternalAgentEvidencePackets, normalizeExternalAgentResponse } from "./adapters/registry.js";
+import type { ExternalAgentFailure } from "./adapters/externalAgentAdapter.js";
+import type { ExternalAgentNormalizationResult } from "./adapters/genericExternalAgentAdapter.js";
+import type { EvidencePacket } from "../evidence/evidencePacket.js";
 
 export type ExternalRoleInvocation = {
   externalAgentId: string;
@@ -12,11 +15,17 @@ export type ExternalRoleInvocation = {
   payload: unknown;
   summary: string;
   attempts: number;
+  evidencePackets: EvidencePacket[];
 };
 
 type PooledExternalClient = {
   client: ExternalAgentProcessClient;
   started: Promise<void>;
+};
+
+type NormalizedExternalPayload = ExternalAgentNormalizationResult & {
+  failure: ExternalAgentFailure;
+  evidencePackets: EvidencePacket[];
 };
 
 const processClientPool = new Map<string, PooledExternalClient>();
@@ -42,24 +51,7 @@ export async function invokeExternalRole(input: {
     return runConfiguredExternalProfile(input, envelope, adaptedPrompt);
   }
   if (input.profile.command && !input.profile.autoStart) {
-    const result = await runCommandExternalAgent({
-      cwd: input.cwd,
-      profile: input.profile,
-      role: input.role,
-      task: adaptedPrompt,
-      context: envelope,
-      ledger: input.ledger
-    });
-    if (!result.ok) throw new Error(result.error ?? "External command runner failed.");
-    const rawPayload = parseJsonish(result.stdout) ?? { summary: result.summary, stdout: result.stdout };
-    const normalized = normalizeExternalPayload(input, envelope, rawPayload);
-    return {
-      externalAgentId: input.profile.id,
-      role: input.role,
-      payload: normalized.payload,
-      summary: normalized.summary,
-      attempts: 1
-    };
+    return invokeCommandExternalRole(input, envelope, adaptedPrompt);
   }
 
   const requestRef = input.ledger.writeArtifact("external_requests", JSON.stringify({
@@ -85,16 +77,61 @@ export async function invokeExternalRole(input: {
   try {
     const tools = await client.listTools();
     const toolName = input.toolName ?? chooseExternalTool(tools);
-    const result = await client.callTool(toolName, {
-      role: input.role,
-      prompt: adaptedPrompt,
-      context: envelope,
-      outputContract: envelope.outputContract
-    });
-    if (!result.ok) throw new Error(result.error ?? "External MCP tool call failed.");
-    const rawPayload = unwrapMcpToolResult(result.result);
-    const normalized = normalizeExternalPayload(input, envelope, rawPayload);
-    const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(result.result, null, 2), "json");
+    let prompt = adaptedPrompt;
+    let lastNormalized: NormalizedExternalPayload | undefined;
+    let lastResult: ExternalAgentProcessResult | undefined;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const result = await client.callTool(toolName, {
+        role: input.role,
+        prompt,
+        context: envelope,
+        outputContract: envelope.outputContract
+      });
+      lastResult = result;
+      if (!result.ok) throw new Error(result.error ?? "External MCP tool call failed.");
+      const rawPayload = unwrapMcpToolResult(result.result);
+      const normalized = normalizeExternalPayload(input, envelope, rawPayload, { throwOnFailure: false });
+      lastNormalized = normalized;
+      if (!normalized.failure.failed) {
+        const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(result.result, null, 2), "json");
+        input.ledger.append({
+          type: "external_agent_call",
+          phase: phaseForRole(input.role),
+          role: input.role,
+          provider: `external:${input.profile.id}`,
+          model: input.profile.name,
+          externalAgentId: input.profile.id,
+          tool: toolName,
+          status: "success",
+          requestRef,
+          responseRef
+        });
+        input.ledger.append({
+          type: "external_agent_result",
+          phase: phaseForRole(input.role),
+          role: input.role,
+          provider: `external:${input.profile.id}`,
+          model: input.profile.name,
+          externalAgentId: input.profile.id,
+          resultRef: responseRef,
+          summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`)
+        });
+        return {
+          externalAgentId: input.profile.id,
+          role: input.role,
+          payload: normalized.payload,
+          summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`),
+          attempts: result.attempts,
+          evidencePackets: normalized.evidencePackets
+        };
+      }
+      const retry = externalAgentRetryPolicy({ profile: input.profile, role: input.role, failure: normalized.failure, attempt });
+      if (!retry.retry) break;
+      prompt = retryPrompt(adaptedPrompt, normalized.failure, normalized.warnings);
+      recordExternalAgentRetry(input, attempt + 1, retry.reason, prompt);
+    }
+    const normalized = finishFailedExternalNormalization(input, lastNormalized);
+    const responseRef = input.ledger.writeArtifact("external_results", JSON.stringify(lastResult?.result ?? normalized.payload, null, 2), "json");
     input.ledger.append({
       type: "external_agent_call",
       phase: phaseForRole(input.role),
@@ -103,27 +140,12 @@ export async function invokeExternalRole(input: {
       model: input.profile.name,
       externalAgentId: input.profile.id,
       tool: toolName,
-      status: "success",
+      status: "failure",
       requestRef,
-      responseRef
+      responseRef,
+      error: lastNormalized?.failure.reason ?? "external adapter rejected normalized output"
     });
-    input.ledger.append({
-      type: "external_agent_result",
-      phase: phaseForRole(input.role),
-      role: input.role,
-      provider: `external:${input.profile.id}`,
-      model: input.profile.name,
-      externalAgentId: input.profile.id,
-      resultRef: responseRef,
-      summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`)
-    });
-    return {
-      externalAgentId: input.profile.id,
-      role: input.role,
-      payload: normalized.payload,
-      summary: normalized.summary || summarizePayload(normalized.payload, `External MCP process returned ${toolName}.`),
-      attempts: result.attempts
-    };
+    return normalized;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await discardPooledExternalClient(pooled.key);
@@ -152,6 +174,49 @@ export async function invokeExternalRole(input: {
   } finally {
     if (input.profile.command && input.profile.autoStart === false) await discardPooledExternalClient(pooled.key);
   }
+}
+
+async function invokeCommandExternalRole(input: {
+  cwd: string;
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  prompt: string;
+  context?: unknown;
+  ledger: EventLedger;
+  toolName?: string;
+  outputContract?: ExternalOutputContract;
+}, envelope: ExternalTaskEnvelope, adaptedPrompt: string): Promise<ExternalRoleInvocation> {
+  let task = adaptedPrompt;
+  let lastNormalized: NormalizedExternalPayload | undefined;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const result = await runCommandExternalAgent({
+      cwd: input.cwd,
+      profile: input.profile,
+      role: input.role,
+      task,
+      context: envelope,
+      ledger: input.ledger
+    });
+    if (!result.ok) throw new Error(result.error ?? "External command runner failed.");
+    const rawPayload = parseJsonish(result.stdout) ?? { summary: result.summary, stdout: result.stdout };
+    const normalized = normalizeExternalPayload(input, envelope, rawPayload, { throwOnFailure: false });
+    lastNormalized = normalized;
+    if (!normalized.failure.failed) {
+      return {
+        externalAgentId: input.profile.id,
+        role: input.role,
+        payload: normalized.payload,
+        summary: normalized.summary,
+        attempts: attempt,
+        evidencePackets: normalized.evidencePackets
+      };
+    }
+    const retry = externalAgentRetryPolicy({ profile: input.profile, role: input.role, failure: normalized.failure, attempt });
+    if (!retry.retry) break;
+    task = retryPrompt(adaptedPrompt, normalized.failure, normalized.warnings);
+    recordExternalAgentRetry(input, attempt + 1, retry.reason, task);
+  }
+  return finishFailedExternalNormalization(input, lastNormalized);
 }
 
 function runConfiguredExternalProfile(input: {
@@ -212,7 +277,8 @@ function runConfiguredExternalProfile(input: {
     role: input.role,
     payload: normalized.payload,
     summary,
-    attempts: 1
+    attempts: 1,
+    evidencePackets: normalized.evidencePackets
   };
 }
 
@@ -220,7 +286,7 @@ function normalizeExternalPayload(input: {
   profile: ExternalAgentProfile;
   role: AgentRole;
   ledger: EventLedger;
-}, envelope: ExternalTaskEnvelope, rawPayload: unknown): ReturnType<typeof normalizeExternalAgentResponse> {
+}, envelope: ExternalTaskEnvelope, rawPayload: unknown, options: { throwOnFailure?: boolean } = {}): NormalizedExternalPayload {
   const normalized = normalizeExternalAgentResponse({
     profile: input.profile,
     role: input.role,
@@ -272,6 +338,13 @@ function normalizeExternalPayload(input: {
       evidence
     });
   }
+  const evidencePackets = extractExternalAgentEvidencePackets({
+    profile: input.profile,
+    role: input.role,
+    outputContract: envelope.outputContract,
+    rawPayload,
+    normalized
+  });
   const failure = detectExternalAgentFailure({
     profile: input.profile,
     role: input.role,
@@ -289,14 +362,65 @@ function normalizeExternalPayload(input: {
       externalAgentId: input.profile.id,
       error: `normalization failed: ${failure.reason ?? "external adapter detected a role output failure"}`
     });
-    if (input.profile.normalizationStrictness === "strict" || input.profile.strictJson) {
+    if (options.throwOnFailure !== false && (input.profile.normalizationStrictness === "strict" || input.profile.strictJson)) {
       throw new Error(`External ${input.role} output failed ${normalized.adapter} adapter contract: ${failure.reason ?? "invalid typed role output"}`);
     }
   }
-  if (normalized.status === "failed") {
+  if (options.throwOnFailure !== false && normalized.status === "failed") {
     throw new Error(`External ${input.role} output failed ${normalized.adapter} normalization: ${normalized.warnings.join("; ") || "invalid typed role output"}`);
   }
-  return normalized;
+  return { ...normalized, failure, evidencePackets };
+}
+
+function finishFailedExternalNormalization(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  ledger: EventLedger;
+}, normalized: NormalizedExternalPayload | undefined): ExternalRoleInvocation {
+  if (!normalized) throw new Error(`External ${input.role} produced no output to normalize.`);
+  const strict = input.profile.normalizationStrictness === "strict" || input.profile.strictJson;
+  if (strict) {
+    const reason = normalized.failure.reason ?? (normalized.warnings.join("; ") || "invalid typed role output");
+    throw new Error(`External ${input.role} output failed ${normalized.adapter} adapter contract after retry: ${reason}`);
+  }
+  return {
+    externalAgentId: input.profile.id,
+    role: input.role,
+    payload: normalized.payload,
+    summary: normalized.summary,
+    attempts: 2,
+    evidencePackets: normalized.evidencePackets
+  };
+}
+
+function recordExternalAgentRetry(input: {
+  profile: ExternalAgentProfile;
+  role: AgentRole;
+  ledger: EventLedger;
+}, attempt: number, reason: string, prompt: string): void {
+  const retryPromptRef = input.ledger.writeArtifact("external_requests", prompt);
+  input.ledger.append({
+    type: "external_agent_retry",
+    phase: phaseForRole(input.role),
+    role: input.role,
+    provider: `external:${input.profile.id}`,
+    model: input.profile.name,
+    externalAgentId: input.profile.id,
+    attempt,
+    reason,
+    retryPromptRef
+  });
+}
+
+function retryPrompt(originalPrompt: string, failure: ExternalAgentFailure, warnings: string[]): string {
+  return [
+    originalPrompt,
+    "",
+    "TomorrowEdge adapter rejected the previous output.",
+    `Failure: ${failure.reason ?? "invalid typed role output"}`,
+    warnings.length ? `Warnings: ${warnings.join("; ")}` : undefined,
+    "Retry once. Return only the required typed JSON contract, with all required fields present."
+  ].filter(Boolean).join("\n");
 }
 
 export async function releaseExternalAgentProcessPool(): Promise<void> {

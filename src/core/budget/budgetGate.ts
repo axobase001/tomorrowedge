@@ -39,7 +39,7 @@ export type RoleBudgetInput = {
   maxCallsPerTask?: number;
 };
 
-export type ModelInvocationKind = "model_planner" | "live_patch" | "live_advisory" | "pre_judge_debate";
+export type ModelInvocationKind = "model_planner" | "task_governance" | "live_patch" | "live_advisory" | "pre_judge_debate";
 
 export function evaluateModelCallInvocation(input: {
   config: TomorrowEdgeConfig;

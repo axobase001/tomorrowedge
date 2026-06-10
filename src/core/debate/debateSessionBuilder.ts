@@ -2,7 +2,7 @@ import type { DebateRound } from "../../schemas/debate.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
-import type { DebateClaim, DebateIssue, DebateMove, DebateSession } from "./debateProtocol.js";
+import type { DebateCandidateResolution, DebateClaim, DebateIssue, DebateMove, DebateSession } from "./debateProtocol.js";
 
 export function buildDebateSession(input: {
   sessionId: string;
@@ -51,7 +51,14 @@ export function buildDebateSession(input: {
   const claims = [...candidateClaims, ...reviewClaims];
   const issues = buildIssues(input.review, roundMoves, packetRefs);
   const unresolvedIssues = issues.filter((issue) => issue.status === "open");
-  const unresolvedBlockingIssues = unresolvedIssues.filter((issue) => issue.blocking).map((issue) => issue.title);
+  const globalBlockingIssues = unresolvedIssues.filter((issue) => issue.blocking && !issue.candidateId);
+  const unresolvedBlockingIssues = globalBlockingIssues.map((issue) => issue.title);
+  const candidateIds = candidateIdsFor(input.candidates, input.review);
+  const candidateResolutions = Object.fromEntries(candidateIds.map((candidateId) => [
+    candidateId,
+    candidateResolution(candidateId, unresolvedIssues, globalBlockingIssues)
+  ]));
+  const globalResolution = resolutionForIssues(globalBlockingIssues);
   const acceptedClaims = claims.filter((claim) => claim.status === "accepted").map((claim) => claim.claim);
   const rejectedClaims = claims.filter((claim) => claim.status === "rejected").map((claim) => claim.claim);
   const evidenceCoverageScore = evidenceCoverage(claims);
@@ -66,8 +73,8 @@ export function buildDebateSession(input: {
         speaker: "judge",
         moveType: "resolution",
         content: unresolvedBlockingIssues.length
-          ? `Revision required: ${unresolvedBlockingIssues.slice(0, 3).join("; ")}`
-          : "No unresolved blocking issue found in structured debate.",
+          ? `Global revision required: ${unresolvedBlockingIssues.slice(0, 3).join("; ")}`
+          : "No workflow-wide blocking issue found in structured debate; candidate-specific issues remain scoped to their candidate.",
         evidenceRefs: packetRefs
       }
     ],
@@ -76,9 +83,11 @@ export function buildDebateSession(input: {
     unresolvedIssues,
     acceptedClaims,
     rejectedClaims,
+    candidateResolutions,
+    globalResolution,
     unresolvedBlockingIssues,
     evidenceCoverageScore,
-    resolution: unresolvedBlockingIssues.length ? "request_revision" : "selectable"
+    resolution: globalResolution.resolution
   };
 }
 
@@ -123,4 +132,30 @@ function evidenceCoverage(claims: DebateClaim[]): number {
   if (!claims.length) return 100;
   const covered = claims.filter((claim) => claim.evidenceRefs.length > 0).length;
   return Math.round((covered / claims.length) * 100);
+}
+
+function candidateIdsFor(candidates: PatchCandidate[], review?: ReviewReport): string[] {
+  return [...new Set([
+    ...candidates.map((candidate) => candidate.candidateId),
+    ...(review?.reviews ?? []).map((item) => item.candidateId)
+  ].filter(Boolean))];
+}
+
+function candidateResolution(candidateId: string, unresolvedIssues: DebateIssue[], globalBlockingIssues: DebateIssue[]): DebateCandidateResolution {
+  const candidateIssues = unresolvedIssues.filter((issue) => issue.candidateId === candidateId);
+  const candidateBlocking = candidateIssues.filter((issue) => issue.blocking);
+  const blocking = [...globalBlockingIssues, ...candidateBlocking];
+  return {
+    resolution: blocking.length ? "request_revision" : "selectable",
+    unresolvedBlockingIssues: blocking.map((issue) => issue.title),
+    unresolvedIssues: [...globalBlockingIssues, ...candidateIssues]
+  };
+}
+
+function resolutionForIssues(issues: DebateIssue[]): DebateCandidateResolution {
+  return {
+    resolution: issues.length ? "request_revision" : "selectable",
+    unresolvedBlockingIssues: issues.map((issue) => issue.title),
+    unresolvedIssues: issues
+  };
 }

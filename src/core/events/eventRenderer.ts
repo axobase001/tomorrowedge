@@ -64,6 +64,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.externalAgentId} ${event.decision}${event.selectedCandidateId ? ` ${event.selectedCandidateId}` : ""}: ${event.reason}`;
     case "external_agent_error":
       return `${event.externalAgentId} error: ${event.error}`;
+    case "external_agent_retry":
+      return `${event.externalAgentId} retry attempt=${event.attempt}: ${event.reason}`;
     case "external_agent_cost_usage":
       return `${event.externalAgentId} tokens=${event.totalTokens ?? ((event.inputTokens ?? 0) + (event.outputTokens ?? 0))}${event.estimatedCostUsd === undefined ? "" : ` cost=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "external_agent_normalization":
@@ -75,7 +77,7 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
     case "debate_move":
       return `${event.debateSessionId} r${event.round} ${event.speaker}/${event.moveType}: ${event.summary}`;
     case "debate_resolution":
-      return `${event.resolution} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
+      return `${event.resolution} selected=${event.selectedCandidateId ?? "-"} selectedResolution=${event.selectedCandidateResolution ?? "-"} global=${event.globalResolution ?? "-"} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
     case "summary":
       return `result=${event.result}`;
     case "autonomy_limit_reached":
