@@ -4,7 +4,7 @@ import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import { redactText } from "../../safety/secretScanner.js";
-import type { OutcomeMismatchType } from "../events/eventTypes.js";
+import type { EventPhase, OutcomeMismatchType } from "../events/eventTypes.js";
 import { classifyProviderError, type ProviderErrorCategory } from "../../safety/providerRedaction.js";
 
 export type TaskMemory = {
@@ -34,6 +34,8 @@ export type LearnedTaskMemory = {
   result?: string;
   routeAssignments?: Array<{ role: AgentRole; provider: string; model: string }>;
   providerOutcomes?: ProviderOutcome[];
+  negativeSignals?: NegativeLearningSignal[];
+  subtaskSignals?: SubtaskMemorySignal[];
   filePatterns?: string[];
   frameworkSignals?: string[];
   patchApproach?: string;
@@ -109,6 +111,25 @@ export type ProviderOutcome = {
 };
 
 export type FailureAttributionPhase = AgentRole | "provider" | "environment" | "unknown";
+
+export type NegativeLearningSignal = {
+  stage: "pre_validation" | "post_validation";
+  source: "rejected_candidate" | "reviewer_miss" | "judge_selection_error";
+  candidateId?: string;
+  phase: "review" | "judge" | "verification";
+  confidence: "provisional" | "strong";
+  summary: string;
+  evidenceRefs?: string[];
+};
+
+export type SubtaskMemorySignal = {
+  subtaskId: string;
+  title?: string;
+  status?: "pending" | "running" | "done" | "blocked";
+  outcome: "passed" | "failed" | "blocked" | "review_blocked" | "unknown";
+  phase?: EventPhase;
+  evidenceRefs?: string[];
+};
 
 export type StrategyAvoidedRoute = {
   role?: AgentRole;
@@ -227,6 +248,8 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
     filePatterns: collectFilePatterns(state),
     frameworkSignals: collectFrameworkSignals(state),
     patchApproach: selectedPatchApproach(state),
+    negativeSignals: collectNegativeLearningSignals(state),
+    subtaskSignals: collectSubtaskSignals(state),
     routeAssignments: state.finalSummary?.result === "completed"
       ? state.routing.assignments
           .filter((assignment) => !["runner", "vision"].includes(assignment.role))
@@ -328,6 +351,142 @@ function collectProviderOutcomes(state: AgentGraphState): ProviderOutcome[] {
     }
   }
   return outcomes.slice(-24);
+}
+
+function collectNegativeLearningSignals(state: AgentGraphState): NegativeLearningSignal[] {
+  const signals: NegativeLearningSignal[] = [];
+  const reviewRefs = artifactRefsForEventType(state, "review_decision");
+  const judgeRefs = artifactRefsForEventType(state, "judge_decision");
+  const selectedCandidateId = state.judge?.selectedCandidateId;
+  const failedValidation = state.runResults.some((run) => !run.success && !run.skipped);
+  for (const review of state.review?.reviews ?? []) {
+    if (review.recommendation === "reject" || review.recommendation === "revise") {
+      signals.push({
+        stage: "pre_validation",
+        source: "rejected_candidate",
+        candidateId: review.candidateId,
+        phase: "review",
+        confidence: review.recommendation === "reject" || review.riskScore >= 7 ? "strong" : "provisional",
+        summary: clip(redactMemoryText([
+          `recommendation=${review.recommendation}`,
+          `risk=${review.riskScore}`,
+          `coverage=${review.testCoverage}`,
+          ...review.securityConcerns.slice(0, 2),
+          ...review.regressionConcerns.slice(0, 2),
+          ...review.notes.slice(0, 2)
+        ].join("; ")), 220),
+        evidenceRefs: reviewRefs
+      });
+    }
+  }
+  const selectedReview = selectedCandidateId
+    ? state.review?.reviews.find((review) => review.candidateId === selectedCandidateId)
+    : undefined;
+  if (failedValidation && selectedReview && ["accept", "accept_with_minor_change"].includes(selectedReview.recommendation)) {
+    signals.push({
+      stage: "post_validation",
+      source: "reviewer_miss",
+      candidateId: selectedCandidateId,
+      phase: "verification",
+      confidence: "strong",
+      summary: clip(redactMemoryText(`Reviewer accepted ${selectedCandidateId}, but validation failed after selection.`), 220),
+      evidenceRefs: unique([...reviewRefs, ...artifactRefsForEventType(state, "shell_run")])
+    });
+  }
+  if (failedValidation && state.judge?.decision === "select" && selectedCandidateId) {
+    const competingWarning = state.review?.reviews.some((review) =>
+      review.candidateId !== selectedCandidateId &&
+      (review.recommendation === "reject" || review.recommendation === "revise" || review.riskScore >= 7)
+    );
+    signals.push({
+      stage: "post_validation",
+      source: "judge_selection_error",
+      candidateId: selectedCandidateId,
+      phase: "judge",
+      confidence: competingWarning ? "strong" : "provisional",
+      summary: clip(redactMemoryText(`Judge selected ${selectedCandidateId}, but validation failed${competingWarning ? " while alternate warning signals existed" : ""}.`), 220),
+      evidenceRefs: unique([...judgeRefs, ...artifactRefsForEventType(state, "shell_run")])
+    });
+  }
+  return signals.slice(0, 12);
+}
+
+function collectSubtaskSignals(state: AgentGraphState): SubtaskMemorySignal[] {
+  const planSteps = state.plan?.steps ?? [];
+  const failedRun = state.runResults.find((run) => !run.success && !run.skipped);
+  const succeededRun = state.runResults.find((run) => run.success && !run.skipped);
+  const reviewBlocked = state.review?.reviews.some((review) => review.recommendation === "reject" || review.recommendation === "revise");
+  const judgeBlocked = state.judge?.decision === "request_revision" || state.judge?.decision === "abort";
+  const signals: SubtaskMemorySignal[] = [];
+  for (const step of planSteps) {
+    const phase = phaseForPlanStep(step.id, step.title);
+    const titleText = `${step.id} ${step.title} ${step.detail}`.toLowerCase();
+    let outcome: SubtaskMemorySignal["outcome"] = step.status === "blocked" ? "blocked" : "unknown";
+    let evidenceRefs: string[] = [];
+    if (phase === "review" && reviewBlocked) {
+      outcome = "review_blocked";
+      evidenceRefs = artifactRefsForEventType(state, "review_decision");
+    } else if (phase === "judge" && judgeBlocked) {
+      outcome = "blocked";
+      evidenceRefs = artifactRefsForEventType(state, "judge_decision");
+    } else if ((phase === "verification" || phase === "shell" || /test|verify|validation|shell/.test(titleText)) && failedRun) {
+      outcome = "failed";
+      evidenceRefs = artifactRefsForEventType(state, "shell_run");
+    } else if ((phase === "verification" || phase === "shell" || /test|verify|validation|shell/.test(titleText)) && succeededRun) {
+      outcome = "passed";
+      evidenceRefs = artifactRefsForEventType(state, "shell_run");
+    } else if (step.status === "done") {
+      outcome = "passed";
+    }
+    if (outcome !== "unknown" || step.status === "blocked") {
+      signals.push({
+        subtaskId: step.id,
+        title: clip(redactMemoryText(step.title), 120),
+        status: step.status,
+        outcome,
+        phase,
+        evidenceRefs: evidenceRefs.slice(0, 6)
+      });
+    }
+  }
+  if (!signals.length && failedRun) {
+    signals.push({
+      subtaskId: "verification",
+      title: "Verification",
+      status: "blocked",
+      outcome: "failed",
+      phase: "verification",
+      evidenceRefs: artifactRefsForEventType(state, "shell_run").slice(0, 6)
+    });
+  }
+  return signals.slice(0, 12);
+}
+
+function artifactRefsForEventType(state: AgentGraphState, eventType: string): string[] {
+  const refs = state.events.flatMap((event) => {
+    if (event.type !== eventType) return [];
+    const values: string[] = [];
+    if ("diffRef" in event && event.diffRef) values.push(event.diffRef);
+    if ("stdoutRef" in event && event.stdoutRef) values.push(event.stdoutRef);
+    if ("stderrRef" in event && event.stderrRef) values.push(event.stderrRef);
+    if ("reviewRef" in event && event.reviewRef) values.push(event.reviewRef);
+    if ("decisionRef" in event && event.decisionRef) values.push(event.decisionRef);
+    if ("responseRef" in event && event.responseRef) values.push(event.responseRef);
+    return values;
+  });
+  return unique(refs.map((ref) => redactMemoryText(ref))).slice(0, 8);
+}
+
+function phaseForPlanStep(id: string, title: string): EventPhase | undefined {
+  const value = `${id} ${title}`.toLowerCase();
+  if (/plan|understand|design|contract/.test(value)) return "planning";
+  if (/explore|inspect|context|read/.test(value)) return "exploration";
+  if (/code|edit|implement|patch/.test(value)) return "coding";
+  if (/review|audit/.test(value)) return "review";
+  if (/judge|select|decide/.test(value)) return "judge";
+  if (/test|verify|validation|shell|run/.test(value)) return "verification";
+  if (/repair|retry/.test(value)) return "repair";
+  return undefined;
 }
 
 function collectFilePatterns(state: AgentGraphState): string[] {
@@ -675,6 +834,8 @@ export async function explainFailureMemories(cwd: string, task: string, options:
       record.introducedByPhase,
       record.missedByPhase,
       record.detectedByPhase,
+      ...(record.negativeSignals ?? []).flatMap((signal) => [signal.stage, signal.source, signal.candidateId, signal.summary]),
+      ...(record.subtaskSignals ?? []).flatMap((signal) => [signal.subtaskId, signal.title, signal.outcome, signal.phase]),
       ...(record.applicability ?? []),
       ...(record.counterexamples ?? []),
       ...(record.constraints ?? []),
@@ -1031,6 +1192,8 @@ function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemor
     evidenceRefs: unique([...(current.evidenceRefs ?? []), ...(next.evidenceRefs ?? [])]).slice(0, 12),
     applicability: unique([...(current.applicability ?? []), ...(next.applicability ?? [])]).slice(0, 12),
     counterexamples: unique([...(current.counterexamples ?? []), ...(next.counterexamples ?? [])]).slice(0, 8),
+    negativeSignals: mergeNegativeSignals(current.negativeSignals, next.negativeSignals),
+    subtaskSignals: mergeSubtaskSignals(current.subtaskSignals, next.subtaskSignals),
     correctionStatus: strongerCorrectionStatus(current.correctionStatus, next.correctionStatus),
     confidence: Math.max(current.confidence ?? 0, next.confidence ?? 0)
   };
@@ -1146,6 +1309,43 @@ function tokenize(value: string): Set<string> {
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function mergeNegativeSignals(a: NegativeLearningSignal[] | undefined, b: NegativeLearningSignal[] | undefined): NegativeLearningSignal[] | undefined {
+  const merged = new Map<string, NegativeLearningSignal>();
+  for (const signal of [...(a ?? []), ...(b ?? [])]) {
+    const key = `${signal.stage}:${signal.source}:${signal.candidateId ?? "*"}:${signal.phase}`;
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, signal);
+      continue;
+    }
+    merged.set(key, {
+      ...current,
+      confidence: current.confidence === "strong" || signal.confidence === "strong" ? "strong" : "provisional",
+      evidenceRefs: unique([...(current.evidenceRefs ?? []), ...(signal.evidenceRefs ?? [])]).slice(0, 8)
+    });
+  }
+  const values = [...merged.values()].slice(0, 12);
+  return values.length ? values : undefined;
+}
+
+function mergeSubtaskSignals(a: SubtaskMemorySignal[] | undefined, b: SubtaskMemorySignal[] | undefined): SubtaskMemorySignal[] | undefined {
+  const rank: Record<SubtaskMemorySignal["outcome"], number> = { unknown: 0, passed: 1, blocked: 2, review_blocked: 3, failed: 4 };
+  const merged = new Map<string, SubtaskMemorySignal>();
+  for (const signal of [...(a ?? []), ...(b ?? [])]) {
+    const key = signal.subtaskId;
+    const current = merged.get(key);
+    if (!current || rank[signal.outcome] >= rank[current.outcome]) {
+      merged.set(key, {
+        ...current,
+        ...signal,
+        evidenceRefs: unique([...(current?.evidenceRefs ?? []), ...(signal.evidenceRefs ?? [])]).slice(0, 8)
+      });
+    }
+  }
+  const values = [...merged.values()].slice(0, 12);
+  return values.length ? values : undefined;
 }
 
 function hashText(value: string): string {

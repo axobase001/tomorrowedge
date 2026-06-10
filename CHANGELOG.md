@@ -32,6 +32,13 @@ Changelog: newest changes first, grouped by release and by change type.
   are accumulated into a temporary live cost line while a workflow is running.
   The implementation avoids unmeasured model-baseline savings claims and keeps
   cumulative browser state out of the shared view-model layer.
+- GUI and docs CSS now route component colors through design tokens and expose
+  consistent `:focus-visible` states for keyboard users across the cockpit,
+  docs site, tiny local LM demo, and React UI fixture.
+- Learned memory now captures pre-validation negative signals from rejected
+  candidates plus post-validation reviewer misses and judge selection errors.
+  It also records plan-step/subtask outcomes so final success does not erase
+  earlier failed or blocked subtasks.
 
 ## [1.3.10] - 2026-06-10
 

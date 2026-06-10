@@ -25,6 +25,7 @@
   --te-mark-red: #d81f0d;
   --te-mark-ink: #050505;
   --te-mark-cyan: #25d7e8;
+  --te-focus-ring: var(--te-blue);
   --te-chip-blue-bg: #eaf5fb;
   --te-chip-blue-border: #b9d7e8;
   --te-chip-green-bg: #f0faf4;
@@ -93,9 +94,11 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--te-blue);
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--te-focus-ring);
   outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--te-focus-ring) 18%, transparent);
 }
 input, textarea, select {
   border: 1px solid var(--te-border);

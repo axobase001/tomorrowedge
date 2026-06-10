@@ -174,6 +174,182 @@ describe("learned task memory", () => {
     }
   });
 
+  it("stores pre-validation negative signals from rejected candidate reviews even when final result completes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-review-negative-"));
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test with two candidate patches", defaultConfig);
+      state.review = {
+        mode: "standard",
+        overallRecommendation: "Candidate B rejected; candidate A accepted.",
+        reviews: [
+          {
+            candidateId: "candidate_a",
+            correctnessScore: 8,
+            riskScore: 2,
+            invasiveness: "low",
+            testCoverage: "adequate",
+            securityConcerns: [],
+            regressionConcerns: [],
+            redTeamFindings: [],
+            recommendation: "accept",
+            notes: ["Narrow patch."]
+          },
+          {
+            candidateId: "candidate_b",
+            correctnessScore: 3,
+            riskScore: 8,
+            invasiveness: "high",
+            testCoverage: "weak",
+            securityConcerns: ["Touches unrelated auth code."],
+            regressionConcerns: ["May break login flow."],
+            redTeamFindings: [],
+            recommendation: "reject",
+            notes: ["Wrong file boundary."]
+          }
+        ]
+      };
+      state.events.push({
+        id: "event_review_rejects_b",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "review_decision",
+        phase: "review",
+        role: "reviewer",
+        reviewRef: "reviews/review.json",
+        recommendation: "Candidate B rejected."
+      });
+      state.finalSummary = {
+        task: state.goal,
+        result: "completed",
+        changedFiles: ["index.js"],
+        testsRun: ["npm test"],
+        evidence: ["Command passed: npm test"],
+        risksRemaining: [],
+        suggestedCommitMessage: "fix: test"
+      };
+
+      await saveSession(cwd, state, { failureMemory: { enabled: true, redaction: "artifact_refs" } });
+      const [record] = await readLearnedTaskMemory(cwd);
+
+      expect(record.negativeSignals).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          stage: "pre_validation",
+          source: "rejected_candidate",
+          candidateId: "candidate_b",
+          confidence: "strong",
+          evidenceRefs: expect.arrayContaining(["reviews/review.json"])
+        })
+      ]));
+      expect(record.failureClass).toBeUndefined();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records post-validation reviewer misses, judge selection errors, and subtask failures", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-reviewer-miss-"));
+    try {
+      const state = await runOfflineGraph(cwd, "fix npm test failure in index.js", defaultConfig);
+      state.plan = {
+        ...state.plan!,
+        steps: [
+          ...state.plan!.steps,
+          { id: "verify", title: "Run verification", detail: "Run npm test before completion.", status: "blocked" }
+        ]
+      };
+      state.review = {
+        mode: "standard",
+        overallRecommendation: "Candidate A accepted.",
+        reviews: [{
+          candidateId: "fixture_candidate_a",
+          correctnessScore: 8,
+          riskScore: 2,
+          invasiveness: "low",
+          testCoverage: "adequate",
+          securityConcerns: [],
+          regressionConcerns: [],
+          redTeamFindings: [],
+          recommendation: "accept",
+          notes: ["Looks correct before verifier."]
+        }]
+      };
+      state.judge = {
+        decision: "select",
+        selectedCandidateId: "fixture_candidate_a",
+        reason: "Selected reviewed candidate.",
+        confidence: 0.8
+      };
+      state.runResults = [{
+        command: "npm test",
+        exitCode: 1,
+        stdout: "",
+        stderr: "AssertionError: still failing",
+        durationMs: 10,
+        success: false
+      }];
+      state.events.push({
+        id: "event_review_accepts_a",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "review_decision",
+        phase: "review",
+        role: "reviewer",
+        reviewRef: "reviews/review.json",
+        recommendation: "accept"
+      }, {
+        id: "event_judge_selects_a",
+        timestamp: "2026-06-07T00:00:00.001Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "judge_decision",
+        phase: "judge",
+        role: "judge",
+        decision: "select",
+        selectedCandidateId: "fixture_candidate_a",
+        reason: "Selected reviewed candidate.",
+        confidence: 0.8,
+        decisionRef: "judge/decision.json"
+      }, {
+        id: "event_shell_fails",
+        timestamp: "2026-06-07T00:00:00.002Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "shell_run",
+        phase: "shell",
+        role: "runner",
+        command: "npm test",
+        cwd,
+        success: false,
+        exitCode: 1,
+        stderrRef: "stderr/npm-test.txt"
+      });
+      state.finalSummary = {
+        task: state.goal,
+        result: "failed",
+        changedFiles: ["index.js"],
+        testsRun: ["npm test"],
+        evidence: ["Command failed: npm test"],
+        risksRemaining: ["Verifier failed."],
+        suggestedCommitMessage: "fix: retry"
+      };
+
+      await saveSession(cwd, state, { failureMemory: { enabled: true, redaction: "artifact_refs" } });
+      const [record] = await readFailureMemories(cwd);
+
+      expect(record.negativeSignals).toEqual(expect.arrayContaining([
+        expect.objectContaining({ stage: "post_validation", source: "reviewer_miss", candidateId: "fixture_candidate_a", confidence: "strong" }),
+        expect.objectContaining({ stage: "post_validation", source: "judge_selection_error", candidateId: "fixture_candidate_a", confidence: "provisional" })
+      ]));
+      expect(record.subtaskSignals).toEqual(expect.arrayContaining([
+        expect.objectContaining({ subtaskId: "verify", outcome: "failed", phase: "verification", evidenceRefs: ["stderr/npm-test.txt"] })
+      ]));
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("uses task-scoped strategy memory and avoids recently failed provider routes", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-strategy-provider-avoid-"));
     try {

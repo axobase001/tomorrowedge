@@ -198,6 +198,8 @@ function renderFailureDetail(record: FailureMemoryRecord): string {
     `filePatterns: ${(record.filePatterns ?? []).join(", ") || "-"}`,
     `frameworkSignals: ${(record.frameworkSignals ?? []).join(", ") || "-"}`,
     `patchApproach: ${record.patchApproach ?? "-"}`,
+    `negativeSignals: ${renderNegativeSignals(record)}`,
+    `subtaskSignals: ${renderSubtaskSignals(record)}`,
     `verification: ${(record.verificationCommands ?? []).join(", ") || "-"}`,
     `correction: ${record.correction}`,
     `evidenceRefs: ${record.evidenceRefs.length ? record.evidenceRefs.join(", ") : "-"}`
@@ -230,7 +232,25 @@ function renderPreview(preview: Awaited<ReturnType<typeof previewLearnedTaskMemo
     `redaction: ${preview.policy.redaction}`,
     record ? `task: ${record.goalPreview ?? record.goalFingerprint}` : undefined,
     record?.failureClass ? `failureClass: ${record.failureClass}` : undefined,
+    record?.negativeSignals?.length ? `negativeSignals: ${renderNegativeSignals(record)}` : undefined,
+    record?.subtaskSignals?.length ? `subtaskSignals: ${renderSubtaskSignals(record)}` : undefined,
     record?.correction ? `correction: ${record.correction}` : undefined,
     `evidenceRefs: ${record?.evidenceRefs?.length ? record.evidenceRefs.join(", ") : "-"}`
   ].filter((line): line is string => Boolean(line)).join("\n") + "\n";
+}
+
+function renderNegativeSignals(record: { negativeSignals?: FailureMemoryRecord["negativeSignals"] }): string {
+  const signals = record.negativeSignals ?? [];
+  if (!signals.length) return "-";
+  return signals
+    .map((signal) => `${signal.stage}/${signal.source}${signal.candidateId ? `:${signal.candidateId}` : ""}/${signal.confidence}`)
+    .join(", ");
+}
+
+function renderSubtaskSignals(record: { subtaskSignals?: FailureMemoryRecord["subtaskSignals"] }): string {
+  const signals = record.subtaskSignals ?? [];
+  if (!signals.length) return "-";
+  return signals
+    .map((signal) => `${signal.subtaskId}:${signal.outcome}`)
+    .join(", ");
 }
