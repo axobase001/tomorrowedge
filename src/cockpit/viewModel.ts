@@ -625,14 +625,22 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
   const usageFromEvents = deriveUsageFromEvents(state);
   const usage = state?.usageSummary?.totalTokens ? state.usageSummary : usageFromEvents ?? state?.usageSummary ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   const routeFor = (role: string) => routes.find((route) => route.role === role);
+  const currentCostUsd = usage.estimatedCostUsd;
+  const budgetUsd = state?.budgetStatus?.maxCostUsd;
+  const budgetUsedPercent = typeof currentCostUsd === "number" && typeof budgetUsd === "number" && budgetUsd > 0
+    ? Math.min(100, Math.round((currentCostUsd / budgetUsd) * 100))
+    : undefined;
+  const budgetRemainingUsd = typeof currentCostUsd === "number" && typeof budgetUsd === "number"
+    ? Math.max(0, budgetUsd - currentCostUsd)
+    : undefined;
   return {
     plannerModel: formatRoute(routeFor("planner")),
     coderModel: formatRoute(routeFor("coder_a")),
     reviewerModel: formatRoute(routeFor("reviewer")),
     judgeModel: formatRoute(routeFor("judge")),
     providerSummary: [...new Set(routes.map((route) => route.provider))].slice(0, 4).join(" / ") || "offline",
-    currentCostUsd: usage.estimatedCostUsd,
-    budgetUsd: state?.budgetStatus?.maxCostUsd,
+    currentCostUsd,
+    budgetUsd,
     inputTokens: usage.inputTokens ?? 0,
     outputTokens: usage.outputTokens ?? 0,
     totalTokens: usage.totalTokens ?? 0,
@@ -646,8 +654,35 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
     shellWaiting: approval?.kind === "shell",
     latestRiskLevel: approval?.riskLevel ?? selectedCandidate(state)?.estimatedRisk,
     decisionConfidence: state?.judge?.confidence,
-    fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length
+    fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length,
+    budgetUsedPercent,
+    budgetRemainingUsd,
+    roleCosts: buildRoleCosts(state?.modelNotes ?? [], currentCostUsd)
   };
+}
+
+function buildRoleCosts(notes: AgentGraphState["modelNotes"], totalCost?: number): CockpitTelemetry["roleCosts"] {
+  const byRole = new Map<string, { model: string; costUsd: number }>();
+  for (const note of notes) {
+    const costUsd = note.estimatedCostUsd ?? 0;
+    if (costUsd <= 0) continue;
+    const existing = byRole.get(note.role);
+    if (existing) {
+      existing.costUsd += costUsd;
+      continue;
+    }
+    byRole.set(note.role, { model: `${note.provider}/${note.model}`, costUsd });
+  }
+  const denominator = totalCost && totalCost > 0 ? totalCost : [...byRole.values()].reduce((sum, item) => sum + item.costUsd, 0);
+  return [...byRole.entries()]
+    .map(([role, item]) => ({
+      role,
+      model: item.model,
+      costUsd: item.costUsd,
+      percent: denominator > 0 ? Math.round((item.costUsd / denominator) * 100) : 0
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd)
+    .slice(0, 8);
 }
 
 function deriveUsageFromEvents(state?: AgentGraphState): AgentGraphState["usageSummary"] | undefined {

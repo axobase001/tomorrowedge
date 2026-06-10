@@ -85,6 +85,14 @@ export type CockpitTelemetry = {
   latestRiskLevel?: "low" | "medium" | "high";
   decisionConfidence?: number;
   fallbackCount: number;
+  budgetUsedPercent?: number;
+  budgetRemainingUsd?: number;
+  roleCosts?: Array<{
+    role: string;
+    model: string;
+    costUsd: number;
+    percent: number;
+  }>;
 };
 
 export type CockpitSessionSource = "empty" | "saved" | "live" | "api_unavailable";

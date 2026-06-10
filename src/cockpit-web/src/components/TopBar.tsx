@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 import type { GuiLanguage, Translator } from "../i18n.js";
 import { supportedLanguages, translateKnownValue } from "../i18n.js";
@@ -23,6 +24,7 @@ export function TopBar({
   onRun: () => void;
   onRefresh: () => void;
 }) {
+  const dailySavedUsd = useDailySavedUsd(viewModel.sessionId, viewModel.telemetry.budgetRemainingUsd);
   return (
     <header className="te-topbar" data-testid="topbar">
       <div className="te-brand">
@@ -43,6 +45,11 @@ export function TopBar({
         <span className={viewModel.sessionMeta.connectionState === "connected" ? "te-chip te-chip-green" : viewModel.sessionMeta.connectionState === "unavailable" || viewModel.sessionMeta.connectionState === "disconnected" ? "te-chip te-chip-red" : "te-chip"}>
           {translateKnownValue(t, viewModel.sessionMeta.connectionLabel)}
         </span>
+        {dailySavedUsd !== undefined && dailySavedUsd > 0 ? (
+          <span className="te-chip te-chip-green" title="Today unused budget across completed sessions">
+            saved today ${dailySavedUsd.toFixed(2)}
+          </span>
+        ) : null}
         {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">{t("topbar.fixture")}</span> : null}
         {viewModel.sessionMeta.stale ? <span className="te-chip">{t("topbar.snapshot")}</span> : null}
         <label className="te-language-control">
@@ -59,4 +66,36 @@ export function TopBar({
       </div>
     </header>
   );
+}
+
+function useDailySavedUsd(sessionId: string | undefined, savedUsd: number | undefined): number | undefined {
+  const [total, setTotal] = useState<number>();
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `tedge_budget_remaining_${today}`;
+    const ledger = readLedger(key);
+    if (sessionId && savedUsd !== undefined && savedUsd > 0) {
+      ledger[sessionId] = Math.max(ledger[sessionId] ?? 0, savedUsd);
+      localStorage.setItem(key, JSON.stringify(ledger));
+    }
+    setTotal(Object.values(ledger).reduce((sum, value) => sum + value, 0));
+  }, [sessionId, savedUsd]);
+
+  return total;
+}
+
+function readLedger(key: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "{}") as Record<string, unknown>;
+    const entries: Array<[string, number]> = [];
+    for (const [entryKey, value] of Object.entries(parsed)) {
+      const numericValue = typeof value === "number" && Number.isFinite(value) ? value : 0;
+      if (numericValue > 0) entries.push([entryKey, numericValue]);
+    }
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
 }

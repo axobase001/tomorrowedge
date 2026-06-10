@@ -26,6 +26,11 @@ Changelog: newest changes first, grouped by release and by change type.
   evidence ids. Failure-memory explanation now requires real structural overlap
   so generic words like "failure" cannot select unrelated memories by
   themselves.
+- Cockpit telemetry now shows budget usage, remaining budget, measured
+  per-role cost breakdowns, a click-to-open cost receipt, and a browser-local
+  daily unused-budget counter in the top bar. The implementation avoids
+  unmeasured model-baseline savings claims and keeps cumulative browser state
+  out of the shared view-model layer.
 
 ## [1.3.10] - 2026-06-10
 

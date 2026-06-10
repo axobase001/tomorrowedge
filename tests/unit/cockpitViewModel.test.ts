@@ -48,6 +48,44 @@ describe("cockpit view model", () => {
     expect(vm.sessionMeta.fixtureMode).toBe(true);
   });
 
+  it("projects budget usage and per-role costs into telemetry", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      usageSummary: { inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.03 },
+      budgetStatus: {
+        status: "within_budget",
+        maxCostUsd: 0.1,
+        estimatedInputTokens: 100,
+        estimatedOutputTokens: 50,
+        estimatedCostUsd: 0.03,
+        reason: "test"
+      },
+      modelNotes: [{
+        id: "note_planner",
+        role: "planner",
+        provider: "deepseek",
+        model: "deepseek-chat",
+        kind: "plan_advice",
+        content: "plan",
+        estimatedCostUsd: 0.01
+      }, {
+        id: "note_coder",
+        role: "coder_a",
+        provider: "openrouter",
+        model: "qwen/free",
+        kind: "implementation_advice",
+        content: "patch",
+        estimatedCostUsd: 0.02
+      }]
+    }));
+
+    expect(vm.telemetry.budgetUsedPercent).toBe(30);
+    expect(vm.telemetry.budgetRemainingUsd).toBeCloseTo(0.07);
+    expect(vm.telemetry.roleCosts).toEqual([
+      expect.objectContaining({ role: "coder_a", model: "openrouter/qwen/free", costUsd: 0.02, percent: 67 }),
+      expect.objectContaining({ role: "planner", model: "deepseek/deepseek-chat", costUsd: 0.01, percent: 33 })
+    ]);
+  });
+
   it("projects retrieved failure-memory influence into cockpit cards", () => {
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
       failureMemory: {

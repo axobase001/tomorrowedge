@@ -362,12 +362,156 @@ input, textarea, select {
 .te-metric strong {
   font: 13px var(--te-mono);
 }
-.te-telemetry a {
-  display: block;
-  margin: 10px 12px 0;
-  color: var(--te-deep-blue);
-  text-align: right;
+.te-budget-gauge {
+  margin: 0 12px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--te-border-soft);
+}
+.te-budget-gauge-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: var(--te-muted);
   font: 11px var(--te-mono);
+}
+.te-budget-gauge-header strong {
+  color: var(--te-text);
+  font-weight: 500;
+}
+.te-budget-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--te-alt);
+}
+.te-budget-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--te-success);
+}
+.te-budget-gauge-warn .te-budget-fill {
+  background: var(--te-warning);
+}
+.te-budget-gauge-danger .te-budget-fill {
+  background: var(--te-danger);
+}
+.te-role-costs {
+  margin: 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--te-border-soft);
+}
+.te-role-costs div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-role-costs strong {
+  color: var(--te-text);
+  font-weight: 500;
+}
+.te-telemetry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 10px 12px 0;
+}
+.te-receipt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--te-backdrop);
+}
+.te-receipt-card {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--te-border);
+  border-radius: 7px;
+  background: var(--te-surface);
+  box-shadow: 0 24px 70px var(--te-modal-shadow);
+  padding: 16px;
+}
+.te-receipt-card header,
+.te-receipt-card footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.te-receipt-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.te-receipt-card p {
+  margin: 4px 0 0;
+  color: var(--te-muted);
+  font: 12px var(--te-mono);
+}
+.te-receipt-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.te-receipt-summary div {
+  padding: 8px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 6px;
+  background: var(--te-soft);
+}
+.te-receipt-summary span,
+.te-receipt-row span,
+.te-receipt-empty {
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-receipt-summary strong {
+  display: block;
+  margin-top: 4px;
+  font: 13px var(--te-mono);
+}
+.te-receipt-table {
+  border: 1px solid var(--te-border-soft);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.te-receipt-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 104px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--te-border-soft);
+}
+.te-receipt-row:last-child {
+  border-bottom: 0;
+}
+.te-receipt-head {
+  background: var(--te-alt);
+}
+.te-receipt-row span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-receipt-row span:nth-child(3) {
+  text-align: right;
+  color: var(--te-text);
+}
+.te-receipt-empty {
+  padding: 12px;
+  text-align: center;
+}
+.te-receipt-card footer {
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .te-trace {
