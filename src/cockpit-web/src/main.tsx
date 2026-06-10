@@ -170,7 +170,7 @@ function CockpitWebRoot() {
         void loadCompletedRun(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
       }
     });
-    let liveCost = 0;
+    const liveCostRef = { current: 0 };
     let lastCostEvent = Date.now();
     source.addEventListener("event", (message) => {
       const payload = JSON.parse(message.data) as {
@@ -180,9 +180,10 @@ function CockpitWebRoot() {
       // Accumulate real-time cost from model_call events
       const evt = payload.event;
       if (evt.type === "model_call" && typeof evt.estimatedCostUsd === "number") {
-        liveCost += evt.estimatedCostUsd;
+        liveCostRef.current += evt.estimatedCostUsd;
         lastCostEvent = Date.now();
       }
+      const lc = liveCostRef.current;
       setViewModel((current) => ({
         ...current,
         sessionId,
@@ -198,8 +199,8 @@ function CockpitWebRoot() {
         },
         telemetry: {
           ...current.telemetry,
-          liveRunningCostUsd: liveCost,
-          liveSavingRateUsd: liveCost > 0 ? liveCost / Math.max(1, (Date.now() - lastCostEvent + 1000) / 1000) : undefined,
+          liveRunningCostUsd: lc,
+          liveSavingRateUsd: lc > 0 ? lc / Math.max(1, (Date.now() - lastCostEvent + 1000) / 1000) : undefined,
         },
         trace: [{
           id: payload.event?.id ?? `${Date.now()}`,
