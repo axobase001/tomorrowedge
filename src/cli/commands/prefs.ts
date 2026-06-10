@@ -7,6 +7,7 @@ export type PrefsOptions = {
   testCommand?: string;
   livePatch?: boolean;
   liveAdvisory?: boolean;
+  strategyMemoryRouting?: string | boolean;
   json?: boolean;
   listKeys?: boolean;
 };
@@ -28,6 +29,7 @@ export async function prefsCommand(cwd: string, options: PrefsOptions = {}): Pro
   if (options.testCommand !== undefined) updates.preferredTestCommand = options.testCommand;
   if (options.livePatch !== undefined) updates.preferredLivePatch = Boolean(options.livePatch);
   if (options.liveAdvisory !== undefined) updates.preferredLiveAdvisory = Boolean(options.liveAdvisory);
+  if (options.strategyMemoryRouting !== undefined) updates.strategyMemoryRouting = parseBooleanPreference("strategy-memory-routing", options.strategyMemoryRouting);
 
   if (!Object.keys(updates).length) {
     if (options.json) {
@@ -54,16 +56,26 @@ function renderPrefsHelp(current: ProjectPreferences, listKeys: boolean): string
     `- preferredTestCommand: ${current.preferredTestCommand ?? "(unset; uses plan command)"}`,
     `- preferredLivePatch: ${current.preferredLivePatch ?? false}`,
     `- preferredLiveAdvisory: ${current.preferredLiveAdvisory ?? false}`,
+    `- strategyMemoryRouting: ${current.strategyMemoryRouting === undefined ? "(unset; uses config.strategy_memory.enabled)" : current.strategyMemoryRouting}`,
     "",
     "Usage:",
     "tedge prefs --access-mode restricted|partial|full",
     "tedge prefs --routing-mode cheap|balanced|quality|local|privacy|china",
     "tedge prefs --test-command \"npm test\"",
     "tedge prefs --live-patch --live-advisory",
+    "tedge prefs --strategy-memory-routing true|false",
     "tedge prefs --json"
   ];
   if (listKeys) {
-    lines.push("", "Available keys:", "accessMode", "routingMode", "preferredTestCommand", "preferredLivePatch", "preferredLiveAdvisory");
+    lines.push("", "Available keys:", "accessMode", "routingMode", "preferredTestCommand", "preferredLivePatch", "preferredLiveAdvisory", "strategyMemoryRouting");
   }
   return `${lines.join("\n")}\n`;
+}
+
+function parseBooleanPreference(name: string, value: string | boolean): boolean {
+  if (typeof value === "boolean") return value;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "on", "enabled"].includes(normalized)) return true;
+  if (["false", "0", "no", "off", "disabled"].includes(normalized)) return false;
+  throw new Error(`Invalid ${name}: ${value}. Use true or false.`);
 }

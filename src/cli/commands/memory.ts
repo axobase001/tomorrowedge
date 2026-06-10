@@ -13,24 +13,41 @@ import {
 import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
 import { writeFile } from "node:fs/promises";
 import { loadConfig } from "../../config/configLoader.js";
+import { loadProjectPreferences } from "../../core/memory/preferences.js";
 
-type MemoryOptions = { limit?: string; strategy?: boolean; json?: boolean };
+type MemoryOptions = { limit?: string; strategy?: boolean | string; json?: boolean };
 type FailureMemoryOptions = { limit?: string; json?: boolean; includeStale?: boolean };
 
 export async function memoryCommand(cwd: string, options: MemoryOptions = {}): Promise<void> {
   const limit = options.limit ? Number(options.limit) : 20;
   if (options.strategy) {
-    const hints = await buildStrategyMemoryHints(cwd, { limit: Number.isFinite(limit) ? limit : 20 });
+    const config = loadConfig(cwd);
+    const prefs = loadProjectPreferences(cwd);
+    const strategyTask = typeof options.strategy === "string" ? options.strategy.trim() : undefined;
+    const strategyEnabled = prefs.strategyMemoryRouting ?? config.strategy_memory.enabled;
+    const enabledProviders = Object.entries(config.providers)
+      .filter(([, provider]) => provider.enabled)
+      .map(([providerId]) => providerId);
+    const hints = await buildStrategyMemoryHints(cwd, {
+      limit: Number.isFinite(limit) ? limit : 20,
+      task: strategyTask || undefined,
+      enabledProviders
+    });
     if (options.json) {
-      process.stdout.write(`${JSON.stringify(hints, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ enabled: strategyEnabled, ...hints }, null, 2)}\n`);
       return;
     }
-    process.stdout.write(`strategy memory records=${hints.sourceRecords}\n`);
+    process.stdout.write(`strategy memory enabled=${strategyEnabled ? "yes" : "no"} records=${hints.sourceRecords} matched=${hints.matchedRecords}\n`);
+    if (hints.task) process.stdout.write(`task=${hints.task}\n`);
+    if (hints.taskType) process.stdout.write(`task_type=${hints.taskType}\n`);
     if (hints.preferredTestCommand) process.stdout.write(`test_command=${hints.preferredTestCommand}\n`);
     for (const route of hints.routeAssignments) {
       process.stdout.write(`${route.role}\t${route.provider}/${route.model}\t${route.reason}\n`);
     }
-    if (!hints.routeAssignments.length && !hints.preferredTestCommand) process.stdout.write("No strategy hints available.\n");
+    for (const route of hints.avoidedRoutes) {
+      process.stdout.write(`avoid\t${route.role ?? "*"}\t${route.provider}/${route.model}\t${route.category}\t${route.reason}\n`);
+    }
+    if (!hints.routeAssignments.length && !hints.preferredTestCommand && !hints.avoidedRoutes.length) process.stdout.write("No strategy hints available.\n");
     return;
   }
   const records = await readLearnedTaskMemory(cwd, Number.isFinite(limit) ? limit : 20);
@@ -174,6 +191,13 @@ function renderFailureDetail(record: FailureMemoryRecord): string {
     `stale: ${record.stale ? record.staleReason ?? "yes" : "no"}`,
     `judge: ${record.judgeDecision ?? "unknown"}`,
     `selectedCandidate: ${record.selectedCandidate ?? "-"}`,
+    `introducedByPhase: ${record.introducedByPhase ?? "-"}`,
+    `missedByPhase: ${record.missedByPhase ?? "-"}`,
+    `detectedByPhase: ${record.detectedByPhase ?? "-"}`,
+    `attributionConfidence: ${record.attributionConfidence?.toFixed(2) ?? "-"}`,
+    `filePatterns: ${(record.filePatterns ?? []).join(", ") || "-"}`,
+    `frameworkSignals: ${(record.frameworkSignals ?? []).join(", ") || "-"}`,
+    `patchApproach: ${record.patchApproach ?? "-"}`,
     `verification: ${(record.verificationCommands ?? []).join(", ") || "-"}`,
     `correction: ${record.correction}`,
     `evidenceRefs: ${record.evidenceRefs.length ? record.evidenceRefs.join(", ") : "-"}`

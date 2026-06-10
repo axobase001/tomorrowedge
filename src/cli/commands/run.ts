@@ -45,7 +45,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   if (!effectiveGoal) throw new Error("Task goal is required unless --recipe supplies a default goal.");
   const accessMode = parseAccessMode(options.accessMode);
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
-  const { prefs, memoryHints, config } = await resolveRuntimeConfig(targetCwd);
+  const { prefs, memoryHints, config } = await resolveRuntimeConfig(targetCwd, { task: effectiveGoal });
   const effectiveAccessMode = accessMode ?? recipe?.accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {

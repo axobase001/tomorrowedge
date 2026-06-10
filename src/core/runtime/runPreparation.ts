@@ -26,11 +26,26 @@ export type RuntimeConfigResolution = {
   config: TomorrowEdgeConfig;
 };
 
-export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfigResolution> {
+export async function resolveRuntimeConfig(cwd: string, options: { task?: string } = {}): Promise<RuntimeConfigResolution> {
   const loadedConfig = loadConfig(cwd);
   const prefs = loadProjectPreferences(cwd);
-  const baseConfig = prefs.routingMode ? { ...loadedConfig, routing: { ...loadedConfig.routing, mode: prefs.routingMode } } : loadedConfig;
-  const memoryHints = baseConfig.strategy_memory.enabled ? await buildStrategyMemoryHints(cwd, { limit: baseConfig.strategy_memory.max_records }) : undefined;
+  const baseConfig: TomorrowEdgeConfig = {
+    ...loadedConfig,
+    routing: prefs.routingMode ? { ...loadedConfig.routing, mode: prefs.routingMode } : loadedConfig.routing,
+    strategy_memory: prefs.strategyMemoryRouting === undefined
+      ? loadedConfig.strategy_memory
+      : { ...loadedConfig.strategy_memory, enabled: prefs.strategyMemoryRouting }
+  };
+  const enabledProviders = Object.entries(baseConfig.providers)
+    .filter(([, provider]) => provider.enabled)
+    .map(([providerId]) => providerId);
+  const memoryHints = baseConfig.strategy_memory.enabled
+    ? await buildStrategyMemoryHints(cwd, {
+        limit: baseConfig.strategy_memory.max_records,
+        task: options.task,
+        enabledProviders
+      })
+    : undefined;
   const config = memoryHints ? applyStrategyMemory(baseConfig, memoryHints) : baseConfig;
   return { loadedConfig, prefs, memoryHints, config };
 }

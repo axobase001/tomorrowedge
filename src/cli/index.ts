@@ -121,9 +121,10 @@ program
   .option("--test-command <command>", "preferred test command")
   .option("--live-patch", "prefer live patch candidates")
   .option("--live-advisory", "prefer live advisory notes")
+  .option("--strategy-memory-routing <enabled>", "true/false: let learned strategy memory influence runtime routing")
   .option("--json", "print raw preferences JSON")
   .option("--list-keys", "show available preference keys")
-  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean; json?: boolean; listKeys?: boolean }) => prefsCommand(cwd, options));
+  .action((options: { accessMode?: string; routingMode?: string; testCommand?: string; livePatch?: boolean; liveAdvisory?: boolean; strategyMemoryRouting?: string; json?: boolean; listKeys?: boolean }) => prefsCommand(cwd, options));
 
 program
   .command("drill")
@@ -204,9 +205,9 @@ const memory = program
   .command("memory")
   .description("Inspect learned local task and failure memory")
   .option("--limit <n>", "number of entries", "20")
-  .option("--strategy", "show opt-in strategy memory routing and test-command hints")
+  .option("--strategy [task]", "show opt-in strategy memory routing and test-command hints; optionally scope to a task")
   .option("--json", "print machine-readable JSON")
-  .action((options: { limit?: string; strategy?: boolean; json?: boolean }) => memoryCommand(cwd, options));
+  .action((options: { limit?: string; strategy?: boolean | string; json?: boolean }) => memoryCommand(cwd, options));
 const memoryFailures = memory.command("failures").description("List structured failure memories").option("--limit <n>", "number of entries", "20").option("--include-stale", "include stale failure memories rejected by lifecycle policy").option("--json", "print machine-readable JSON");
 memoryFailures.action(() => memoryFailuresCommand(cwd, memoryFailures.opts() as { limit?: string; json?: boolean; includeStale?: boolean }));
 const memoryShow = memory.command("show").description("Show one failure memory by id or goal fingerprint").argument("<id>", "failure memory id or goal fingerprint").option("--include-stale", "allow showing stale failure memories").option("--json", "print machine-readable JSON");

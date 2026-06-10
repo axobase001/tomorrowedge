@@ -9,6 +9,7 @@ export type ProjectPreferences = {
   preferredTestCommand?: string;
   preferredLivePatch?: boolean;
   preferredLiveAdvisory?: boolean;
+  strategyMemoryRouting?: boolean;
 };
 
 export const emptyProjectPreferences: ProjectPreferences = {};

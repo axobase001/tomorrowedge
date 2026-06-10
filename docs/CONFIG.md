@@ -302,6 +302,8 @@ failure_memory:
 Useful inspection commands:
 
 ```bash
+tedge prefs --strategy-memory-routing true
+tedge memory --strategy "fix failing test"
 tedge memory preview latest
 tedge memory export --output failure-memory.json
 tedge memory delete <failure-id>
@@ -329,6 +331,24 @@ influence the workflow as explicit, auditable retrieval context:
 - `coder_constraints`: memory-derived anti-patterns and verifier requirements shown to coders
 - `review_guard`: reviewer/judge checks against retrieved failure memories
 - `repair_context`: correction strategies retrieved after a validation failure
+
+Project preferences can override the config-level strategy-memory switch with
+`tedge prefs --strategy-memory-routing true|false`. The preview command accepts
+an optional task string, so `tedge memory --strategy "fix failing test"` shows
+matched records, inferred task type, recommended role routes, preferred test
+command, and avoided provider/model routes before a workflow runs.
+
+Learned strategy memory stores compact provider outcomes from `model_call` and
+`provider_fallback` events. Recent `rate_limited`, `quota_exhausted`,
+`invalid_key`, `invalid_model`, or `upstream_unavailable` outcomes become
+explicit avoided routes, and disabled providers are not recommended from older
+success records.
+
+Failure memories also carry structured similarity and attribution fields:
+file patterns, framework signals, patch approach, introduced phase, missed
+phase, detected phase, attribution confidence, and attribution evidence. These
+fields are used by `tedge memory explain <task>` so unrelated memories do not
+win purely because they are recent or verified.
 
 All four failure-memory switches are ablation knobs. Turning one off removes
 that injection point without deleting stored memories.

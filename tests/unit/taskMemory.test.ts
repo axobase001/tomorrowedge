@@ -131,6 +131,187 @@ describe("learned task memory", () => {
     }
   });
 
+  it("records provider failure outcomes in learned task memory previews", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-provider-outcome-"));
+    try {
+      const state = await runOfflineGraph(cwd, "summarize code with a live planner", defaultConfig);
+      state.events = [{
+        id: "event_model_call_rate_limit",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        sessionId: state.sessionId,
+        mode: "partial",
+        type: "model_call",
+        phase: "planning",
+        role: "planner",
+        provider: "openrouter",
+        model: "openai/gpt-5.2",
+        status: "failure",
+        requestId: "request_planner_test",
+        error: "HTTP 429 too many requests"
+      }];
+      state.finalSummary = {
+        task: state.goal,
+        result: "failed",
+        changedFiles: [],
+        testsRun: [],
+        evidence: ["Planner provider failed."],
+        risksRemaining: ["Provider unavailable."],
+        suggestedCommitMessage: "chore: retry"
+      };
+
+      const preview = await previewLearnedTaskMemory(cwd, state, { failureMemory: { enabled: true } });
+
+      expect(preview.record?.providerOutcomes?.[0]).toMatchObject({
+        role: "planner",
+        provider: "openrouter",
+        model: "openai/gpt-5.2",
+        status: "failure",
+        category: "rate_limited"
+      });
+      expect(JSON.stringify(preview.record)).not.toContain("sk-live");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses task-scoped strategy memory and avoids recently failed provider routes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-strategy-provider-avoid-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      const rows = [
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "failed-provider",
+          goalPreview: "fix npm test failure",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "failed",
+          providerOutcomes: [{
+            role: "coder_a",
+            provider: "openrouter",
+            model: "openai/gpt-5.2",
+            status: "failure",
+            category: "rate_limited",
+            reason: "HTTP 429 rate limit exceeded"
+          }]
+        },
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "old-success-openrouter",
+          goalPreview: "fix npm test failure",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "completed",
+          routeAssignments: [{ role: "coder_a", provider: "openrouter", model: "openai/gpt-5.2" }]
+        },
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "success-deepseek",
+          goalPreview: "fix npm test failure",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "completed",
+          routeAssignments: [{ role: "coder_a", provider: "deepseek", model: "deepseek-chat" }]
+        }
+      ];
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+      const hints = await buildStrategyMemoryHints(cwd, {
+        task: "fix failing npm test",
+        enabledProviders: ["openrouter", "deepseek"]
+      });
+
+      expect(hints.taskType).toBe("test");
+      expect(hints.matchedRecords).toBe(3);
+      expect(hints.avoidedRoutes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: "coder_a", provider: "openrouter", model: "openai/gpt-5.2", category: "rate_limited" })
+      ]));
+      expect(hints.routeAssignments).toEqual([
+        expect.objectContaining({ role: "coder_a", provider: "deepseek", model: "deepseek-chat" })
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not let unrelated task memory drive a task-scoped strategy preview", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-strategy-scope-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      const rows = [
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "docs-task",
+          goalPreview: "update README docs",
+          taskType: "docs",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm run docs:status"],
+          result: "completed",
+          routeAssignments: [{ role: "coder_a", provider: "openrouter", model: "openai/gpt-5.2" }]
+        },
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "test-task",
+          goalPreview: "fix npm test failing assertion",
+          taskType: "test",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm test"],
+          result: "completed",
+          routeAssignments: [{ role: "coder_a", provider: "deepseek", model: "deepseek-chat" }]
+        }
+      ];
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+      const hints = await buildStrategyMemoryHints(cwd, { task: "fix failing test" });
+
+      expect(hints.taskType).toBe("test");
+      expect(hints.matchedRecords).toBe(1);
+      expect(hints.preferredTestCommand).toBe("npm test");
+      expect(hints.routeAssignments).toEqual([
+        expect.objectContaining({ provider: "deepseek", model: "deepseek-chat" })
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("stores structured failure memory without bulky raw artifacts", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-failure-memory-"));
     try {
@@ -146,6 +327,7 @@ describe("learned task memory", () => {
         }
       ];
       state.eventArtifacts = [{ ref: "artifacts/stderr.txt", content: "OPENROUTER_API_KEY=sk-123456789012345678901234\nAssertionError" }];
+      state.changedFiles = ["index.js"];
       state.events = [{
         id: "event_prediction_sensitive",
         timestamp: "2026-06-07T00:00:00.000Z",
@@ -220,6 +402,12 @@ describe("learned task memory", () => {
       expect(record.counterexamples?.some((item) => item.includes("npm test"))).toBe(true);
       expect(record.validationCommand).toBe("npm test");
       expect(record.correctionStatus).toBe("partial");
+      expect(["coder_a", "coder_b", "repairer"]).toContain(record.introducedByPhase);
+      expect(record.detectedByPhase).toBe("runner");
+      expect(record.attributionConfidence).toBeGreaterThan(0.5);
+      expect(record.filePatterns).toContain("file:index.js");
+      expect(record.frameworkSignals).toContain("node");
+      expect(record.patchApproach).toBeDefined();
       expect(record.outcomePredictionRefs).toEqual(["event_prediction_sensitive"]);
       expect(record.outcomeObservationRefs).toEqual(["event_observation_sensitive"]);
       expect(record.outcomeMismatchType).toBe("wrong_assumption");
@@ -364,6 +552,84 @@ describe("learned task memory", () => {
       expect(explanation.selected[0]?.id).toBe(failure.id);
       expect(explanation.selected[0]?.matchedSignals).toContain("npm");
       expect(explanation.rejected).toEqual([]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("retrieves structurally similar failure memories and rejects unrelated near misses", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-failure-structured-search-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      const rows = [
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "pytest-api",
+          goalPreview: "repair API route pytest validation failure",
+          taskType: "test",
+          riskLevel: "medium",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: ["API route must preserve response schema"],
+          verificationCommands: ["pytest tests/api"],
+          result: "failed",
+          failureClass: "validation_failed",
+          failureSignature: "pytest-api-signature",
+          correction: "Reproduce pytest tests/api and fix the API route regression.",
+          correctedRule: "Use pytest tests/api before marking the route fixed.",
+          validationCommand: "pytest tests/api",
+          correctionStatus: "verified",
+          filePatterns: ["dir:api", "ext:.py"],
+          frameworkSignals: ["python"],
+          patchApproach: "minimal_patch",
+          introducedByPhase: "coder_a",
+          detectedByPhase: "runner",
+          evidenceRefs: [],
+          confidence: 0.9,
+          recurrenceCount: 2,
+          fixedCount: 1,
+          sourceSessionIds: ["session_pytest_api"]
+        },
+        {
+          schemaVersion: "task-memory/v2",
+          createdAt: now,
+          firstSeen: now,
+          lastSeen: now,
+          goalFingerprint: "readme-docs",
+          goalPreview: "update README docs",
+          taskType: "docs",
+          riskLevel: "low",
+          routingMode: "balanced",
+          accessMode: "partial",
+          constraints: [],
+          verificationCommands: ["npm run docs:status"],
+          result: "failed",
+          failureClass: "workflow_incomplete",
+          failureSignature: "docs-signature",
+          correction: "Run docs status after editing README.",
+          correctedRule: "Docs updates need docs status.",
+          correctionStatus: "verified",
+          filePatterns: ["file:README.md", "ext:.md"],
+          frameworkSignals: ["node"],
+          evidenceRefs: [],
+          confidence: 0.9,
+          recurrenceCount: 1,
+          fixedCount: 1,
+          sourceSessionIds: ["session_docs"]
+        }
+      ];
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+      const explanation = await explainFailureMemories(cwd, "fix python API pytest failure in api/users.py");
+
+      expect(explanation.selected[0]?.goalFingerprint).toBe("pytest-api");
+      expect(explanation.selected[0]?.matchedSignals).toEqual(expect.arrayContaining(["pytest", "api"]));
+      expect(explanation.rejected.some((item) => item.id.includes("readme-docs") || item.reason === "low task-signal overlap")).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

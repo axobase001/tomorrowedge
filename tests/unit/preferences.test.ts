@@ -15,14 +15,16 @@ describe("project preferences", () => {
         accessMode: "restricted",
         routingMode: "privacy",
         preferredTestCommand: "npm test",
-        preferredLivePatch: true
+        preferredLivePatch: true,
+        strategyMemoryRouting: true
       });
 
       expect(loadProjectPreferences(cwd)).toMatchObject({
         accessMode: "restricted",
         routingMode: "privacy",
         preferredTestCommand: "npm test",
-        preferredLivePatch: true
+        preferredLivePatch: true,
+        strategyMemoryRouting: true
       });
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -37,6 +39,7 @@ describe("project preferences", () => {
       expect(output).toContain("TomorrowEdge project preferences");
       expect(output).toContain("Available keys");
       expect(output).toContain("accessMode");
+      expect(output).toContain("strategyMemoryRouting");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -49,6 +52,19 @@ describe("project preferences", () => {
       await captureStdout(() => modeCommand(cwd, "full"));
 
       expect(loadProjectPreferences(cwd).accessMode).toBe("full");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("updates the strategy-memory routing preference from CLI input", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-prefs-"));
+    try {
+      await captureStdout(() => prefsCommand(cwd, { strategyMemoryRouting: "true" }));
+      expect(loadProjectPreferences(cwd).strategyMemoryRouting).toBe(true);
+
+      await captureStdout(() => prefsCommand(cwd, { strategyMemoryRouting: "false" }));
+      expect(loadProjectPreferences(cwd).strategyMemoryRouting).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

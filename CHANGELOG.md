@@ -7,6 +7,26 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+### Changed
+
+- Strategy memory can now be toggled from project preferences with
+  `tedge prefs --strategy-memory-routing true|false`, and
+  `tedge memory --strategy "<task>"` shows task-scoped matched records,
+  inferred task type, route recommendations, avoided provider/model routes, and
+  preferred test command.
+- Learned task memory now records compact provider outcomes from `model_call`
+  and `provider_fallback` events, including failure categories such as
+  `rate_limited`, `quota_exhausted`, `invalid_key`, `invalid_model`, and
+  `upstream_unavailable`. Runtime strategy routing skips recently failed or
+  disabled provider/model pairs instead of blindly reusing older success
+  routes.
+- Failure memory records now include structured retrieval and causal
+  attribution fields: file patterns, framework signals, patch approach,
+  introduced phase, missed phase, detected phase, attribution confidence, and
+  evidence ids. Failure-memory explanation now requires real structural overlap
+  so generic words like "failure" cannot select unrelated memories by
+  themselves.
+
 ## [1.3.10] - 2026-06-10
 
 1.3.10 corrects the answer-first runtime path from 1.3.8: user-facing

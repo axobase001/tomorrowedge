@@ -5,6 +5,7 @@ import type { AgentGraphState } from "../agentGraph/state.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import { redactText } from "../../safety/secretScanner.js";
 import type { OutcomeMismatchType } from "../events/eventTypes.js";
+import { classifyProviderError, type ProviderErrorCategory } from "../../safety/providerRedaction.js";
 
 export type TaskMemory = {
   preferredTestCommands: string[];
@@ -32,6 +33,10 @@ export type LearnedTaskMemory = {
   judgeDecision?: string;
   result?: string;
   routeAssignments?: Array<{ role: AgentRole; provider: string; model: string }>;
+  providerOutcomes?: ProviderOutcome[];
+  filePatterns?: string[];
+  frameworkSignals?: string[];
+  patchApproach?: string;
   failureClass?: FailureClass;
   failureSignature?: string;
   correction?: string;
@@ -46,6 +51,11 @@ export type LearnedTaskMemory = {
   outcomeObservationRefs?: string[];
   outcomeMismatchType?: OutcomeMismatchType;
   predictionAccuracy?: { matched: number; total: number };
+  introducedByPhase?: FailureAttributionPhase;
+  missedByPhase?: FailureAttributionPhase;
+  detectedByPhase?: FailureAttributionPhase;
+  attributionConfidence?: number;
+  attributionEvidence?: string[];
   confidence?: number;
   recurrenceCount?: number;
   fixedCount?: number;
@@ -87,10 +97,36 @@ export type MemoryScope = {
   experimentId?: string;
 };
 
+export type ProviderOutcome = {
+  role?: AgentRole;
+  provider: string;
+  model: string;
+  status: "success" | "failure" | "fallback";
+  category?: ProviderErrorCategory;
+  reason?: string;
+  eventId?: string;
+  createdAt?: string;
+};
+
+export type FailureAttributionPhase = AgentRole | "provider" | "environment" | "unknown";
+
+export type StrategyAvoidedRoute = {
+  role?: AgentRole;
+  provider: string;
+  model: string;
+  category: ProviderErrorCategory | "disabled_provider";
+  reason: string;
+  sourceRecords: number;
+};
+
 export type StrategyMemoryHints = {
   routeAssignments: Array<{ role: AgentRole; provider: string; model: string; reason: string }>;
+  avoidedRoutes: StrategyAvoidedRoute[];
   preferredTestCommand?: string;
   sourceRecords: number;
+  matchedRecords: number;
+  task?: string;
+  taskType?: string;
 };
 
 export type FailureClass =
@@ -124,6 +160,11 @@ export type FailureMemoryRecord = LearnedTaskMemory & {
   outcomeObservationRefs?: string[];
   outcomeMismatchType?: OutcomeMismatchType;
   predictionAccuracy?: { matched: number; total: number };
+  introducedByPhase?: FailureAttributionPhase;
+  missedByPhase?: FailureAttributionPhase;
+  detectedByPhase?: FailureAttributionPhase;
+  attributionConfidence?: number;
+  attributionEvidence?: string[];
   confidence: number;
   recurrence: number;
   recurrenceCount: number;
@@ -183,11 +224,15 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
     selectedCandidate: state.judge?.selectedCandidateId,
     judgeDecision: state.judge?.decision,
     result: state.finalSummary?.result,
+    filePatterns: collectFilePatterns(state),
+    frameworkSignals: collectFrameworkSignals(state),
+    patchApproach: selectedPatchApproach(state),
     routeAssignments: state.finalSummary?.result === "completed"
       ? state.routing.assignments
           .filter((assignment) => !["runner", "vision"].includes(assignment.role))
           .map((assignment) => ({ role: assignment.role, provider: assignment.provider, model: assignment.model }))
-      : []
+      : [],
+    providerOutcomes: collectProviderOutcomes(state)
   };
   Object.assign(record, summarizeOutcomeEvents(state));
   const failure = buildFailureMemoryFields(state, record);
@@ -215,16 +260,28 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
   };
 }
 
-export async function buildStrategyMemoryHints(cwd: string, options: { limit?: number } = {}): Promise<StrategyMemoryHints> {
+export async function buildStrategyMemoryHints(cwd: string, options: { limit?: number; task?: string; enabledProviders?: Iterable<string> } = {}): Promise<StrategyMemoryHints> {
   const records = await readLearnedTaskMemory(cwd, options.limit ?? 20);
-  const successful = records.filter((record) => record.result === "completed");
+  const taskProfile = options.task ? profileStrategyTask(options.task) : undefined;
+  const scoped = taskProfile
+    ? records
+        .map((record) => ({ record, score: scoreStrategyRecord(record, taskProfile) }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || b.record.createdAt.localeCompare(a.record.createdAt))
+        .map((entry) => entry.record)
+    : records;
+  const enabledProviders = options.enabledProviders ? new Set([...options.enabledProviders]) : undefined;
+  const avoidedRoutes = buildAvoidedRoutes(scoped, enabledProviders);
+  const successful = scoped.filter((record) => record.result === "completed");
   const routeByRole = new Map<AgentRole, { role: AgentRole; provider: string; model: string; reason: string }>();
   for (const record of successful) {
     for (const route of record.routeAssignments ?? []) {
+      if (enabledProviders && !enabledProviders.has(route.provider)) continue;
+      if (isAvoidedRoute(route, avoidedRoutes)) continue;
       if (!routeByRole.has(route.role)) {
         routeByRole.set(route.role, {
           ...route,
-          reason: `strategy memory: reused ${route.provider}/${route.model} from recent completed ${record.taskType} workflow`
+          reason: `strategy memory: reused ${route.provider}/${route.model} from recent completed ${record.taskType} workflow${taskProfile ? ` matched to ${taskProfile.taskType}` : ""}`
         });
       }
     }
@@ -232,9 +289,298 @@ export async function buildStrategyMemoryHints(cwd: string, options: { limit?: n
   const preferredTestCommand = mostCommon(successful.flatMap((record) => record.verificationCommands ?? []));
   return {
     routeAssignments: [...routeByRole.values()],
+    avoidedRoutes,
     preferredTestCommand,
-    sourceRecords: successful.length
+    sourceRecords: records.length,
+    matchedRecords: scoped.length,
+    task: taskProfile?.task,
+    taskType: taskProfile?.taskType
   };
+}
+
+function collectProviderOutcomes(state: AgentGraphState): ProviderOutcome[] {
+  const outcomes: ProviderOutcome[] = [];
+  for (const event of state.events) {
+    if (event.type === "model_call" && event.provider && event.model && event.status && event.status !== "start") {
+      const category = event.status === "failure" ? providerErrorCategory(event.error) : undefined;
+      outcomes.push({
+        role: event.role,
+        provider: event.provider,
+        model: event.model,
+        status: event.status === "success" ? "success" : "failure",
+        category,
+        reason: event.error ? clip(redactMemoryText(event.error), 180) : event.status,
+        eventId: event.id,
+        createdAt: event.timestamp
+      });
+    }
+    if (event.type === "provider_fallback") {
+      outcomes.push({
+        role: event.role,
+        provider: event.fromProvider,
+        model: event.fromModel,
+        status: "fallback",
+        category: providerErrorCategory(event.error ?? event.reason),
+        reason: clip(redactMemoryText(event.reason), 180),
+        eventId: event.id,
+        createdAt: event.timestamp
+      });
+    }
+  }
+  return outcomes.slice(-24);
+}
+
+function collectFilePatterns(state: AgentGraphState): string[] {
+  const files = unique([
+    ...state.changedFiles,
+    ...(state.contextSelection?.selectedFiles ?? []).map((file) => file.path),
+    ...state.candidates.flatMap((candidate) => candidate.filesChanged),
+    ...state.repairCandidates.flatMap((candidate) => candidate.filesChanged)
+  ]).map((file) => redactMemoryText(file).replace(/\\/g, "/"));
+  const patterns = files.flatMap((file) => {
+    const ext = path.extname(file).toLowerCase();
+    const topDir = file.includes("/") ? file.split("/")[0] : "";
+    const name = path.basename(file);
+    return [
+      ext ? `ext:${ext}` : "",
+      topDir ? `dir:${topDir}` : "",
+      name ? `file:${name}` : ""
+    ];
+  });
+  return unique(patterns).slice(0, 12);
+}
+
+function collectFrameworkSignals(state: AgentGraphState): string[] {
+  const text = [
+    state.goal,
+    ...(state.plan?.verificationCommands ?? []),
+    ...state.runResults.map((run) => `${run.command}\n${run.stderr}\n${run.stdout}`),
+    ...collectFilePatterns(state)
+  ].join("\n").toLowerCase();
+  const signals: string[] = [];
+  if (/npm|pnpm|yarn|node|package\.json|\.tsx?|\.jsx?/.test(text)) signals.push("node");
+  if (/typescript|tsc|\.tsx?|vite/.test(text)) signals.push("typescript");
+  if (/vitest|jest/.test(text)) signals.push("js-test");
+  if (/pytest|python|\.py/.test(text)) signals.push("python");
+  if (/cargo|rustc|\.rs/.test(text)) signals.push("rust");
+  if (/\bgo test\b|\.go\b/.test(text)) signals.push("go");
+  if (/cmake|make|\.cpp|\.cc|\.hpp|\.h\b/.test(text)) signals.push("cpp");
+  if (/react|jsx|tsx/.test(text)) signals.push("react");
+  return unique(signals).slice(0, 10);
+}
+
+function selectedPatchApproach(state: AgentGraphState): string | undefined {
+  const selectedId = state.judge?.selectedCandidateId;
+  const selected = selectedId
+    ? [...state.candidates, ...state.repairCandidates].find((candidate) => candidate.candidateId === selectedId)
+    : undefined;
+  return selected?.approach ?? state.repairCandidates.at(-1)?.approach ?? state.candidates.at(-1)?.approach;
+}
+
+function inferFailureAttribution(state: AgentGraphState, record: LearnedTaskMemory, failureClass: FailureClass): Pick<LearnedTaskMemory, "introducedByPhase" | "missedByPhase" | "detectedByPhase" | "attributionConfidence" | "attributionEvidence"> {
+  const providerEvent = state.events.find((event) => event.type === "model_call" && event.status === "failure")
+    ?? state.events.find((event) => event.type === "provider_fallback")
+    ?? state.events.find((event) => event.type === "external_agent_error");
+  const failedShellEvent = state.events.find((event) => event.type === "shell_run" && event.success === false);
+  const reviewEvent = state.events.find((event) => event.type === "review_decision");
+  const judgeEvent = state.events.find((event) => event.type === "judge_decision");
+  const candidatePhase = candidateAttributionPhase(state);
+  const evidence = unique([
+    providerEvent?.id,
+    failedShellEvent?.id,
+    reviewEvent?.id,
+    judgeEvent?.id,
+    ...state.runResults.filter((run) => !run.success && !run.skipped).map((run) => `run:${redactMemoryText(run.command)}`)
+  ].filter((value): value is string => Boolean(value))).slice(0, 8);
+  switch (failureClass) {
+    case "provider_failure":
+      return {
+        introducedByPhase: "provider",
+        detectedByPhase: asAttributionPhase(providerEvent?.role) ?? "unknown",
+        attributionConfidence: 0.8,
+        attributionEvidence: evidence
+      };
+    case "environment_failure":
+      return {
+        introducedByPhase: "environment",
+        detectedByPhase: "runner",
+        attributionConfidence: 0.72,
+        attributionEvidence: evidence
+      };
+    case "validation_failed":
+    case "coding_error":
+      return {
+        introducedByPhase: candidatePhase,
+        missedByPhase: state.review ? "reviewer" : state.judge ? "judge" : undefined,
+        detectedByPhase: "runner",
+        attributionConfidence: failedShellEvent || state.runResults.some((run) => !run.success && !run.skipped) ? 0.72 : 0.58,
+        attributionEvidence: evidence
+      };
+    case "review_or_judge_blocked":
+      return {
+        introducedByPhase: candidatePhase,
+        detectedByPhase: state.judge?.decision === "request_revision" ? "judge" : "reviewer",
+        attributionConfidence: 0.7,
+        attributionEvidence: evidence
+      };
+    case "routing_blocked":
+      return {
+        introducedByPhase: asAttributionPhase(providerEvent?.role) ?? "planner",
+        detectedByPhase: "planner",
+        attributionConfidence: 0.62,
+        attributionEvidence: evidence
+      };
+    case "no_candidate_selected":
+    case "partial_completion":
+    case "workflow_incomplete":
+      return {
+        introducedByPhase: "planner",
+        detectedByPhase: state.judge ? "judge" : "unknown",
+        attributionConfidence: 0.52,
+        attributionEvidence: evidence
+      };
+  }
+}
+
+function inferLegacyFailureAttribution(failureClass: FailureClass, record: LearnedTaskMemory): Pick<LearnedTaskMemory, "introducedByPhase" | "missedByPhase" | "detectedByPhase" | "attributionConfidence" | "attributionEvidence"> {
+  switch (failureClass) {
+    case "provider_failure":
+      return { introducedByPhase: "provider", detectedByPhase: "unknown", attributionConfidence: 0.55, attributionEvidence: [] };
+    case "environment_failure":
+      return { introducedByPhase: "environment", detectedByPhase: "runner", attributionConfidence: 0.55, attributionEvidence: [] };
+    case "validation_failed":
+    case "coding_error":
+      return {
+        introducedByPhase: asAttributionPhase(record.selectedCandidate?.includes("_b") ? "coder_b" : "coder_a"),
+        detectedByPhase: "runner",
+        attributionConfidence: 0.5,
+        attributionEvidence: []
+      };
+    case "review_or_judge_blocked":
+      return { introducedByPhase: "coder_a", detectedByPhase: "reviewer", attributionConfidence: 0.5, attributionEvidence: [] };
+    default:
+      return { introducedByPhase: "unknown", detectedByPhase: "unknown", attributionConfidence: 0.35, attributionEvidence: [] };
+  }
+}
+
+function candidateAttributionPhase(state: AgentGraphState): FailureAttributionPhase {
+  const selectedId = state.judge?.selectedCandidateId;
+  const selected = selectedId
+    ? [...state.candidates, ...state.repairCandidates].find((candidate) => candidate.candidateId === selectedId)
+    : undefined;
+  const candidate = selected ?? state.repairCandidates.at(-1) ?? state.candidates.at(-1);
+  if (candidate?.approach === "repair") return "repairer";
+  return asAttributionPhase(candidate?.agentId) ?? (candidate?.candidateId?.includes("_b") ? "coder_b" : "coder_a");
+}
+
+function asAttributionPhase(value: string | undefined): FailureAttributionPhase | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim();
+  const allowed = new Set<FailureAttributionPhase>([
+    "core", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "repairer", "summarizer", "vision",
+    "provider", "environment", "unknown"
+  ]);
+  return allowed.has(normalized as FailureAttributionPhase) ? normalized as FailureAttributionPhase : undefined;
+}
+
+function buildAvoidedRoutes(records: LearnedTaskMemory[], enabledProviders: Set<string> | undefined): StrategyAvoidedRoute[] {
+  const counts = new Map<string, StrategyAvoidedRoute>();
+  const add = (route: StrategyAvoidedRoute) => {
+    const key = routeKey(route.role, route.provider, route.model);
+    const current = counts.get(key);
+    if (!current) counts.set(key, route);
+    else counts.set(key, { ...current, sourceRecords: current.sourceRecords + route.sourceRecords });
+  };
+  for (const record of records) {
+    for (const outcome of record.providerOutcomes ?? []) {
+      if (!outcome.provider || !outcome.model) continue;
+      if (outcome.status === "failure" || outcome.status === "fallback") {
+        add({
+          role: outcome.role,
+          provider: outcome.provider,
+          model: outcome.model,
+          category: outcome.category ?? "unknown",
+          reason: `recent provider ${outcome.status}${outcome.category ? ` (${outcome.category})` : ""}: ${outcome.reason ?? "no provider output"}`,
+          sourceRecords: 1
+        });
+      }
+    }
+    if (!enabledProviders) continue;
+    for (const route of record.routeAssignments ?? []) {
+      if (!enabledProviders.has(route.provider)) {
+        add({
+          role: route.role,
+          provider: route.provider,
+          model: route.model,
+          category: "disabled_provider",
+          reason: "provider is disabled in the current config",
+          sourceRecords: 1
+        });
+      }
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.sourceRecords - a.sourceRecords || a.provider.localeCompare(b.provider)).slice(0, 12);
+}
+
+function providerErrorCategory(message: string | undefined): ProviderErrorCategory | undefined {
+  if (!message) return undefined;
+  const category = classifyProviderError(message);
+  return category === "unknown" ? undefined : category;
+}
+
+type StrategyTaskProfile = {
+  task: string;
+  taskType: string;
+  signals: Set<string>;
+};
+
+function profileStrategyTask(task: string): StrategyTaskProfile {
+  const redacted = clip(redactMemoryText(task), 180);
+  return {
+    task: redacted,
+    taskType: inferStrategyTaskType(redacted),
+    signals: tokenize(redacted)
+  };
+}
+
+function scoreStrategyRecord(record: LearnedTaskMemory, profile: StrategyTaskProfile): number {
+  const recordSignals = tokenize([
+    record.goalPreview,
+    record.taskType,
+    record.riskLevel,
+    record.routingMode,
+    record.judgeDecision,
+    record.result,
+    record.failureClass,
+    record.correction,
+    ...(record.constraints ?? []),
+    ...(record.verificationCommands ?? [])
+  ].filter(Boolean).join(" "));
+  const overlap = [...profile.signals].filter((signal) => recordSignals.has(signal)).length;
+  const taskTypeBoost = profile.taskType !== "unknown" && record.taskType === profile.taskType ? 5 : 0;
+  const verifierBoost = profile.taskType === "test" && (record.verificationCommands ?? []).some((command) => /test|pytest|vitest|jest|verify/i.test(command)) ? 2 : 0;
+  return overlap + taskTypeBoost + verifierBoost;
+}
+
+function inferStrategyTaskType(task: string): string {
+  if (/test|verify|failing|failure|pytest|vitest|jest|测试|驗證|验证|失败|修复/.test(task.toLowerCase())) return "test";
+  if (/review|audit|diff|审查|审核|安全/.test(task.toLowerCase())) return "review";
+  if (/refactor|cleanup|重构|整理/.test(task.toLowerCase())) return "refactor";
+  if (/doc|readme|docs|文档|说明/.test(task.toLowerCase())) return "docs";
+  if (/read|list|inspect|show|查看|读取|列出|检查/.test(task.toLowerCase())) return "inspect";
+  return "unknown";
+}
+
+function routeKey(role: AgentRole | undefined, provider: string, model: string): string {
+  return `${role ?? "*"}:${provider}:${model}`;
+}
+
+function isAvoidedRoute(route: { role: AgentRole; provider: string; model: string }, avoidedRoutes: StrategyAvoidedRoute[]): boolean {
+  return avoidedRoutes.some((avoided) =>
+    (!avoided.role || avoided.role === route.role) &&
+    avoided.provider === route.provider &&
+    (avoided.model === "*" || avoided.model === route.model)
+  );
 }
 
 function mostCommon(values: string[]): string | undefined {
@@ -303,6 +649,7 @@ export async function compactFailureMemories(cwd: string, options: { keepStale?:
 export async function explainFailureMemories(cwd: string, task: string, options: { limit?: number } = {}): Promise<FailureMemoryExplanation> {
   const records = await readFailureMemories(cwd, Math.max(options.limit ?? 5, 20), { includeStale: true });
   const taskSignals = tokenize(task);
+  const inferredTaskType = inferStrategyTaskType(task);
   const selected: Array<FailureMemoryRecord & { score: number; matchedSignals: string[] }> = [];
   const rejected: Array<{ id: string; reason: string }> = [];
   for (const record of records) {
@@ -324,20 +671,36 @@ export async function explainFailureMemories(cwd: string, task: string, options:
       record.correctedRule,
       record.validationCommand,
       record.correctionStatus,
+      record.patchApproach,
+      record.introducedByPhase,
+      record.missedByPhase,
+      record.detectedByPhase,
       ...(record.applicability ?? []),
       ...(record.counterexamples ?? []),
       ...(record.constraints ?? []),
-      ...(record.verificationCommands ?? [])
+      ...(record.verificationCommands ?? []),
+      ...(record.filePatterns ?? []),
+      ...(record.frameworkSignals ?? [])
     ].filter(Boolean).join(" "));
     const matchedSignals = [...taskSignals].filter((signal) => recordSignals.has(signal));
+    const strongMatchedSignals = matchedSignals.filter((signal) => !weakSimilaritySignals.has(signal));
+    const taskTypeMatch = record.taskType !== "unknown" && (record.taskType === inferredTaskType || taskSignals.has(record.taskType));
+    const failureClassMatch =
+      (record.failureClass === "validation_failed" && /test|verify|pytest|vitest|jest|验证|测试|失败/i.test(task)) ||
+      (record.failureClass === "review_or_judge_blocked" && /review|judge|审查|裁决/i.test(task)) ||
+      (record.failureClass === "provider_failure" && /provider|model|api|429|quota|key|模型|密钥/i.test(task));
+    if (!strongMatchedSignals.length && !taskTypeMatch && !failureClassMatch) {
+      rejected.push({ id: record.id, reason: "low task-signal overlap" });
+      continue;
+    }
     const score =
-      matchedSignals.length * 3 +
-      (record.taskType !== "unknown" && taskSignals.has(record.taskType) ? 4 : 0) +
+      strongMatchedSignals.length * 3 +
+      (taskTypeMatch ? 4 : 0) +
       (record.failureClass === "review_or_judge_blocked" && /review|judge|审查|裁决/i.test(task) ? 4 : 0) +
       (record.failureClass === "validation_failed" && /test|verify|验证|测试/i.test(task) ? 4 : 0) +
       correctionStatusScore(record.correctionStatus) +
       Math.min(record.recurrence, 4);
-    if (score >= 3) selected.push({ ...record, score, matchedSignals });
+    if (score >= 3) selected.push({ ...record, score, matchedSignals: strongMatchedSignals.length ? strongMatchedSignals : matchedSignals });
     else rejected.push({ id: record.id, reason: "low task-signal overlap" });
   }
   selected.sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt));
@@ -378,6 +741,7 @@ function buildFailureMemoryFields(state: AgentGraphState, record: LearnedTaskMem
   const correction = correctionForFailure(failureClass, state, record);
   return {
     failureClass,
+    ...inferFailureAttribution(state, record, failureClass),
     correction,
     wrongAssumption: wrongAssumptionForFailure(failureClass, state, record),
     correctedRule: correctedRuleForFailure(failureClass, correction, state, record),
@@ -401,6 +765,7 @@ function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): Failure
   const lastSeen = record.lastSeen ?? record.createdAt;
   const lifecycle = staleStatus(record, cwd);
   const correction = record.correction ?? correctionForFailure(failureClass, undefined, record);
+  const attribution = record.introducedByPhase ? {} : inferLegacyFailureAttribution(failureClass, record);
   const fallbackSignature = hashText([
     failureClass,
     record.taskType,
@@ -428,6 +793,11 @@ function normalizeFailureRecord(record: LearnedTaskMemory, cwd: string): Failure
     outcomeObservationRefs: record.outcomeObservationRefs,
     outcomeMismatchType: record.outcomeMismatchType,
     predictionAccuracy: record.predictionAccuracy,
+    introducedByPhase: record.introducedByPhase ?? attribution.introducedByPhase,
+    missedByPhase: record.missedByPhase ?? attribution.missedByPhase,
+    detectedByPhase: record.detectedByPhase ?? attribution.detectedByPhase,
+    attributionConfidence: record.attributionConfidence ?? attribution.attributionConfidence,
+    attributionEvidence: record.attributionEvidence ?? attribution.attributionEvidence,
     confidence: record.confidence ?? confidenceForFailure(failureClass, evidenceRefs),
     recurrence: record.recurrenceCount ?? 1,
     recurrenceCount: record.recurrenceCount ?? 1,
@@ -549,6 +919,11 @@ function applicabilityForFailure(failureClass: FailureClass, state: AgentGraphSt
     `task_type:${record.taskType}`,
     `risk:${record.riskLevel}`,
     primaryValidationCommand(state, record) ? `verifier:${primaryValidationCommand(state, record)}` : "",
+    ...(record.filePatterns ?? []),
+    ...(record.frameworkSignals ?? []).map((signal) => `framework:${signal}`),
+    record.patchApproach ? `patch:${record.patchApproach}` : "",
+    record.introducedByPhase ? `introduced_by:${record.introducedByPhase}` : "",
+    record.detectedByPhase ? `detected_by:${record.detectedByPhase}` : "",
     ...(state?.changedFiles ?? []).slice(0, 4).map((file) => `file:${redactMemoryText(file)}`)
   ]).slice(0, 8);
 }
@@ -778,3 +1153,4 @@ function hashText(value: string): string {
 }
 
 const stopWords = new Set(["the", "and", "for", "with", "from", "this", "that", "task", "code", "file", "test", "fix", "add", "run"]);
+const weakSimilaritySignals = new Set(["failure", "failed", "failing", "repair", "update", "change", "issue", "bug"]);
