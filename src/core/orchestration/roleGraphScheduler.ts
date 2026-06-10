@@ -61,15 +61,20 @@ export function readyRoleNodes(state: RoleGraphExecutionState): RoleNode[] {
       const dependencyNode = state.graph.nodes.find((item) => item.id === dependency);
       if (!dependencyState) return true;
       return dependencyState.status === "success"
-        || dependencyState.status === "skipped"
+        || Boolean(dependencyNode?.canSkip && dependencyState.status === "skipped")
         || Boolean(dependencyNode && !dependencyNode.required && (dependencyState.status === "failed" || dependencyState.status === "blocked"));
     });
   });
 }
 
-export function markRoleNodeRunning(state: RoleGraphExecutionState, role: AgentRole, now = new Date().toISOString()): RoleNodeExecution | undefined {
-  const node = nextNodeForRole(state, role);
-  if (!node) return undefined;
+export function canRunRoleNode(state: RoleGraphExecutionState, role: AgentRole, nodeId?: string): boolean {
+  const node = nodeForRole(state, role, nodeId);
+  return Boolean(node && readyRoleNodes(state).some((ready) => ready.id === node.id));
+}
+
+export function beginRoleNode(state: RoleGraphExecutionState, role: AgentRole, nodeId?: string, now = new Date().toISOString()): RoleNodeExecution | undefined {
+  const node = nodeForRole(state, role, nodeId);
+  if (!node || !canRunRoleNode(state, role, node.id)) return undefined;
   const execution = state.nodes[node.id]!;
   execution.status = "running";
   execution.startedAt = execution.startedAt ?? now;
@@ -77,10 +82,38 @@ export function markRoleNodeRunning(state: RoleGraphExecutionState, role: AgentR
   return execution;
 }
 
+export function completeRoleNode(state: RoleGraphExecutionState, role: AgentRole, result: Omit<RoleNodeResult, "role" | "status"> & { status?: "success" }, nodeId?: string): RoleNodeExecution | undefined {
+  return finishRoleNode(state, { ...result, role, nodeId: nodeId ?? result.nodeId, status: "success" });
+}
+
+export function blockRoleNode(state: RoleGraphExecutionState, role: AgentRole, reason: string, nodeId?: string): RoleNodeExecution | undefined {
+  return finishRoleNode(state, { role, nodeId, status: "blocked", summary: reason, error: reason });
+}
+
+export function skipRoleNode(state: RoleGraphExecutionState, role: AgentRole, reason: string, nodeId?: string): RoleNodeExecution | undefined {
+  return finishRoleNode(state, { role, nodeId, status: "skipped", summary: reason, evidence: [reason] });
+}
+
+export function markRoleNodeRunning(state: RoleGraphExecutionState, role: AgentRole, now = new Date().toISOString()): RoleNodeExecution | undefined {
+  return beginRoleNode(state, role, undefined, now);
+}
+
 export function markRoleNodeResult(state: RoleGraphExecutionState, result: RoleNodeResult, now = new Date().toISOString()): RoleNodeExecution | undefined {
-  const node = result.nodeId ? state.graph.nodes.find((item) => item.id === result.nodeId) : nextNodeForRole(state, result.role);
+  return finishRoleNode(state, result, now);
+}
+
+function finishRoleNode(state: RoleGraphExecutionState, result: RoleNodeResult, now = new Date().toISOString()): RoleNodeExecution | undefined {
+  const node = nodeForRole(state, result.role, result.nodeId);
   if (!node) return undefined;
   const execution = state.nodes[node.id]!;
+  if (result.status === "success" && execution.status !== "running" && !canRunRoleNode(state, result.role, node.id)) {
+    state.stopReason = `role node ${node.id} cannot complete before dependencies are satisfied`;
+    return undefined;
+  }
+  if (result.status === "success" && execution.status !== "running") {
+    execution.startedAt = execution.startedAt ?? now;
+    execution.attempts += 1;
+  }
   execution.status = result.status;
   execution.endedAt = now;
   execution.summary = result.summary;
@@ -108,8 +141,12 @@ export function roleGraphExecutionSummary(state: RoleGraphExecutionState): strin
 }
 
 function nextNodeForRole(state: RoleGraphExecutionState, role: AgentRole): RoleNode | undefined {
-  return state.graph.nodes.find((node) => node.role === role && ["ready", "pending", "running"].includes(state.nodes[node.id]?.status ?? "pending"))
-    ?? state.graph.nodes.find((node) => node.role === role);
+  return state.graph.nodes.find((node) => node.role === role && ["ready", "pending", "running"].includes(state.nodes[node.id]?.status ?? "pending"));
+}
+
+function nodeForRole(state: RoleGraphExecutionState, role: AgentRole, nodeId?: string): RoleNode | undefined {
+  if (nodeId) return state.graph.nodes.find((node) => node.id === nodeId && node.role === role);
+  return nextNodeForRole(state, role);
 }
 
 function stopReasonForState(state: RoleGraphExecutionState): string | undefined {

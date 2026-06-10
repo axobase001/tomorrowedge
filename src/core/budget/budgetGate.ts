@@ -52,8 +52,15 @@ export function evaluateModelCallInvocation(input: {
   escalationSignals?: string[];
   canFallback?: boolean;
 }): BudgetGateDecision {
+  const config = {
+    ...input.config,
+    strong_agents: {
+      ...input.config.strong_agents,
+      escalate_on: [...new Set([...input.config.strong_agents.escalate_on, input.invocation])]
+    }
+  };
   return evaluateRoleInvocation({
-    config: input.config,
+    config,
     runtime: input.runtime,
     role: input.role,
     phase: phaseForInvocation(input.invocation),

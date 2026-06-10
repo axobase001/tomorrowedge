@@ -75,6 +75,9 @@ Changelog: newest changes first, grouped by release and by change type.
 - Budget governance now exposes `evaluateModelCallInvocation` for
   `model_planner`, `live_patch`, `live_advisory`, and `pre_judge_debate`
   invocation checks.
+- External agent adapters now expose a role-aware runtime interface for prompt
+  construction, output normalization, evidence extraction, failure detection,
+  retry policy, and cost estimation.
 
 ### Changed
 
@@ -94,6 +97,33 @@ Changelog: newest changes first, grouped by release and by change type.
   behavior.
 - Patch and shell approval requirements remain visible as waiting-user states
   and no longer poison required RoleGraph nodes as failed executions.
+- RoleGraph execution is now scheduler-gated for normal agent success paths.
+  Read-only optional governance nodes are explicitly skipped before summary,
+  and patch workflows distinguish `patch_runner` from `test_runner`.
+- Debate Protocol v2 unresolved issues are candidate-scoped. A losing
+  candidate with no diff no longer blocks a good selected candidate unless the
+  issue is global.
+- TaskGraph nodes now receive runtime status updates via `task_node_result`
+  events, and apply/verify nodes validate their dependencies before being
+  marked done.
+- Policy counterfactual replay now records decision-level changes such as
+  reviewer/judge requirements, parallel candidate permission, debate, repair,
+  early stop, external strong-agent preference, and unresolved issue blocking.
+- Live patch, live advisory, and pre-judge debate model calls now use the
+  BudgetGate reserve/invoke/commit-or-release lifecycle. `routing.max_cost_usd`
+  remains a preflight estimate; governance decisions come from BudgetGate.
+- Explorer cache keys now project stable plan intent instead of runtime
+  TaskGraph status, so graph execution state no longer invalidates reusable
+  context selections.
+
+### Fixed
+
+- Strict Codex/Claude adapter mode no longer fails valid generic plan/core
+  payloads merely because the role has no adapter-specific override.
+- Raw Codex unified diffs can normalize into typed patch candidates.
+- External-agent normalization errors now record explicit
+  `external_agent_error` events before the workflow aborts or safely falls
+  back according to strictness.
 
 ## [1.3.10] - 2026-06-10
 

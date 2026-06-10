@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
-import { createBudgetRuntimeState, evaluateRoleInvocation, commitRoleCall, reserveRoleCall } from "../../src/core/budget/budgetGate.js";
+import { createBudgetRuntimeState, evaluateModelCallInvocation, evaluateRoleInvocation, commitRoleCall, releaseRoleCall, reserveRoleCall } from "../../src/core/budget/budgetGate.js";
 
 describe("budget gate", () => {
   it("blocks strong-agent invocation when global call budget is exhausted", () => {
@@ -92,5 +92,42 @@ describe("budget gate", () => {
     expect(second.reason).toContain("Strong-agent call budget exhausted");
     expect(runtime.roleCallsUsed.reviewer).toBe(1);
     expect(runtime.strongAgentCallsUsed).toBe(1);
+  });
+
+  it("reserves live model invocations without consuming budget until commit", () => {
+    const runtime = createBudgetRuntimeState();
+    const decision = evaluateModelCallInvocation({
+      config: defaultConfig,
+      runtime,
+      invocation: "live_patch",
+      role: "coder_a",
+      assignment: { role: "coder_a", provider: "openrouter", model: "openai/gpt-5.2", reason: "live patch" },
+      estimatedCostUsd: 0.01
+    });
+    const reservation = reserveRoleCall(runtime, decision);
+
+    expect(decision.action).toBe("allow");
+    expect(runtime.strongAgentCallsUsed).toBe(0);
+    commitRoleCall(runtime, reservation);
+    expect(runtime.strongAgentCallsUsed).toBe(1);
+  });
+
+  it("releases failed live model invocation reservations without consuming calls", () => {
+    const runtime = createBudgetRuntimeState();
+    const decision = evaluateModelCallInvocation({
+      config: defaultConfig,
+      runtime,
+      invocation: "live_advisory",
+      role: "reviewer",
+      assignment: { role: "reviewer", provider: "openrouter", model: "openai/gpt-5.2", reason: "live advisory" },
+      estimatedCostUsd: 0.01
+    });
+    const reservation = reserveRoleCall(runtime, decision);
+
+    releaseRoleCall(runtime, reservation, "provider failed");
+
+    expect(decision.action).toBe("allow");
+    expect(runtime.strongAgentCallsUsed).toBe(0);
+    expect(reservation.released).toBe(true);
   });
 });

@@ -2,7 +2,7 @@ import type { DebateRound } from "../../schemas/debate.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import type { EvidencePacket } from "../evidence/evidencePacket.js";
-import type { DebateClaim, DebateMove, DebateSession } from "./debateProtocol.js";
+import type { DebateClaim, DebateIssue, DebateMove, DebateSession } from "./debateProtocol.js";
 
 export function buildDebateSession(input: {
   sessionId: string;
@@ -49,7 +49,9 @@ export function buildDebateSession(input: {
     riskSignal: round.riskRaised
   }));
   const claims = [...candidateClaims, ...reviewClaims];
-  const unresolvedBlockingIssues = claims.filter((claim) => claim.status === "unresolved" && claim.blocking).map((claim) => claim.claim);
+  const issues = buildIssues(input.review, roundMoves, packetRefs);
+  const unresolvedIssues = issues.filter((issue) => issue.status === "open");
+  const unresolvedBlockingIssues = unresolvedIssues.filter((issue) => issue.blocking).map((issue) => issue.title);
   const acceptedClaims = claims.filter((claim) => claim.status === "accepted").map((claim) => claim.claim);
   const rejectedClaims = claims.filter((claim) => claim.status === "rejected").map((claim) => claim.claim);
   const evidenceCoverageScore = evidenceCoverage(claims);
@@ -70,12 +72,51 @@ export function buildDebateSession(input: {
       }
     ],
     claims,
+    issues,
+    unresolvedIssues,
     acceptedClaims,
     rejectedClaims,
     unresolvedBlockingIssues,
     evidenceCoverageScore,
     resolution: unresolvedBlockingIssues.length ? "request_revision" : "selectable"
   };
+}
+
+function buildIssues(review: ReviewReport | undefined, moves: DebateMove[], packetRefs: string[]): DebateIssue[] {
+  const issues: DebateIssue[] = [];
+  for (const item of review?.reviews ?? []) {
+    const security = item.securityConcerns.map((title) => ({ title, global: true, evidence: ["security review evidence"] }));
+    const regressions = item.regressionConcerns.map((title) => ({ title, global: false, evidence: ["regression evidence"] }));
+    const redTeam = item.redTeamFindings
+      .filter((finding) => finding.severity === "high" || finding.severity === "critical")
+      .map((finding) => ({ title: finding.title, global: finding.severity === "critical", evidence: ["red-team evidence"] }));
+    for (const [index, risk] of [...security, ...regressions, ...redTeam].entries()) {
+      const relatedMoveIds = moves
+        .filter((move) => move.targetCandidateId === item.candidateId || risk.global && !move.targetCandidateId)
+        .map((move) => move.id);
+      issues.push({
+        id: `issue_${item.candidateId}_${index + 1}`,
+        candidateId: risk.global ? undefined : item.candidateId,
+        title: risk.title,
+        blocking: true,
+        status: "open",
+        requiredEvidence: packetRefs.length ? packetRefs : risk.evidence,
+        relatedMoveIds
+      });
+    }
+    if (item.testCoverage === "weak" && item.recommendation !== "accept") {
+      issues.push({
+        id: `issue_${item.candidateId}_test_coverage`,
+        candidateId: item.candidateId,
+        title: "Candidate lacks enough test evidence for automatic selection.",
+        blocking: item.riskScore >= 70,
+        status: "open",
+        requiredEvidence: ["test evidence"],
+        relatedMoveIds: moves.filter((move) => move.targetCandidateId === item.candidateId).map((move) => move.id)
+      });
+    }
+  }
+  return issues;
 }
 
 function evidenceCoverage(claims: DebateClaim[]): number {

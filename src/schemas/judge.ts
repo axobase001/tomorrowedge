@@ -6,6 +6,7 @@ export type JudgeDecision = {
   acceptedClaims?: string[];
   rejectedClaims?: string[];
   unresolvedBlockingIssues?: string[];
+  unresolvedIssueIds?: string[];
   evidenceCoverageScore?: number;
   confidence: number;
   requiredUserDecision?: string;
