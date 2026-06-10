@@ -50,6 +50,7 @@ export type OrchestrationPolicyGenome = {
     createdAt: string;
     source: "default" | "mutated" | "selected" | "manual";
     parentPolicyIds: string[];
+    mutation?: string;
     fitness?: number;
     scenarioType?: ScenarioType;
   };
@@ -107,4 +108,3 @@ export function defaultOrchestrationPolicy(now = new Date().toISOString()): Orch
     }
   };
 }
-

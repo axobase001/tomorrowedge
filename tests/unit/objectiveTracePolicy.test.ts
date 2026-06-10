@@ -7,6 +7,7 @@ import { generateNativeObjectiveContract } from "../../src/core/contracts/contra
 import { verifyAndRepairContract } from "../../src/core/contracts/contractVerifier.js";
 import { evolvePoliciesOffline } from "../../src/core/orchestrationPolicy/policyEvolution.js";
 import { evaluatePolicyFitness } from "../../src/core/orchestrationPolicy/policyEvaluator.js";
+import { ORCHESTRATION_POLICY_MUTATION_OPERATOR_COUNT, mutatePolicy } from "../../src/core/orchestrationPolicy/policyMutation.js";
 import { loadBestPolicy, savePolicyScore } from "../../src/core/orchestrationPolicy/policyStore.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
 import { classifyWorkflowIntentLocally, type WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
@@ -97,6 +98,41 @@ describe("objective trace memory and policy evolution", () => {
     }
   });
 
+  it("mutates every runtime-wired policy genome family", () => {
+    const base = defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z");
+    const variants = Array.from({ length: ORCHESTRATION_POLICY_MUTATION_OPERATOR_COUNT }, (_, index) => mutatePolicy(base, index));
+
+    expect(variants).toHaveLength(ORCHESTRATION_POLICY_MUTATION_OPERATOR_COUNT);
+    expect(new Set(variants.map((item) => item.metadata.mutation)).size).toBe(ORCHESTRATION_POLICY_MUTATION_OPERATOR_COUNT);
+    expect(changes(variants, base, (item) => item.contractPolicy.contractDepth)).toBe(true);
+    expect(changes(variants, base, (item) => item.contractPolicy.successCriteriaCount)).toBe(true);
+    expect(changes(variants, base, (item) => item.contractPolicy.requireEvidence)).toBe(true);
+    expect(changes(variants, base, (item) => item.tracePolicy.traceTopK)).toBe(true);
+    expect(changes(variants, base, (item) => item.tracePolicy.preferRecent)).toBe(true);
+    expect(changes(variants, base, (item) => item.tracePolicy.preferSuccessTraces)).toBe(true);
+    expect(changes(variants, base, (item) => item.tracePolicy.preferFailureTraces)).toBe(true);
+    expect(changes(variants, base, (item) => item.tracePolicy.avoidStaleTraces)).toBe(true);
+    expect(changes(variants, base, (item) => item.planningPolicy.maxStepsMode)).toBe(true);
+    expect(changes(variants, base, (item) => item.planningPolicy.allowParallelRoles)).toBe(true);
+    expect(changes(variants, base, (item) => item.planningPolicy.requirePlanStepEvidenceBinding)).toBe(true);
+    expect(changes(variants, base, (item) => item.routingPolicy.routingPreference)).toBe(true);
+    expect(changes(variants, base, (item) => item.routingPolicy.reviewerThreshold)).toBe(true);
+    expect(changes(variants, base, (item) => item.routingPolicy.judgeThreshold)).toBe(true);
+    expect(changes(variants, base, (item) => item.verificationPolicy.verificationStrictness)).toBe(true);
+    expect(changes(variants, base, (item) => item.verificationPolicy.requireEvidencePacket)).toBe(true);
+    expect(changes(variants, base, (item) => item.verificationPolicy.requireCommandValidationForPatch)).toBe(true);
+    expect(changes(variants, base, (item) => item.verificationPolicy.requireReviewerForHighRisk)).toBe(true);
+    expect(changes(variants, base, (item) => item.repairPolicy.maxRepairRounds)).toBe(true);
+    expect(changes(variants, base, (item) => item.repairPolicy.retryOnMissingEvidence)).toBe(true);
+    expect(changes(variants, base, (item) => item.repairPolicy.retryOnFailedVerification)).toBe(true);
+    expect(changes(variants, base, (item) => item.repairPolicy.stopOnRecurringFailure)).toBe(true);
+    expect(changes(variants, base, (item) => item.stopPolicy.stopMode)).toBe(true);
+    expect(changes(variants, base, (item) => item.stopPolicy.allowPartialCompletion)).toBe(true);
+    expect(changes(variants, base, (item) => item.stopPolicy.escalateWhenAmbiguous)).toBe(true);
+    expect(variants.every((item) => item.schemaVersion === base.schemaVersion)).toBe(true);
+    expect(variants.every((item) => item.metadata.parentPolicyIds.includes(base.policyId))).toBe(true);
+  });
+
   it("scores different policy variants differently over the same trace set", () => {
     const base = defaultOrchestrationPolicy("2026-06-10T00:00:00.000Z");
     const strictQuality = {
@@ -132,6 +168,12 @@ describe("objective trace memory and policy evolution", () => {
     expect(evolved.scored.every((item) => item.fitness.policyAlignmentScore !== undefined)).toBe(true);
   });
 });
+
+function changes<T>(variants: ObjectiveTracePolicy[], base: ObjectiveTracePolicy, read: (policy: ObjectiveTracePolicy) => T): boolean {
+  return variants.some((variant) => read(variant) !== read(base));
+}
+
+type ObjectiveTracePolicy = ReturnType<typeof defaultOrchestrationPolicy>;
 
 function makeTrace(
   goal: string,

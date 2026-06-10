@@ -2,6 +2,7 @@ import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import { agentRoles, type AgentRole } from "../../schemas/agentTask.js";
 import type { Plan } from "../../schemas/plan.js";
 import { validateExternalAssignment } from "../externalAgents/externalAgentRouter.js";
+import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import { profilesFromConfig, type ModelProfile } from "./modelProfiles.js";
 import { buildRoutingPlan, rerouteRoutingPlanForPlan, type AgentRouteOverrides, type PostPlanRoutingContext, type RouteAssignment, type RoutingPlan, type RoutingPlanChange } from "./policies.js";
 
@@ -39,6 +40,21 @@ export class ModelRouter {
     return this.plan.fallbacks.find((item) => item.role === role);
   }
 
+  applyPolicyRoutingPreference(policy: OrchestrationPolicyGenome | undefined): RoutingPlanChange[] {
+    const preference = policy?.routingPolicy.routingPreference;
+    if (!preference || preference === "balanced" || this.plan.privacyLocked) return [];
+    if (this.config.routing.mode === "china" && preference !== "privacy") return [];
+    const next = buildRoutingPlan(preference, this.profiles, this.overrides);
+    const nextPlan = {
+      ...next,
+      assignments: next.assignments.map((assignment) => validateExternalAssignment(this.config, assignment)),
+      fallbacks: next.fallbacks.filter((assignment) => !assignment.provider.startsWith("external:"))
+    };
+    const changes = routeChanges(this.plan, nextPlan, `policy routingPreference=${preference}`);
+    this.plan = nextPlan;
+    return changes;
+  }
+
   rerouteAfterPlan(plan: Plan, context: PostPlanRoutingContext = {}): RoutingPlanChange[] {
     const result = rerouteRoutingPlanForPlan(this.plan, plan, this.config.routing.mode, this.profiles, this.overrides, context);
     this.plan = {
@@ -48,6 +64,14 @@ export class ModelRouter {
     };
     return result.changes;
   }
+}
+
+function routeChanges(current: RoutingPlan, next: RoutingPlan, reason: string): RoutingPlanChange[] {
+  return next.assignments.flatMap((to) => {
+    const from = current.assignments.find((assignment) => assignment.role === to.role);
+    if (!from || (from.provider === to.provider && from.model === to.model && from.reason === to.reason)) return [];
+    return [{ role: to.role, from, to, reason }];
+  });
 }
 
 function overridesFromConfig(config: TomorrowEdgeConfig): AgentRouteOverrides {

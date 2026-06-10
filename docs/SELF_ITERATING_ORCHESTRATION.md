@@ -48,7 +48,7 @@ self_iterating_orchestration:
   mode: trace_guided
   allow_policy_mutation: false
   allow_offline_evolution: true
-  max_policy_variants: 8
+  max_policy_variants: 15
   elite_retention: 2
 ```
 

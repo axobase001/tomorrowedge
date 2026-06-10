@@ -292,7 +292,7 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
 }
 
 async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
-  const { access, config, cwd, goal, imagePaths, ledger } = runtime;
+  const { access, config, cwd, goal, imagePaths, ledger, router } = runtime;
   const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: access.mode, hasImageInputs: imagePaths.length > 0 });
   state.scenarioProfile = scenarioProfile;
   ledger.append({
@@ -323,6 +323,16 @@ async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     stopMode: policy.stopPolicy.stopMode,
     policyRef: ledger.writeArtifact("policies", JSON.stringify(policy, null, 2), "json")
   });
+  const policyRouteChanges = router.applyPolicyRoutingPreference(policy);
+  if (policyRouteChanges.length) {
+    state.routing = routingForState(router, imagePaths.length > 0);
+    for (const change of policyRouteChanges) {
+      recordRoutingAndBudgetPreview(config, state, ledger, {
+        ...change.to,
+        reason: `${change.reason}; previous route was ${change.from.provider}/${change.from.model}`
+      }, goal, "planning");
+    }
+  }
 
   const retrievedTraces = policyMode === "off" ? [] : await retrieveSimilar(cwd, goal, scenarioProfile, policy.tracePolicy.traceTopK, policy.tracePolicy);
   state.retrievedObjectiveTraces = retrievedTraces;
