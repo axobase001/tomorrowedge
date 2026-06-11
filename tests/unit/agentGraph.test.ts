@@ -60,7 +60,9 @@ describe("offline agent graph", () => {
     expect(state.debateRounds.length).toBeGreaterThan(0);
     expect(state.judge?.decision).toBe("request_revision");
     expect(state.finalSummary?.result).toBe("aborted");
-    expect(state.finalSummary?.evidence.some((item) => item.includes("Evidence gate blocked runner"))).toBe(true);
+    expect(state.finalSummary?.userReply).toContain("did not clear any patch candidate");
+    expect(state.finalSummary?.evidence.some((item) => item.includes("Judge requested revision before patch application"))).toBe(true);
+    expect(state.events.some((event) => event.type === "evidence_gap" && event.role === "runner")).toBe(false);
     expect(state.evidencePackets.length).toBeGreaterThan(0);
     expect(state.providerViews.length).toBeGreaterThan(0);
     expect(state.traceCompleteness?.score).toBeGreaterThan(0);
