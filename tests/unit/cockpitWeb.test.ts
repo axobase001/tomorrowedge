@@ -258,6 +258,14 @@ describe("cockpit web React surface", () => {
     expect(modelOptionIds("openrouter", "moonshotai/kimi-k2.6:free", [{ id: "qwen/qwen3-coder:free", label: "Qwen", source: "catalog" }])).toContain("qwen/qwen3-coder:free");
   });
 
+  it("keeps OpenAI-compatible fallback model options provider-safe", () => {
+    const options = modelOptionIds("openai_compatible", undefined, []);
+
+    expect(options).toContain("gpt-4o-mini");
+    expect(options).toContain("gpt-4.1-mini");
+    expect(options).not.toContain("qwen/qwen3-coder:free");
+  });
+
   it("exposes provider models to role-level model pickers", () => {
     expect(roleModelOptionIds("openrouter", [{
       id: "openrouter",

@@ -335,7 +335,7 @@ function staticModelOptionsFor(provider: string): string[] {
     mimo: ["mimo-v2.5-pro"],
     anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
     gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
-    openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
+    openai_compatible: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.2"]
   };
   return lookup[providerId] ?? [];
 }

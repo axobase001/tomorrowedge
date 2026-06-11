@@ -797,6 +797,21 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("keeps OpenAI-compatible fallback models free of OpenRouter-specific ids", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-compatible-models-"));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("gateway unavailable", { status: 503 })) as typeof fetch;
+    try {
+      const models = await listCockpitProviderModels(cwd, "openai_compatible", 5);
+
+      expect(models).toContainEqual(expect.objectContaining({ id: "gpt-4o-mini", source: "static" }));
+      expect(models).not.toContainEqual(expect.objectContaining({ id: "qwen/qwen3-coder:free" }));
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("saves custom OpenAI-compatible base URLs from the GUI key manager", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-compatible-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
