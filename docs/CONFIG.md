@@ -338,6 +338,20 @@ an optional task string, so `tedge memory --strategy "fix failing test"` shows
 matched records, inferred task type, recommended role routes, preferred test
 command, and avoided provider/model routes before a workflow runs.
 
+When strategy memory is disabled, `tedge memory --strategy ...` is a preview
+surface only. Text output says `strategy memory is disabled; showing preview
+recommendations only.`, and JSON output includes
+`enabled:false`, `previewOnly:true`, and `applied:false`. Disabled previews may
+still show `routeRecommendations`, but they do not become applied
+`routeAssignments` until strategy-memory routing is explicitly enabled.
+Task-type inference treats `fix` / `bug` / `repair` requests that mention a
+failing fixture, failing unit test, or verifier failure as `bugfix` with a
+secondary `test_failure` signal rather than a pure `test` task.
+Stored task-memory records use the same normalization, so a repaired failing
+test is saved as `taskType:"bugfix"` with `secondarySignals:["test_failure"]`.
+Pure test-authoring requests such as `add tests for parser` remain
+`taskType:"test"`.
+
 Learned strategy memory stores compact provider outcomes from `model_call` and
 `provider_fallback` events. Recent `rate_limited`, `quota_exhausted`,
 `invalid_key`, `invalid_model`, or `upstream_unavailable` outcomes become

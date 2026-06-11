@@ -47,6 +47,11 @@ describe("fixture E2E workflow", () => {
 
     expect(state.changedFiles).toEqual(["index.js"]);
     expect(source).toContain("return a + b");
+    expect(state.events).toContainEqual(expect.objectContaining({
+      type: "patch_candidate",
+      candidateId: "fixture_candidate_a",
+      diffRef: expect.stringContaining("diffs")
+    }));
     expect(state.runResults).toEqual([]);
     expect(state.finalSummary?.result).toBe("partially_completed");
   });
@@ -463,6 +468,34 @@ describe("fixture E2E workflow", () => {
     await expect(readFile(path.join(projectRoot, "tests", "fixtures", "sample-repo-basic", "index.js"), "utf8")).resolves.toContain("return a - b");
   });
 
+  it("warns that fixture-mode is sample-scoped and treats arbitrary repos as revision requests, not runtime failures", async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-arbitrary-fixture-"));
+    trackCleanup(projectRoot);
+    await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({ name: "not-a-fixture", type: "module" }, null, 2), "utf8");
+    await writeFile(path.join(projectRoot, "README.md"), "# Not a fixture\n", "utf8");
+
+    const output = await captureOutput(() =>
+      runCommand(projectRoot, "fix failing test", {
+        headless: true,
+        fixtureMode: true
+      })
+    );
+    const payload = JSON.parse(output.stdout) as {
+      executionCwd: string;
+      fixtureWorkspace?: string;
+      judge?: { decision?: string };
+      changedFiles: string[];
+      summary?: { result?: string };
+    };
+
+    expect(output.stderr).toContain("fixture-mode may not produce valid diffs for arbitrary repositories.");
+    expect(payload.executionCwd).toBe(projectRoot);
+    expect(payload.fixtureWorkspace).toBeUndefined();
+    expect(payload.changedFiles).toEqual([]);
+    expect(payload.judge?.decision).toBe("request_revision");
+    expect(payload.summary?.result).toBe("aborted");
+  }, 20_000);
+
   it("does not fail a patched greenfield project when default npm test is missing", async () => {
     const projectRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-greenfield-"));
     trackCleanup(projectRoot);
@@ -512,16 +545,27 @@ describe("fixture E2E workflow", () => {
 });
 
 async function captureStdout(fn: () => Promise<void>): Promise<string> {
+  return (await captureOutput(fn)).stdout;
+}
+
+async function captureOutput(fn: () => Promise<void>): Promise<{ stdout: string; stderr: string }> {
   const originalWrite = process.stdout.write.bind(process.stdout);
-  let output = "";
+  const originalErrorWrite = process.stderr.write.bind(process.stderr);
+  let stdout = "";
+  let stderr = "";
   process.stdout.write = ((chunk: string | Uint8Array) => {
-    output += String(chunk);
+    stdout += String(chunk);
     return true;
   }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderr += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
   try {
     await fn();
   } finally {
     process.stdout.write = originalWrite;
+    process.stderr.write = originalErrorWrite;
   }
-  return output;
+  return { stdout, stderr };
 }

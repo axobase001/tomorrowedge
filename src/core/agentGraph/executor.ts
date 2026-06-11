@@ -1282,7 +1282,8 @@ async function runReviewerRoleNode(runtime: OfflineGraphRuntime, state: AgentGra
   const reviewJson = JSON.stringify(state.review, null, 2);
   const reviewRef = ledger.writeArtifact("reviews", reviewJson, "json");
   recordArtifactProjection(state, ledger, "review", reviewRef, reviewJson, "review", "reviewer");
-  recordEvidencePacket(state, ledger, buildReviewEvidence(state.review, reviewRef), "reviewer");
+  const reviewPacketRef = recordEvidencePacket(state, ledger, buildReviewEvidence(state.review, reviewRef), "reviewer");
+  attachTaskNodeRefs(state, ["review_patch", "security_review"], { evidenceRefs: [reviewPacketRef], artifactRefs: [reviewRef] });
   ledger.append({
     type: "review_decision",
     phase: "review",
@@ -1364,7 +1365,8 @@ async function runJudgeRoleNode(runtime: OfflineGraphRuntime, state: AgentGraphS
   const judgeJson = JSON.stringify(state.judge, null, 2);
   const decisionRef = ledger.writeArtifact("judge_decisions", judgeJson, "json");
   recordArtifactProjection(state, ledger, "judge", decisionRef, judgeJson, "judge", "judge");
-  recordEvidencePacket(state, ledger, buildJudgeEvidence(state.judge, decisionRef), "judge");
+  const judgePacketRef = recordEvidencePacket(state, ledger, buildJudgeEvidence(state.judge, decisionRef), "judge");
+  attachTaskNodeRefs(state, "judge_patch", { evidenceRefs: [judgePacketRef], artifactRefs: [decisionRef] });
   ledger.append({
     type: "judge_decision",
     phase: "judge",
@@ -1464,6 +1466,7 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
       applied: false,
       error: "dryRun=true; selected patch was recorded but not applied."
     });
+    attachTaskNodeRefs(state, "apply_patch", { artifactRefs: diffRef ? [diffRef] : [] });
     recordRoleNodeExecutionResult(state, ledger, "runner", "success", "dryRun=true recorded selected patch without mutating files", [], undefined, "patch_runner");
     if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", "dryRun=true; selected patch was recorded but not applied.");
   } else if (state.judge?.decision === "select" && state.judge.selectedCandidateId) {
@@ -1475,10 +1478,12 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
         const applyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, access.patchAllowed && access.patchApproved), "offline");
         state.changedFiles = applyResult.changedFiles;
         ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: applyResult.changedFiles, diffRef, undoSnapshotIds: applyResult.undoSnapshotIds, applied: true });
+        attachTaskNodeRefs(state, "apply_patch", { artifactRefs: [diffRef] });
         recordOutcomeObservation(ledger, prediction, "applied", `${applyResult.changedFiles.length} file(s) changed.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: selected.candidateId, filesChanged: selected.filesChanged, diffRef, undoSnapshotIds: [], applied: false, error: message });
+        attachTaskNodeRefs(state, "apply_patch", { artifactRefs: [diffRef] });
         recordOutcomeObservation(ledger, prediction, "blocked", message);
         state.agents.push({
           id: "approval_patch",
@@ -1500,6 +1505,7 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
         ? recordPatchApplicationPrediction(ledger, selected, "patch", false, "Selected candidate has no unified diff to apply.")
         : undefined;
       ledger.append({ type: "patch_apply", phase: "patch", role: "runner", provider: "local_tool", model: "patch", candidateId: state.judge.selectedCandidateId, filesChanged: [], diffRef: undefined, undoSnapshotIds: [], applied: false, error: reason });
+      attachTaskNodeRefs(state, "apply_patch", { artifactRefs: [] });
       if (prediction) recordOutcomeObservation(ledger, prediction, "blocked", reason);
       recordRoleNodeExecutionResult(state, ledger, "runner", "blocked", reason, [], reason, "patch_runner");
     }
@@ -2030,6 +2036,10 @@ async function executeReadOnlySummarizerNode(runtime: OfflineGraphRuntime, state
     risksRemaining: summarized.reply.source === "model" ? [] : [summarized.reply.error ?? "No model-backed user reply was produced."],
     suggestedCommitMessage: "chore: no code changes"
   };
+  attachSummaryTaskNodeRefs(state, {
+    evidenceRefs: [summarized.evidenceRef, summarized.replyRef],
+    artifactRefs: [summarized.evidenceRef, summarized.replyRef]
+  });
 }
 
 function assertSummarizerNodeReady(state: AgentGraphState, taskNode?: TaskGraphNode, roleNode?: RoleNode): void {
@@ -2258,11 +2268,13 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     totalTokens: state.usageSummary.totalTokens,
     estimatedCostUsd: state.usageSummary.estimatedCostUsd
   });
+  const summaryRef = ledger.writeArtifact("summaries", JSON.stringify(state.finalSummary, null, 2), "json");
+  attachSummaryTaskNodeRefs(state, { evidenceRefs: [summaryRef], artifactRefs: [summaryRef] });
   ledger.append({
     type: "summary",
     phase: "summary",
     role: "summarizer",
-    summaryRef: ledger.writeArtifact("summaries", JSON.stringify(state.finalSummary, null, 2), "json"),
+    summaryRef,
     result: state.finalSummary.result
   });
   ledger.append({
@@ -2273,6 +2285,8 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     result: state.finalSummary.result
   });
   state.traceCompleteness = computeTraceCompleteness(ledger.events, { workflowKind, plan: state.plan });
+  const traceCompletenessRef = ledger.writeArtifact("trace_completeness", JSON.stringify(state.traceCompleteness, null, 2), "json");
+  attachSummaryTaskNodeRefs(state, { evidenceRefs: [traceCompletenessRef], artifactRefs: [traceCompletenessRef] });
   ledger.append({
     type: "trace_completeness",
     phase: "summary",
@@ -2281,7 +2295,8 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     missing: state.traceCompleteness.missing,
     intentionallySkipped: state.traceCompleteness.intentionallySkipped,
     blockedByApproval: state.traceCompleteness.blockedByApproval,
-    workflowKind
+    workflowKind,
+    traceCompletenessRef
   });
   await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
 }
@@ -2334,6 +2349,7 @@ async function writeObjectiveTraceAndPolicyEvents(state: AgentGraphState, ledger
   const trace = buildObjectiveTrace(state, runtime);
   state.objectiveTrace = trace;
   const traceRef = ledger.writeArtifact("objective_traces", JSON.stringify(trace, null, 2), "json");
+  attachSummaryTaskNodeRefs(state, { evidenceRefs: [traceRef], artifactRefs: [traceRef] });
   await addTrace(runtime.cwd, trace);
   ledger.append({
     type: "objective_trace_written",
@@ -3177,7 +3193,8 @@ function completeDesignOrAnalysisTaskNode(ledger: EventLedger, state: AgentGraph
     riskSignals: result.riskSignals,
     verificationStatus: "partial"
   });
-  recordEvidencePacket(state, ledger, packet, node.ownerRole);
+  const packetRef = recordEvidencePacket(state, ledger, packet, node.ownerRole);
+  attachTaskNodeRefs(state, node.id, { evidenceRefs: [packetRef], artifactRefs: [artifactRef] });
   node.status = "done";
   ledger.append({
     type: "task_node_result",
@@ -3759,7 +3776,10 @@ function recordPatchCandidateEvent(state: AgentGraphState, ledger: EventLedger, 
   const diffRef = candidate.unifiedDiff ? ledger.writeArtifact("diffs", candidate.unifiedDiff) : undefined;
   const phase = role === "repairer" ? "repair" : "coding";
   if (diffRef) recordArtifactProjection(state, ledger, phase, diffRef, candidate.unifiedDiff, "diff", role);
-  recordEvidencePacket(state, ledger, buildPatchEvidence(candidate, diffRef), role);
+  const packetRef = recordEvidencePacket(state, ledger, buildPatchEvidence(candidate, diffRef), role);
+  if (role === "coder_a") attachTaskNodeRefs(state, "produce_patch", { evidenceRefs: [packetRef], artifactRefs: diffRef ? [diffRef] : [] });
+  if (role === "coder_b") attachTaskNodeRefs(state, "produce_patch_alt", { evidenceRefs: [packetRef], artifactRefs: diffRef ? [diffRef] : [] });
+  if (role === "repairer") attachTaskNodeRefs(state, "produce_repair", { evidenceRefs: [packetRef], artifactRefs: diffRef ? [diffRef] : [] });
   ledger.append({
     type: "patch_candidate",
     phase,
@@ -3778,7 +3798,8 @@ function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: s
   const stderrRef = ledger.writeArtifact("stderr", result.stderr);
   recordArtifactProjection(state, ledger, "shell", stdoutRef, result.stdout, "stdout", "runner");
   recordArtifactProjection(state, ledger, "shell", stderrRef, result.stderr, "stderr", "runner");
-  recordEvidencePacket(state, ledger, buildTestEvidence(result, { stdoutRef, stderrRef }), "runner");
+  const packetRef = recordEvidencePacket(state, ledger, buildTestEvidence(result, { stdoutRef, stderrRef }), "runner");
+  attachTaskNodeRefs(state, ["verify_patch", "verify_repair", "verify_failed"], { evidenceRefs: [packetRef], artifactRefs: [stdoutRef, stderrRef] });
   return ledger.append({
     type: "shell_run",
     phase: "shell",
@@ -3843,8 +3864,9 @@ function recordArtifactProjection(state: AgentGraphState, ledger: EventLedger, p
   return view;
 }
 
-function recordEvidencePacket(state: AgentGraphState, ledger: EventLedger, packet: EvidencePacket, role?: AgentRole): void {
+function recordEvidencePacket(state: AgentGraphState, ledger: EventLedger, packet: EvidencePacket, role?: AgentRole): string {
   state.evidencePackets.push(packet);
+  const packetRef = ledger.writeArtifact("evidence_packets", JSON.stringify(packet, null, 2), "json");
   ledger.append({
     type: "evidence_packet",
     phase: packet.phase === "plan" ? "planning" : packet.phase === "patch" ? "coding" : packet.phase === "test" ? "verification" : packet.phase,
@@ -3854,8 +3876,27 @@ function recordEvidencePacket(state: AgentGraphState, ledger: EventLedger, packe
     summary: packet.summary,
     verificationStatus: packet.verificationStatus,
     supportingArtifacts: packet.supportingArtifacts,
-    packetRef: ledger.writeArtifact("evidence_packets", JSON.stringify(packet, null, 2), "json")
+    packetRef
   });
+  return packetRef;
+}
+
+function attachTaskNodeRefs(state: AgentGraphState, taskNodeIds: string | string[], refs: { evidenceRefs?: string[]; artifactRefs?: string[] }): void {
+  const graph = state.plan?.taskGraph;
+  if (!graph) return;
+  const ids = Array.isArray(taskNodeIds) ? taskNodeIds : [taskNodeIds];
+  for (const id of ids) {
+    const node = graph.nodes.find((item) => item.id === id);
+    if (!node) continue;
+    node.evidenceRefs = uniqueStrings([...(node.evidenceRefs ?? []), ...(refs.evidenceRefs ?? [])]);
+    node.artifactRefs = uniqueStrings([...(node.artifactRefs ?? []), ...(refs.artifactRefs ?? [])]);
+  }
+}
+
+function attachSummaryTaskNodeRefs(state: AgentGraphState, refs: { evidenceRefs?: string[]; artifactRefs?: string[] }): void {
+  const graph = state.plan?.taskGraph;
+  const summaryNodeIds = graph?.nodes.filter((node) => node.kind === "summarize").map((node) => node.id) ?? [];
+  attachTaskNodeRefs(state, summaryNodeIds.length ? summaryNodeIds : ["summarize", "summarize_findings"], refs);
 }
 
 function recordPatchApplicationPrediction(ledger: EventLedger, candidate: PatchCandidate, target: Extract<OutcomeTarget, "patch" | "repair">, willApply: boolean, note?: string): OutcomePredictionEvent {

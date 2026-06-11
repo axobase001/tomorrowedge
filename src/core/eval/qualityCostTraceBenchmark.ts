@@ -1,4 +1,7 @@
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defaultConfig } from "../../config/defaultConfig.js";
 import { makeId } from "../../utils/ids.js";
@@ -27,6 +30,12 @@ export type QualityCostTraceBenchmark = {
   id: string;
   createdAt: string;
   fixture: string;
+  reproducibility: {
+    runtimeVersion: string;
+    fixtureHash: string;
+    fixtureManifestHash: string;
+    gitCommit?: string;
+  };
   caveat: string;
   strategies: BenchmarkStrategy[];
   winner: string | null;
@@ -34,12 +43,13 @@ export type QualityCostTraceBenchmark = {
 };
 
 export const benchmarkDemoWarning = "WARNING: This is an audited deterministic fixture comparison; no real provider calls or hidden-test leaderboard claims are made.";
+const execFileAsync = promisify(execFile);
 
 export async function runQualityCostTraceBenchmark(cwd: string, options: { format?: "json" | "markdown" } = {}): Promise<QualityCostTraceBenchmark> {
   const id = makeId("benchmark");
   const createdAt = new Date().toISOString();
   const workspaceRoot = path.join(cwd, ".tomorrowedge", "benchmarks", id, "workspaces");
-  const fixtureRoot = path.resolve(cwd, "tests", "fixtures", "sample-repo-basic");
+  const fixtureRoot = await resolveBenchmarkFixtureRoot(cwd);
   const strategies = await Promise.all([
     runStrategy(workspaceRoot, fixtureRoot, {
       id: "strong-single",
@@ -67,6 +77,7 @@ export async function runQualityCostTraceBenchmark(cwd: string, options: { forma
     id,
     createdAt,
     fixture: "offline fixture workflow comparison",
+    reproducibility: await buildReproducibilityMetadata(cwd, fixtureRoot),
     caveat: `${benchmarkDemoWarning} Synthetic cost, hidden-test, and winner fields were removed; unavailable measurements are reported as not measured.`,
     strategies,
     winner: null,
@@ -102,6 +113,79 @@ async function prepareFixtureWorkspace(workspaceRoot: string, workspace: string,
   await cp(fixtureRoot, workspace, { recursive: true }).catch(async () => {
     await cp(fallbackFixtureRoot, workspace, { recursive: true });
   });
+}
+
+async function resolveBenchmarkFixtureRoot(cwd: string): Promise<string> {
+  const localFixtureRoot = path.resolve(cwd, "tests", "fixtures", "sample-repo-basic");
+  const fallbackFixtureRoot = path.resolve(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+  try {
+    await stat(path.join(localFixtureRoot, "package.json"));
+    return localFixtureRoot;
+  } catch {
+    return fallbackFixtureRoot;
+  }
+}
+
+async function buildReproducibilityMetadata(cwd: string, fixtureRoot: string): Promise<QualityCostTraceBenchmark["reproducibility"]> {
+  const entries = await fixtureManifest(fixtureRoot);
+  const fixtureHash = hashText((await Promise.all(entries.map(async (entry) => {
+    const content = await readFile(path.join(fixtureRoot, entry.path));
+    return `${entry.path}\0${hashBuffer(content)}`;
+  }))).join("\n"));
+  return {
+    runtimeVersion: await runtimeVersion(cwd),
+    fixtureHash,
+    fixtureManifestHash: hashText(entries.map((entry) => `${entry.path}:${entry.size}:${entry.mtimeMs}`).join("\n")),
+    gitCommit: await gitCommit(cwd)
+  };
+}
+
+async function fixtureManifest(root: string): Promise<Array<{ path: string; size: number; mtimeMs: number }>> {
+  const out: Array<{ path: string; size: number; mtimeMs: number }> = [];
+  async function walk(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const absolute = path.join(dir, entry.name);
+      const relative = path.relative(root, absolute).replace(/\\/g, "/");
+      if (entry.isDirectory()) {
+        await walk(absolute);
+      } else if (entry.isFile()) {
+        const info = await stat(absolute);
+        out.push({ path: relative, size: info.size, mtimeMs: Math.round(info.mtimeMs) });
+      }
+    }
+  }
+  await walk(root);
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function runtimeVersion(cwd: string): Promise<string> {
+  const content = await readFile(path.join(cwd, "package.json"), "utf8")
+    .catch(() => readFile(path.join(process.cwd(), "package.json"), "utf8"))
+    .catch(() => undefined);
+  if (!content) return "unknown";
+  try {
+    return String((JSON.parse(content) as { version?: unknown }).version ?? "unknown");
+  } catch {
+    return "unknown";
+  }
+}
+
+async function gitCommit(cwd: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--short=12", "HEAD"], { cwd, timeout: 3000 });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function hashBuffer(value: Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function deriveStrategy(input: {
@@ -142,6 +226,14 @@ export function renderBenchmarkMarkdown(result: QualityCostTraceBenchmark): stri
 Created: ${result.createdAt}
 
 Fixture: ${result.fixture}
+
+Runtime: ${result.reproducibility.runtimeVersion}
+
+Fixture hash: ${result.reproducibility.fixtureHash}
+
+Fixture manifest hash: ${result.reproducibility.fixtureManifestHash}
+
+Git commit: ${result.reproducibility.gitCommit ?? "not available"}
 
 | Strategy | Result | Tests passed | Tests failed | Hidden | Cost | Time | Repairs | Strong Calls | Trace | Events |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

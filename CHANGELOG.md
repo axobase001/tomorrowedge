@@ -7,6 +7,45 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-06-11
+
+1.4.2 polishes the 1.4.1 alpha candidate by tightening fixture-mode boundaries,
+stored strategy-memory semantics, cockpit execution-state projection, summary
+evidence refs, and contributor test ergonomics.
+
+### Changed
+
+- Strategy-memory previews now distinguish recommendations from applied
+  assignments. When routing is disabled, CLI text says the output is
+  preview-only and JSON reports `previewOnly:true`, `applied:false`, and empty
+  applied `routeAssignments`.
+- Strategy-memory task inference now treats fix/bug/repair prompts that mention
+  failing fixtures, unit tests, or verifier failures as `bugfix` with a
+  secondary `test_failure` signal.
+- Task-memory subtask signals are normalized on read/write so terminal outcomes
+  cannot keep contradictory `pending` status.
+- TaskGraph nodes now retain artifact refs and EvidencePacket refs for
+  design/risk-map/review/judge/test outputs, and the cockpit detail drawer
+  exposes a TaskGraph section alongside the RoleGraph.
+- Summarize TaskGraph nodes now retain final-summary, trace-completeness, and
+  objective-trace artifact refs, so the cockpit can open final evidence from
+  the graph instead of only from the raw event ledger.
+- Cockpit RoleGraph nodes now read execution status, attempts, and timing from
+  authoritative `roleGraphExecution.nodes`; compact execution `results` remain
+  a log summary rather than the UI state source.
+- `--fixture-mode` is documented and warned as a deterministic sample workflow
+  provider, not a general repository patch provider. Arbitrary repositories may
+  request revision/no-change without being treated as runtime failures.
+- Read-only RoleGraph summarizers now depend directly on `explorer`, while the
+  TaskGraph still depends on `inspect_context`.
+- `tedge benchmark` now records reproducibility metadata: runtime version,
+  fixture hash, fixture manifest hash, and optional git commit, while keeping
+  winner, hidden-test, and cost claims unmeasured unless evidence exists.
+- Added `npm run test:core`, `npm run test:adaptive`,
+  `npm run test:integration`, `npm run test:ui`, and `npm run test:memory` for
+  faster targeted stability checks around memory, cockpit, integration, and
+  adaptive runtime suites.
+
 ## [1.4.1] - 2026-06-11
 
 1.4.1 hardens the Adaptive Orchestration Runtime without claiming a fully

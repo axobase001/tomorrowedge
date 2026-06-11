@@ -52,6 +52,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     })),
     routes,
     roleGraph: buildRoleGraphSummary(state),
+    taskGraph: buildTaskGraphSummary(state),
     telemetry: buildTelemetry(state, routes, currentApproval),
     approvals,
     approvalHistory,
@@ -200,18 +201,44 @@ function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleG
   if (!state?.roleGraph) return undefined;
   return {
     workflowKind: state.roleGraph.workflowKind,
-    nodes: state.roleGraph.nodes.map((node) => ({
-      id: node.id,
-      role: node.role,
-      required: node.required,
-      dependencies: node.dependencies,
-      canFallback: node.canFallback,
-      canSkip: node.canSkip,
-      maxRetries: node.maxRetries,
-      produces: node.produces,
-      consumes: node.consumes
-    })),
+    nodes: state.roleGraph.nodes.map((node) => {
+      const execution = state.roleGraphExecution?.nodes[node.id];
+      return {
+        id: node.id,
+        role: node.role,
+        required: node.required,
+        dependencies: node.dependencies,
+        canFallback: node.canFallback,
+        canSkip: node.canSkip,
+        maxRetries: node.maxRetries,
+        produces: node.produces,
+        consumes: node.consumes,
+        status: execution?.status,
+        attempts: execution?.attempts,
+        startedAt: execution?.startedAt,
+        endedAt: execution?.endedAt
+      };
+    }),
     stopConditions: state.roleGraph.stopConditions
+  };
+}
+
+function buildTaskGraphSummary(state?: AgentGraphState): CockpitViewModel["taskGraph"] {
+  const graph = state?.plan?.taskGraph;
+  if (!graph) return undefined;
+  return {
+    workflowKind: graph.workflowKind,
+    nodes: graph.nodes.map((node) => ({
+      id: node.id,
+      kind: node.kind,
+      title: node.title,
+      status: node.status,
+      role: node.ownerRole,
+      dependencies: node.dependsOn,
+      evidenceRefs: node.evidenceRefs ?? [],
+      artifactRefs: node.artifactRefs ?? []
+    })),
+    terminalNodeIds: graph.terminalNodeIds
   };
 }
 

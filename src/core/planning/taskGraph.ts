@@ -46,6 +46,8 @@ export type TaskGraphNode = {
   expectedOutputs: ExpectedOutput[];
   requiredEvidence: string[];
   expectedArtifacts: string[];
+  evidenceRefs?: string[];
+  artifactRefs?: string[];
   files?: string[];
   riskLevel: RiskLevel;
   mutationAllowed: boolean;

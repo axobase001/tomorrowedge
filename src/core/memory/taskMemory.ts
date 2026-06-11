@@ -22,6 +22,7 @@ export type LearnedTaskMemory = {
   goalPreview?: string;
   memoryScope?: MemoryScope;
   taskType: string;
+  secondarySignals?: string[];
   riskLevel: string;
   routingMode: string;
   accessMode: string;
@@ -125,8 +126,8 @@ export type NegativeLearningSignal = {
 export type SubtaskMemorySignal = {
   subtaskId: string;
   title?: string;
-  status?: "pending" | "running" | "done" | "blocked";
-  outcome: "passed" | "failed" | "blocked" | "review_blocked" | "unknown";
+  status?: "pending" | "running" | "done" | "failed" | "blocked" | "done_with_blocking_signal" | "skipped";
+  outcome: "passed" | "failed" | "blocked" | "review_blocked" | "skipped" | "unknown";
   phase?: EventPhase;
   evidenceRefs?: string[];
 };
@@ -148,6 +149,7 @@ export type StrategyMemoryHints = {
   matchedRecords: number;
   task?: string;
   taskType?: string;
+  secondarySignals?: string[];
 };
 
 export type FailureClass =
@@ -226,6 +228,7 @@ export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphStat
 export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphState, options: { failureMemory?: FailureMemoryPolicyInput } = {}): Promise<FailureMemoryPreview> {
   const policy = normalizeFailureMemoryPolicy(options.failureMemory);
   const now = new Date().toISOString();
+  const taskProfile = normalizeStoredTaskProfile(state.goal, state.plan?.taskType);
   const record: LearnedTaskMemory = {
     schemaVersion: "task-memory/v2",
     createdAt: now,
@@ -234,7 +237,8 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
     goalFingerprint: fingerprintGoal(state.goal),
     goalPreview: clip(redactMemoryText(state.goal), 180),
     memoryScope: await buildMemoryScope(cwd, policy),
-    taskType: state.plan?.taskType ?? "unknown",
+    taskType: taskProfile.taskType,
+    secondarySignals: taskProfile.secondarySignals,
     riskLevel: state.plan?.riskLevel ?? "unknown",
     routingMode: state.routing.mode,
     accessMode: state.access.mode,
@@ -249,7 +253,7 @@ export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphSta
     frameworkSignals: collectFrameworkSignals(state),
     patchApproach: selectedPatchApproach(state),
     negativeSignals: collectNegativeLearningSignals(state),
-    subtaskSignals: collectSubtaskSignals(state),
+    subtaskSignals: normalizeSubtaskSignals(collectSubtaskSignals(state)),
     routeAssignments: state.finalSummary?.result === "completed"
       ? state.routing.assignments
           .filter((assignment) => !["runner", "vision"].includes(assignment.role))
@@ -304,7 +308,7 @@ export async function buildStrategyMemoryHints(cwd: string, options: { limit?: n
       if (!routeByRole.has(route.role)) {
         routeByRole.set(route.role, {
           ...route,
-          reason: `strategy memory: reused ${route.provider}/${route.model} from recent completed ${record.taskType} workflow${taskProfile ? ` matched to ${taskProfile.taskType}` : ""}`
+          reason: strategyRouteReason(record, route, taskProfile)
         });
       }
     }
@@ -317,7 +321,8 @@ export async function buildStrategyMemoryHints(cwd: string, options: { limit?: n
     sourceRecords: records.length,
     matchedRecords: scoped.length,
     task: taskProfile?.task,
-    taskType: taskProfile?.taskType
+    taskType: taskProfile?.taskType,
+    secondarySignals: taskProfile?.secondarySignals
   };
 }
 
@@ -690,22 +695,28 @@ function providerErrorCategory(message: string | undefined): ProviderErrorCatego
 type StrategyTaskProfile = {
   task: string;
   taskType: string;
+  secondarySignals: string[];
   signals: Set<string>;
 };
 
 function profileStrategyTask(task: string): StrategyTaskProfile {
   const redacted = clip(redactMemoryText(task), 180);
+  const inferred = inferStrategyTaskProfile(redacted);
   return {
     task: redacted,
-    taskType: inferStrategyTaskType(redacted),
-    signals: tokenize(redacted)
+    taskType: inferred.taskType,
+    secondarySignals: inferred.secondarySignals,
+    signals: new Set([...tokenize(redacted), inferred.taskType, ...inferred.secondarySignals])
   };
 }
 
 function scoreStrategyRecord(record: LearnedTaskMemory, profile: StrategyTaskProfile): number {
+  const normalizedRecordProfile = normalizeStoredTaskProfile(record.goalPreview ?? "", record.taskType);
   const recordSignals = tokenize([
     record.goalPreview,
-    record.taskType,
+    normalizedRecordProfile.taskType,
+    ...(normalizedRecordProfile.secondarySignals ?? []),
+    ...(record.secondarySignals ?? []),
     record.riskLevel,
     record.routingMode,
     record.judgeDecision,
@@ -716,18 +727,51 @@ function scoreStrategyRecord(record: LearnedTaskMemory, profile: StrategyTaskPro
     ...(record.verificationCommands ?? [])
   ].filter(Boolean).join(" "));
   const overlap = [...profile.signals].filter((signal) => recordSignals.has(signal)).length;
-  const taskTypeBoost = profile.taskType !== "unknown" && record.taskType === profile.taskType ? 5 : 0;
-  const verifierBoost = profile.taskType === "test" && (record.verificationCommands ?? []).some((command) => /test|pytest|vitest|jest|verify/i.test(command)) ? 2 : 0;
+  const taskTypeBoost = profile.taskType !== "unknown" && normalizedRecordProfile.taskType === profile.taskType ? 5 : 0;
+  const verifierBoost = (profile.taskType === "test" || profile.secondarySignals.includes("test_failure"))
+    && (record.verificationCommands ?? []).some((command) => /test|pytest|vitest|jest|verify/i.test(command))
+    ? 2
+    : 0;
   return overlap + taskTypeBoost + verifierBoost;
 }
 
 function inferStrategyTaskType(task: string): string {
-  if (/test|verify|failing|failure|pytest|vitest|jest|测试|驗證|验证|失败|修复/.test(task.toLowerCase())) return "test";
-  if (/review|audit|diff|审查|审核|安全/.test(task.toLowerCase())) return "review";
-  if (/refactor|cleanup|重构|整理/.test(task.toLowerCase())) return "refactor";
-  if (/doc|readme|docs|文档|说明/.test(task.toLowerCase())) return "docs";
-  if (/read|list|inspect|show|查看|读取|列出|检查/.test(task.toLowerCase())) return "inspect";
-  return "unknown";
+  return inferStrategyTaskProfile(task).taskType;
+}
+
+function normalizeStoredTaskProfile(goal: string | undefined, currentTaskType?: string): { taskType: string; secondarySignals: string[] } {
+  const inferred = inferStrategyTaskProfile(goal ?? "");
+  if (inferred.taskType !== "unknown") return inferred;
+  const fallbackTaskType = currentTaskType && currentTaskType !== "unknown" ? currentTaskType : "unknown";
+  return { taskType: fallbackTaskType, secondarySignals: [] };
+}
+
+function strategyRouteReason(record: LearnedTaskMemory, route: { provider: string; model: string }, taskProfile: StrategyTaskProfile | undefined): string {
+  const storedProfile = normalizeStoredTaskProfile(record.goalPreview, record.taskType);
+  const label = storedProfile.taskType;
+  const signals = unique([...(storedProfile.secondarySignals ?? []), ...(record.secondarySignals ?? [])]);
+  const signalText = signals.length ? ` with ${signals.join("+")} signal` : "";
+  const matchText = taskProfile && taskProfile.taskType !== label
+    ? ` matched by ${taskProfile.secondarySignals.length ? taskProfile.secondarySignals.join("+") : taskProfile.taskType}`
+    : "";
+  return `strategy memory: reused ${route.provider}/${route.model} from recent completed ${label} workflow${signalText}${matchText}`;
+}
+
+function inferStrategyTaskProfile(task: string): { taskType: string; secondarySignals: string[] } {
+  const lower = task.toLowerCase();
+  const bugSignal = /\b(fix|bug|repair|broken|regression|issue|error|crash|incorrect)\b|修复|错误|异常/.test(lower);
+  const testFailureSignal = /\b(failing|failure|failed|test failure|unit test|fixture|pytest|vitest|jest)\b|失败|测试|验证/.test(lower);
+  if (bugSignal && testFailureSignal) return { taskType: "bugfix", secondarySignals: ["test_failure"] };
+  if (/\b(add|write|create|cover|coverage)\b.*\b(test|tests|spec|pytest|vitest|jest)\b|\b(test|tests|spec)\b.*\b(for|coverage)\b|新增测试|添加测试/.test(lower)) {
+    return { taskType: "test", secondarySignals: [] };
+  }
+  if (bugSignal) return { taskType: "bugfix", secondarySignals: testFailureSignal ? ["test_failure"] : [] };
+  if (/\b(test|verify|pytest|vitest|jest)\b|验证/.test(lower)) return { taskType: "test", secondarySignals: [] };
+  if (/\b(review|audit|diff)\b|审查|审核|安全/.test(lower)) return { taskType: "review", secondarySignals: [] };
+  if (/\b(refactor|cleanup)\b|重构|整理/.test(lower)) return { taskType: "refactor", secondarySignals: [] };
+  if (/\b(doc|readme|docs)\b|文档|说明/.test(lower)) return { taskType: "docs", secondarySignals: [] };
+  if (/\b(read|list|inspect|show)\b|查看|读取|列出|检查/.test(lower)) return { taskType: "inspect", secondarySignals: [] };
+  return { taskType: "unknown", secondarySignals: [] };
 }
 
 function routeKey(role: AgentRole | undefined, provider: string, model: string): string {
@@ -754,7 +798,7 @@ export async function readLearnedTaskMemory(cwd: string, limit = 20, options: { 
   const records = content
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as LearnedTaskMemory);
+    .map((line) => normalizeLearnedTaskMemory(JSON.parse(line) as LearnedTaskMemory));
   const filtered = options.includeStale ? records : records.filter((record) => !staleStatus(record, cwd).stale);
   const selected = filtered.slice(-limit);
   return options.newestFirst === false ? selected : selected.reverse();
@@ -1203,7 +1247,7 @@ function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemor
 async function writeTaskMemoryFile(cwd: string, records: LearnedTaskMemory[]): Promise<void> {
   const dir = path.join(cwd, ".tomorrowedge");
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "task-memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+  await writeFile(path.join(dir, "task-memory.jsonl"), records.map((record) => JSON.stringify(normalizeLearnedTaskMemory(record))).join("\n") + "\n", "utf8");
 }
 
 async function buildMemoryScope(cwd: string, policy?: FailureMemoryPolicy): Promise<MemoryScope> {
@@ -1331,21 +1375,52 @@ function mergeNegativeSignals(a: NegativeLearningSignal[] | undefined, b: Negati
 }
 
 function mergeSubtaskSignals(a: SubtaskMemorySignal[] | undefined, b: SubtaskMemorySignal[] | undefined): SubtaskMemorySignal[] | undefined {
-  const rank: Record<SubtaskMemorySignal["outcome"], number> = { unknown: 0, passed: 1, blocked: 2, review_blocked: 3, failed: 4 };
+  const rank: Record<SubtaskMemorySignal["outcome"], number> = { unknown: 0, skipped: 1, passed: 2, blocked: 3, review_blocked: 4, failed: 5 };
   const merged = new Map<string, SubtaskMemorySignal>();
   for (const signal of [...(a ?? []), ...(b ?? [])]) {
-    const key = signal.subtaskId;
+    const normalized = normalizeSubtaskSignal(signal);
+    const key = normalized.subtaskId;
     const current = merged.get(key);
-    if (!current || rank[signal.outcome] >= rank[current.outcome]) {
+    if (!current || rank[normalized.outcome] >= rank[current.outcome]) {
       merged.set(key, {
         ...current,
-        ...signal,
-        evidenceRefs: unique([...(current?.evidenceRefs ?? []), ...(signal.evidenceRefs ?? [])]).slice(0, 8)
+        ...normalized,
+        evidenceRefs: unique([...(current?.evidenceRefs ?? []), ...(normalized.evidenceRefs ?? [])]).slice(0, 8)
       });
     }
   }
   const values = [...merged.values()].slice(0, 12);
   return values.length ? values : undefined;
+}
+
+function normalizeLearnedTaskMemory(record: LearnedTaskMemory): LearnedTaskMemory {
+  const taskProfile = normalizeStoredTaskProfile(record.goalPreview, record.taskType);
+  return {
+    ...record,
+    taskType: taskProfile.taskType,
+    secondarySignals: unique([...(record.secondarySignals ?? []), ...taskProfile.secondarySignals]),
+    subtaskSignals: normalizeSubtaskSignals(record.subtaskSignals)
+  };
+}
+
+function normalizeSubtaskSignals(signals: SubtaskMemorySignal[] | undefined): SubtaskMemorySignal[] | undefined {
+  const normalized = signals?.map(normalizeSubtaskSignal).slice(0, 12);
+  return normalized?.length ? normalized : undefined;
+}
+
+function normalizeSubtaskSignal(signal: SubtaskMemorySignal): SubtaskMemorySignal {
+  const statusByOutcome: Partial<Record<SubtaskMemorySignal["outcome"], NonNullable<SubtaskMemorySignal["status"]>>> = {
+    passed: "done",
+    failed: "failed",
+    blocked: "blocked",
+    review_blocked: "done_with_blocking_signal",
+    skipped: "skipped"
+  };
+  const terminalStatus = statusByOutcome[signal.outcome];
+  return {
+    ...signal,
+    status: terminalStatus ?? signal.status
+  };
 }
 
 function hashText(value: string): string {

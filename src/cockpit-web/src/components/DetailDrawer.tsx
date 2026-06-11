@@ -8,6 +8,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
   const capabilityText = formatCapabilities(viewModel);
   const routeText = formatRoutes(viewModel);
   const roleGraphText = formatRoleGraph(viewModel);
+  const taskGraphText = formatTaskGraph(viewModel);
   const rawEventsText = viewModel.rawEvents.length ? JSON.stringify(viewModel.rawEvents.slice(-40), null, 2) : "";
   return (
     <>
@@ -69,6 +70,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       {routeText ? <pre>{routeText}</pre> : <EmptyState title={t("state.noRouteDetails")} detail={t("state.noRoutesDetail")} testId="drawer-routes-empty-state" />}
       <h3>{t("drawer.roleGraph")}</h3>
       {roleGraphText ? <pre>{roleGraphText}</pre> : <EmptyState title={t("state.noRoleGraph")} testId="drawer-role-graph-empty-state" />}
+      <h3>TaskGraph</h3>
+      {taskGraphText ? <pre>{taskGraphText}</pre> : <EmptyState title="No task graph yet." testId="drawer-task-graph-empty-state" />}
       <h3>{t("drawer.artifacts")}</h3>
       <div className="te-artifact-list" data-testid="drawer-artifacts">
         {viewModel.artifacts.length ? viewModel.artifacts.map((artifact) => (
@@ -122,9 +125,10 @@ function formatRoleGraph(viewModel: CockpitViewModel): string {
   const graph = viewModel.roleGraph;
   if (!graph) return "";
   const nodes = graph.nodes.map((node) => [
-    `${node.id} (${node.role}) ${node.required ? "required" : "optional"}`,
+    `${node.id} (${node.role}) ${node.required ? "required" : "optional"} state=${node.status ?? "-"} attempts=${node.attempts ?? 0}`,
     `after=${node.dependencies.join(", ") || "-"}`,
     `fallback=${node.canFallback ? "yes" : "no"} skip=${node.canSkip ? "yes" : "no"} retries=${node.maxRetries}`,
+    node.startedAt || node.endedAt ? `time=${node.startedAt ?? "-"} -> ${node.endedAt ?? "-"}` : undefined,
     node.consumes.length ? `consumes=${node.consumes.join(", ")}` : undefined,
     node.produces.length ? `produces=${node.produces.join(", ")}` : undefined
   ].filter(Boolean).join("\n"));
@@ -134,6 +138,24 @@ function formatRoleGraph(viewModel: CockpitViewModel): string {
     ...nodes,
     "",
     `stop=${graph.stopConditions.join(", ") || "-"}`
+  ].join("\n");
+}
+
+function formatTaskGraph(viewModel: CockpitViewModel): string {
+  const graph = viewModel.taskGraph;
+  if (!graph) return "";
+  const nodes = graph.nodes.map((node) => [
+    `${node.id} (${node.kind}/${node.role}) status=${node.status}`,
+    `after=${node.dependencies.join(", ") || "-"}`,
+    node.evidenceRefs.length ? `evidence=${node.evidenceRefs.join(", ")}` : undefined,
+    node.artifactRefs.length ? `artifacts=${node.artifactRefs.join(", ")}` : undefined
+  ].filter(Boolean).join("\n"));
+  return [
+    `workflow=${graph.workflowKind ?? "-"}`,
+    "",
+    ...nodes,
+    "",
+    `terminal=${graph.terminalNodeIds.join(", ") || "-"}`
   ].join("\n");
 }
 

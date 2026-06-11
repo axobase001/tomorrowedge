@@ -180,6 +180,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("tournamentRef" in event && event.tournamentRef) refs.push(event.tournamentRef);
   if ("sessionRef" in event && event.sessionRef) refs.push(event.sessionRef);
   if ("traceRef" in event && event.traceRef) refs.push(event.traceRef);
+  if ("traceCompletenessRef" in event && event.traceCompletenessRef) refs.push(event.traceCompletenessRef);
   return refs;
 }
 

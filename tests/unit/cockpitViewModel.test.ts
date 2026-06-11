@@ -24,6 +24,8 @@ describe("cockpit view model", () => {
     expect(vm.sessionMeta.source).toBe("saved");
     expect(vm.sessionMeta.stale).toBe(true);
     expect(vm.roleGraph?.workflowKind).toBe("debate_patch");
+    expect(vm.roleGraph?.nodes.find((node) => node.id === "planner")?.attempts).toBeGreaterThan(0);
+    expect(vm.roleGraph?.nodes.find((node) => node.id === "planner")?.status).toBe("success");
     expect(vm.capabilities.find((item) => item.id === "provider-routing")?.status).toBe("available");
     expect(vm.capabilities.find((item) => item.id === "workflow-ledger")?.readiness).toContain("event");
     expect(vm.objectiveContract?.workflowKind).toBe("patch");
@@ -31,6 +33,19 @@ describe("cockpit view model", () => {
     expect(vm.objectiveTrace?.traceWritten).toBe(true);
     expect(vm.objectiveTrace?.traceId).toBeTruthy();
     expect(vm.orchestrationPolicy?.policyId).toBeTruthy();
+    expect(vm.taskGraph?.nodes.length).toBeGreaterThan(0);
+    expect(vm.taskGraph?.nodes.some((node) => node.evidenceRefs.length || node.artifactRefs.length)).toBe(true);
+    const summaryNode = vm.taskGraph?.nodes.find((node) => node.kind === "summarize");
+    expect(summaryNode?.evidenceRefs).toEqual(expect.arrayContaining([
+      expect.stringContaining("summaries"),
+      expect.stringContaining("trace_completeness"),
+      expect.stringContaining("objective_traces")
+    ]));
+    expect(summaryNode?.artifactRefs).toEqual(expect.arrayContaining([
+      expect.stringContaining("summaries"),
+      expect.stringContaining("trace_completeness"),
+      expect.stringContaining("objective_traces")
+    ]));
   });
 
   it("marks live snapshots as connected and non-stale", async () => {

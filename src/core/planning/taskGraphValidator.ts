@@ -68,6 +68,8 @@ export function parseTaskGraphCandidate(value: unknown): TaskGraph | undefined {
       expectedOutputs,
       requiredEvidence: requiredInputs.map((item) => item.description),
       expectedArtifacts: expectedOutputs.map((item) => item.description),
+      evidenceRefs: arrayOfStrings(node.evidenceRefs),
+      artifactRefs: arrayOfStrings(node.artifactRefs),
       files: arrayOfStrings(node.files),
       riskLevel: riskLevel(node.riskLevel),
       mutationAllowed: Boolean(node.mutationAllowed),

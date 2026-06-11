@@ -58,8 +58,27 @@ export type CockpitRoleGraphSummary = {
     maxRetries: number;
     produces: string[];
     consumes: string[];
+    status?: string;
+    attempts?: number;
+    startedAt?: string;
+    endedAt?: string;
   }>;
   stopConditions: string[];
+};
+
+export type CockpitTaskGraphSummary = {
+  workflowKind?: string;
+  nodes: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    status: string;
+    role: AgentRole;
+    dependencies: string[];
+    evidenceRefs: string[];
+    artifactRefs: string[];
+  }>;
+  terminalNodeIds: string[];
 };
 
 export type CockpitTelemetry = {
@@ -281,6 +300,7 @@ export type CockpitViewModel = {
   agents: CockpitAgentSummary[];
   routes: CockpitRouteSummary[];
   roleGraph?: CockpitRoleGraphSummary;
+  taskGraph?: CockpitTaskGraphSummary;
   telemetry: CockpitTelemetry;
   approvals: CockpitApproval[];
   approvalHistory: CockpitApprovalHistoryItem[];

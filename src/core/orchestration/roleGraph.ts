@@ -79,7 +79,7 @@ function readOnlyGraph(workflowKind: "read_only" | "advisory", governed = false)
       node("judge", ["reviewer"], { required: false, canSkip: true, produces: ["judge_advice"], consumes: ["plan", "context", "review_advice"] })
     );
   }
-  nodes.push(node("summarizer", governed ? ["judge"] : ["explorer"], { produces: ["summary"], consumes: governed ? ["plan", "context", "review_advice", "judge_advice"] : ["plan", "context"] }));
+  nodes.push(node("summarizer", ["explorer"], { produces: ["summary"], consumes: governed ? ["plan", "context", "review_advice", "judge_advice"] : ["plan", "context"] }));
   return {
     workflowKind,
     nodes,

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -55,7 +55,7 @@ export async function prepareRunWorkspace(cwd: string, options: RuntimeRunOption
     return { executionCwd: cwd };
   }
 
-  if (!options.forceFixtureWorkspace && existsSync(path.join(cwd, "index.js")) && existsSync(path.join(cwd, "package.json"))) {
+  if (!options.forceFixtureWorkspace && isKnownFixtureSampleRepo(cwd)) {
     return { executionCwd: cwd };
   }
 
@@ -71,6 +71,17 @@ export async function prepareRunWorkspace(cwd: string, options: RuntimeRunOption
 
 export function isFixtureRun(options: RuntimeRunOptions): boolean {
   return Boolean(options.fixtureMode || options.provider === "fixture");
+}
+
+export function isKnownFixtureSampleRepo(cwd: string): boolean {
+  const packagePath = path.join(cwd, "package.json");
+  if (!existsSync(path.join(cwd, "index.js")) || !existsSync(packagePath)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(packagePath, "utf8")) as { name?: string };
+    return pkg.name === "sample-repo-basic";
+  } catch {
+    return false;
+  }
 }
 
 export function liveOption(offline: boolean | undefined, live: boolean | undefined, autoLive: boolean, explicit: boolean | undefined): boolean {

@@ -482,6 +482,7 @@ export type TraceCompletenessEvent = BaseEvent & {
   intentionallySkipped?: string[];
   blockedByApproval?: string[];
   workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
+  traceCompletenessRef?: string;
 };
 
 export type AgentCacheEvent = BaseEvent & {

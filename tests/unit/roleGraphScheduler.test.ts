@@ -37,6 +37,18 @@ describe("role graph scheduler", () => {
     expect(state.stopReason).toContain("cannot complete before dependencies");
   });
 
+  it("does not let read-only summarizer run before explorer even without a TaskGraph", () => {
+    const graph = buildRoleGraph({ workflowKind: "read_only" });
+    const state = createRoleGraphExecutionState(graph);
+
+    expect(graph.nodes.find((node) => node.id === "summarizer")?.dependencies).toEqual(["explorer"]);
+    expect(canRunRoleNode(state, "summarizer")).toBe(false);
+    markRoleNodeResult(state, { role: "planner", status: "success", summary: "planned" });
+    expect(canRunRoleNode(state, "summarizer")).toBe(false);
+    markRoleNodeResult(state, { role: "explorer", status: "success", summary: "inspected" });
+    expect(canRunRoleNode(state, "summarizer")).toBe(true);
+  });
+
   it("increments attempts for successful normal role executions", () => {
     const graph = buildRoleGraph({ workflowKind: "patch" });
     const state = createRoleGraphExecutionState(graph);

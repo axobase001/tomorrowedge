@@ -6,6 +6,8 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { buildStrategyMemoryHints, compactFailureMemories, deleteFailureMemory, explainFailureMemories, previewLearnedTaskMemory, readFailureMemories, readLearnedTaskMemory, showFailureMemory } from "../../src/core/memory/taskMemory.js";
+import { memoryCommand } from "../../src/cli/commands/memory.js";
+import { saveProjectPreferences } from "../../src/core/memory/preferences.js";
 
 describe("learned task memory", () => {
   it("records compact reusable task metadata when a session is saved", async () => {
@@ -24,7 +26,8 @@ describe("learned task memory", () => {
       await saveSession(cwd, state);
       const records = await readLearnedTaskMemory(cwd);
 
-      expect(records[0]?.taskType).toBe("test");
+      expect(records[0]?.taskType).toBe("bugfix");
+      expect(records[0]?.secondarySignals).toEqual(["test_failure"]);
       expect(records[0]?.routingMode).toBe("balanced");
       expect(records[0]?.verificationCommands).toContain("npm test");
       expect(records[0]?.goalFingerprint).toMatch(/^[0-9a-f]+$/);
@@ -126,6 +129,44 @@ describe("learned task memory", () => {
       expect(hints.sourceRecords).toBe(1);
       expect(hints.preferredTestCommand).toBe("npm test");
       expect(hints.routeAssignments.some((route) => route.role === "planner" && route.reason.includes("strategy memory"))).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes stored task type for failing-test repair and pure test-authoring tasks", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-type-normalize-"));
+    try {
+      const failingState = await runOfflineGraph(cwd, "repair failing unit test caused by implementation bug", defaultConfig);
+      failingState.finalSummary = {
+        task: failingState.goal,
+        result: "completed",
+        changedFiles: ["index.js"],
+        testsRun: ["npm test"],
+        evidence: ["Command passed: npm test"],
+        risksRemaining: [],
+        suggestedCommitMessage: "fix: implementation bug"
+      };
+      await saveSession(cwd, failingState);
+
+      const testState = await runOfflineGraph(cwd, "add tests for parser", defaultConfig);
+      testState.finalSummary = {
+        task: testState.goal,
+        result: "completed",
+        changedFiles: ["parser.test.ts"],
+        testsRun: ["npm test"],
+        evidence: ["Added parser coverage."],
+        risksRemaining: [],
+        suggestedCommitMessage: "test: add parser coverage"
+      };
+      await saveSession(cwd, testState);
+
+      const records = await readLearnedTaskMemory(cwd, 20, { newestFirst: false });
+
+      expect(records[0]?.taskType).toBe("bugfix");
+      expect(records[0]?.secondarySignals).toEqual(["test_failure"]);
+      expect(records[1]?.taskType).toBe("test");
+      expect(records[1]?.secondarySignals ?? []).toEqual([]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -343,8 +384,45 @@ describe("learned task memory", () => {
         expect.objectContaining({ stage: "post_validation", source: "judge_selection_error", candidateId: "fixture_candidate_a", confidence: "provisional" })
       ]));
       expect(record.subtaskSignals).toEqual(expect.arrayContaining([
-        expect.objectContaining({ subtaskId: "verify", outcome: "failed", phase: "verification", evidenceRefs: ["stderr/npm-test.txt"] })
+        expect.objectContaining({ subtaskId: "verify", status: "failed", outcome: "failed", phase: "verification", evidenceRefs: ["stderr/npm-test.txt"] })
       ]));
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes terminal subtask outcomes so pending does not survive passed or failed records", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-subtask-normalize-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${JSON.stringify({
+        schemaVersion: "task-memory/v2",
+        createdAt: now,
+        firstSeen: now,
+        lastSeen: now,
+        goalFingerprint: "subtask",
+        goalPreview: "fix failing fixture bug",
+        taskType: "bugfix",
+        riskLevel: "low",
+        routingMode: "balanced",
+        accessMode: "partial",
+        constraints: [],
+        verificationCommands: ["npm test"],
+        result: "completed",
+        subtaskSignals: [
+          { subtaskId: "verify", status: "pending", outcome: "passed", phase: "verification" },
+          { subtaskId: "review", status: "pending", outcome: "review_blocked", phase: "review" }
+        ]
+      })}\n`, "utf8");
+
+      const [record] = await readLearnedTaskMemory(cwd);
+
+      expect(record.subtaskSignals).toEqual([
+        expect.objectContaining({ subtaskId: "verify", status: "done", outcome: "passed" }),
+        expect.objectContaining({ subtaskId: "review", status: "done_with_blocking_signal", outcome: "review_blocked" })
+      ]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -420,7 +498,8 @@ describe("learned task memory", () => {
         enabledProviders: ["openrouter", "deepseek"]
       });
 
-      expect(hints.taskType).toBe("test");
+      expect(hints.taskType).toBe("bugfix");
+      expect(hints.secondarySignals).toEqual(["test_failure"]);
       expect(hints.matchedRecords).toBe(3);
       expect(hints.avoidedRoutes).toEqual(expect.arrayContaining([
         expect.objectContaining({ role: "coder_a", provider: "openrouter", model: "openai/gpt-5.2", category: "rate_limited" })
@@ -428,6 +507,8 @@ describe("learned task memory", () => {
       expect(hints.routeAssignments).toEqual([
         expect.objectContaining({ role: "coder_a", provider: "deepseek", model: "deepseek-chat" })
       ]);
+      expect(hints.routeAssignments[0]?.reason).toContain("completed bugfix workflow");
+      expect(hints.routeAssignments[0]?.reason).not.toContain("completed test workflow matched to bugfix");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -477,12 +558,74 @@ describe("learned task memory", () => {
 
       const hints = await buildStrategyMemoryHints(cwd, { task: "fix failing test" });
 
-      expect(hints.taskType).toBe("test");
+      expect(hints.taskType).toBe("bugfix");
+      expect(hints.secondarySignals).toEqual(["test_failure"]);
       expect(hints.matchedRecords).toBe(1);
       expect(hints.preferredTestCommand).toBe("npm test");
       expect(hints.routeAssignments).toEqual([
         expect.objectContaining({ provider: "deepseek", model: "deepseek-chat" })
       ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("classifies strategy memory bugfixes with test-failure as a secondary signal", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-strategy-type-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${[
+        { schemaVersion: "task-memory/v2", createdAt: now, firstSeen: now, lastSeen: now, goalFingerprint: "bug", goalPreview: "fix failing fixture bug", taskType: "bugfix", riskLevel: "low", routingMode: "balanced", accessMode: "partial", constraints: [], verificationCommands: ["npm test"], result: "completed", routeAssignments: [{ role: "coder_a", provider: "deepseek", model: "deepseek-chat" }] },
+        { schemaVersion: "task-memory/v2", createdAt: now, firstSeen: now, lastSeen: now, goalFingerprint: "tests", goalPreview: "add tests for parser", taskType: "test", riskLevel: "low", routingMode: "balanced", accessMode: "partial", constraints: [], verificationCommands: ["npm test"], result: "completed", routeAssignments: [{ role: "coder_a", provider: "openrouter", model: "qwen/free" }] }
+      ].map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+      const bugfix = await buildStrategyMemoryHints(cwd, { task: "fix failing fixture bug" });
+      const tests = await buildStrategyMemoryHints(cwd, { task: "add tests for parser" });
+      const repair = await buildStrategyMemoryHints(cwd, { task: "repair failing unit test caused by implementation bug" });
+
+      expect(bugfix).toMatchObject({ taskType: "bugfix", secondarySignals: ["test_failure"] });
+      expect(bugfix.routeAssignments).toEqual([expect.objectContaining({ provider: "deepseek" })]);
+      expect(tests).toMatchObject({ taskType: "test" });
+      expect(repair.taskType).toBe("bugfix");
+      expect(repair.secondarySignals).toEqual(["test_failure"]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("prints disabled strategy memory as preview-only recommendations", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-strategy-preview-"));
+    try {
+      const memoryDir = path.join(cwd, ".tomorrowedge");
+      await mkdir(memoryDir, { recursive: true });
+      const now = new Date().toISOString();
+      await writeFile(path.join(memoryDir, "task-memory.jsonl"), `${JSON.stringify({
+        schemaVersion: "task-memory/v2",
+        createdAt: now,
+        firstSeen: now,
+        lastSeen: now,
+        goalFingerprint: "route",
+        goalPreview: "fix failing fixture bug",
+        taskType: "bugfix",
+        riskLevel: "low",
+        routingMode: "balanced",
+        accessMode: "partial",
+        constraints: [],
+        verificationCommands: ["npm test"],
+        result: "completed",
+        routeAssignments: [{ role: "coder_a", provider: "mock", model: "mock-balanced" }]
+      })}\n`, "utf8");
+      await saveProjectPreferences(cwd, { strategyMemoryRouting: false });
+
+      const text = await captureStdout(() => memoryCommand(cwd, { strategy: "fix failing fixture bug" }));
+      const json = JSON.parse(await captureStdout(() => memoryCommand(cwd, { strategy: "fix failing fixture bug", json: true })));
+
+      expect(text).toContain("strategy memory is disabled; showing preview recommendations only.");
+      expect(text).toContain("recommend\tcoder_a");
+      expect(json).toMatchObject({ enabled: false, previewOnly: true, applied: false, routeAssignments: [] });
+      expect(json.routeRecommendations).toEqual([expect.objectContaining({ role: "coder_a", provider: "mock" })]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -880,3 +1023,18 @@ describe("learned task memory", () => {
     }
   });
 });
+
+async function captureStdout(fn: () => Promise<void>): Promise<string> {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return output;
+}

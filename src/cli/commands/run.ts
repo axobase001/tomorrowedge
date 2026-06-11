@@ -10,7 +10,7 @@ import { getGitStatus } from "../../core/tools/gitTool.js";
 import { addTrace } from "../../core/traces/traceStore.js";
 import { renderCockpit } from "../renderCockpit.js";
 import { getWorkflowRecipe, materializeRecipeGoal } from "../../core/recipes/recipeLoader.js";
-import { liveOption, prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, isFixtureRun } from "../../core/runtime/runPreparation.js";
+import { liveOption, prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, isFixtureRun, isKnownFixtureSampleRepo } from "../../core/runtime/runPreparation.js";
 
 export { prepareRunWorkspace, type RunWorkspace } from "../../core/runtime/runPreparation.js";
 
@@ -52,6 +52,7 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
     throw new Error("Use either --live or --offline, not both.");
   }
   const workspace = await prepareRunWorkspace(targetCwd, options);
+  warnFixtureModeScope(workspace, options);
   if (effectiveAccessMode === "full") {
     await warnFullMode(workspace.executionCwd);
   }
@@ -145,6 +146,13 @@ async function warnFullMode(cwd: string): Promise<void> {
   if (gitStatus !== "clean") {
     process.stderr.write(`Warning: workspace is ${gitStatus}. Prefer a clean repo, sandbox, or fixture before full mode.\n`);
   }
+}
+
+function warnFixtureModeScope(workspace: { executionCwd: string; fixtureWorkspace?: string }, options: RunOptions): void {
+  if (!isFixtureRun(options)) return;
+  if (workspace.fixtureWorkspace) return;
+  if (isKnownFixtureSampleRepo(workspace.executionCwd)) return;
+  process.stderr.write("Warning: fixture-mode may not produce valid diffs for arbitrary repositories.\n");
 }
 
 function validateImageInputs(cwd: string, imagePaths: string[]): string[] {

@@ -1,6 +1,6 @@
 {
   "name": "tomorrowedge",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "A contract-first, self-iterating orchestration GUI/runtime for multi-model, multi-agent coding workflows.",
   "type": "module",
   "bin": {
@@ -16,6 +16,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "node scripts/tsx-dev.mjs",
     "test": "vitest run --fileParallelism=false",
+    "test:core": "vitest run tests/unit/taskMemory.test.ts tests/unit/benchmark.test.ts tests/unit/cockpitViewModel.test.ts tests/unit/preferences.test.ts --fileParallelism=false",
+    "test:adaptive": "vitest run tests/unit/objectiveContract.test.ts tests/unit/objectiveTracePolicy.test.ts tests/unit/agentGraph.test.ts tests/unit/roleGraph.test.ts tests/unit/roleGraphScheduler.test.ts tests/unit/taskGraph.test.ts tests/unit/taskGraphScheduler.test.ts tests/unit/adaptiveRuntime.test.ts tests/unit/budgetGate.test.ts --fileParallelism=false",
+    "test:integration": "vitest run tests/integration --fileParallelism=false",
+    "test:ui": "vitest run tests/unit/cockpitViewModel.test.ts tests/unit/localCockpit.test.ts tests/unit/cockpitWeb.test.ts --fileParallelism=false",
+    "test:memory": "vitest run tests/unit/taskMemory.test.ts tests/unit/failureMemoryInfluence.test.ts tests/unit/errorLoopExperiment.test.ts --fileParallelism=false",
     "test:watch": "vitest",
     "e2e:cockpit": "npm run build && npm run web:build && tsx scripts/cockpit-e2e-smoke.ts",
     "verify": "npm test && npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run pack:dry",

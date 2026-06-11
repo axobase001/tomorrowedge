@@ -33,21 +33,33 @@ export async function memoryCommand(cwd: string, options: MemoryOptions = {}): P
       task: strategyTask || undefined,
       enabledProviders
     });
+    const routeRecommendations = hints.routeAssignments;
+    const routeAssignments = strategyEnabled ? hints.routeAssignments : [];
     if (options.json) {
-      process.stdout.write(`${JSON.stringify({ enabled: strategyEnabled, ...hints }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({
+        enabled: strategyEnabled,
+        previewOnly: !strategyEnabled,
+        applied: strategyEnabled,
+        ...hints,
+        routeAssignments,
+        routeRecommendations
+      }, null, 2)}\n`);
       return;
     }
     process.stdout.write(`strategy memory enabled=${strategyEnabled ? "yes" : "no"} records=${hints.sourceRecords} matched=${hints.matchedRecords}\n`);
+    if (!strategyEnabled) process.stdout.write("strategy memory is disabled; showing preview recommendations only.\n");
     if (hints.task) process.stdout.write(`task=${hints.task}\n`);
     if (hints.taskType) process.stdout.write(`task_type=${hints.taskType}\n`);
+    if (hints.secondarySignals?.length) process.stdout.write(`secondary_signals=${hints.secondarySignals.join(",")}\n`);
     if (hints.preferredTestCommand) process.stdout.write(`test_command=${hints.preferredTestCommand}\n`);
-    for (const route of hints.routeAssignments) {
-      process.stdout.write(`${route.role}\t${route.provider}/${route.model}\t${route.reason}\n`);
+    for (const route of routeRecommendations) {
+      const label = strategyEnabled ? route.role : `recommend\t${route.role}`;
+      process.stdout.write(`${label}\t${route.provider}/${route.model}\t${route.reason}\n`);
     }
     for (const route of hints.avoidedRoutes) {
       process.stdout.write(`avoid\t${route.role ?? "*"}\t${route.provider}/${route.model}\t${route.category}\t${route.reason}\n`);
     }
-    if (!hints.routeAssignments.length && !hints.preferredTestCommand && !hints.avoidedRoutes.length) process.stdout.write("No strategy hints available.\n");
+    if (!routeRecommendations.length && !hints.preferredTestCommand && !hints.avoidedRoutes.length) process.stdout.write("No strategy hints available.\n");
     return;
   }
   const records = await readLearnedTaskMemory(cwd, Number.isFinite(limit) ? limit : 20);

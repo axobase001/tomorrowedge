@@ -152,6 +152,7 @@ describe("offline agent graph", () => {
       const taskEvents = state.events.filter((event) => event.type === "task_node_result");
       const taskOrder = taskEvents.map((event) => event.taskNodeId);
       const designEvent = taskEvents.find((event) => event.taskNodeId === "design_patch" && event.status === "done");
+      const taskNode = (id: string) => state.plan?.taskGraph?.nodes.find((node) => node.id === id);
 
       expect(roleOrder.indexOf("patch_runner")).toBeGreaterThan(roleOrder.indexOf("judge"));
       expect(roleOrder.indexOf("test_runner")).toBeGreaterThan(roleOrder.indexOf("patch_runner"));
@@ -163,6 +164,23 @@ describe("offline agent graph", () => {
         artifacts: expect.arrayContaining([expect.stringContaining("designs")]),
         evidenceRef: expect.stringContaining("designs")
       });
+      expect(taskNode("design_patch")?.artifactRefs).toEqual(expect.arrayContaining([expect.stringContaining("designs")]));
+      expect(taskNode("design_patch")?.evidenceRefs).toEqual(expect.arrayContaining([expect.stringContaining("evidence_packets")]));
+      expect(taskNode("review_patch")?.artifactRefs).toEqual(expect.arrayContaining([expect.stringContaining("reviews")]));
+      expect(taskNode("review_patch")?.evidenceRefs).toEqual(expect.arrayContaining([expect.stringContaining("evidence_packets")]));
+      expect(taskNode("judge_patch")?.artifactRefs).toEqual(expect.arrayContaining([expect.stringContaining("judge_decisions")]));
+      expect(taskNode("judge_patch")?.evidenceRefs).toEqual(expect.arrayContaining([expect.stringContaining("evidence_packets")]));
+      expect(taskNode("verify_patch")?.artifactRefs).toEqual(expect.arrayContaining([expect.stringContaining("stdout"), expect.stringContaining("stderr")]));
+      expect(taskNode("summarize")?.artifactRefs).toEqual(expect.arrayContaining([
+        expect.stringContaining("summaries"),
+        expect.stringContaining("trace_completeness"),
+        expect.stringContaining("objective_traces")
+      ]));
+      expect(taskNode("summarize")?.evidenceRefs).toEqual(expect.arrayContaining([
+        expect.stringContaining("summaries"),
+        expect.stringContaining("trace_completeness"),
+        expect.stringContaining("objective_traces")
+      ]));
       expect(state.events.some((event) => event.type === "shell_run" && event.success === true)).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -186,6 +204,8 @@ describe("offline agent graph", () => {
         artifacts: expect.arrayContaining([expect.stringContaining("risk_maps")]),
         evidenceRef: expect.stringContaining("risk_maps")
       });
+      expect(state.plan?.taskGraph?.nodes.find((node) => node.id === "risk_map")?.artifactRefs).toEqual(expect.arrayContaining([expect.stringContaining("risk_maps")]));
+      expect(state.plan?.taskGraph?.nodes.find((node) => node.id === "risk_map")?.evidenceRefs).toEqual(expect.arrayContaining([expect.stringContaining("evidence_packets")]));
       expect(riskMapIndex).toBeGreaterThanOrEqual(0);
       expect(securityReviewIndex).toBeGreaterThan(riskMapIndex);
       expect(reviewerNotes).toContain("Risk map evidence visible to reviewer: 1.");
@@ -329,7 +349,18 @@ describe("offline agent graph", () => {
       expect(eventTypes).not.toContain("shell_run");
       const taskEvents = state.events.filter((event) => event.type === "task_node_result");
       const taskOrder = taskEvents.map((event) => event.taskNodeId);
+      const summarizeNode = state.plan?.taskGraph?.nodes.find((node) => node.id === "summarize_findings");
       expect(taskOrder.indexOf("summarize_findings")).toBeGreaterThan(taskOrder.indexOf("inspect_context"));
+      expect(summarizeNode?.artifactRefs).toEqual(expect.arrayContaining([
+        expect.stringContaining("summaries"),
+        expect.stringContaining("trace_completeness"),
+        expect.stringContaining("objective_traces")
+      ]));
+      expect(summarizeNode?.evidenceRefs).toEqual(expect.arrayContaining([
+        expect.stringContaining("summaries"),
+        expect.stringContaining("trace_completeness"),
+        expect.stringContaining("objective_traces")
+      ]));
       expect(state.events.find((event) => event.type === "workflow_stop_reason")).toMatchObject({
         reason: "read-only request completed without patch workflow"
       });

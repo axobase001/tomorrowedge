@@ -12,6 +12,9 @@ describe("quality-cost-trace benchmark", () => {
       const report = await readFile(result.reportPath, "utf8");
 
       expect(result.winner).toBeNull();
+      expect(result.reproducibility.runtimeVersion).toMatch(/^\d+\.\d+\.\d+/);
+      expect(result.reproducibility.fixtureHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.reproducibility.fixtureManifestHash).toMatch(/^[0-9a-f]{64}$/);
       expect(result.strategies).toHaveLength(3);
       expect(result.strategies.every((strategy) => strategy.sessionId.startsWith("session_"))).toBe(true);
       expect(result.strategies.every((strategy) => strategy.eventCount > 0)).toBe(true);
@@ -23,6 +26,8 @@ describe("quality-cost-trace benchmark", () => {
       expect(report).toContain("hidden-test leaderboard claims");
       expect(report).toContain("not measured");
       expect(report).toContain("Winner: not ranked");
+      expect(report).toContain("Fixture hash:");
+      expect(report).toContain("Fixture manifest hash:");
       expect(report).toContain("TomorrowEdge repair-loop fixture route");
     } finally {
       await rm(cwd, { recursive: true, force: true });
