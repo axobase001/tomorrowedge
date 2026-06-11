@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CockpitProviderConnectionResult, CockpitSetupRequest, CockpitSetupStatus } from "../api.js";
 import type { Translator } from "../i18n.js";
+import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
 
 type SetupWizardProps = {
@@ -110,7 +111,7 @@ export function SetupWizard({
         {message ? <p className="te-setup-message" data-testid="setup-message">{message}</p> : null}
         {connectionResult ? (
           <p className="te-setup-message" data-testid="setup-connection">
-            <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {connectionResult.detail}
+            <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {formatProviderConnectionMessage(connectionResult, t)}
           </p>
         ) : null}
       </section>

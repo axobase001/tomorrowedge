@@ -7,6 +7,7 @@ import { App } from "../../src/cockpit-web/src/App.js";
 import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleModelOptionIds, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
+import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/providerConnectionMessage.js";
 import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
@@ -325,6 +326,32 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("命令");
     expect(html).toContain("密钥与角色管理");
     expect(html).toContain("至少连接一个模型");
+  });
+
+  it("formats provider connection guidance in Chinese for missing keys", () => {
+    const message = formatProviderConnectionMessage({
+      id: "openrouter",
+      status: "missing_key",
+      reason: "missing_key",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      detail: "missing env OPENROUTER_API_KEY"
+    }, createTranslator("zh"));
+
+    expect(message).toContain("缺少 API key");
+    expect(message).toContain("OPENROUTER_API_KEY");
+  });
+
+  it("formats provider connection guidance in English for invalid models", () => {
+    const message = formatProviderConnectionMessage({
+      id: "openai_compatible",
+      status: "failed",
+      reason: "invalid_model",
+      testedModel: "bad-model-id",
+      detail: "{\"error\":{\"message\":\"invalid model ID\"}}"
+    }, createTranslator("en"));
+
+    expect(message).toContain("Model ID was rejected by the provider");
+    expect(message).toContain("bad-model-id");
   });
 
   it("keeps a newly selected session visible before the session list refreshes", () => {
