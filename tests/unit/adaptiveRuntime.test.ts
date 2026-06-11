@@ -6,7 +6,7 @@ import { createBudgetRuntimeState, evaluateModelCallInvocation } from "../../src
 import { buildDebateSession } from "../../src/core/debate/debateSessionBuilder.js";
 import type { DebateSession } from "../../src/core/debate/debateProtocol.js";
 import { validateEvidenceDependencies } from "../../src/core/evidence/evidenceDependency.js";
-import { extractExternalAgentEvidencePackets, normalizeExternalAgentResponse } from "../../src/core/externalAgents/adapters/registry.js";
+import { detectExternalAgentFailure, extractExternalAgentEvidencePackets, normalizeExternalAgentResponse } from "../../src/core/externalAgents/adapters/registry.js";
 import { JudgeAgent } from "../../src/core/agents/judge.js";
 import { simulatePolicyOnTrace, runPolicyTournament } from "../../src/core/orchestrationPolicy/policyCounterfactual.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
@@ -300,6 +300,37 @@ describe("adaptive orchestration runtime", () => {
     expect(claude.summary).toBe("reviewed");
   });
 
+  it("extracts adapter JSON when responseMode=json_block and text precedes the block", () => {
+    const normalized = normalizeExternalAgentResponse({
+      profile: { id: "codex", name: "Codex", transport: "mcp", adapter: "codex", responseMode: "json_block", capabilities: [], allowedRoles: ["planner"], trustLevel: "high" },
+      role: "planner",
+      outputContract: "plan",
+      rawPayload: "I inspected the task.\n\n```json\n{\"summary\":\"planned\",\"plan\":{\"steps\":[{\"id\":\"inspect\",\"title\":\"Inspect\",\"detail\":\"Read files\"}],\"riskLevel\":\"low\",\"taskType\":\"analysis\"}}\n```"
+    });
+
+    expect(normalized.status).toBe("success");
+    expect((normalized.payload as { plan?: { steps?: unknown[] } }).plan?.steps).toHaveLength(1);
+  });
+
+  it("rejects natural-language-only strict Codex output", () => {
+    const normalized = normalizeExternalAgentResponse({
+      profile: { id: "codex", name: "Codex", transport: "mcp", adapter: "codex", strictJson: true, normalizationStrictness: "strict", capabilities: [], allowedRoles: ["coder_a"], trustLevel: "high" },
+      role: "coder_a",
+      outputContract: "patch",
+      rawPayload: "I cannot safely produce a patch without more context."
+    });
+    const failure = detectExternalAgentFailure({
+      profile: { id: "codex", name: "Codex", transport: "mcp", adapter: "codex", strictJson: true, normalizationStrictness: "strict", capabilities: [], allowedRoles: ["coder_a"], trustLevel: "high" },
+      role: "coder_a",
+      outputContract: "patch",
+      rawPayload: "I cannot safely produce a patch without more context.",
+      normalized
+    });
+
+    expect(normalized.status).toBe("failed");
+    expect(failure).toMatchObject({ failed: true, retryable: true, category: "malformed_output" });
+  });
+
   it("normalizes Codex raw patch output into a PatchCandidate", () => {
     const normalized = normalizeExternalAgentResponse({
       profile: { id: "codex", name: "Codex", transport: "mcp", adapter: "codex", capabilities: [], allowedRoles: ["coder_a"], trustLevel: "high" },
@@ -312,6 +343,39 @@ describe("adaptive orchestration runtime", () => {
     expect(normalized.status).toBe("success");
     expect(payload.candidate?.filesChanged).toEqual(["index.js"]);
     expect(payload.candidate?.unifiedDiff).toContain("return a + b");
+  });
+
+  it("turns Codex stdout with raw diff and JSON notes into a patch candidate with stable diff evidence", () => {
+    const rawDiff = "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1,3 +1,3 @@\n export function add(a, b) {\n-  return a - b;\n+  return a + b;\n }\n";
+    const normalized = normalizeExternalAgentResponse({
+      profile: { id: "codex_cli", name: "Codex CLI", transport: "mcp", adapter: "codex", capabilities: [], allowedRoles: ["coder_a"], trustLevel: "high" },
+      role: "coder_a",
+      outputContract: "patch",
+      rawPayload: `${rawDiff}\n{\"summary\":\"metadata after diff\"}`
+    });
+    const packets = extractExternalAgentEvidencePackets({
+      profile: { id: "codex_cli", name: "Codex CLI", transport: "mcp", adapter: "codex", capabilities: [], allowedRoles: ["coder_a"], trustLevel: "high" },
+      role: "coder_a",
+      outputContract: "patch",
+      rawPayload: `${rawDiff}\n{\"summary\":\"metadata after diff\"}`,
+      normalized
+    });
+    const payload = normalized.payload as { candidate?: { unifiedDiff?: string }; diffRef?: string };
+
+    expect(normalized.status).toBe("success");
+    expect(payload.candidate?.unifiedDiff).toContain("return a + b");
+    expect(payload.diffRef).toMatch(/^external:\/\/codex_cli\/diffs\/external_codex_diff_[a-f0-9]+\.patch$/);
+    expect(packets[0]?.supportingArtifacts).toContain(payload.diffRef);
+  });
+
+  it("treats empty Codex candidate explanations as retryable missing-contract failures", () => {
+    const profile = { id: "codex", name: "Codex", transport: "mcp" as const, adapter: "codex" as const, capabilities: [], allowedRoles: ["coder_a" as const], trustLevel: "high" as const };
+    const rawPayload = { summary: "No safe patch yet.", explanation: "Need the target file before editing." };
+    const normalized = normalizeExternalAgentResponse({ profile, role: "coder_a", outputContract: "patch", rawPayload });
+    const failure = detectExternalAgentFailure({ profile, role: "coder_a", outputContract: "patch", rawPayload, normalized });
+
+    expect(normalized.status).toBe("warning");
+    expect(failure).toMatchObject({ failed: true, retryable: true, category: "missing_contract" });
   });
 
   it("normalizes Codex reviewer output into candidate-scoped debate issues", () => {
@@ -425,24 +489,28 @@ describe("adaptive orchestration runtime", () => {
   });
 
   it("normalizes Claude judge output with unresolved issue ids", () => {
+    const profile = { id: "claude_code", name: "Claude Code", transport: "mcp" as const, adapter: "claude_code" as const, capabilities: [], allowedRoles: ["judge" as const], trustLevel: "high" as const };
+    const rawPayload = {
+      judgment: {
+        decision: "request_revision",
+        reason: "blocking issue remains",
+        confidence: 0.7,
+        unresolvedIssueIds: ["issue_a"]
+      }
+    };
     const normalized = normalizeExternalAgentResponse({
-      profile: { id: "claude_code", name: "Claude Code", transport: "mcp", adapter: "claude_code", capabilities: [], allowedRoles: ["judge"], trustLevel: "high" },
+      profile,
       role: "judge",
       outputContract: "judgment",
-      rawPayload: {
-        judgment: {
-          decision: "request_revision",
-          reason: "blocking issue remains",
-          confidence: 0.7,
-          unresolvedIssueIds: ["issue_a"]
-        }
-      }
+      rawPayload
     });
     const payload = normalized.payload as { judgment?: { decision?: string; unresolvedIssueIds?: string[] } };
+    const packets = extractExternalAgentEvidencePackets({ profile, role: "judge", outputContract: "judgment", rawPayload, normalized });
 
     expect(normalized.status).toBe("success");
     expect(payload.judgment?.decision).toBe("request_revision");
     expect(payload.judgment?.unresolvedIssueIds).toEqual(["issue_a"]);
+    expect(packets[0]?.supportingArtifacts).toContain("debate_issue:issue_a");
   });
 
   it("keeps external Codex and Claude evidence packets linked to stable artifact refs", () => {

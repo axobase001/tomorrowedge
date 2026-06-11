@@ -19,6 +19,12 @@ workflows now dispatch from RoleGraph-ready and TaskGraph-ready intersections.
   `executeReadyTaskNode()` dispatch path for graph-ready coder, reviewer,
   judge, patch-runner, and test-runner nodes. Legacy phase functions remain the
   internal actions, but RoleGraph/TaskGraph readiness is now the top-level gate.
+- The summarizer is now an executable graph node instead of a deferred no-op:
+  patch summaries wait for `test_runner` to reach a terminal state, and
+  read-only summaries wait for `inspect_context`.
+- `design_patch` and high-risk `risk_map` task nodes now emit structured
+  artifacts, EvidencePackets, artifact refs, and task-node evidence refs for
+  reviewer/judge consumption.
 - TaskGraphs now align with RoleGraphs: optional `coder_b` branches create an
   explicit `produce_patch_alt` task node, and stale cached/model task graphs are
   rebuilt when they no longer match the selected RoleGraph.
@@ -33,10 +39,16 @@ workflows now dispatch from RoleGraph-ready and TaskGraph-ready intersections.
   `blockedByApproval` and `intentionallySkipped` categories, so partial
   approval-blocked workflows do not report shell execution as an unqualified
   missing trace item.
-- Budget decisions now label real provider calls separately from simulated
-  mock/fixture/local governance calls, and the GUI telemetry shows both counts.
+- BudgetGate runtime now tracks committed real strong-agent calls separately
+  from committed simulated mock/fixture/local calls, and cockpit telemetry
+  displays those committed counters.
 - Codex and Claude Code external adapter evidence packets now preserve stable
-  diff, review, and judge artifact refs when the external payload provides them.
+  diff, review, and judge artifact refs when the external payload provides
+  them. Codex raw-diff stdout can become a PatchCandidate with a stable diff
+  evidence ref, and Claude judge packets include unresolved DebateIssue refs.
+- Trace completeness docs now clarify that a trace can be complete while the
+  workflow result remains `partially_completed` because patch or shell approval
+  was intentionally blocked.
 - Strategy memory can now be toggled from project preferences with
   `tedge prefs --strategy-memory-routing true|false`, and
   `tedge memory --strategy "<task>"` shows task-scoped matched records,

@@ -63,7 +63,9 @@ const emptyViewModel: CockpitViewModel = {
     shellWaiting: false,
     fallbackCount: 0,
     realBudgetDecisions: 0,
-    simulatedBudgetDecisions: 0
+    simulatedBudgetDecisions: 0,
+    realStrongAgentCallsUsed: 0,
+    simulatedStrongAgentCallsUsed: 0
   },
   approvals: [],
   approvalHistory: [],

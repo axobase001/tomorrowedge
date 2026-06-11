@@ -658,6 +658,8 @@ function buildTelemetry(state: AgentGraphState | undefined, routes: CockpitRoute
     fallbackCount: (state?.events ?? []).filter((event) => event.type === "provider_fallback" || event.type === "fallback_to_native").length,
     realBudgetDecisions: budgetDecisions.filter((event) => event.realProvider).length,
     simulatedBudgetDecisions: budgetDecisions.filter((event) => event.simulated).length,
+    realStrongAgentCallsUsed: state?.budgetRuntime.realStrongAgentCallsUsed ?? budgetDecisions.filter((event) => event.status === "allowed" && event.realProvider).length,
+    simulatedStrongAgentCallsUsed: state?.budgetRuntime.simulatedStrongAgentCallsUsed ?? budgetDecisions.filter((event) => event.status === "allowed" && event.simulated).length,
     budgetUsedPercent,
     budgetRemainingUsd,
     roleCosts: buildRoleCosts(state?.modelNotes ?? [], currentCostUsd)

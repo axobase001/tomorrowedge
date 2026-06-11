@@ -151,13 +151,44 @@ describe("offline agent graph", () => {
       const roleOrder = roleEvents.map((event) => event.nodeId);
       const taskEvents = state.events.filter((event) => event.type === "task_node_result");
       const taskOrder = taskEvents.map((event) => event.taskNodeId);
+      const designEvent = taskEvents.find((event) => event.taskNodeId === "design_patch" && event.status === "done");
 
       expect(roleOrder.indexOf("patch_runner")).toBeGreaterThan(roleOrder.indexOf("judge"));
       expect(roleOrder.indexOf("test_runner")).toBeGreaterThan(roleOrder.indexOf("patch_runner"));
       expect(roleOrder.indexOf("summarizer")).toBeGreaterThan(roleOrder.indexOf("test_runner"));
       expect(taskOrder.indexOf("apply_patch")).toBeGreaterThan(taskOrder.indexOf("judge_patch"));
       expect(taskOrder.indexOf("verify_patch")).toBeGreaterThan(taskOrder.indexOf("apply_patch"));
+      expect(taskOrder.indexOf("summarize")).toBeGreaterThan(taskOrder.indexOf("verify_patch"));
+      expect(designEvent).toMatchObject({
+        artifacts: expect.arrayContaining([expect.stringContaining("designs")]),
+        evidenceRef: expect.stringContaining("designs")
+      });
       expect(state.events.some((event) => event.type === "shell_run" && event.success === true)).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records high-risk risk_map evidence before security review and passes it to reviewer", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-risk-map-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix auth token security bug in the failing test", defaultConfig, { fixtureMode: true });
+      const taskEvents = state.events.filter((event) => event.type === "task_node_result");
+      const riskMap = taskEvents.find((event) => event.taskNodeId === "risk_map" && event.status === "done");
+      const securityReviewIndex = taskEvents.findIndex((event) => event.taskNodeId === "security_review" && event.status === "done");
+      const riskMapIndex = taskEvents.findIndex((event) => event.taskNodeId === "risk_map" && event.status === "done");
+      const reviewerNotes = state.review?.reviews.flatMap((review) => review.notes) ?? [];
+
+      expect(state.plan?.riskLevel).toBe("high");
+      expect(riskMap).toMatchObject({
+        artifacts: expect.arrayContaining([expect.stringContaining("risk_maps")]),
+        evidenceRef: expect.stringContaining("risk_maps")
+      });
+      expect(riskMapIndex).toBeGreaterThanOrEqual(0);
+      expect(securityReviewIndex).toBeGreaterThan(riskMapIndex);
+      expect(reviewerNotes).toContain("Risk map evidence visible to reviewer: 1.");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -202,6 +233,8 @@ describe("offline agent graph", () => {
       ]));
       expect(state.traceCompleteness?.missing).not.toContain("shell run recorded");
       expect(state.traceCompleteness?.blockedByApproval).toContain("shell run recorded");
+      expect(state.finalSummary?.evidence.join("\n")).toContain("patch_runner skipped");
+      expect(state.finalSummary?.evidence.join("\n")).toContain("test_runner skipped");
       expect(completenessEvent).toMatchObject({
         blockedByApproval: expect.arrayContaining(["shell run recorded"])
       });
@@ -294,6 +327,9 @@ describe("offline agent graph", () => {
       expect(eventTypes).not.toContain("judge_decision");
       expect(eventTypes).not.toContain("patch_apply");
       expect(eventTypes).not.toContain("shell_run");
+      const taskEvents = state.events.filter((event) => event.type === "task_node_result");
+      const taskOrder = taskEvents.map((event) => event.taskNodeId);
+      expect(taskOrder.indexOf("summarize_findings")).toBeGreaterThan(taskOrder.indexOf("inspect_context"));
       expect(state.events.find((event) => event.type === "workflow_stop_reason")).toMatchObject({
         reason: "read-only request completed without patch workflow"
       });
@@ -723,7 +759,9 @@ describe("offline agent graph", () => {
     expect(state.modelNotes.filter((note) => note.kind === "patch_generation").length).toBe(2);
     expect(state.changedFiles).toEqual([]);
     expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_a" && event.phase === "coding")).toBe(true);
-    expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_b" && event.phase === "coding")).toBe(true);
+      expect(state.events.some((event) => event.type === "budget_decision" && event.role === "coder_b" && event.phase === "coding")).toBe(true);
+      expect(state.budgetRuntime.simulatedStrongAgentCallsUsed).toBeGreaterThan(0);
+      expect(state.budgetRuntime.realStrongAgentCallsUsed).toBe(0);
   });
 
   it("blocks live patch through the unified model invocation budget gate", async () => {

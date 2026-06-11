@@ -26,6 +26,13 @@ function reviewCandidate(candidate: PatchCandidate, redTeam: boolean, evidencePa
   const securityConcerns: string[] = [];
   const regressionConcerns: string[] = [];
   const redTeamFindings = redTeam ? buildRedTeamFindings(candidate) : [];
+  const riskMapEvidenceCount = evidencePackets.filter((packet) =>
+    /risk_map|risk map|security boundary|regression boundary/i.test([
+      packet.summary,
+      ...packet.claims,
+      ...packet.supportingArtifacts
+    ].join(" "))
+  ).length;
 
   if (!candidate.unifiedDiff.trim()) {
     regressionConcerns.push("No concrete diff produced in skeleton mode.");
@@ -75,6 +82,7 @@ function reviewCandidate(candidate: PatchCandidate, redTeam: boolean, evidencePa
     notes: [
       "[MOCK] Offline reviewer used deterministic scoring.",
       `Evidence packets visible to reviewer: ${evidencePackets.length}.`,
+      `Risk map evidence visible to reviewer: ${riskMapEvidenceCount}.`,
       "Blocking concerns prevent automatic judge selection.",
       ...(redTeam ? ["Red-team pass checked missing diff, broad blast radius, and missing verification."] : [])
     ]

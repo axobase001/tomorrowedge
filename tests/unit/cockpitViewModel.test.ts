@@ -8,6 +8,7 @@ import { buildAccessPolicy } from "../../src/core/permissions/accessPolicy.js";
 import type { AgentGraphState } from "../../src/core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../../src/core/events/eventTypes.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
+import { createBudgetRuntimeState } from "../../src/core/budget/budgetGate.js";
 
 describe("cockpit view model", () => {
   it("projects an offline run into four-zone cockpit sections", async () => {
@@ -97,13 +98,20 @@ describe("cockpit view model", () => {
           realProvider: false,
           simulated: true
         })
-      ]
+      ],
+      budgetRuntime: {
+        ...createBudgetRuntimeState(),
+        realStrongAgentCallsUsed: 1,
+        simulatedStrongAgentCallsUsed: 2
+      }
     }));
 
     expect(vm.telemetry.budgetUsedPercent).toBe(30);
     expect(vm.telemetry.budgetRemainingUsd).toBeCloseTo(0.07);
     expect(vm.telemetry.realBudgetDecisions).toBe(1);
     expect(vm.telemetry.simulatedBudgetDecisions).toBe(1);
+    expect(vm.telemetry.realStrongAgentCallsUsed).toBe(1);
+    expect(vm.telemetry.simulatedStrongAgentCallsUsed).toBe(2);
     expect(vm.telemetry.roleCosts).toEqual([
       expect.objectContaining({ role: "coder_a", model: "openrouter/qwen/free", costUsd: 0.02, percent: 67 }),
       expect.objectContaining({ role: "planner", model: "deepseek/deepseek-chat", costUsd: 0.01, percent: 33 })
@@ -594,6 +602,7 @@ function sampleCockpitState(overrides: Partial<AgentGraphState> = {}): AgentGrap
     debateRounds: [],
     modelNotes: [],
     usageSummary: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    budgetRuntime: createBudgetRuntimeState(),
     budgetStatuses: [],
     review: {
       mode: "standard",

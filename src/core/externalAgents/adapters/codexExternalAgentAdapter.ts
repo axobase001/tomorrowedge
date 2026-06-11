@@ -95,9 +95,11 @@ function normalizeCodexOutput(input: ExternalAgentOutputInput): ExternalAgentNor
   const warnings = [...generic.warnings];
 
   if (input.role === "coder_a" || input.role === "coder_b" || input.role === "repairer") {
-    const candidate = candidateFromPayload(payload) ?? candidateFromRawDiff(input.rawPayload, input.role);
+    const parsedCandidate = candidateFromPayload(payload);
+    const candidate = parsedCandidate ?? candidateFromRawDiff(input.rawPayload, input.role);
     if (candidate) {
-      const diffRef = artifactRefFromPayload(payload, ["diffRef", "patchRef", "artifactRef"]);
+      const diffRef = artifactRefFromPayload(payload, ["diffRef", "patchRef", "artifactRef"])
+        ?? (!parsedCandidate ? stableExternalDiffRef(input.externalAgentId, candidate.candidateId) : undefined);
       const candidateWarnings = warnings.filter((warning) => !warning.includes("payload does not satisfy outputContract=patch"));
       payload = { summary: candidate.summary, candidate: diffRef ? { ...candidate, diffRef } : candidate, diffRef };
       return { ...generic, status: candidateWarnings.length ? "warning" : "success", warnings: candidateWarnings, payload, summary: candidate.summary || `Codex normalized ${input.role} patch candidate.` };
@@ -320,6 +322,12 @@ function artifactRefFromPayload(payload: unknown, keys: string[]): string | unde
   }
   const artifacts = Array.isArray(object?.artifacts) ? object.artifacts : [];
   return artifacts.find((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function stableExternalDiffRef(externalAgentId: string, candidateId: string): string {
+  const safeAgent = externalAgentId.replace(/[^a-zA-Z0-9_.-]+/g, "_") || "codex";
+  const safeCandidate = candidateId.replace(/[^a-zA-Z0-9_.-]+/g, "_") || "patch";
+  return `external://${safeAgent}/diffs/${safeCandidate}.patch`;
 }
 
 function isDefined<T>(value: T | undefined): value is T {

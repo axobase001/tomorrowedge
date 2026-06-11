@@ -53,7 +53,34 @@ describe("budget gate", () => {
     expect(first.action).toBe("allow");
     expect(runtime.roleCallsUsed.reviewer).toBe(1);
     expect(runtime.strongAgentCallsUsed).toBe(1);
+    expect(runtime.realStrongAgentCallsUsed).toBe(1);
+    expect(runtime.simulatedStrongAgentCallsUsed).toBe(0);
     expect(second.action).toBe("block");
+  });
+
+  it("splits committed strong-agent calls into real and simulated counters", () => {
+    const runtime = createBudgetRuntimeState();
+    const real = evaluateModelCallInvocation({
+      config: defaultConfig,
+      runtime,
+      invocation: "live_advisory",
+      role: "reviewer",
+      assignment: { role: "reviewer", provider: "openrouter", model: "openai/gpt-5.2", reason: "real review" }
+    });
+    const simulated = evaluateModelCallInvocation({
+      config: defaultConfig,
+      runtime,
+      invocation: "task_governance",
+      role: "planner",
+      assignment: { role: "planner", provider: "mock", model: "mock-balanced", reason: "fixture governance" }
+    });
+
+    commitRoleCall(runtime, reserveRoleCall(runtime, real));
+    commitRoleCall(runtime, reserveRoleCall(runtime, simulated));
+
+    expect(runtime.strongAgentCallsUsed).toBe(2);
+    expect(runtime.realStrongAgentCallsUsed).toBe(1);
+    expect(runtime.simulatedStrongAgentCallsUsed).toBe(1);
   });
 
   it("blocks role-budgeted strong calls when the global pool is exhausted", () => {

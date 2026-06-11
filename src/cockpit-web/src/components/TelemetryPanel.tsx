@@ -48,7 +48,7 @@ export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetr
       <Metric label={t("telemetry.tokens")} value={compact(telemetry.totalTokens)} />
       <Metric label={t("telemetry.cache")} value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
       <Metric label={t("telemetry.agents")} value={t("telemetry.agentsValue", { done: telemetry.completed, waiting: telemetry.waiting })} />
-      <Metric label="budget calls" value={`real ${telemetry.realBudgetDecisions} / sim ${telemetry.simulatedBudgetDecisions}`} />
+      <Metric label="strong calls" value={`real ${telemetry.realStrongAgentCallsUsed} / sim ${telemetry.simulatedStrongAgentCallsUsed}`} />
       <Metric label={t("telemetry.latency")} value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
       <Metric label={t("telemetry.risk")} value={telemetry.latestRiskLevel ?? "-"} />
       {telemetry.roleCosts?.length ? (

@@ -146,7 +146,19 @@ function extractClaudeEvidencePackets(input: ExternalAgentEvidenceInput): Eviden
   const review = reviewFromPayload(input.normalized.payload);
   if (review) packets.push(buildReviewEvidence(review, artifactRefFromPayload(input.normalized.payload, ["reviewRef", "artifactRef"])));
   const judgment = judgmentFromPayload(input.normalized.payload);
-  if (judgment) packets.push(buildJudgeEvidence(judgment, artifactRefFromPayload(input.normalized.payload, ["decisionRef", "judgeRef", "artifactRef"])));
+  if (judgment) {
+    const packet = buildJudgeEvidence(judgment, artifactRefFromPayload(input.normalized.payload, ["decisionRef", "judgeRef", "artifactRef"]));
+    for (const issueId of judgment.unresolvedIssueIds ?? []) packet.supportingArtifacts.push(`debate_issue:${issueId}`);
+    packet.supportingArtifacts = [...new Set(packet.supportingArtifacts)];
+    if (judgment.unresolvedIssueIds?.length) {
+      packet.riskSignals.push(`Unresolved debate issues: ${judgment.unresolvedIssueIds.join(", ")}`);
+      packet.modelVisibleText = [
+        packet.modelVisibleText,
+        `Unresolved Issue Refs: ${judgment.unresolvedIssueIds.map((id) => `debate_issue:${id}`).join(", ")}`
+      ].join("\n");
+    }
+    packets.push(packet);
+  }
   return packets;
 }
 

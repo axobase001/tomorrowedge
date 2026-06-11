@@ -3,7 +3,7 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 export type ExternalAgentTransport = "mcp";
 export type ExternalAgentTrustLevel = "low" | "medium" | "high" | "owner";
 export type ExternalAgentAdapter = "generic" | "codex" | "claude_code";
-export type ExternalAgentResponseMode = "json" | "text" | "mixed";
+export type ExternalAgentResponseMode = "json" | "json_block" | "text" | "mixed";
 export type ExternalAgentWorkingTreeMode = "read_only" | "patch_proposal" | "full_access";
 export type ExternalAgentNormalizationStrictness = "off" | "warn" | "strict";
 

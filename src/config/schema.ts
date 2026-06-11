@@ -55,7 +55,7 @@ export const externalAgentConfigSchema = z.object({
   name: z.string().optional(),
   transport: externalAgentTransportSchema.default("mcp"),
   adapter: z.enum(["generic", "codex", "claude_code"]).optional(),
-  responseMode: z.enum(["json", "text", "mixed"]).default("mixed"),
+  responseMode: z.enum(["json", "json_block", "text", "mixed"]).default("mixed"),
   strictJson: z.boolean().default(false),
   workingTreeMode: z.enum(["read_only", "patch_proposal", "full_access"]).default("patch_proposal"),
   normalizationStrictness: z.enum(["off", "warn", "strict"]).default("warn"),
