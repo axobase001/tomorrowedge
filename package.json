@@ -1,5 +1,5 @@
 {
-  "name": "tomorrowedge",
+  "name": "@axobase001/tomorrowedge",
   "version": "1.4.2",
   "description": "A contract-first, self-iterating orchestration GUI/runtime for multi-model, multi-agent coding workflows.",
   "type": "module",
@@ -77,6 +77,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/axobase001/tomorrowedge.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "bugs": {
     "url": "https://github.com/axobase001/tomorrowedge/issues"

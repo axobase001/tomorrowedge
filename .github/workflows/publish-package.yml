@@ -1,0 +1,47 @@
+name: Publish GitHub Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version to publish"
+        required: false
+        default: "1.4.2"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish npm package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@axobase001"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build package artifacts
+        run: |
+          npm run build
+          npm run web:build
+
+      - name: Verify package contents
+        run: npm run pack:dry:strict
+
+      - name: Publish to GitHub Packages
+        run: npm publish --registry=https://npm.pkg.github.com --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
