@@ -8,6 +8,7 @@ import { evidenceFromRun } from "../core/verifier/evidenceMatcher.js";
 import { finalizePostApprovalTrace } from "../core/traces/postApprovalFinalizer.js";
 import { makeId } from "../utils/ids.js";
 import type { CockpitApprovalIntent } from "./contracts.js";
+import { resolveCockpitShellCommand } from "./verificationCommand.js";
 
 export type CockpitApprovalExecutionResult = {
   state: AgentGraphState;
@@ -129,7 +130,7 @@ function rejectPatch(state: AgentGraphState, feedback?: string): CockpitApproval
 
 async function approveShell(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
   if (!state.access.shellAllowed) return { state, message: accessBlockedMessage(state, "shell") };
-  const command = state.plan?.verificationCommands?.[0];
+  const command = resolveCockpitShellCommand(state);
   if (!command) return { state, message: "No verification command is available." };
   if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification." };
 
@@ -176,7 +177,7 @@ async function approveShell(cwd: string, state: AgentGraphState): Promise<Cockpi
 }
 
 function rejectShell(state: AgentGraphState, feedback?: string): CockpitApprovalExecutionResult {
-  const command = state.plan?.verificationCommands?.[0] ?? "verification command";
+  const command = resolveCockpitShellCommand(state) ?? "verification command";
   const next = withAbortSummary({
     ...state,
     approvals: { ...state.approvals, shellApproved: false },
