@@ -115,8 +115,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.4.2`。
+当前版本：`1.4.3`。
 
+- `1.4.3` clears the older experiment/fixture issue queue: error-loop experiments now support explicit baseline aliases (`direct`, `reflection_only`, `preference_feedback`, `error_memory`), the deterministic fixture catalog covers wrong-API / wrong-file / hidden-invariant traps, and `tedge experiment dashboard` builds an offline cohort dashboard from experiment bundles.
 - `1.4.2` polishes the 1.4.1 alpha candidate: fixture-mode is now clearly bounded as a deterministic sample workflow provider, stored strategy memory normalizes failing-test repairs as `bugfix` with a secondary `test_failure` signal, cockpit RoleGraph state comes from authoritative execution nodes, summarize TaskGraph nodes link final summary / trace-completeness / objective-trace artifacts, and targeted test groups cover integration, UI, memory, core, and adaptive runtime checks.
 - `1.4.1` hardens the Adaptive Orchestration Runtime: patch workflows dispatch from RoleGraph-ready and TaskGraph-ready intersections, the summarizer is an executable graph node, `design_patch` / high-risk `risk_map` / review / judge / test nodes retain artifact and EvidencePacket refs, approval-blocked trace completeness is classified separately from workflow result, budget telemetry separates committed real strong-agent calls from simulated governance calls, and deterministic benchmarks include reproducibility metadata without claiming hidden-test, cost, or winner evidence.
 - `1.4.0` introduces the Adaptive Orchestration Runtime: validated TaskGraphs on plans, RoleGraph-gated phased execution, task-node status events, evidence dependency gates, candidate-scoped Debate Protocol v2 resolution, trace-level policy counterfactual replay/tournament events, external agent adapters for generic/Codex/Claude Code outputs, external retry/evidence extraction, and a unified model-invocation BudgetGate for planner/governance/live/debate calls.
@@ -578,7 +579,13 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.4.2`.
+Current version: `1.4.3`.
+
+`1.4.3` clears the older experiment/fixture issue queue: error-loop experiments
+now support explicit baseline aliases (`direct`, `reflection_only`,
+`preference_feedback`, `error_memory`), the deterministic fixture catalog covers
+wrong-API / wrong-file / hidden-invariant traps, and `tedge experiment
+dashboard` builds an offline cohort dashboard from experiment bundles.
 
 `1.4.2` polishes the 1.4.1 alpha candidate: fixture-mode is now clearly bounded
 as a deterministic sample workflow provider, stored strategy memory normalizes

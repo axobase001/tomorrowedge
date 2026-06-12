@@ -7,6 +7,26 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-12
+
+1.4.3 clears the older experiment and fixture issue queue by making baseline
+comparison modes explicit, expanding deterministic fixture coverage, and adding
+an offline cohort dashboard for error-loop experiment bundles.
+
+### Added
+
+- `tedge experiment error-loop` now accepts first-class baseline aliases:
+  `direct`, `reflection_only`, `preference_feedback`, and `error_memory`.
+  Exported trials, retrieval decisions, manifests, and reports preserve the
+  requested baseline mode alongside the normalized ablation arm.
+- The deterministic experiment fixture catalog now includes explicit
+  wrong-API, wrong-file, and hidden-invariant traps, in addition to existing
+  cross-language, React/UI, state-machine, and flaky-validator scenarios.
+- `tedge experiment dashboard --input-dir <bundle>` builds a local HTML cohort
+  dashboard and `dashboard_summary.json` from an error-loop experiment bundle,
+  showing baseline mappings, normalized ablations, cohort pass rates, recovery
+  attempts, transfer splits, and insufficient-data flags.
+
 ## [1.4.2] - 2026-06-11
 
 1.4.2 polishes the 1.4.1 alpha candidate by tightening fixture-mode boundaries,

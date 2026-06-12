@@ -1,6 +1,6 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "A contract-first, self-iterating orchestration GUI/runtime for multi-model, multi-agent coding workflows.",
   "type": "module",
   "bin": {
