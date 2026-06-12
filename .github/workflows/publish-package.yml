@@ -6,7 +6,7 @@ on:
       version:
         description: "Package version to publish"
         required: false
-        default: "1.4.2"
+        default: "1.4.3"
   release:
     types: [published]
 
