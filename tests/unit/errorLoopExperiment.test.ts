@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { experimentFixtureCatalog } from "../../src/core/eval/experimentFixtures.js";
 import { runErrorLoopExperiment } from "../../src/core/eval/errorLoopExperiment.js";
 
 describe("error-loop experiment export", () => {
@@ -111,6 +112,53 @@ describe("error-loop experiment export", () => {
     }
   });
 
+  it("supports baseline mode aliases for direct, reflection-only, preference feedback, and error memory experiments", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-error-loop-baseline-modes-"));
+    try {
+      const requestedModes = ["direct", "reflection_only", "preference_feedback", "error_memory"] as const;
+      const result = await runErrorLoopExperiment(cwd, {
+        tasks: ["js-off-by-one-train"],
+        ablations: [...requestedModes],
+        repetitions: 1,
+        outputDir: "baselines"
+      });
+      const manifest = JSON.parse(await readFile(result.manifestPath, "utf8")) as {
+        requestedModes: string[];
+        ablations: string[];
+        baselineModeMap: Record<string, string>;
+        modeSelections: Array<{ requestedMode: string; baselineMode: string | null; ablation: string }>;
+      };
+      const trialRows = (await readFile(result.trialsPath, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { requestedMode: string; baselineMode: string | null; ablation: string });
+      const retrievalRows = (await readFile(result.retrievalDecisionsPath, "utf8")).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { requestedMode: string; baselineMode: string | null; ablation: string });
+      const report = await readFile(result.reportPath, "utf8");
+
+      expect(manifest.requestedModes).toEqual([...requestedModes]);
+      expect(manifest.ablations).toEqual(["memory_off", "success_memory_only", "retrieve_only", "memory_on"]);
+      expect(manifest.baselineModeMap).toMatchObject({
+        direct: "memory_off",
+        reflection_only: "success_memory_only",
+        preference_feedback: "retrieve_only",
+        error_memory: "memory_on"
+      });
+      expect(manifest.modeSelections).toEqual([
+        { requestedMode: "direct", baselineMode: "direct", ablation: "memory_off" },
+        { requestedMode: "reflection_only", baselineMode: "reflection_only", ablation: "success_memory_only" },
+        { requestedMode: "preference_feedback", baselineMode: "preference_feedback", ablation: "retrieve_only" },
+        { requestedMode: "error_memory", baselineMode: "error_memory", ablation: "memory_on" }
+      ]);
+      expect(trialRows.map((row) => row.requestedMode)).toEqual([...requestedModes]);
+      expect(trialRows.find((row) => row.requestedMode === "direct")?.ablation).toBe("memory_off");
+      expect(retrievalRows.find((row) => row.requestedMode === "preference_feedback")?.ablation).toBe("retrieve_only");
+      expect(report).toContain("Baseline Modes");
+      expect(report).toContain("direct -> memory_off");
+      expect(report).toContain("reflection_only -> success_memory_only");
+      expect(report).toContain("preference_feedback -> retrieve_only");
+      expect(report).toContain("error_memory -> memory_on");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("runs catalog fixture splits and reports transfer plus validator uncertainty metadata", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-error-loop-catalog-"));
     try {
@@ -130,5 +178,29 @@ describe("error-loop experiment export", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("catalog covers error traps, cross-language transfer, UI transfer, state-machine transfer, and flaky validators", () => {
+    const byId = new Map(experimentFixtureCatalog.map((fixture) => [fixture.id, fixture]));
+    const latentFailureTypes = new Set(experimentFixtureCatalog.map((fixture) => fixture.latentFailureType));
+    const surfaces = new Set(experimentFixtureCatalog.map((fixture) => fixture.surface));
+    const languages = new Set(experimentFixtureCatalog.map((fixture) => fixture.language));
+
+    expect([...latentFailureTypes]).toEqual(expect.arrayContaining([
+      "off_by_one",
+      "wrong_api",
+      "wrong_file",
+      "hidden_invariant",
+      "async_state_transition",
+      "invalid_terminal_transition",
+      "flaky_result"
+    ]));
+    expect([...languages]).toEqual(expect.arrayContaining(["javascript", "python", "typescript", "typescript-react"]));
+    expect([...surfaces]).toEqual(expect.arrayContaining(["unit", "ui", "state_machine", "flaky"]));
+    expect(byId.get("python-off-by-one-transfer")?.split).toBe("transfer");
+    expect(byId.get("react-async-ui-transfer")?.surface).toBe("ui");
+    expect(byId.get("state-machine-transfer")?.surface).toBe("state_machine");
+    expect(byId.get("flaky-validator-validation")?.surface).toBe("flaky");
+    expect(experimentFixtureCatalog.every((fixture) => fixture.evaluatorOnly.hiddenValidators.length > 0)).toBe(true);
   });
 });

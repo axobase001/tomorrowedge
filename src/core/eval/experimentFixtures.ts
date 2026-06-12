@@ -43,6 +43,63 @@ export const experimentFixtureCatalog: ExperimentFixtureMetadata[] = [
     }
   },
   {
+    id: "js-wrong-api-validation",
+    task: "repair the JavaScript helper that calls the wrong public API",
+    split: "validation",
+    taskFamily: "api-contract",
+    latentFailureType: "wrong_api",
+    language: "javascript",
+    surface: "unit",
+    modelVisible: {
+      prompt: "Fix the helper so it calls the intended public API without changing the API surface.",
+      visibleValidators: ["npm test"],
+      taxonomy: ["api", "contract", "wrong_api"]
+    },
+    evaluatorOnly: {
+      hiddenValidators: ["hidden: correct API invocation and call-order invariant"],
+      leakageTokens: ["WRONG_API_ORACLE", "answer:call-normalize-input"],
+      notes: "Exact target API name and call-order oracle are evaluator-only."
+    }
+  },
+  {
+    id: "ts-wrong-file-train",
+    task: "fix the TypeScript regression without editing the unrelated module",
+    split: "train",
+    taskFamily: "file-locality",
+    latentFailureType: "wrong_file",
+    language: "typescript",
+    surface: "unit",
+    modelVisible: {
+      prompt: "Fix the failing TypeScript regression while keeping unrelated modules untouched.",
+      visibleValidators: ["npm test"],
+      taxonomy: ["file_locality", "wrong_file", "regression"]
+    },
+    evaluatorOnly: {
+      hiddenValidators: ["hidden: unrelated module diff must remain empty"],
+      leakageTokens: ["WRONG_FILE_ORACLE", "answer:edit-parser-not-renderer"],
+      notes: "The exact forbidden file and locality oracle are evaluator-only."
+    }
+  },
+  {
+    id: "js-hidden-invariant-transfer",
+    task: "repair the JavaScript workflow while preserving the hidden invariant",
+    split: "transfer",
+    taskFamily: "hidden-invariant",
+    latentFailureType: "hidden_invariant",
+    language: "javascript",
+    surface: "unit",
+    modelVisible: {
+      prompt: "Fix the visible workflow failure without weakening existing behavior.",
+      visibleValidators: ["npm test"],
+      taxonomy: ["invariant", "transfer", "hidden_validator"]
+    },
+    evaluatorOnly: {
+      hiddenValidators: ["hidden: legacy invariant remains true after the visible fix"],
+      leakageTokens: ["HIDDEN_INVARIANT_ORACLE", "answer:preserve-legacy-normalization"],
+      notes: "The invariant name and oracle are evaluator-only."
+    }
+  },
+  {
     id: "python-off-by-one-transfer",
     task: "repair the Python range aggregation transfer task",
     split: "transfer",

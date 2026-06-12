@@ -19,6 +19,12 @@ export type ErrorLoopAblation =
   | "success_memory_only"
   | "failure_memory_only"
   | "random_memory_control";
+export type ErrorLoopBaselineMode =
+  | "direct"
+  | "reflection_only"
+  | "preference_feedback"
+  | "error_memory";
+export type ErrorLoopMode = ErrorLoopAblation | ErrorLoopBaselineMode;
 export type MemoryUpdateReason =
   | "written"
   | "skipped_no_failure"
@@ -30,7 +36,7 @@ export type MemoryUpdateReason =
 export type ErrorLoopExperimentOptions = {
   tasks?: string[];
   repetitions?: number;
-  ablations?: ErrorLoopAblation[];
+  ablations?: ErrorLoopMode[];
   seed?: string;
   outputDir?: string;
   memoryPolicy?: MemoryRetrievalPolicyMode;
@@ -47,6 +53,8 @@ export type ErrorLoopTrial = {
   language: string;
   validatorUncertain: boolean;
   repetition: number;
+  requestedMode: ErrorLoopMode;
+  baselineMode: ErrorLoopBaselineMode | null;
   ablation: ErrorLoopAblation;
   sessionId: string;
   sessionPath: string;
@@ -146,6 +154,8 @@ type RetrievalDecisionRow = {
   schemaVersion: "error-loop-retrieval/v1";
   trialId: string;
   task: string;
+  requestedMode: ErrorLoopMode;
+  baselineMode: ErrorLoopBaselineMode | null;
   ablation: ErrorLoopAblation;
   memoryPolicy: MemoryRetrievalPolicyMode;
   selected: FailureMemoryExplanation["selected"];
@@ -173,6 +183,18 @@ type AblationSettings = {
 };
 
 const defaultTasks = defaultExperimentTasks();
+const baselineModeMap: Record<ErrorLoopBaselineMode, ErrorLoopAblation> = {
+  direct: "memory_off",
+  reflection_only: "success_memory_only",
+  preference_feedback: "retrieve_only",
+  error_memory: "memory_on"
+};
+
+type ErrorLoopModeSelection = {
+  requestedMode: ErrorLoopMode;
+  baselineMode: ErrorLoopBaselineMode | null;
+  ablation: ErrorLoopAblation;
+};
 
 export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExperimentOptions = {}): Promise<ErrorLoopExperimentResult> {
   const id = makeId("error_loop");
@@ -180,7 +202,9 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   const outputDir = path.resolve(cwd, options.outputDir ?? path.join(".tomorrowedge", "experiments", "error-loop", id));
   const tasks = normalizeTasks(options.tasks);
   const repetitions = clampPositiveInt(options.repetitions ?? 1, 1, 20);
-  const ablations = normalizeAblations(options.ablations);
+  const modeSelections = normalizeExperimentModes(options.ablations);
+  const requestedModes = modeSelections.map((selection) => selection.requestedMode);
+  const ablations = [...new Set(modeSelections.map((selection) => selection.ablation))];
   const memoryPolicy = options.memoryPolicy ?? defaultConfig.strategy_memory.policy;
   const trials: ErrorLoopTrial[] = [];
   const memoryRecords: FailureMemoryRecord[] = [];
@@ -191,7 +215,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   await mkdir(path.join(outputDir, "workspaces"), { recursive: true });
 
   let index = 0;
-  for (const ablation of ablations) {
+  for (const modeSelection of modeSelections) {
     for (let repetition = 1; repetition <= repetitions; repetition += 1) {
       for (const task of tasks) {
         index += 1;
@@ -203,7 +227,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
           task: fixture.task,
           fixture,
           repetition,
-          ablation,
+          modeSelection,
           memoryPolicy
         });
         trials.push(trial.trial);
@@ -243,7 +267,10 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
       };
     }),
     repetitions,
+    requestedModes,
     ablations,
+    baselineModeMap,
+    modeSelections,
     ablationSettings: Object.fromEntries(ablations.map((ablation) => [ablation, ablationSettings(ablation)])),
     memoryPolicy,
     runtime: {
@@ -274,7 +301,7 @@ export async function runErrorLoopExperiment(cwd: string, options: ErrorLoopExpe
   await writeFile(memoryRecordsPath, jsonl(memoryExports), "utf8");
   await writeFile(retrievalDecisionsPath, jsonl(retrievalDecisions), "utf8");
   await writeFile(cohortMetricsPath, `${JSON.stringify(metrics.cohortMetrics, null, 2)}\n`, "utf8");
-  await writeFile(reportPath, renderErrorLoopReport({ id, createdAt, tasks, repetitions, ablations, memoryPolicy, metrics, trials }), "utf8");
+  await writeFile(reportPath, renderErrorLoopReport({ id, createdAt, tasks, repetitions, requestedModes, modeSelections, ablations, memoryPolicy, metrics, trials }), "utf8");
 
   return {
     schemaVersion: "error-loop-experiment/v1",
@@ -298,6 +325,8 @@ export function renderErrorLoopReport(input: {
   createdAt: string;
   tasks: string[];
   repetitions: number;
+  requestedModes: ErrorLoopMode[];
+  modeSelections: ErrorLoopModeSelection[];
   ablations: ErrorLoopAblation[];
   memoryPolicy: MemoryRetrievalPolicyMode;
   metrics: ErrorLoopMetrics;
@@ -306,6 +335,10 @@ export function renderErrorLoopReport(input: {
   const skippedRows = Object.entries(input.metrics.memorySkipped)
     .filter(([, count]) => count > 0)
     .map(([reason, count]) => `- ${reason}: ${count}`)
+    .join("\n") || "- none";
+  const baselineRows = input.modeSelections
+    .filter((selection) => selection.baselineMode)
+    .map((selection) => `- ${selection.requestedMode} -> ${selection.ablation}`)
     .join("\n") || "- none";
   return `# Error-Loop Experiment ${input.id}
 
@@ -318,8 +351,13 @@ memory and retrieval behavior. It is not a live provider benchmark.
 
 - Tasks: ${input.tasks.map((task) => `\`${redactText(task)}\``).join(", ")}
 - Repetitions: ${input.repetitions}
+- Requested modes: ${input.requestedModes.join(", ")}
 - Ablations: ${input.ablations.join(", ")}
 - Memory policy: ${input.memoryPolicy}
+
+## Baseline Modes
+
+${baselineRows}
 
 ## Metrics
 
@@ -357,9 +395,9 @@ ${skippedRows}
 
 ## Trials
 
-| Trial | Split | Family | Ablation | Result | Memory update | Retrieval | Policy | Recovery | Validation | Prediction | Failure class |
-| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
-${input.trials.map((trial) => `| ${trial.trialId} | ${trial.taskSplit} | ${trial.taskFamily} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.recoveryAttemptsAfterFirstFailure} | ${trial.validationPassed ? "passed" : trial.validationFailed ? "failed" : "not_run"} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
+| Trial | Split | Family | Requested mode | Ablation | Result | Memory update | Retrieval | Policy | Recovery | Validation | Prediction | Failure class |
+| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
+${input.trials.map((trial) => `| ${trial.trialId} | ${trial.taskSplit} | ${trial.taskFamily} | ${trial.requestedMode} | ${trial.ablation} | ${trial.result} | ${trial.memoryUpdateStatus} | ${trial.retrievalSelected}/${trial.retrievalRejected} | ${trial.memoryPolicyExploit}/${trial.memoryPolicyBypass} | ${trial.recoveryAttemptsAfterFirstFailure} | ${trial.validationPassed ? "passed" : trial.validationFailed ? "failed" : "not_run"} | ${trial.predictionTotal ? `${trial.predictionMatched}/${trial.predictionTotal}` : "-"} | ${trial.failureClass ?? "-"} |`).join("\n")}
 `;
 }
 
@@ -369,12 +407,12 @@ async function runTrial(input: {
   task: string;
   fixture: ExperimentFixtureMetadata;
   repetition: number;
-  ablation: ErrorLoopAblation;
+  modeSelection: ErrorLoopModeSelection;
   memoryPolicy: MemoryRetrievalPolicyMode;
 }): Promise<{ trial: ErrorLoopTrial; memoryRecords: FailureMemoryRecord[]; retrievalDecision: RetrievalDecisionRow }> {
   const trialCwd = path.join(input.outputDir, "workspaces", input.trialId);
   await mkdir(trialCwd, { recursive: true });
-  const settings = ablationSettings(input.ablation);
+  const settings = ablationSettings(input.modeSelection.ablation);
   const config = {
     ...defaultConfig,
     strategy_memory: {
@@ -426,7 +464,9 @@ async function runTrial(input: {
     schemaVersion: "error-loop-retrieval/v1",
     trialId: input.trialId,
     task: redactText(input.task),
-    ablation: input.ablation,
+    requestedMode: input.modeSelection.requestedMode,
+    baselineMode: input.modeSelection.baselineMode,
+    ablation: input.modeSelection.ablation,
     memoryPolicy: settings.memoryPolicyOverride ?? input.memoryPolicy,
     selected: retrieval.selected,
     rejected: retrieval.rejected
@@ -447,7 +487,9 @@ async function runTrial(input: {
       language: input.fixture.language,
       validatorUncertain: input.fixture.surface === "flaky" || firstFailure?.outcomeMismatchType === "flaky_result",
       repetition: input.repetition,
-      ablation: input.ablation,
+      requestedMode: input.modeSelection.requestedMode,
+      baselineMode: input.modeSelection.baselineMode,
+      ablation: input.modeSelection.ablation,
       sessionId: state.sessionId,
       sessionPath,
       result: state.finalSummary?.result ?? "unknown",
@@ -721,9 +763,26 @@ function normalizeTasks(tasks: string[] | undefined): string[] {
   return values.length ? values : defaultTasks;
 }
 
-function normalizeAblations(value: ErrorLoopAblation[] | undefined): ErrorLoopAblation[] {
+function normalizeExperimentModes(value: ErrorLoopMode[] | undefined): ErrorLoopModeSelection[] {
   const raw = value?.length ? value : ["memory_on"];
-  return [...new Set(raw.filter(isErrorLoopAblation))];
+  const seen = new Set<ErrorLoopMode>();
+  const selections = raw
+    .filter(isErrorLoopMode)
+    .filter((mode) => {
+      if (seen.has(mode)) return false;
+      seen.add(mode);
+      return true;
+    })
+    .map((mode) => {
+      const baselineMode = isErrorLoopBaselineMode(mode) ? mode : null;
+      const ablation: ErrorLoopAblation = baselineMode ? baselineModeMap[baselineMode] : mode as ErrorLoopAblation;
+      return {
+        requestedMode: mode,
+        baselineMode,
+        ablation
+      };
+    });
+  return selections.length ? selections : [{ requestedMode: "memory_on", baselineMode: null, ablation: "memory_on" }];
 }
 
 export function isErrorLoopAblation(value: string): value is ErrorLoopAblation {
@@ -736,6 +795,14 @@ export function isErrorLoopAblation(value: string): value is ErrorLoopAblation {
     "failure_memory_only",
     "random_memory_control"
   ].includes(value);
+}
+
+export function isErrorLoopBaselineMode(value: string): value is ErrorLoopBaselineMode {
+  return Object.prototype.hasOwnProperty.call(baselineModeMap, value);
+}
+
+export function isErrorLoopMode(value: string): value is ErrorLoopMode {
+  return isErrorLoopAblation(value) || isErrorLoopBaselineMode(value);
 }
 
 function ablationSettings(ablation: ErrorLoopAblation): AblationSettings {

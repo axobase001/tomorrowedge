@@ -1,4 +1,4 @@
-import { isErrorLoopAblation, runErrorLoopExperiment, type ErrorLoopAblation } from "../../core/eval/errorLoopExperiment.js";
+import { isErrorLoopMode, runErrorLoopExperiment, type ErrorLoopMode } from "../../core/eval/errorLoopExperiment.js";
 import type { MemoryRetrievalPolicyMode } from "../../core/memory/retrievalPolicy.js";
 
 export type ErrorLoopExperimentCliOptions = {
@@ -53,12 +53,12 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function parseAblations(value: string | undefined): ErrorLoopAblation[] | undefined {
+function parseAblations(value: string | undefined): ErrorLoopMode[] | undefined {
   if (!value?.trim()) return undefined;
   return value
     .split(",")
     .map((item) => item.trim())
-    .filter(isErrorLoopAblation);
+    .filter(isErrorLoopMode);
 }
 
 function parseMemoryPolicy(value: string | undefined): MemoryRetrievalPolicyMode | undefined {
