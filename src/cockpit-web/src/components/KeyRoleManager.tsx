@@ -10,6 +10,7 @@ import type {
 import type { Translator } from "../i18n.js";
 import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
+import { staticModelIdsForProvider, suggestedModelForProvider } from "../../../providers/staticModels.js";
 
 type KeyRoleManagerProps = {
   setupStatus?: CockpitSetupStatus;
@@ -167,7 +168,17 @@ export function KeyRoleManager({
                 try {
                   const options = await onListProviderModels(normalizedProvider);
                   setCatalogModels(options);
-                  setCatalogMessage(options.length ? t("keymgr.modelsLoaded", { count: String(options.length) }) : t("keymgr.noModelsFound"));
+                  const stale = options.some((item) => item.stale);
+                  const cached = options.some((item) => item.cached);
+                  setCatalogMessage(
+                    stale
+                      ? t("keymgr.modelsLoadedStale", { count: String(options.length) })
+                      : cached
+                        ? t("keymgr.modelsLoadedCached", { count: String(options.length) })
+                        : options.length
+                          ? t("keymgr.modelsLoaded", { count: String(options.length) })
+                          : t("keymgr.noModelsFound")
+                  );
                 } catch (error) {
                   setCatalogMessage(t("keymgr.modelsFailed", { message: error instanceof Error ? error.message : String(error) }));
                 } finally {
@@ -316,29 +327,12 @@ function defaultBaseUrlFor(provider: string): string {
 
 function suggestedModelFor(provider: string): string {
   const providerId = normalizeProviderId(provider);
-  const lookup: Record<string, string> = {
-    openrouter: "moonshotai/kimi-k2.6:free",
-    deepseek: "deepseek-chat",
-    kimi: "kimi-k2-0711-preview",
-    mimo: "mimo-v2.5-pro",
-    anthropic: "claude-opus-4.1",
-    gemini: "gemini-2.5-pro"
-  };
-  return lookup[providerId] ?? "";
+  return suggestedModelForProvider(providerId);
 }
 
 function staticModelOptionsFor(provider: string): string[] {
   const providerId = normalizeProviderId(provider);
-  const lookup: Record<string, string[]> = {
-    openrouter: ["moonshotai/kimi-k2.6:free", "qwen/qwen3-coder:free", "deepseek/deepseek-chat-v3-0324:free"],
-    deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
-    kimi: ["kimi-k2-0711-preview", "kimi-latest"],
-    mimo: ["mimo-v2.5-pro"],
-    anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
-    gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
-    openai_compatible: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.2"]
-  };
-  return lookup[providerId] ?? [];
+  return staticModelIdsForProvider(providerId);
 }
 
 function labelProvider(provider: string, externalAgents: CockpitExternalAgentOption[] = []): string {

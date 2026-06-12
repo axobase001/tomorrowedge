@@ -77,6 +77,8 @@ export type CockpitProviderModelOption = {
   isFree?: boolean;
   isLowCost?: boolean;
   tags?: string[];
+  cached?: boolean;
+  stale?: boolean;
 };
 
 export type CockpitRoleAssignmentsRequest = {

@@ -11,6 +11,7 @@ import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/provi
 import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
+import { staticModelIdsForProvider } from "../../src/providers/staticModels.js";
 
 describe("cockpit web React surface", () => {
   it("renders the geometric brand mark instead of the legacy text tile", () => {
@@ -265,6 +266,7 @@ describe("cockpit web React surface", () => {
     expect(options).toContain("gpt-4o-mini");
     expect(options).toContain("gpt-4.1-mini");
     expect(options).not.toContain("qwen/qwen3-coder:free");
+    expect(options).toEqual(expect.arrayContaining(staticModelIdsForProvider("openai_compatible")));
   });
 
   it("exposes provider models to role-level model pickers", () => {

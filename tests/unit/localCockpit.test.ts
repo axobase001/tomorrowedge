@@ -8,7 +8,7 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { markLiveRunFailed, startLocalCockpitServer } from "../../src/localCockpit/server.js";
-import { listCockpitProviderModels } from "../../src/localCockpit/setup.js";
+import { clearCockpitProviderModelCache, listCockpitProviderModels } from "../../src/localCockpit/setup.js";
 
 async function withEnvOverrides<T>(overrides: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
   const previous = new Map<string, string | undefined>();
@@ -828,6 +828,158 @@ describe("local cockpit server", () => {
       expect(models).not.toContainEqual(expect.objectContaining({ id: "qwen/qwen3-coder:free" }));
     } finally {
       globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("coalesces concurrent provider model discovery requests", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-cache-"));
+    const originalFetch = globalThis.fetch;
+    clearCockpitProviderModelCache();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return new Response(JSON.stringify({
+        data: [{ id: "deepseek-live-cached", name: "DeepSeek Live Cached" }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      await writeConfig(cwd, {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          deepseek: {
+            ...defaultConfig.providers.deepseek,
+            enabled: true,
+            base_url: "https://api.deepseek-cache.example/v1",
+            auth_header: "none"
+          }
+        }
+      });
+      const [first, second] = await Promise.all([
+        listCockpitProviderModels(cwd, "deepseek", 5),
+        listCockpitProviderModels(cwd, "deepseek", 5)
+      ]);
+
+      expect(calls).toBe(1);
+      expect(first).toContainEqual(expect.objectContaining({ id: "deepseek-live-cached", source: "catalog" }));
+      expect(second).toContainEqual(expect.objectContaining({ id: "deepseek-live-cached", cached: true }));
+    } finally {
+      clearCockpitProviderModelCache();
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses stale provider model catalogs when refresh fails", async () => {
+    await withEnvOverrides({ TOMORROWEDGE_COCKPIT_MODEL_CACHE_TTL_MS: "0" }, async () => {
+      const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-stale-"));
+      const originalFetch = globalThis.fetch;
+      clearCockpitProviderModelCache();
+      let calls = 0;
+      globalThis.fetch = (async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(JSON.stringify({
+            data: [{ id: "deepseek-live-stale", name: "DeepSeek Live Stale" }]
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        return new Response("provider outage", { status: 503 });
+      }) as typeof fetch;
+      try {
+        await writeConfig(cwd, {
+          ...defaultConfig,
+          providers: {
+            ...defaultConfig.providers,
+            deepseek: {
+              ...defaultConfig.providers.deepseek,
+              enabled: true,
+              base_url: "https://api.deepseek-stale.example/v1",
+              auth_header: "none"
+            }
+          }
+        });
+        await listCockpitProviderModels(cwd, "deepseek", 5);
+        const stale = await listCockpitProviderModels(cwd, "deepseek", 5);
+
+        expect(calls).toBe(2);
+        expect(stale).toContainEqual(expect.objectContaining({
+          id: "deepseek-live-stale",
+          cached: true,
+          stale: true
+        }));
+      } finally {
+        clearCockpitProviderModelCache();
+        globalThis.fetch = originalFetch;
+        await rm(cwd, { recursive: true, force: true });
+      }
+    });
+  });
+
+  it("rejects provider-model mismatches before saving provider keys", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-provider-mismatch-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/openai_compatible?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen/qwen3-coder:free",
+          apiKeyEnv: "TEST_KEY_PANEL_OPENAI_COMPATIBLE",
+          apiKey: "test-compatible-key"
+        })
+      });
+      const payload = await response.json() as { error: string; message: string };
+      const config = loadConfig(cwd);
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("setup_error");
+      expect(payload.message).toContain("switch provider to OpenRouter");
+      expect(config.providers.openai_compatible.model).toBe(defaultConfig.providers.openai_compatible.model);
+    } finally {
+      delete process.env.TEST_KEY_PANEL_OPENAI_COMPATIBLE;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects provider-model mismatches during first-run setup and role assignment", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-role-mismatch-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const setupResponse = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "deepseek",
+          model: "openai/gpt-5.2",
+          apiKeyEnv: "TEST_DEEPSEEK_MISMATCH",
+          apiKey: "test-deepseek-key"
+        })
+      });
+      const setupPayload = await setupResponse.json() as { error: string; message: string };
+
+      expect(setupResponse.status).toBe(400);
+      expect(setupPayload.message).toContain("does not match provider deepseek");
+
+      const roleResponse = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assignments: [
+            { role: "coder_a", provider: "deepseek", model: "openai/gpt-5.2" }
+          ]
+        })
+      });
+      const rolePayload = await roleResponse.json() as { error: string; message: string };
+
+      expect(roleResponse.status).toBe(400);
+      expect(rolePayload.error).toBe("setup_error");
+      expect(rolePayload.message).toContain("does not match provider deepseek");
+    } finally {
+      delete process.env.TEST_DEEPSEEK_MISMATCH;
+      await server.close();
       await rm(cwd, { recursive: true, force: true });
     }
   });

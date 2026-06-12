@@ -3,6 +3,7 @@ import type { CockpitProviderConnectionResult, CockpitSetupRequest, CockpitSetup
 import type { Translator } from "../i18n.js";
 import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
+import { suggestedModelForProvider } from "../../../providers/staticModels.js";
 
 type SetupWizardProps = {
   setupStatus?: CockpitSetupStatus;
@@ -151,15 +152,7 @@ function defaultBaseUrlFor(provider: string): string {
 
 function suggestedModelFor(provider: string): string {
   const providerId = normalizeProviderId(provider);
-  const lookup: Record<string, string> = {
-    openrouter: "moonshotai/kimi-k2.6:free",
-    deepseek: "deepseek-chat",
-    kimi: "kimi-k2-0711-preview",
-    mimo: "mimo-v2.5-pro",
-    anthropic: "claude-opus-4.1",
-    gemini: "gemini-2.5-pro"
-  };
-  return lookup[providerId] ?? "";
+  return suggestedModelForProvider(providerId);
 }
 
 function normalizeProviderId(provider: string): string {
