@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildErrorLoopDashboard } from "../../src/core/eval/experimentDashboard.js";
 import { experimentFixtureCatalog } from "../../src/core/eval/experimentFixtures.js";
 import { runErrorLoopExperiment } from "../../src/core/eval/errorLoopExperiment.js";
 
@@ -202,5 +203,36 @@ describe("error-loop experiment export", () => {
     expect(byId.get("state-machine-transfer")?.surface).toBe("state_machine");
     expect(byId.get("flaky-validator-validation")?.surface).toBe("flaky");
     expect(experimentFixtureCatalog.every((fixture) => fixture.evaluatorOnly.hiddenValidators.length > 0)).toBe(true);
+  });
+
+  it("builds a local cohort dashboard from an error-loop experiment bundle", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-error-loop-dashboard-"));
+    try {
+      const experiment = await runErrorLoopExperiment(cwd, {
+        tasks: ["js-off-by-one-train", "python-off-by-one-transfer"],
+        ablations: ["direct", "error_memory"],
+        repetitions: 1,
+        outputDir: "bundle"
+      });
+      const dashboard = await buildErrorLoopDashboard(cwd, {
+        inputDir: experiment.outputDir,
+        outputDir: "dashboard"
+      });
+      const summary = JSON.parse(await readFile(dashboard.summaryPath, "utf8")) as { schemaVersion: string; trialCount: number; cohortCount: number; requestedModes: string[]; bestCohorts: unknown[] };
+      const html = await readFile(dashboard.htmlPath, "utf8");
+
+      expect(dashboard.schemaVersion).toBe("error-loop-dashboard/v1");
+      expect(summary.schemaVersion).toBe("error-loop-dashboard-summary/v1");
+      expect(summary.trialCount).toBe(4);
+      expect(summary.cohortCount).toBeGreaterThan(0);
+      expect(summary.requestedModes).toEqual(["direct", "error_memory"]);
+      expect(summary.bestCohorts.length).toBeGreaterThan(0);
+      expect(html).toContain("TomorrowEdge Error-Loop Cohort Dashboard");
+      expect(html).toContain("direct");
+      expect(html).toContain("memory_off");
+      expect(html).toContain("transfer");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

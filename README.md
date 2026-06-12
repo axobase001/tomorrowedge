@@ -1093,8 +1093,10 @@ For a deterministic no-key export bundle:
 
 ```bash
 tedge experiment error-loop --tasks "fix failing test" --ablation memory_on,memory_off
+tedge experiment error-loop --ablation direct,reflection_only,preference_feedback,error_memory
 tedge experiment error-loop --ablation memory_off,success_memory_only,failure_memory_only,random_memory_control
 tedge experiment error-loop --memory-policy explore_alternative
+tedge experiment dashboard --input-dir .tomorrowedge/experiments/error-loop/<run-id>
 ```
 
 The command writes `manifest.json`, `trials.jsonl`, `memory_records.jsonl`,

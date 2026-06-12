@@ -28,7 +28,7 @@ import { githubReportCommand } from "./commands/githubReport.js";
 import { mcpAgentsCommand, mcpInvokeCommand, mcpServeCommand, mcpStatusCommand, mcpToolsCommand } from "./commands/mcp.js";
 import { askCommand, targetsCommand } from "./commands/conversation.js";
 import { recipesCommand } from "./commands/recipes.js";
-import { experimentErrorLoopCommand } from "./commands/experiment.js";
+import { experimentDashboardCommand, experimentErrorLoopCommand } from "./commands/experiment.js";
 import { skillsCandidatesCommand, skillsInspectCommand, skillsListCommand, skillsPacksCommand, skillsProposeCommand, skillsValidateCommand } from "./commands/skills.js";
 
 const program = new Command();
@@ -235,6 +235,13 @@ experiment
   .option("--seed <seed>", "recorded deterministic seed label")
   .option("--json", "print machine-readable result metadata")
   .action((options: { tasks?: string; repetitions?: string; ablation?: string; memoryPolicy?: string; outputDir?: string; seed?: string; json?: boolean }) => experimentErrorLoopCommand(cwd, options));
+experiment
+  .command("dashboard")
+  .description("Build a local HTML cohort dashboard from an error-loop experiment output directory")
+  .requiredOption("--input-dir <path>", "error-loop experiment output directory")
+  .option("--output-dir <path>", "dashboard output directory; defaults to <input-dir>/dashboard")
+  .option("--json", "print machine-readable result metadata")
+  .action((options: { inputDir?: string; outputDir?: string; json?: boolean }) => experimentDashboardCommand(cwd, options));
 
 const mcp = program.command("mcp").description("Run or inspect the experimental TomorrowEdge MCP Agent Bridge").action(() => mcpStatusCommand());
 mcp.command("serve").description("Serve TomorrowEdge MCP tools over stdio").action(() => mcpServeCommand(cwd));

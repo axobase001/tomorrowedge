@@ -9,7 +9,9 @@ tedge memory failures
 tedge memory show <failure-id>
 tedge memory explain "task description"
 tedge experiment error-loop --ablation memory_on,memory_off
+tedge experiment error-loop --ablation direct,reflection_only,preference_feedback,error_memory
 tedge experiment error-loop --ablation memory_off,success_memory_only,failure_memory_only,random_memory_control
+tedge experiment dashboard --input-dir .tomorrowedge/experiments/error-loop/<run-id>
 ```
 
 Each failure record keeps a task fingerprint, a short redacted goal preview,
@@ -39,6 +41,12 @@ research-friendly bundle:
 - `metrics.json`
 - `report.md`
 
+`tedge experiment dashboard --input-dir <bundle>` builds a local
+`dashboard/index.html` plus `dashboard_summary.json` from the same bundle. It is
+an offline cohort dashboard for comparing requested baseline modes, normalized
+ablations, train/validation/transfer splits, pass rates, recovery attempts, and
+insufficient-data flags. It does not claim live provider leaderboard results.
+
 Each trial includes `memoryUpdateStatus`. This field separates workflow failure
 or repair success from actual memory writes:
 
@@ -54,6 +62,11 @@ Reports must not claim the system learned from a failure unless
 audited.
 
 The harness supports explicit ablation arms:
+
+- `direct`: baseline alias for `memory_off`.
+- `reflection_only`: baseline alias for `success_memory_only`.
+- `preference_feedback`: baseline alias for `retrieve_only`.
+- `error_memory`: baseline alias for `memory_on`.
 
 - `memory_on`: write, retrieve, and inject failure memory plus success-memory
   route/test hints.

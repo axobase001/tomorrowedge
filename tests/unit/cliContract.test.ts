@@ -112,4 +112,49 @@ describe("CLI contract", () => {
       await rm(outputRoot, { recursive: true, force: true });
     }
   }, 45_000);
+
+  it("builds an error-loop cohort dashboard from the CLI", async () => {
+    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-cli-error-loop-dashboard-"));
+    const dashboardRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-cli-error-loop-dashboard-out-"));
+    try {
+      await execa("tsx", [
+        "src/cli/index.ts",
+        "experiment",
+        "error-loop",
+        "--tasks",
+        "js-off-by-one-train",
+        "--ablation",
+        "direct,error_memory",
+        "--output-dir",
+        outputRoot
+      ], {
+        cwd: process.cwd(),
+        preferLocal: true
+      });
+      const dashboard = await execa("tsx", [
+        "src/cli/index.ts",
+        "experiment",
+        "dashboard",
+        "--input-dir",
+        outputRoot,
+        "--output-dir",
+        dashboardRoot,
+        "--json"
+      ], {
+        cwd: process.cwd(),
+        preferLocal: true
+      });
+      const payload = JSON.parse(dashboard.stdout) as { schemaVersion: string; htmlPath: string; summaryPath: string; trialCount: number; cohortCount: number; requestedModes: string[] };
+
+      expect(payload.schemaVersion).toBe("error-loop-dashboard/v1");
+      expect(payload.htmlPath).toContain(dashboardRoot);
+      expect(payload.summaryPath).toContain(dashboardRoot);
+      expect(payload.trialCount).toBe(2);
+      expect(payload.cohortCount).toBeGreaterThan(0);
+      expect(payload.requestedModes).toEqual(["direct", "error_memory"]);
+    } finally {
+      await rm(outputRoot, { recursive: true, force: true });
+      await rm(dashboardRoot, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

@@ -1,4 +1,5 @@
 import { isErrorLoopMode, runErrorLoopExperiment, type ErrorLoopMode } from "../../core/eval/errorLoopExperiment.js";
+import { buildErrorLoopDashboard } from "../../core/eval/experimentDashboard.js";
 import type { MemoryRetrievalPolicyMode } from "../../core/memory/retrievalPolicy.js";
 
 export type ErrorLoopExperimentCliOptions = {
@@ -8,6 +9,12 @@ export type ErrorLoopExperimentCliOptions = {
   outputDir?: string;
   seed?: string;
   memoryPolicy?: string;
+  json?: boolean;
+};
+
+export type ErrorLoopDashboardCliOptions = {
+  inputDir?: string;
+  outputDir?: string;
   json?: boolean;
 };
 
@@ -25,6 +32,27 @@ export async function experimentErrorLoopCommand(cwd: string, options: ErrorLoop
     return;
   }
   process.stdout.write(renderExperimentSummary(result));
+}
+
+export async function experimentDashboardCommand(cwd: string, options: ErrorLoopDashboardCliOptions = {}): Promise<void> {
+  if (!options.inputDir?.trim()) {
+    throw new Error("experiment dashboard requires --input-dir <error-loop-output-dir>");
+  }
+  const result = await buildErrorLoopDashboard(cwd, {
+    inputDir: options.inputDir,
+    outputDir: options.outputDir
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+  process.stdout.write([
+    `Error-loop dashboard: ${result.outputDir}`,
+    `HTML: ${result.htmlPath}`,
+    `Summary: ${result.summaryPath}`,
+    `Trials: ${result.trialCount}`,
+    `Cohorts: ${result.cohortCount}`
+  ].join("\n") + "\n");
 }
 
 function renderExperimentSummary(result: Awaited<ReturnType<typeof runErrorLoopExperiment>>): string {
