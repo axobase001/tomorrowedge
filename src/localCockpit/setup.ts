@@ -428,7 +428,7 @@ function staticModelOptionsFor(providerId: string): CockpitProviderModelOption[]
     anthropic: ["claude-opus-4.1", "claude-sonnet-4.5"],
     gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
     ollama: ["llama3.2", "qwen2.5-coder", "deepseek-r1"],
-    openai_compatible: ["gpt-4o-mini", "gpt-5.2", "qwen/qwen3-coder:free"]
+    openai_compatible: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.2"]
   };
   return (options[providerId] ?? []).map((id) => ({
     id,
