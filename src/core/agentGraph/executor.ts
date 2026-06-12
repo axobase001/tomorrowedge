@@ -858,6 +858,7 @@ async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: Ag
     await runReviewAndJudgePhase(runtime, state);
     await runPostJudgeAdvisoryIfNeeded(runtime, state);
     await runPatchApplicationPhase(runtime, state);
+    if (state.workflowBlockedReason) return;
     await runVerificationAndRepairPhase(runtime, state);
     return;
   }
@@ -1439,6 +1440,7 @@ async function runLiveAdvisoryPhase(runtime: OfflineGraphRuntime, state: AgentGr
 
 async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   const { access, cwd, ledger, options, router } = runtime;
+  if (stopBeforePatchApplication(runtime, state)) return;
   if (!enforceEvidenceGate(state, ledger, validateEvidenceDependencies({
     role: "runner",
     candidates: state.candidates,
@@ -1510,6 +1512,28 @@ async function runPatchApplicationPhase(runtime: OfflineGraphRuntime, state: Age
       recordRoleNodeExecutionResult(state, ledger, "runner", "blocked", reason, [], reason, "patch_runner");
     }
   }
+}
+
+function stopBeforePatchApplication(runtime: OfflineGraphRuntime, state: AgentGraphState): boolean {
+  const decision = state.judge?.decision;
+  if (!decision || decision === "select") return false;
+  const reason = decision === "request_revision"
+    ? `Judge requested revision before patch application: ${state.judge?.reason ?? "No candidate was approved for automatic application."}`
+    : decision === "ask_user"
+      ? `Judge requires user decision before patch application: ${state.judge?.reason ?? "A user decision is required before applying changes."}`
+      : `Judge aborted patch application: ${state.judge?.reason ?? "Patch application was aborted."}`;
+  state.workflowBlockedReason = reason;
+  if (state.roleGraphExecution) {
+    recordRoleNodeExecutionResult(state, runtime.ledger, "runner", "skipped", reason, [], undefined, "patch_runner");
+  }
+  runtime.ledger.append({
+    type: "workflow_stop_reason",
+    phase: "judge",
+    role: "judge",
+    reason,
+    result: "aborted"
+  });
+  return true;
 }
 
 async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
@@ -1942,6 +1966,34 @@ async function finalizeBlockedByContract(runtime: OfflineGraphRuntime, state: Ag
 
 async function finalizeBlockedByEvidenceGate(runtime: OfflineGraphRuntime, state: AgentGraphState, reason: string): Promise<AgentGraphState> {
   const { ledger } = runtime;
+  if (state.judge?.decision === "request_revision" || state.judge?.decision === "ask_user" || state.judge?.decision === "abort") {
+    const userReply = state.judge.decision === "request_revision"
+      ? `I stopped before applying changes because review and judgment did not clear any patch candidate for safe automatic application. ${state.judge.reason}`
+      : state.judge.decision === "ask_user"
+        ? `I stopped before applying changes because the judge requires a user decision. ${state.judge.reason}`
+        : `I stopped before applying changes because the judge aborted the workflow. ${state.judge.reason}`;
+    const risksRemaining = state.judge.decision === "ask_user"
+      ? ["A user decision is still required before any patch can be applied."]
+      : ["No patch candidate was approved for application."];
+    state.finalSummary = {
+      task: state.goal,
+      result: "aborted",
+      userReply,
+      userReplySource: "blocked",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: [
+        reason,
+        state.judge.reason,
+        ...state.evidencePackets.map((packet) => packet.summary)
+      ],
+      risksRemaining,
+      suggestedCommitMessage: "chore: no code changes"
+    };
+    await appendFinalSummaryEvents(state, ledger, runtime);
+    await releaseExternalAgentProcessPool();
+    return state;
+  }
   state.finalSummary = {
     task: state.goal,
     result: "aborted",

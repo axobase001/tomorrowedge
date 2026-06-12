@@ -24,7 +24,7 @@ describe("adaptive orchestration runtime", () => {
     expect(eventTypes).toEqual(expect.arrayContaining(["task_graph", "role_node_result", "debate_move", "debate_resolution"]));
   });
 
-  it("blocks runner execution when judge did not select a candidate", async () => {
+  it("stops before runner mutation when judge did not select a candidate", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
@@ -46,10 +46,11 @@ describe("adaptive orchestration runtime", () => {
     const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
 
     expect(state.finalSummary?.result).toBe("aborted");
+    expect(state.finalSummary?.userReply).toContain("did not clear any patch candidate");
     expect(state.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "evidence_gap", role: "runner", blocking: true }),
-      expect.objectContaining({ type: "workflow_stop_reason", role: "runner" })
+      expect.objectContaining({ type: "workflow_stop_reason", role: "judge", reason: expect.stringContaining("Judge requested revision before patch application") })
     ]));
+    expect(state.events.some((event) => event.type === "evidence_gap" && event.role === "runner")).toBe(false);
     expect(state.events.some((event) => event.type === "patch_apply" && event.applied)).toBe(false);
   });
 
