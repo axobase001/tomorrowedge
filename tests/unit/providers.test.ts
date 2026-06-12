@@ -359,8 +359,60 @@ describe("provider registry", () => {
     });
 
     expect(calls).toBe(0);
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("missing_key");
+    expect(result.reason).toBe("missing_key");
+    expect(result.apiKeyEnv).toBe("OPENROUTER_MISSING_TEST_KEY");
     expect(result.detail).toContain("missing env");
+  });
+
+  it("classifies invalid authentication responses for user-facing guidance", async () => {
+    vi.stubEnv("OPENROUTER_TEST_KEY", "test-key");
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({
+      error: { message: "Invalid Authentication", type: "invalid_authentication_error" }
+    }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    const result = await testProviderConnection("openrouter", {
+      enabled: true,
+      api_key_env: "OPENROUTER_TEST_KEY",
+      base_url: "https://openrouter.ai/api/v1",
+      model: "moonshotai/kimi-k2.6:free",
+      api_format: "openai_chat",
+      auth_header: "bearer",
+      extra_headers: {}
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toBe("invalid_authentication");
+    expect(result.httpStatus).toBe(401);
+    expect(result.rawDetail).toContain("Invalid Authentication");
+  });
+
+  it("classifies invalid model responses for user-facing guidance", async () => {
+    vi.stubEnv("OPENAI_TEST_KEY", "test-key");
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({
+      error: { message: "invalid model ID" }
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    const result = await testProviderConnection("openai_compatible", {
+      enabled: true,
+      api_key_env: "OPENAI_TEST_KEY",
+      base_url: "https://api.openai.com/v1",
+      model: "bad-model-id",
+      api_format: "openai_chat",
+      auth_header: "bearer",
+      extra_headers: {}
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toBe("invalid_model");
+    expect(result.testedModel).toBe("bad-model-id");
+    expect(result.rawDetail).toContain("invalid model ID");
   });
 
   it("tests Anthropic and Gemini connectivity with native selected-model smoke endpoints", async () => {

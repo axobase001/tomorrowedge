@@ -2,11 +2,27 @@ import type { ProviderAuthHeader, ProviderConfig, TomorrowEdgeConfig } from "../
 
 export type ProviderConnectionResult = {
   id: string;
-  status: "ok" | "failed" | "skipped";
+  status: "ok" | "failed" | "skipped" | "missing_key";
+  reason?:
+    | "provider_disabled"
+    | "offline_provider"
+    | "base_url_missing"
+    | "missing_key"
+    | "model_missing"
+    | "invalid_authentication"
+    | "invalid_model"
+    | "rate_limited"
+    | "quota_exhausted"
+    | "endpoint_not_found"
+    | "upstream_unavailable"
+    | "connection_failed"
+    | "http_error";
   httpStatus?: number;
   url?: string;
   testedModel?: string;
+  apiKeyEnv?: string;
   detail: string;
+  rawDetail?: string;
 };
 
 export async function testProviderConnections(config: TomorrowEdgeConfig, providerFilter?: string): Promise<ProviderConnectionResult[]> {
@@ -20,30 +36,50 @@ export async function testProviderConnections(config: TomorrowEdgeConfig, provid
 }
 
 export async function testProviderConnection(id: string, provider: ProviderConfig): Promise<ProviderConnectionResult> {
-  if (!provider.enabled) return { id, status: "skipped", detail: "provider disabled" };
-  if (["mock", "fixture"].includes(id)) return { id, status: "skipped", detail: "offline provider does not need HTTP connectivity" };
-  if (!provider.base_url) return { id, status: "failed", detail: "base_url missing" };
+  if (!provider.enabled) return { id, status: "skipped", reason: "provider_disabled", detail: "provider disabled" };
+  if (["mock", "fixture"].includes(id)) return { id, status: "skipped", reason: "offline_provider", detail: "offline provider does not need HTTP connectivity" };
+  if (!provider.base_url) return { id, status: "failed", reason: "base_url_missing", detail: "base_url missing" };
   const key = provider.api_key_env ? process.env[provider.api_key_env] : undefined;
   if (provider.auth_header !== "none" && !key) {
-    return { id, status: "failed", detail: `missing env ${provider.api_key_env ?? "API key"}` };
+    return {
+      id,
+      status: "missing_key",
+      reason: "missing_key",
+      apiKeyEnv: provider.api_key_env,
+      detail: `missing env ${provider.api_key_env ?? "API key"}`
+    };
   }
-  if (!provider.model) return { id, status: "failed", detail: "model missing" };
+  if (!provider.model) return { id, status: "failed", reason: "model_missing", detail: "model missing" };
   if (id === "ollama" && provider.model === "local-auto") {
     return { id, status: "skipped", detail: "select a concrete Ollama model before running a selected-model smoke test" };
   }
   const smoke = providerSmokeRequest(id, provider, key);
   try {
     const response = await fetch(smoke.url, smoke.init);
+    const rawDetail = response.ok ? undefined : trimDetail(await response.text().catch(() => ""));
     return {
       id,
       status: response.status >= 200 && response.status < 300 ? "ok" : "failed",
+      reason: response.ok ? undefined : classifyConnectionFailure(response.status, rawDetail, provider),
       httpStatus: response.status,
       url: smoke.url,
       testedModel: provider.model,
-      detail: response.ok ? `HTTP 2xx from selected model smoke endpoint (${provider.model})` : trimDetail(await response.text().catch(() => ""))
+      apiKeyEnv: provider.api_key_env,
+      detail: response.ok ? `HTTP 2xx from selected model smoke endpoint (${provider.model})` : rawDetail || `HTTP ${response.status}`,
+      rawDetail
     };
   } catch (error) {
-    return { id, status: "failed", url: smoke.url, testedModel: provider.model, detail: error instanceof Error ? error.message : String(error) };
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      id,
+      status: "failed",
+      reason: "connection_failed",
+      url: smoke.url,
+      testedModel: provider.model,
+      apiKeyEnv: provider.api_key_env,
+      detail,
+      rawDetail: detail
+    };
   }
 }
 
@@ -129,4 +165,19 @@ function providerHeaders(id: string, authHeader: ProviderAuthHeader, key?: strin
 function trimDetail(value: string): string {
   const trimmed = value.replace(/\s+/g, " ").trim();
   return trimmed ? trimmed.slice(0, 180) : "non-2xx response";
+}
+
+function classifyConnectionFailure(status: number, detail: string | undefined, provider: ProviderConfig): NonNullable<ProviderConnectionResult["reason"]> {
+  const text = (detail ?? "").toLowerCase();
+  if (status === 401 || text.includes("invalid authentication") || text.includes("invalid_authentication") || text.includes("unauthorized")) {
+    return "invalid_authentication";
+  }
+  if (text.includes("invalid model") || text.includes("model_not_found") || (text.includes(provider.model.toLowerCase()) && text.includes("not found"))) {
+    return "invalid_model";
+  }
+  if (status === 404) return "endpoint_not_found";
+  if (status === 429 || text.includes("rate limit") || text.includes("rate_limited")) return "rate_limited";
+  if (text.includes("quota") || text.includes("insufficient_quota") || text.includes("quota_exhausted")) return "quota_exhausted";
+  if (status >= 502 || text.includes("upstream_unavailable") || text.includes("bad gateway") || text.includes("service unavailable")) return "upstream_unavailable";
+  return "http_error";
 }

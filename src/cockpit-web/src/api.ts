@@ -86,9 +86,26 @@ export type CockpitRoleAssignmentsRequest = {
 export type CockpitProviderConnectionResult = {
   id: string;
   status: "ok" | "skipped" | "missing_key" | "failed";
+  reason?:
+    | "provider_disabled"
+    | "offline_provider"
+    | "base_url_missing"
+    | "missing_key"
+    | "model_missing"
+    | "invalid_authentication"
+    | "invalid_model"
+    | "rate_limited"
+    | "quota_exhausted"
+    | "endpoint_not_found"
+    | "upstream_unavailable"
+    | "connection_failed"
+    | "http_error";
   httpStatus?: number;
   url?: string;
+  testedModel?: string;
+  apiKeyEnv?: string;
   detail: string;
+  rawDetail?: string;
 };
 
 export async function listCockpitSessions(options: CockpitApiOptions): Promise<CockpitSessionSummary[]> {

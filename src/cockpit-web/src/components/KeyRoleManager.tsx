@@ -8,6 +8,7 @@ import type {
   CockpitSetupStatus
 } from "../api.js";
 import type { Translator } from "../i18n.js";
+import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
 
 type KeyRoleManagerProps = {
@@ -221,7 +222,7 @@ export function KeyRoleManager({
         {message ? <p className="te-setup-message" data-testid="keymgr-message">{message}</p> : null}
         {connectionResult ? (
           <p className="te-setup-message" data-testid="keymgr-connection">
-            <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {connectionResult.detail}
+            <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {formatProviderConnectionMessage(connectionResult, t)}
           </p>
         ) : null}
       </section>
