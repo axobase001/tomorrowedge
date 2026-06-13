@@ -4,9 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { generateNativeObjectiveContract } from "../../src/core/contracts/contractGenerator.js";
-import { classifyWorkflowIntentLocally, type WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
+import type { WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
-import { profileScenario } from "../../src/core/scenarios/scenarioProfiler.js";
+import type { ScenarioProfile, ScenarioType } from "../../src/core/scenarios/scenarioTypes.js";
 import { builtinSkillPacks } from "../../src/core/skills/builtinSkillPacks.js";
 import { transitionSkillLifecycle } from "../../src/core/skills/skillLifecycle.js";
 import { proposeCandidateSkillsFromTraces } from "../../src/core/skills/skillProposal.js";
@@ -177,8 +177,11 @@ describe("governed skills and tool packs", () => {
 });
 
 function contractFor(goal: string) {
-  const workflowIntent = withProvider(classifyWorkflowIntentLocally(goal));
-  const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: "partial" });
+  const workflowIntent = workflowIntentFixture(goal, "patch");
+  const scenarioProfile = scenarioProfileFixture({
+    scenarioType: goal === "inspect current API and database docs" ? "analysis" : "debugging",
+    workflowKind: "patch"
+  });
   const contract = generateNativeObjectiveContract({
     goal,
     workflowIntent,
@@ -266,6 +269,29 @@ function makeSkill(overrides: Partial<SkillManifestV1> & { shellAllowed?: boolea
   };
 }
 
-function withProvider(decision: Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed">): WorkflowIntentDecision {
-  return { ...decision, provider: "test", model: "local" };
+function workflowIntentFixture(goal: string, workflowKind: WorkflowIntentDecision["workflowKind"]): WorkflowIntentDecision {
+  const requiresPatchWorkflow = workflowKind === "patch" || workflowKind === "repair" || workflowKind === "vision_patch";
+  return {
+    intent: requiresPatchWorkflow ? "patch" : "inspect",
+    requiresPatchWorkflow,
+    workflowKind,
+    confidence: 1,
+    reason: `Test fixture declares ${workflowKind} workflow for ${goal}.`,
+    provider: "test_fixture",
+    model: "semantic-fixture",
+    fallbackUsed: false
+  };
+}
+
+function scenarioProfileFixture(input: { scenarioType: ScenarioType; workflowKind: ScenarioProfile["likelyWorkflowKind"] }): ScenarioProfile {
+  return {
+    scenarioType: input.scenarioType,
+    userIntent: `${input.scenarioType} fixture intent`,
+    expectedDeliverable: input.workflowKind === "read_only" ? "read-only answer with evidence" : "patch workflow evidence",
+    ambiguityLevel: "low",
+    likelyWorkflowKind: input.workflowKind,
+    riskSignals: input.scenarioType === "debugging" ? ["correctness_critical"] : [],
+    evidenceNeeds: input.workflowKind === "read_only" ? ["event ledger", "inspected context"] : ["event ledger", "patch diff", "review decision", "judge decision"],
+    suggestedRoles: input.workflowKind === "read_only" ? ["planner", "explorer", "summarizer"] : ["planner", "explorer", "coder_a", "reviewer", "judge", "runner", "summarizer"]
+  };
 }

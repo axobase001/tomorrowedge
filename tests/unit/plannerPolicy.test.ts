@@ -3,28 +3,28 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { allocateStrongAgentCall } from "../../src/core/budget/budgetAllocator.js";
 import { defaultStrongAgentBudget } from "../../src/core/budget/strongAgentBudget.js";
-import { parseGoalToPlan } from "../../src/core/goal/goalParser.js";
+import { isDocumentOnlyGoal, parseGoalToPlan } from "../../src/core/goal/goalParser.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 
 describe("adaptive planning and governance policies", () => {
-  it("builds task-specific native plans instead of a fixed 4-step template", () => {
+  it("keeps the legacy native parser semantically neutral", () => {
     const readOnly = parseGoalToPlan("read the quantum folder and summarize the file structure");
     const feature = parseGoalToPlan("implement OAuth login across the backend and frontend");
 
-    expect(readOnly.taskType).toBe("analysis");
-    expect(readOnly.steps.map((step) => step.id)).toEqual(["understand", "inspect", "summarize"]);
+    expect(readOnly.taskType).toBe("unknown");
+    expect(readOnly.workflowKind).toBe("ask_user");
     expect(readOnly.verificationCommands).toEqual([]);
-
-    expect(feature.taskType).toBe("feature");
-    expect(feature.riskLevel).toBe("high");
-    expect(feature.steps.map((step) => step.id)).toEqual(expect.arrayContaining(["risk-map", "design", "implement", "review", "verify"]));
-    expect(feature.steps.length).toBeGreaterThan(4);
+    expect(readOnly.steps.map((step) => step.id)).toEqual(["semantic-route-required"]);
+    expect(feature.taskType).toBe("unknown");
+    expect(feature.riskLevel).toBe("medium");
+    expect(feature.steps.map((step) => step.id)).toEqual(["semantic-route-required"]);
   });
 
   it("does not run repository test commands for document-only deliverables", () => {
     const plan = parseGoalToPlan("create assignments/ramsey-six-people/proof.md and assignments/ramsey-six-people/proof.html");
 
-    expect(plan.taskType).toBe("feature");
+    expect(plan.taskType).toBe("unknown");
+    expect(isDocumentOnlyGoal(plan.goal)).toBe(true);
     expect(plan.verificationCommands).toEqual([]);
   });
 
@@ -74,6 +74,7 @@ describe("adaptive planning and governance policies", () => {
     const roleBudgetEvent = state.events.find((event) => event.type === "budget_preview" && event.role === "reviewer" && "budgetScope" in event && event.budgetScope === "per_role");
 
     expect(state.plan?.riskLevel).toBe("high");
+    expect(state.events.some((event) => event.type === "model_call" && event.provider === "mock")).toBe(true);
     expect(reviewerRoute?.provider).toBe("openrouter");
     expect(judgeRoute?.provider).toBe("openrouter");
     expect(rerouteEvent).toBeTruthy();

@@ -118,6 +118,8 @@ export async function generateModelBackedObjectiveContract(input: NativeContract
     provider: assignment.provider,
     model: assignment.model,
     ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
     buildRequest: (model) => ({
       model,
       temperature: 0,

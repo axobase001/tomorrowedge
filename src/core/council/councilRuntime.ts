@@ -3,7 +3,7 @@ import type { AgentGraphState } from "../agentGraph/state.js";
 import { buildAgentRuntimeProfiles } from "../agents/defaultCapabilityProfiles.js";
 import { assignTaskOwners } from "../assignment/taskAssignmentEngine.js";
 import { createBudgetRuntimeState, commitRoleCall, evaluateRoleInvocation, reserveRoleCall } from "../budget/budgetGate.js";
-import { inferRisk, routeToChiefAgent, selectChiefAgent } from "../chiefAgent/chiefAgentRouter.js";
+import { routeToChiefAgent, selectChiefAgent } from "../chiefAgent/chiefAgentRouter.js";
 import { runFinalChiefReview } from "../chiefAgent/finalChiefReview.js";
 import type { ChiefAgentProfile } from "../chiefAgent/chiefAgentTypes.js";
 import { buildAccessPolicy } from "../permissions/accessPolicy.js";
@@ -19,10 +19,16 @@ import { runCommandExternalAgent } from "../externalAgents/runners/commandExtern
 import { defaultStrategyGenome, type StrategyGenome } from "../evolution/strategyGenome.js";
 import { mutateTaskGraphForStrategy, proposeStrategyMutations, type StrategyMutationEvent, type StrategySelectionDecision } from "../evolution/mutationEngine.js";
 import { makeId } from "../../utils/ids.js";
+import type { RiskLevel, TaskType } from "../../schemas/plan.js";
 import type { TaskGraph, TaskGraphNode } from "../planning/taskGraph.js";
 import { runAgentCouncil } from "./councilRunner.js";
 import type { CouncilSession } from "./councilTypes.js";
 import { maybeTriggerCouncilReplan } from "./councilReplan.js";
+import { ModelRouter } from "../routing/router.js";
+import { classifyWorkflowIntent } from "../goal/workflowIntent.js";
+import { profileScenarioWithModel } from "../scenarios/modelScenarioProfiler.js";
+import type { ScenarioProfile } from "../scenarios/scenarioTypes.js";
+import type { WorkflowKind } from "../orchestration/workflowKind.js";
 
 export type CouncilRunOptions = {
   accessMode?: AccessMode;
@@ -42,9 +48,46 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     approveShell: options.approveShell
   });
   const ledger = createEventLedger(access.mode, options.sessionId, options.onEvent);
+  const router = new ModelRouter(config);
   const budgetRuntime = createBudgetRuntimeState();
   const availableAgents = buildAgentRuntimeProfiles(config);
-  const objectiveContract = createCouncilObjectiveContract(goal, config, inferRisk(goal));
+  const workflowIntent = await classifyWorkflowIntent({
+    goal,
+    config,
+    router,
+    ledger,
+    fixtureMode: options.fixtureMode,
+    localOnly: options.fixtureMode || !access.cloudAllowed
+  });
+  const scenarioProfileResult = await profileScenarioWithModel({
+    goal,
+    workflowIntent,
+    accessMode: access.mode,
+    config,
+    router,
+    ledger,
+    localOnly: options.fixtureMode || !access.cloudAllowed
+  });
+  if (!scenarioProfileResult.profile) {
+    throw new Error(`Sirius scenario profiling failed; no local semantic fallback will be used. ${scenarioProfileResult.error ?? ""}`.trim());
+  }
+  const scenarioProfile = scenarioProfileResult.profile;
+  ledger.append({
+    type: "scenario_profile",
+    phase: "planning",
+    role: "planner",
+    provider: scenarioProfileResult.provider,
+    model: scenarioProfileResult.model,
+    scenarioType: scenarioProfile.scenarioType,
+    workflowKind: scenarioProfile.likelyWorkflowKind,
+    ambiguityLevel: scenarioProfile.ambiguityLevel,
+    expectedDeliverable: scenarioProfile.expectedDeliverable,
+    riskSignals: scenarioProfile.riskSignals,
+    profileRef: ledger.writeArtifact("scenario_profiles", JSON.stringify(scenarioProfile, null, 2), "json")
+  });
+  const riskLevel = riskLevelFromScenarioProfile(scenarioProfile);
+  const taskType = taskTypeFromScenarioProfile(scenarioProfile, workflowIntent.workflowKind);
+  const objectiveContract = createCouncilObjectiveContract(goal, config, riskLevel, scenarioProfile, workflowIntent.workflowKind, taskType);
   const chiefAgent = selectChiefAgent({ config, goal, availableAgents, objectiveContract });
   if (!chiefAgent) {
     throw new Error("No Chief Agent available for Sirius Agent Council runtime. Configure chief_agent or enable at least one capable core/planner/judge agent.");
@@ -122,7 +165,7 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     summary: "Chief produced an initial governed architecture plan and council policy."
   });
 
-  const council = await runAgentCouncil({ goal, chiefAgent, availableAgents, riskLevel: objectiveContract.riskLevel });
+  const council = await runAgentCouncil({ goal, chiefAgent, availableAgents, riskLevel: objectiveContract.riskLevel, taskType: objectiveContract.taskType });
   recordCouncilEvents(ledger, council);
   let taskGraph = assignTaskOwners({
     taskGraph: council.consensusTaskGraph!,
@@ -652,30 +695,38 @@ function externalProfileForNode(config: TomorrowEdgeConfig, node: TaskGraphNode)
   };
 }
 
-function createCouncilObjectiveContract(goal: string, config: TomorrowEdgeConfig, riskLevel: "low" | "medium" | "high"): ObjectiveContractV1 {
+function createCouncilObjectiveContract(
+  goal: string,
+  config: TomorrowEdgeConfig,
+  riskLevel: RiskLevel,
+  scenarioProfile: ScenarioProfile,
+  workflowKind: WorkflowKind,
+  taskType: TaskType
+): ObjectiveContractV1 {
+  const patchLike = workflowKind === "patch" || workflowKind === "repair" || workflowKind === "vision_patch";
   return {
     schemaVersion: "objective-contract/v1",
     contractId: makeId("contract"),
     createdAt: new Date().toISOString(),
     goal,
     normalizedGoal: goal.trim(),
-    scenarioType: "coding",
-    taskType: /rewrite|rebuild|migration|refactor/i.test(goal) ? "refactor" : "feature",
-    workflowKind: "patch",
+    scenarioType: scenarioProfile.scenarioType,
+    taskType,
+    workflowKind,
     localObjective: goal,
     userScenario: {
-      inferredUserIntent: "governed multi-agent software engineering task",
-      expectedDeliverable: "reviewed deliverable package with task ownership and final chief review",
-      interactionMode: "code_change",
-      ambiguityLevel: riskLevel === "high" ? "high" : "medium"
+      inferredUserIntent: scenarioProfile.userIntent,
+      expectedDeliverable: scenarioProfile.expectedDeliverable,
+      interactionMode: patchLike ? "code_change" : scenarioProfile.scenarioType === "document" ? "artifact" : scenarioProfile.scenarioType === "analysis" || scenarioProfile.scenarioType === "research" || scenarioProfile.scenarioType === "planning" ? "analysis" : "answer",
+      ambiguityLevel: scenarioProfile.ambiguityLevel
     },
     successCriteria: ["Chief initial plan recorded", "Council consensus TaskGraph recorded", "Delegated execution evidence recorded", "Chief final review recorded"],
     failureCriteria: ["Objective Contract violation", "unresolved blocking risk after chief review", "mutation limit exhausted"],
     requiredEvidence: ["chief_plan", "council_moves", "task_ownership", "delegated_execution", "final_chief_review"],
-    allowedPhases: ["routing", "planning", "council", "coding", "review", "judge", "verification", "evolution", "delivery", "summary"],
-    allowedRoles: ["core", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "summarizer"],
-    allowedTools: ["read_repo", "write_artifact", "propose_patch", "run_verification"],
-    forbiddenActions: ["bypass_chief_final_review", "remove_high_risk_judge", "mutate_objective_contract_permissions"],
+    allowedPhases: patchLike ? ["routing", "planning", "council", "coding", "review", "judge", "verification", "evolution", "delivery", "summary"] : ["routing", "planning", "council", "exploration", "delivery", "summary"],
+    allowedRoles: patchLike ? ["core", "planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "runner", "summarizer"] : ["core", "planner", "explorer", "reviewer", "judge", "summarizer"],
+    allowedTools: patchLike ? ["read_repo", "write_artifact", "propose_patch", "run_verification"] : ["read_repo", "write_artifact"],
+    forbiddenActions: patchLike ? ["bypass_chief_final_review", "remove_high_risk_judge", "mutate_objective_contract_permissions"] : ["bypass_chief_final_review", "mutate_objective_contract_permissions", "write_files", "apply_patch", "run_shell"],
     riskLevel,
     reasoningSensitivity: riskLevel === "high" ? "high" : "medium",
     budget: {
@@ -704,7 +755,7 @@ function createCouncilObjectiveContract(goal: string, config: TomorrowEdgeConfig
       userEscalation: "ask_user event"
     },
     verificationRubric: {
-      requiredCommands: ["cargo test"],
+      requiredCommands: patchLike ? ["project verification command selected by owner agent"] : [],
       requiredArtifacts: ["consensus TaskGraph", "delegated task artifacts", "chief final review"],
       evidenceChecks: ["task ownership refs", "mutation refs if failure occurred"],
       reviewerChecks: ["risk_review task node"],
@@ -718,6 +769,22 @@ function createCouncilObjectiveContract(goal: string, config: TomorrowEdgeConfig
     source: "native",
     confidence: 0.82
   };
+}
+
+function riskLevelFromScenarioProfile(profile: ScenarioProfile): RiskLevel {
+  if (profile.riskSignals.some((signal) => signal === "security_sensitive" || signal === "irreversible_or_production" || signal === "correctness_critical")) return "high";
+  if (profile.riskSignals.length || profile.ambiguityLevel === "medium") return "medium";
+  return profile.ambiguityLevel === "high" ? "high" : "low";
+}
+
+function taskTypeFromScenarioProfile(profile: ScenarioProfile, workflowKind: WorkflowKind): TaskType {
+  if (workflowKind === "read_only" || workflowKind === "advisory" || workflowKind === "ask_user") return "analysis";
+  if (profile.scenarioType === "debugging") return "bugfix";
+  if (profile.scenarioType === "refactor") return "refactor";
+  if (profile.scenarioType === "document") return "docs";
+  if (profile.scenarioType === "analysis" || profile.scenarioType === "research" || profile.scenarioType === "planning") return "analysis";
+  if (profile.scenarioType === "coding") return "feature";
+  return "unknown";
 }
 
 function estimateNodeCost(node: TaskGraphNode): number {

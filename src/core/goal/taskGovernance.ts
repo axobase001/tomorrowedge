@@ -29,13 +29,7 @@ export async function classifyTaskGovernance(input: {
   modelDisabled?: boolean;
 }): Promise<TaskGovernanceDecision> {
   if (input.modelDisabled) {
-    const decision = conservativeGovernanceFallback(input.plan, input.workflowIntent, "Governance model call blocked before invocation.");
-    return {
-      ...decision,
-      provider: "local_governance_fallback",
-      model: "conservative",
-      fallbackUsed: true
-    };
+    throw new Error("Governance model call blocked before invocation; no local semantic fallback will be used.");
   }
   const assignment = input.localOnly ? { provider: "mock", model: "mock-balanced" } : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
@@ -45,6 +39,8 @@ export async function classifyTaskGovernance(input: {
     provider: assignment.provider,
     model: assignment.model,
     ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
     buildRequest: (model) => ({
       model,
       temperature: 0,
@@ -77,12 +73,14 @@ export async function classifyTaskGovernance(input: {
     })
   });
   const parsed = parseTaskGovernanceResponse(result.response?.content);
-  const decision = parsed ?? conservativeGovernanceFallback(input.plan, input.workflowIntent, result.error);
+  if (!parsed) {
+    throw new Error(`Governance model returned no valid semantic decision; no local fallback will be used.${result.error ? ` ${result.error}` : ""}`);
+  }
   return {
-    ...decision,
-    provider: result.response ? result.provider : "local_governance_fallback",
-    model: result.response ? result.model : "conservative",
-    fallbackUsed: result.fallbackUsed || !parsed
+    ...parsed,
+    provider: result.provider,
+    model: result.model,
+    fallbackUsed: false
   };
 }
 
@@ -98,17 +96,6 @@ export function parseTaskGovernanceResponse(content?: string): Omit<TaskGovernan
     requiresJudge: typeof object.requiresJudge === "boolean" ? object.requiresJudge : reasoningSensitivity === "high",
     confidence: clampConfidence(object.confidence),
     reason: typeof object.reason === "string" && object.reason.trim() ? object.reason.trim() : `Governance model classified reasoning sensitivity as ${reasoningSensitivity}.`
-  };
-}
-
-function conservativeGovernanceFallback(plan: Plan, workflowIntent: WorkflowIntentDecision, error?: string): Omit<TaskGovernanceDecision, "provider" | "model" | "fallbackUsed"> {
-  const elevated = plan.riskLevel === "high" || Boolean(plan.debateRecommended) || workflowIntent.intent === "ask_user";
-  return {
-    reasoningSensitivity: elevated ? "medium" : "low",
-    requiresReviewer: elevated,
-    requiresJudge: plan.riskLevel === "high" || workflowIntent.intent === "ask_user",
-    confidence: 0.35,
-    reason: `Governance model unavailable; used conservative plan-level fallback.${error ? ` ${error}` : ""}`
   };
 }
 

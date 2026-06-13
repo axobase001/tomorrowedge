@@ -3,16 +3,16 @@ import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { generateNativeObjectiveContract } from "../../src/core/contracts/contractGenerator.js";
 import { contractToPlan, overlayPlanWithContract } from "../../src/core/contracts/contractToPlan.js";
 import { verifyAndRepairContract } from "../../src/core/contracts/contractVerifier.js";
-import { classifyWorkflowIntentLocally, type WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
+import type { WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
 import { applyPolicyToContract, contractToolGate, contractVerificationBlocksExecution, effectiveMaxRepairRounds, effectiveMaxShellRuns, traceCompletenessThreshold } from "../../src/core/orchestrationPolicy/runtimePolicy.js";
-import { profileScenario } from "../../src/core/scenarios/scenarioProfiler.js";
+import type { ScenarioProfile, ScenarioType } from "../../src/core/scenarios/scenarioTypes.js";
 import type { Plan } from "../../src/schemas/plan.js";
 
 describe("objective contracts", () => {
   it("generates and verifies a contract-first patch workflow", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -32,8 +32,8 @@ describe("objective contracts", () => {
   });
 
   it("downgrades mutation contracts in restricted mode", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "restricted" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -54,8 +54,8 @@ describe("objective contracts", () => {
       "Create a new file assignments/gpt55-smoke-test/README.md.",
       "Write a short Chinese explanation and do not modify any other files."
     ].join("\n");
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally(goal));
-    const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture(goal, "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "document", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal,
       workflowIntent,
@@ -69,8 +69,8 @@ describe("objective contracts", () => {
   });
 
   it("overlays model/native plans without relaxing the contract", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -101,8 +101,8 @@ describe("objective contracts", () => {
   });
 
   it("lets policy genome depth and planning fields change contract-derived runtime plan", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const base = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -137,8 +137,8 @@ describe("objective contracts", () => {
   });
 
   it("enforces contract tool gates and failed-contract execution gates", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -164,8 +164,8 @@ describe("objective contracts", () => {
   });
 
   it("uses policy and contract budgets for repair, shell, and trace strictness", () => {
-    const workflowIntent = withProvider(classifyWorkflowIntentLocally("fix failing test"));
-    const scenarioProfile = profileScenario({ goal: "fix failing test", workflowIntent, accessMode: "partial" });
+    const workflowIntent = workflowIntentFixture("fix failing test", "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });
     const contract = generateNativeObjectiveContract({
       goal: "fix failing test",
       workflowIntent,
@@ -187,6 +187,29 @@ describe("objective contracts", () => {
   });
 });
 
-function withProvider(decision: Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed">): WorkflowIntentDecision {
-  return { ...decision, provider: "test", model: "local" };
+function workflowIntentFixture(goal: string, workflowKind: WorkflowIntentDecision["workflowKind"]): WorkflowIntentDecision {
+  const requiresPatchWorkflow = workflowKind === "patch" || workflowKind === "repair" || workflowKind === "vision_patch";
+  return {
+    intent: requiresPatchWorkflow ? "patch" : "inspect",
+    requiresPatchWorkflow,
+    workflowKind,
+    confidence: 1,
+    reason: `Test fixture declares ${workflowKind} workflow for ${goal}.`,
+    provider: "test_fixture",
+    model: "semantic-fixture",
+    fallbackUsed: false
+  };
+}
+
+function scenarioProfileFixture(input: { scenarioType: ScenarioType; workflowKind: ScenarioProfile["likelyWorkflowKind"] }): ScenarioProfile {
+  return {
+    scenarioType: input.scenarioType,
+    userIntent: `${input.scenarioType} fixture intent`,
+    expectedDeliverable: input.workflowKind === "read_only" ? "read-only answer with evidence" : "patch workflow evidence",
+    ambiguityLevel: "low",
+    likelyWorkflowKind: input.workflowKind,
+    riskSignals: input.scenarioType === "debugging" ? ["correctness_critical"] : [],
+    evidenceNeeds: input.workflowKind === "read_only" ? ["event ledger", "inspected context"] : ["event ledger", "patch diff", "review decision", "judge decision"],
+    suggestedRoles: input.workflowKind === "read_only" ? ["planner", "explorer", "summarizer"] : ["planner", "explorer", "coder_a", "reviewer", "judge", "runner", "summarizer"]
+  };
 }

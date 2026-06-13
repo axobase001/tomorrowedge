@@ -44,6 +44,17 @@ export class MockProvider implements ModelProvider {
         }
       };
     }
+    if (req.metadata?.tomorrowedgeTask === "scenario_profile") {
+      return {
+        id: "mock-scenario-profile",
+        model: req.model,
+        content: JSON.stringify(createMockScenarioProfile(last)),
+        usage: {
+          inputTokens: estimateTokens(req.messages.map((m) => stringifyContent(m.content)).join("\n")),
+          outputTokens: 88
+        }
+      };
+    }
     if (req.metadata?.tomorrowedgeTask === "task_governance") {
       return {
         id: "mock-task-governance",
@@ -97,11 +108,12 @@ function classifyMockTaskGovernance(text: string) {
 function createMockPlannerPlan(text: string) {
   const lower = text.toLowerCase();
   const readOnly = hasInspectSignal(lower) || (containsCjk(text) && !hasMutationSignal(lower));
-  const highRisk = /\b(auth|oauth|payment|billing|secret|credential|database|schema|delete|security)\b/.test(lower);
+  const highRisk = /\b(auth|oauth|payment|billing|secret|credential|database|schema|delete|security|rewrite|rebuild|migration|rust)\b/.test(lower);
   const feature = /\b(add|feature|implement|create|build|support)\b/.test(lower);
-  const refactor = /\b(refactor|migrate|cleanup|rename)\b/.test(lower);
+  const refactor = /\b(refactor|rewrite|rebuild|migrate|migration|cleanup|rename)\b/.test(lower);
   const docs = /\b(doc|readme|changelog)\b/.test(lower);
-  const taskType = readOnly ? "analysis" : docs ? "docs" : refactor ? "refactor" : feature ? "feature" : lower.includes("test") ? "test" : lower.includes("fix") || lower.includes("bug") ? "bugfix" : "unknown";
+  const bugfix = /\b(fix|bug|repair|failing|failure|broken|crash)\b/.test(lower);
+  const taskType = readOnly ? "analysis" : docs ? "docs" : refactor ? "refactor" : bugfix ? "bugfix" : feature ? "feature" : lower.includes("test") ? "test" : "unknown";
   const steps = readOnly
     ? [
         { id: "understand", title: "Understand read-only request", detail: "Identify the requested evidence and avoid file mutation." },
@@ -119,7 +131,7 @@ function createMockPlannerPlan(text: string) {
   return {
     taskType,
     riskLevel: highRisk ? "high" : "low",
-    constraints: [],
+    constraints: extractMockConstraints(text),
     steps,
     verificationCommands: readOnly || docs ? [] : ["npm test"],
     debateRecommended: highRisk,
@@ -129,12 +141,15 @@ function createMockPlannerPlan(text: string) {
 
 function classifyMockWorkflowIntent(text: string) {
   const lower = text.toLowerCase();
+  const visionPatch = hasVisionImplementationSignal(lower);
+  const explicitMutation = hasPositiveMutationSignal(lower);
   const mutation = hasMutationSignal(lower);
   const inspect = hasInspectSignal(lower) || (containsCjk(text) && !mutation);
-  if (mutation) {
+  if (visionPatch || explicitMutation || (mutation && !inspect)) {
     return {
       intent: "patch",
       requiresPatchWorkflow: true,
+      workflowKind: visionPatch ? "vision_patch" : "patch",
       confidence: 0.82,
       reason: "Mock intent model identified a file-changing command."
     };
@@ -143,6 +158,7 @@ function classifyMockWorkflowIntent(text: string) {
     return {
       intent: "inspect",
       requiresPatchWorkflow: false,
+      workflowKind: "read_only",
       confidence: 0.86,
       reason: "Mock intent model identified a read-only inspection command."
     };
@@ -150,9 +166,65 @@ function classifyMockWorkflowIntent(text: string) {
   return {
     intent: "ask_user",
     requiresPatchWorkflow: false,
+    workflowKind: "ask_user",
     confidence: 0.4,
     reason: "Mock intent model found the command ambiguous."
   };
+}
+
+function createMockScenarioProfile(text: string) {
+  const lower = text.toLowerCase();
+  const intentPatch = lower.includes('"requirespatchworkflow": true');
+  const intentReadOnly = lower.includes('"workflowkind": "read_only"') || lower.includes('"intent": "inspect"');
+  const highRisk = /\b(auth|security|credential|secret|permission|payment|database|migration|rewrite|rebuild|rust|production|delete|prove|theorem|correctness|formal)\b|\u8bc1\u660e|\u5b9a\u7406|\u5bc6\u7801|\u6743\u9650|\u5b89\u5168/.test(lower);
+  const scenarioType = intentReadOnly
+    ? "analysis"
+    : /\b(fix|bug|failing|repair|debug|error)\b/.test(lower)
+      ? "debugging"
+      : /\b(refactor|rewrite|migrate|migration|cleanup)\b/.test(lower)
+        ? "refactor"
+        : /\b(doc|readme|changelog|markdown)\b/.test(lower)
+          ? "document"
+          : intentPatch
+            ? "coding"
+            : "unknown";
+  const likelyWorkflowKind = hasVisionImplementationSignal(lower)
+    ? "vision_patch"
+    : intentReadOnly
+      ? "read_only"
+      : intentPatch
+        ? "patch"
+        : "ask_user";
+  const riskSignals = [
+    ...(highRisk ? ["correctness_critical"] : []),
+    ...(lower.includes('"accessmode": "full"') ? ["full_access"] : [])
+  ];
+  const readLike = likelyWorkflowKind === "read_only" || likelyWorkflowKind === "ask_user";
+  return {
+    scenarioType,
+    userIntent: `${scenarioType} request classified by mock semantic model`,
+    expectedDeliverable: readLike ? "read-only answer with evidence" : "patch, review, judge, verification evidence, and final summary",
+    ambiguityLevel: likelyWorkflowKind === "ask_user" ? "high" : highRisk ? "medium" : "low",
+    likelyWorkflowKind,
+    riskSignals,
+    evidenceNeeds: readLike
+      ? ["event ledger", "inspected context"]
+      : ["event ledger", "candidate patch diff", "review decision", "judge decision", "verification result"],
+    suggestedRoles: readLike
+      ? ["planner", "explorer", "summarizer"]
+      : ["planner", "explorer", "coder_a", "reviewer", "judge", "runner", "summarizer"]
+  };
+}
+
+function extractMockConstraints(text: string): string[] {
+  const constraints: string[] = [];
+  for (const match of text.matchAll(/without ([^.\n]+)/gi)) {
+    constraints.push(`Without ${match[1].trim()}`);
+  }
+  for (const match of text.matchAll(/do not ([^.\n]+)/gi)) {
+    constraints.push(`Do not ${match[1].trim()}`);
+  }
+  return constraints;
 }
 
 function createMockUserReply(prompt: string): string {
@@ -171,7 +243,16 @@ function hasInspectSignal(text: string): boolean {
 }
 
 function hasMutationSignal(text: string): boolean {
-  return /\b(fix|update|change|modify|add|delete|remove|refactor|implement|write|create|patch|restore|build|generate|save|repair)\b|\u4fee\u590d|\u4fee\u6539|\u66f4\u65b0|\u65b0\u589e|\u5220\u9664|\u91cd\u6784|\u5b9e\u73b0|\u5199\u5165|\u521b\u5efa|\u65b0\u5efa|\u8fd8\u539f|\u751f\u6210|\u4fdd\u5b58/.test(text);
+  return /\b(fix|update|change|modify|add|delete|remove|refactor|rewrite|rebuild|migrate|migration|redesign|implement|write|create|patch|restore|build|generate|save|repair)\b|\u4fee\u590d|\u4fee\u6539|\u66f4\u65b0|\u65b0\u589e|\u5220\u9664|\u91cd\u6784|\u5b9e\u73b0|\u5199\u5165|\u521b\u5efa|\u65b0\u5efa|\u8fd8\u539f|\u751f\u6210|\u4fdd\u5b58/.test(text);
+}
+
+function hasPositiveMutationSignal(text: string): boolean {
+  return /\b(fix|update|add|delete|remove|refactor|rewrite|rebuild|migrate|migration|redesign|implement|write|create|patch|restore|build|generate|save|repair)\b|\u4fee\u590d|\u66f4\u65b0|\u65b0\u589e|\u5220\u9664|\u91cd\u6784|\u5b9e\u73b0|\u5199\u5165|\u521b\u5efa|\u65b0\u5efa|\u8fd8\u539f|\u751f\u6210|\u4fdd\u5b58/.test(text);
+}
+
+function hasVisionImplementationSignal(text: string): boolean {
+  return /\b(image|screenshot|design|layout|ui)\b/.test(text)
+    && /\b(generate|create|build|implement|restore)\b/.test(text);
 }
 
 function containsCjk(text: string): boolean {

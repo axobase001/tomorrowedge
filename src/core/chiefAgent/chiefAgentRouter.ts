@@ -29,7 +29,7 @@ export function selectChiefAgent(input: {
     return undefined;
   }
 
-  const risk = input.objectiveContract?.riskLevel ?? inferRisk(input.goal);
+  const risk = input.objectiveContract?.riskLevel ?? "medium";
   const candidates = input.availableAgents
     .filter((agent) => agent.allowedRoles.includes("core") || agent.allowedRoles.includes("planner") || agent.allowedRoles.includes("judge"))
     .map((agent) => ({ agent, score: scoreAgentForRole(agent, "chief", risk) }))
@@ -53,8 +53,9 @@ export async function routeToChiefAgent(input: {
   goal: string;
   context: ChiefAgentRunContext;
 }): Promise<ChiefAgentDecision> {
-  const risk = input.context.objectiveContract?.riskLevel ?? inferRisk(input.goal);
+  const risk = input.context.objectiveContract?.riskLevel ?? "medium";
   const workflowKind = input.context.objectiveContract?.workflowKind;
+  const taskType = input.context.objectiveContract?.taskType ?? "unknown";
   if (workflowKind === "read_only" && risk === "low") {
     return {
       chiefAgentId: input.chiefAgent.id,
@@ -63,7 +64,7 @@ export async function routeToChiefAgent(input: {
       initialRiskAssessment: "low"
     };
   }
-  if (requiresCouncil(input.goal, risk)) {
+  if (requiresCouncilFromContract(workflowKind, taskType, risk)) {
     return {
       chiefAgentId: input.chiefAgent.id,
       action: "convene_council",
@@ -81,14 +82,12 @@ export async function routeToChiefAgent(input: {
   };
 }
 
-export function inferRisk(goal: string): "low" | "medium" | "high" {
-  const lower = goal.toLowerCase();
-  if (/auth|security|payment|database|migration|rewrite|rebuild|rust|infra|permission|secret/.test(lower)) return "high";
-  if (/refactor|feature|repair|failing|bug|test|api/.test(lower)) return "medium";
-  return "low";
-}
-
-function requiresCouncil(goal: string, risk: "low" | "medium" | "high"): boolean {
+function requiresCouncilFromContract(
+  workflowKind: ObjectiveContractV1["workflowKind"] | undefined,
+  taskType: ObjectiveContractV1["taskType"],
+  risk: ObjectiveContractV1["riskLevel"]
+): boolean {
   if (risk === "high") return true;
-  return /rewrite|rebuild|migration|migrate|redesign|architecture|large|multi[- ]?module|rust|tauri|full app/i.test(goal);
+  if (workflowKind === "read_only" || workflowKind === "advisory" || workflowKind === "ask_user") return false;
+  return taskType === "refactor" || taskType === "feature" || risk === "medium";
 }

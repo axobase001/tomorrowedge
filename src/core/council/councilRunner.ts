@@ -12,6 +12,7 @@ export async function runAgentCouncil(input: {
   chiefAgent: ChiefAgentProfile;
   availableAgents: AgentRuntimeProfile[];
   riskLevel?: RiskLevel;
+  taskType?: TaskType;
 }): Promise<CouncilSession> {
   const riskLevel = input.riskLevel ?? "high";
   const sessionId = makeId("council");
@@ -94,7 +95,7 @@ export async function runAgentCouncil(input: {
     goal: input.goal,
     constraints: ["Use replaceable council agents", "Record evidence and task ownership", "Return to chief for final review"],
     riskLevel,
-    taskType: inferTaskType(input.goal),
+    taskType: input.taskType ?? "unknown",
     workflowKind: "patch",
     requiresPatchWorkflow: true,
     acceptanceCriteria: ["Consensus TaskGraph has concrete owners", "At least two agents own delegated tasks", "Final chief review approves delivery"],
@@ -252,12 +253,4 @@ function moveToProposal(agentId: string, payload: CouncilStructuredPayload, summ
     missingInfo: payload.missingRequirements,
     suggestedAssignments: payload.assignmentSuggestions
   };
-}
-
-function inferTaskType(goal: string): TaskType {
-  if (/rewrite|rebuild|refactor|migration|migrate/i.test(goal)) return "refactor";
-  if (/test|verify/i.test(goal)) return "test";
-  if (/doc|readme/i.test(goal)) return "docs";
-  if (/bug|fix|repair/i.test(goal)) return "bugfix";
-  return "feature";
 }

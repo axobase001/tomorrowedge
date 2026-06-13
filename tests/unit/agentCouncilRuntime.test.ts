@@ -31,7 +31,7 @@ describe("Sirius Agent Council Governance Runtime", () => {
       process.cwd(),
       "rewrite this application in Rust",
       config,
-      { accessMode: "full" }
+      { accessMode: "full", fixtureMode: true }
     )).rejects.toThrow("No Chief Agent available");
   });
 
@@ -40,7 +40,7 @@ describe("Sirius Agent Council Governance Runtime", () => {
       process.cwd(),
       "rewrite this application in Rust",
       siriusConfig(),
-      { accessMode: "full", simulateFailureTaskId: "rust_cli_structure" }
+      { accessMode: "full", fixtureMode: true, simulateFailureTaskId: "rust_cli_structure" }
     );
 
     expect(state.chiefAgent?.id).toBe("codex");
@@ -83,7 +83,7 @@ describe("Sirius Agent Council Governance Runtime", () => {
       process.cwd(),
       "rewrite this application in Rust",
       siriusConfig(),
-      { accessMode: "full", simulateFailureTaskId: "rust_cli_structure" }
+      { accessMode: "full", fixtureMode: true, simulateFailureTaskId: "rust_cli_structure" }
     );
     const vm = buildCockpitViewModel(process.cwd(), state);
 
@@ -108,7 +108,7 @@ describe("Sirius Agent Council Governance Runtime", () => {
       process.cwd(),
       "rewrite this application in Rust",
       commandConfig,
-      { accessMode: "full" }
+      { accessMode: "full", fixtureMode: true }
     );
     const externalEvents = state.events.filter((event) => event.type === "external_agent_call" || event.type === "external_agent_result");
 

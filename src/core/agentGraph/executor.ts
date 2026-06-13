@@ -7,7 +7,6 @@ import { nowIso } from "../../utils/time.js";
 import { CoderAgent } from "../agents/coder.js";
 import { ExplorerAgent } from "../agents/explorer.js";
 import { JudgeAgent } from "../agents/judge.js";
-import { PlannerAgent } from "../agents/planner.js";
 import { VisionAgent } from "../agents/vision.js";
 import { ReviewerAgent } from "../agents/reviewer.js";
 import { RepairerAgent } from "../agents/repairer.js";
@@ -37,7 +36,6 @@ import { externalAgentRegistryFromConfig, type ExternalAgentRegistry } from "../
 import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.js";
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole, releaseExternalAgentProcessPool } from "../externalAgents/externalRoleInvoker.js";
-import type { ExternalRoleInvocation } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
 import { createModelBackedPlan } from "../goal/modelPlanner.js";
 import { classifyTaskGovernance } from "../goal/taskGovernance.js";
@@ -60,7 +58,7 @@ import type { EventPhase, ObservedOutcome, OutcomeMismatchType, OutcomePredictio
 import { buildRoleGraph, type RoleNode } from "../orchestration/roleGraph.js";
 import { beginRoleNode, blockRoleNode, completeRoleNode, createRoleGraphExecutionState, markRoleNodeResult, markRoleNodeRunning, readyRoleNodes, shouldStopRoleGraph, skipRoleNode } from "../orchestration/roleGraphScheduler.js";
 import { inferWorkflowKindFromEvents, workflowKindFromPlan } from "../orchestration/workflowKind.js";
-import { getCachedContextSelection, getCachedPlan, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
+import { getCachedContextSelection, rememberContextSelection, rememberPlan } from "../context/contextCache.js";
 import {
   applyCoderConstraintsToCandidate,
   applyMemoryAssessmentsToJudge,
@@ -80,7 +78,7 @@ import {
 import { explainFailureMemories } from "../memory/taskMemory.js";
 import { decideRepairPolicy, type RepairPolicyDecision } from "../errorLoop/repairPolicy.js";
 import { applyMemoryRetrievalPolicy, type MemoryRetrievalPolicyDecision } from "../memory/retrievalPolicy.js";
-import { profileScenario } from "../scenarios/scenarioProfiler.js";
+import { profileScenarioWithModel } from "../scenarios/modelScenarioProfiler.js";
 import { generateNativeObjectiveContract } from "../contracts/contractGenerator.js";
 import { verifyAndRepairContract } from "../contracts/contractVerifier.js";
 import { contractToPlan, overlayPlanWithContract } from "../contracts/contractToPlan.js";
@@ -340,13 +338,28 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
 }
 
 async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
-  const { access, config, cwd, goal, imagePaths, ledger, router } = runtime;
-  const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: access.mode, hasImageInputs: imagePaths.length > 0 });
+  const { access, config, cwd, goal, imagePaths, ledger, options, router } = runtime;
+  const scenarioProfileResult = await profileScenarioWithModel({
+    goal,
+    workflowIntent,
+    accessMode: access.mode,
+    hasImageInputs: imagePaths.length > 0,
+    config,
+    router,
+    ledger,
+    localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed
+  });
+  if (!scenarioProfileResult.profile) {
+    throw new WorkflowBlockedError(`Model scenario profiling failed; no local semantic fallback will be used. ${scenarioProfileResult.error ?? ""}`.trim());
+  }
+  const scenarioProfile = scenarioProfileResult.profile;
   state.scenarioProfile = scenarioProfile;
   ledger.append({
     type: "scenario_profile",
     phase: "planning",
     role: "planner",
+    provider: scenarioProfileResult.provider,
+    model: scenarioProfileResult.model,
     scenarioType: scenarioProfile.scenarioType,
     workflowKind: scenarioProfile.likelyWorkflowKind,
     ambiguityLevel: scenarioProfile.ambiguityLevel,
@@ -516,21 +529,15 @@ async function runExternalCorePhase(runtime: OfflineGraphRuntime, state: AgentGr
       }),
       {
         agentKind: "external",
-        config,
-        budgetFallback: async (): Promise<ExternalRoleInvocation> => ({
-          externalAgentId: externalCore.id,
-          role: "core",
-          attempts: 0,
-          summary: "Native planner used because external core was budget-blocked.",
-          payload: await new PlannerAgent().run({ goal: [targetPromptPrefix(conversationTarget), goal].filter(Boolean).join("\n\n") }),
-          evidencePackets: []
-        }),
-        budgetFallbackLabel: "native planner"
+        config
       }
     );
     const corePlan = normalizeExternalPlan(coreResult.payload, goal);
     if (corePlan) state.plan = corePlan;
-    else recordExternalNormalizeFallback(ledger, "core", externalCore, "plan", "native planner");
+    else {
+      recordExternalNormalizeFallback(ledger, "core", externalCore, "plan", "blocked");
+      throw new WorkflowBlockedError("External core returned an invalid plan; no native semantic fallback will be used.");
+    }
     ledger.append({
       type: "evidence_update",
       phase: "planning",
@@ -604,7 +611,6 @@ async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphSta
 
 async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
   const { access, config, cwd, externalAgents, goal, imagePaths, ledger, options, router, conversationTarget } = runtime;
-  const planner = new PlannerAgent();
   const policy = state.orchestrationPolicy;
   const contractPlan = state.objectiveContract ? contractToPlan(state.objectiveContract, policy) : undefined;
   const contractPrompt = state.objectiveContract
@@ -629,12 +635,11 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     allowedRoles: state.objectiveContract?.allowedRoles ?? [],
     allowedTools: state.objectiveContract?.allowedTools ?? []
   };
-  const cachedPlan = !state.plan && !externalPlanner ? getCachedPlan(cwd, plannerGoal, plannerCacheContext) : undefined;
   if (!state.plan && !externalPlanner) {
-    ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: cachedPlan ? "hit" : "miss", keyHint: plannerGoal.slice(0, 80) });
+    ledger.append({ type: "agent_cache", phase: "planning", role: "planner", cache: "planner", status: "miss", keyHint: plannerGoal.slice(0, 80), reason: "planner cache is not used for semantic routing; model planner must run" });
   }
-  state.plan = state.plan ?? cachedPlan ?? await runAgentState(state, ledger, router, "planner", async () => {
-    if (!externalPlanner) return planner.run({ goal: plannerGoal });
+  if (!state.plan && externalPlanner) {
+    state.plan = await runAgentState(state, ledger, router, "planner", async () => {
     const result = await invokeExternalRole({
       cwd,
       profile: externalPlanner,
@@ -645,16 +650,18 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     });
     recordExternalInvocationEvidence(state, ledger, result, "planner");
     const plan = normalizeExternalPlan(result.payload, goal);
-    if (!plan) recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "native planner");
-    return plan ?? planner.run({ goal: plannerGoal });
-  }, externalPlanner ? {
+    if (!plan) {
+      recordExternalNormalizeFallback(ledger, "planner", externalPlanner, "plan", "blocked");
+      throw new WorkflowBlockedError("External planner returned an invalid plan; no native semantic fallback will be used.");
+    }
+    return plan;
+  }, {
     agentKind: "external",
-    config,
-    budgetFallback: () => planner.run({ goal: plannerGoal }),
-    budgetFallbackLabel: "native planner"
-  } : "offline");
+    config
+  });
+  }
   state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract, policy) : state.plan ?? contractPlan;
-  if (!externalPlanner && !planFromExternalCore && !cachedPlan && state.plan && workflowIntent.requiresPatchWorkflow) {
+  if (!externalPlanner && !planFromExternalCore) {
     const plannerBudgetScope = beginGovernanceModelInvocation(runtime, state, {
       invocation: "model_planner",
       label: "model-backed planner",
@@ -662,7 +669,10 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
       maxOutputTokens: 900,
       localOnly: options.fixtureMode || !access.cloudAllowed
     });
-    let modelPlan = { provider: "local_planner_fallback", model: "native", fallbackUsed: true, error: "Model-backed planner blocked before invocation by budget or access policy." } as Awaited<ReturnType<typeof createModelBackedPlan>>;
+    let modelPlan: Awaited<ReturnType<typeof createModelBackedPlan>> | undefined;
+    if (!plannerBudgetScope) {
+      throw new WorkflowBlockedError("Model-backed planner blocked before invocation by budget or access policy; no native semantic fallback will be used.");
+    }
     if (plannerBudgetScope) {
       try {
         modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
@@ -676,12 +686,13 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
         throw error;
       }
     }
-    if (modelPlan.plan) {
+    if (modelPlan?.plan) {
+      const priorConstraints = state.plan?.constraints ?? [];
       state.plan = state.objectiveContract
-        ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints]) }, state.objectiveContract, policy)
+        ? overlayPlanWithContract({ ...modelPlan.plan, constraints: uniqueStrings([...priorConstraints, ...modelPlan.plan.constraints]) }, state.objectiveContract, policy)
         : {
             ...modelPlan.plan,
-            constraints: uniqueStrings([...(state.plan.constraints ?? []), ...modelPlan.plan.constraints])
+            constraints: uniqueStrings([...priorConstraints, ...modelPlan.plan.constraints])
           };
       updateCapabilityStep(state, "planner", "success", "planner completed");
       ledger.append({
@@ -694,15 +705,10 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
         evidenceRef: ledger.writeArtifact("summaries", JSON.stringify(state.plan, null, 2), "json")
       });
     } else {
-      ledger.append({
-        type: "fallback_to_native",
-        phase: "planning",
-        fallbackRole: "planner",
-        reason: `Model-backed planner unavailable; using native adaptive planner. ${modelPlan.error ?? ""}`.trim()
-      });
+      throw new WorkflowBlockedError(`Model-backed planner unavailable; no native semantic fallback will be used. ${modelPlan?.error ?? ""}`.trim());
     }
   }
-  state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "low" as const, taskType: "test" as const, verificationCommands: [], debateRecommended: false }), goal };
+  state.plan = { ...(state.plan ?? { steps: [], constraints: [], riskLevel: "medium" as const, taskType: "unknown" as const, workflowKind: "ask_user" as const, requiresPatchWorkflow: false, verificationCommands: [], debateRecommended: false }), goal };
   state.plan = applyWorkflowIntentToPlan(state.plan, workflowIntent);
   if (state.objectiveContract) state.plan = overlayPlanWithContract(state.plan, state.objectiveContract, policy);
   const governanceBudgetScope = beginGovernanceModelInvocation(runtime, state, {
@@ -712,6 +718,9 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     maxOutputTokens: 360,
     localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed
   });
+  if (!governanceBudgetScope) {
+    throw new WorkflowBlockedError("Task governance model blocked before invocation; no local semantic fallback will be used.");
+  }
   state.taskGovernance = await classifyTaskGovernance({
     goal,
     plan: state.plan,
@@ -720,15 +729,9 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     router,
     ledger,
     localOnly: options.fixtureMode || options.provider === "fixture" || !access.cloudAllowed,
-    modelDisabled: !governanceBudgetScope
+    modelDisabled: false
   });
-  if (governanceBudgetScope) {
-    if (state.taskGovernance.fallbackUsed) {
-      releaseModelInvocationBudgetScope(state, governanceBudgetScope.reservations, state.taskGovernance.reason);
-    } else {
-      commitModelInvocationBudgetScope(state, governanceBudgetScope);
-    }
-  }
+  commitModelInvocationBudgetScope(state, governanceBudgetScope);
   ledger.append({
     type: "task_governance",
     phase: "planning",
@@ -4395,7 +4398,7 @@ function beginGovernanceModelInvocation(runtime: OfflineGraphRuntime, state: Age
   maxOutputTokens: number;
   localOnly: boolean;
 }): ModelInvocationBudgetScope | undefined {
-  if (!runtime.access.cloudAllowed) {
+  if (!runtime.access.cloudAllowed && !input.localOnly) {
     runtime.ledger.append({
       type: "autonomy_limit_reached",
       phase: "planning",

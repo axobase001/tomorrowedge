@@ -10,8 +10,8 @@ import { evaluatePolicyFitness } from "../../src/core/orchestrationPolicy/policy
 import { ORCHESTRATION_POLICY_MUTATION_OPERATOR_COUNT, mutatePolicy } from "../../src/core/orchestrationPolicy/policyMutation.js";
 import { loadBestPolicy, savePolicyScore } from "../../src/core/orchestrationPolicy/policyStore.js";
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
-import { classifyWorkflowIntentLocally, type WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
-import { profileScenario } from "../../src/core/scenarios/scenarioProfiler.js";
+import type { WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
+import type { ScenarioProfile } from "../../src/core/scenarios/scenarioTypes.js";
 import { addTrace, retrieveSimilar, retrieveSimilarWithDiagnostics } from "../../src/core/traces/traceStore.js";
 import type { ObjectiveTraceV1 } from "../../src/core/traces/objectiveTrace.js";
 
@@ -246,8 +246,8 @@ function makeTrace(
   status: ObjectiveTraceV1["outcome"]["finalStatus"],
   overrides: { traceId?: string; createdAt?: string } = {}
 ): ObjectiveTraceV1 {
-  const workflowIntent = withProvider(classifyWorkflowIntentLocally(goal));
-  const scenarioProfile = profileScenario({ goal, workflowIntent, accessMode: "partial" });
+  const workflowIntent = workflowIntentFixture(goal, "patch");
+  const scenarioProfile = scenarioProfileFixture("debugging", "patch");
   const contract = generateNativeObjectiveContract({
     goal,
     workflowIntent,
@@ -316,6 +316,29 @@ function makeTrace(
   };
 }
 
-function withProvider(decision: Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed">): WorkflowIntentDecision {
-  return { ...decision, provider: "test", model: "local" };
+function workflowIntentFixture(goal: string, workflowKind: WorkflowIntentDecision["workflowKind"]): WorkflowIntentDecision {
+  const requiresPatchWorkflow = workflowKind === "patch" || workflowKind === "repair" || workflowKind === "vision_patch";
+  return {
+    intent: requiresPatchWorkflow ? "patch" : "inspect",
+    requiresPatchWorkflow,
+    workflowKind,
+    confidence: 1,
+    reason: `Test fixture declares ${workflowKind} workflow for ${goal}.`,
+    provider: "test_fixture",
+    model: "semantic-fixture",
+    fallbackUsed: false
+  };
+}
+
+function scenarioProfileFixture(scenarioType: ScenarioProfile["scenarioType"], workflowKind: ScenarioProfile["likelyWorkflowKind"]): ScenarioProfile {
+  return {
+    scenarioType,
+    userIntent: `${scenarioType} fixture intent`,
+    expectedDeliverable: workflowKind === "read_only" ? "read-only answer with evidence" : "patch workflow evidence",
+    ambiguityLevel: "low",
+    likelyWorkflowKind: workflowKind,
+    riskSignals: ["correctness_critical"],
+    evidenceNeeds: ["event ledger", "patch diff", "review decision", "judge decision"],
+    suggestedRoles: ["planner", "explorer", "coder_a", "reviewer", "judge", "runner", "summarizer"]
+  };
 }

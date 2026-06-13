@@ -636,6 +636,7 @@ export type AgentCacheEvent = BaseEvent & {
   cache: "planner" | "explorer";
   status: "hit" | "miss" | "write";
   keyHint: string;
+  reason?: string;
 };
 
 export type MemoryRetrievalEvent = BaseEvent & {
@@ -667,6 +668,8 @@ export type ScenarioProfileEvent = BaseEvent & {
   expectedDeliverable: string;
   riskSignals: string[];
   profileRef: string;
+  provider?: string;
+  model?: string;
 };
 
 export type TraceRetrievalEvent = BaseEvent & {

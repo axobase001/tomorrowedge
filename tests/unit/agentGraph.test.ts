@@ -301,7 +301,7 @@ describe("offline agent graph", () => {
     }
   });
 
-  it("reuses planner and explorer results while invalidating explorer on repo changes", async () => {
+  it("keeps planner semantic routing model-backed while reusing explorer results", async () => {
     clearContextCaches();
     const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-context-cache-"));
@@ -312,10 +312,11 @@ describe("offline agent graph", () => {
       await writeFile(path.join(cwd, "index.js"), "export function add(a, b) { return a + b; }\n// cache invalidation\n", "utf8");
       const third = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { fixtureMode: true });
 
-      expect(second.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "hit" }));
+      expect(second.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "miss" }));
       expect(second.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "explorer", status: "hit" }));
-      expect(third.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "hit" }));
+      expect(third.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "planner", status: "miss" }));
       expect(third.events).toContainEqual(expect.objectContaining({ type: "agent_cache", cache: "explorer", status: "miss" }));
+      expect(second.events.some((event) => event.type === "model_call" && event.role === "planner")).toBe(true);
     } finally {
       clearContextCaches();
       await rm(cwd, { recursive: true, force: true });
@@ -495,15 +496,16 @@ describe("offline agent graph", () => {
       }
     };
 
-    const state = await runOfflineGraph(cwd, "fix failing test", config);
+    const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true });
     const agentKinds = new Map(state.agents.map((agent) => [agent.role, agent.agentKind]));
     const plannerRoute = state.routing.assignments.find((assignment) => assignment.role === "planner");
     expect(plannerRoute).toMatchObject({ provider: "deepseek", model: "deepseek-v4-pro" });
-    expect(agentKinds.get("planner")).toBe("offline");
+    expect(agentKinds.get("planner")).toBeUndefined();
+    expect(state.events.some((event) => event.type === "model_call" && event.role === "planner" && event.provider === "mock")).toBe(true);
     expect(agentKinds.get("coder_a")).toBe("offline");
     expect(agentKinds.get("reviewer")).toBe("offline");
     expect(agentKinds.get("judge")).toBe("offline");
-    expect(state.events.find((event) => event.type === "agent_run" && event.role === "planner")).toMatchObject({ agentKind: "offline" });
+    expect(state.events.find((event) => event.type === "agent_run" && event.role === "planner")).toBeUndefined();
   });
 
   it("lets configured external MCP agents execute core-led workflow roles", async () => {
@@ -734,7 +736,7 @@ describe("offline agent graph", () => {
     });
 
     expect(state.access.cloudAllowed).toBe(false);
-    expect(state.budgetStatus?.status).toBe("blocked");
+    expect(state.events.some((event) => event.type === "autonomy_limit_reached" && event.reason.includes("Live advisory blocked"))).toBe(true);
     expect(state.modelNotes).toEqual([]);
   });
 
@@ -746,11 +748,17 @@ describe("offline agent graph", () => {
       providers: {
         ...defaultConfig.providers,
         openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "mock", model: "mock-balanced" },
+        reviewer: { provider: "openrouter", model: "openai/gpt-5.2" },
+        judge: { provider: "openrouter", model: "openai/gpt-5.2" }
       }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
 
-    expect(state.routing.assignments.find((assignment) => assignment.role === "planner")?.provider).toBe("openrouter");
+    expect(state.routing.assignments.find((assignment) => assignment.role === "reviewer")?.provider).toBe("openrouter");
     expect(state.modelNotes.length).toBeGreaterThan(0);
     expect(state.modelNotes.every((note) => note.provider === "mock")).toBe(true);
     expect(state.debateRounds.some((round) => round.speaker === "reviewer" && round.evidence.some((item) => item.includes("provider=mock/")))).toBe(true);
@@ -772,14 +780,21 @@ describe("offline agent graph", () => {
       providers: {
         ...defaultConfig.providers,
         openrouter: { ...defaultConfig.providers.openrouter, enabled: true, api_key_env: "OPENROUTER_API_KEY", base_url: "https://openrouter.ai/api/v1" }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "mock", model: "mock-balanced" },
+        reviewer: { provider: "openrouter", model: "openai/gpt-5.2" },
+        judge: { provider: "openrouter", model: "openai/gpt-5.2" }
       }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true });
 
-    expect(state.modelNotes.length).toBeGreaterThan(0);
-    expect(state.modelNotes.every((note) => note.provider === "openrouter")).toBe(true);
-    expect(state.modelNotes.every((note) => note.fallbackUsed !== true)).toBe(true);
-    expect(state.modelNotes.every((note) => note.error?.includes("not configured"))).toBe(true);
+    const errorNotes = state.modelNotes.filter((note) => note.error);
+    expect(errorNotes.length).toBeGreaterThan(0);
+    expect(errorNotes.every((note) => note.provider === "openrouter")).toBe(true);
+    expect(errorNotes.every((note) => note.fallbackUsed !== true)).toBe(true);
+    expect(errorNotes.every((note) => note.error?.includes("not configured"))).toBe(true);
   });
 
   it("records live patch candidate attempts without applying them", async () => {
@@ -801,7 +816,7 @@ describe("offline agent graph", () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
-      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 2 }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { livePatch: true, accessMode: "full" });
 
@@ -810,14 +825,14 @@ describe("offline agent graph", () => {
       invocationKind: "live_patch",
       status: "blocked"
     }));
-    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(2);
   });
 
   it("blocks live advisory through the unified model invocation budget gate", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
-      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 4 }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true, accessMode: "full" });
 
@@ -826,14 +841,14 @@ describe("offline agent graph", () => {
       invocationKind: "live_advisory",
       status: "blocked"
     }));
-    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(4);
   });
 
   it("blocks pre-judge model debate through the unified model invocation budget gate", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {
       ...defaultConfig,
-      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 2 }
     };
     const state = await runOfflineGraph(cwd, "fix failing test", config, { liveAdvisory: true, accessMode: "full" });
 
@@ -842,7 +857,7 @@ describe("offline agent graph", () => {
       invocationKind: "pre_judge_debate",
       status: "blocked"
     }));
-    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+    expect(state.budgetRuntime.strongAgentCallsUsed).toBe(2);
   });
 
   it("routes model planner and task governance through the unified model invocation budget gate", async () => {
@@ -873,7 +888,7 @@ describe("offline agent graph", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-budget-gate-blocked-"));
     const config = {
       ...defaultConfig,
-      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 0 }
+      strong_agents: { ...defaultConfig.strong_agents, max_calls_per_task: 1 }
     };
     try {
       await cp(source, cwd, { recursive: true });
@@ -882,14 +897,14 @@ describe("offline agent graph", () => {
       expect(state.events).toContainEqual(expect.objectContaining({
         type: "budget_decision",
         invocationKind: "model_planner",
-        status: "blocked"
+        status: "allowed"
       }));
       expect(state.events).toContainEqual(expect.objectContaining({
         type: "budget_decision",
         invocationKind: "task_governance",
         status: "blocked"
       }));
-      expect(state.budgetRuntime.strongAgentCallsUsed).toBe(0);
+      expect(state.budgetRuntime.strongAgentCallsUsed).toBe(1);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -953,7 +968,7 @@ describe("offline agent graph", () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, { livePatch: true, accessMode: "restricted" });
 
-    expect(state.budgetStatus?.status).toBe("blocked");
+    expect(state.events.some((event) => event.type === "autonomy_limit_reached" && event.reason.includes("Live patch generation blocked"))).toBe(true);
     expect(state.modelNotes.filter((note) => note.kind === "patch_generation")).toEqual([]);
   });
 
