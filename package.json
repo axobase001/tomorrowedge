@@ -47,6 +47,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.zh-CN.md",
     "README.product.md",
     "CHANGELOG.md",
     "LICENSE",
