@@ -489,6 +489,7 @@ export type ChiefInitialPlanEvent = BaseEvent & {
   chiefAgentId: string;
   planRef: string;
   summary: string;
+  source?: "native" | "chief_agent";
 };
 
 export type CouncilSessionStartedEvent = BaseEvent & {
@@ -509,6 +510,7 @@ export type CouncilMoveEvent = BaseEvent & {
   targetMoveId?: string;
   summary: string;
   moveRef?: string;
+  source?: "native" | "agent";
 };
 
 export type CouncilConsensusEvent = BaseEvent & {
@@ -540,6 +542,18 @@ export type TaskOwnershipAssignmentEvent = BaseEvent & {
   fallbackAgents: string[];
 };
 
+export type TaskOwnershipReassignmentEvent = BaseEvent & {
+  type: "task_ownership_reassignment";
+  taskGraphId?: string;
+  taskNodeId: string;
+  oldOwnerAgentId: string;
+  newOwnerAgentId: string;
+  assignedProvider: string;
+  assignedModel?: string;
+  reason: string;
+  trigger: "budget_blocked" | "agent_failure" | "strategy_mutation";
+};
+
 export type DelegatedTaskResultEvent = BaseEvent & {
   type: "delegated_task_result";
   taskNodeId: string;
@@ -559,12 +573,17 @@ export type StrategyMutationRuntimeEvent = BaseEvent & {
   mutationId: string;
   parentStrategyId: string;
   childStrategyId: string;
-  mutationType: "split_task" | "switch_owner_agent" | "add_reviewer" | "add_judge" | "increase_debate" | "trigger_council_replan" | "relax_cost" | "tighten_evidence" | "fallback_to_chief";
+  mutationType: "split_task" | "switch_owner_agent" | "retry_same_owner" | "add_reviewer" | "add_judge" | "increase_debate" | "trigger_council_replan" | "relax_cost" | "tighten_evidence" | "escalate_to_chief" | "fallback_to_chief";
   trigger: "test_failed" | "review_blocked" | "judge_request_revision" | "budget_blocked" | "evidence_gap" | "agent_failure" | "timeout";
   reason: string;
   affectedTaskNodeIds: string[];
   selected: boolean;
   mutationRef: string;
+  requestedChange?: string;
+  appliedChange?: string;
+  changedOwner?: boolean;
+  oldOwnerAgentId?: string;
+  newOwnerAgentId?: string;
 };
 
 export type StrategySelectionDecisionEvent = BaseEvent & {
@@ -592,6 +611,7 @@ export type ChiefFinalReviewEvent = BaseEvent & {
   summary: string;
   unresolvedRisks: string[];
   requiredRevisions: string[];
+  source?: "native" | "chief_agent";
 };
 
 export type ChiefDeliveryApprovedEvent = BaseEvent & {
@@ -627,7 +647,7 @@ export type TraceCompletenessEvent = BaseEvent & {
   missing: string[];
   intentionallySkipped?: string[];
   blockedByApproval?: string[];
-  workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user";
+  workflowKind?: "read_only" | "patch" | "repair" | "vision_patch" | "advisory" | "ask_user" | "sirius_council";
   traceCompletenessRef?: string;
 };
 
@@ -845,6 +865,7 @@ export type TomorrowEdgeEvent =
   | CouncilConsensusEvent
   | CouncilUnresolvedRiskEvent
   | TaskOwnershipAssignmentEvent
+  | TaskOwnershipReassignmentEvent
   | DelegatedTaskResultEvent
   | StrategyMutationRuntimeEvent
   | StrategySelectionDecisionEvent

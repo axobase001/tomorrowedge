@@ -11,6 +11,7 @@ import { addTrace } from "../../core/traces/traceStore.js";
 import { renderCockpit } from "../renderCockpit.js";
 import { getWorkflowRecipe, materializeRecipeGoal } from "../../core/recipes/recipeLoader.js";
 import { liveOption, prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, isFixtureRun, isKnownFixtureSampleRepo } from "../../core/runtime/runPreparation.js";
+import { normalizeUserSuppliedText } from "../../utils/textEncoding.js";
 
 export { prepareRunWorkspace, type RunWorkspace } from "../../core/runtime/runPreparation.js";
 
@@ -41,7 +42,11 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   const targetCwd = options.cwd ? path.resolve(cwd, options.cwd) : cwd;
   const recipe = options.recipe ? getWorkflowRecipe(options.recipe) : undefined;
   if (options.recipe && !recipe) throw new Error(`Unknown workflow recipe "${options.recipe}". Run "tedge recipes" to list available recipes.`);
-  const effectiveGoal = recipe ? materializeRecipeGoal(recipe, goal) : goal.trim();
+  const normalizedGoal = normalizeUserSuppliedText(goal);
+  if (normalizedGoal.repaired) {
+    process.stderr.write(`Warning: repaired probable CLI text encoding issue: ${normalizedGoal.reason}.\n`);
+  }
+  const effectiveGoal = recipe ? materializeRecipeGoal(recipe, normalizedGoal.text) : normalizedGoal.text;
   if (!effectiveGoal) throw new Error("Task goal is required unless --recipe supplies a default goal.");
   const accessMode = parseAccessMode(options.accessMode);
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);

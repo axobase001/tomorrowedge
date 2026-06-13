@@ -2,6 +2,7 @@ import { loadConfig } from "../../config/configLoader.js";
 import { createConversationSession } from "../../core/conversation/conversationSession.js";
 import { listConversationTargets, renderConversationTarget } from "../../core/conversation/conversationTargets.js";
 import { saveSession } from "../../core/memory/sessionMemory.js";
+import { normalizeUserSuppliedText } from "../../utils/textEncoding.js";
 
 export async function targetsCommand(cwd: string): Promise<void> {
   const config = loadConfig(cwd);
@@ -17,7 +18,11 @@ export async function targetsCommand(cwd: string): Promise<void> {
 
 export async function askCommand(cwd: string, message: string, options: { to?: string; headless?: boolean } = {}): Promise<void> {
   const config = loadConfig(cwd);
-  const state = createConversationSession({ message, target: options.to, config });
+  const normalizedMessage = normalizeUserSuppliedText(message);
+  if (normalizedMessage.repaired) {
+    process.stderr.write(`Warning: repaired probable CLI text encoding issue: ${normalizedMessage.reason}.\n`);
+  }
+  const state = createConversationSession({ message: normalizedMessage.text, target: options.to, config });
   const sessionPath = await saveSession(cwd, state, { failureMemory: config.failure_memory });
   if (options.headless) {
     process.stdout.write(JSON.stringify({ sessionPath, conversationTarget: state.conversationTarget, summary: state.finalSummary }, null, 2) + "\n");

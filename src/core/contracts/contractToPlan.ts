@@ -3,6 +3,7 @@ import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestra
 import { planStepLimit, shouldPolicyRequireJudge, shouldPolicyRequireReviewer } from "../orchestrationPolicy/runtimePolicy.js";
 import { buildTaskGraph } from "../planning/taskGraphBuilder.js";
 import type { ObjectiveContractV1 } from "./objectiveContract.js";
+import { isBoundedFileVerificationCommand } from "./verificationCommandPolicy.js";
 
 export function contractToPlan(contract: ObjectiveContractV1, policy?: OrchestrationPolicyGenome): Plan {
   const patchLike = contract.workflowKind !== "read_only" && contract.workflowKind !== "advisory" && contract.workflowKind !== "ask_user";
@@ -46,7 +47,9 @@ export function overlayPlanWithContract(plan: Plan, contract: ObjectiveContractV
     acceptanceCriteria: mergeStrings(contract.successCriteria, plan.acceptanceCriteria ?? []),
     constraints: mergeStrings(contractPlan.constraints, plan.constraints ?? []),
     steps: mergePlanSteps(contractPlan.steps, plan.steps, policy),
-    verificationCommands: mergeStrings(contract.verificationRubric.requiredCommands, plan.verificationCommands ?? []),
+    verificationCommands: contract.verificationRubric.requiredCommands.some(isBoundedFileVerificationCommand)
+      ? contract.verificationRubric.requiredCommands
+      : mergeStrings(contract.verificationRubric.requiredCommands, plan.verificationCommands ?? []),
     debateRecommended: policy?.planningPolicy.allowParallelRoles === false ? false : plan.debateRecommended || contractPlan.debateRecommended,
     reasonForDebate: policy?.planningPolicy.allowParallelRoles === false ? undefined : plan.reasonForDebate ?? contractPlan.reasonForDebate
   };

@@ -1044,7 +1044,7 @@ describe("offline agent graph", () => {
       });
 
       expect(state.budgetStatus?.status).toBe("blocked");
-      expect(state.budgetStatus?.estimatedInputTokens).toBeGreaterThan(1000);
+      expect(state.budgetStatuses.some((status) => status.status === "blocked" && (status.estimatedInputTokens ?? 0) > 1000)).toBe(true);
       expect(state.modelNotes.find((note) => note.kind === "vision_spec")).toBeUndefined();
       expect(state.visualSpec?.pageType).toBe("ui_screen");
     } finally {

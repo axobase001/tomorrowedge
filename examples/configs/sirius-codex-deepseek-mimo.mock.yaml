@@ -1,0 +1,94 @@
+project:
+  access_mode: full
+  telemetry: false
+
+providers:
+  mock:
+    enabled: true
+    model: mock-balanced
+  fixture:
+    enabled: true
+    model: fixture-scripted
+  deepseek:
+    enabled: false
+  mimo:
+    enabled: false
+
+chief_agent:
+  id: codex
+  provider: external:codex
+  model: Codex mock command
+  roles:
+    - lead_planner
+    - architecture_reviewer
+    - final_judge
+    - final_code_review
+  trustLevel: high
+  costTier: expensive
+
+external_agents:
+  codex:
+    enabled: true
+    name: Codex mock chief
+    transport: mcp
+    adapter: codex
+    responseMode: json
+    strictJson: false
+    command: node
+    args:
+      - tests/fixtures/mock-command-agent.mjs
+    roles:
+      - core
+      - planner
+      - reviewer
+      - judge
+    capabilities:
+      - core
+      - planning
+      - architecture
+      - review
+      - judgment
+      - tool_use
+    trustLevel: high
+
+agent_capabilities:
+  codex:
+    planning: 0.95
+    architecture: 0.95
+    review: 0.92
+    judging: 0.95
+    costTier: expensive
+    trustLevel: high
+    allowedRoles:
+      - core
+      - planner
+      - reviewer
+      - judge
+  deepseek:
+    coding: 0.9
+    patchGeneration: 0.9
+    repair: 0.8
+    costTier: medium
+    trustLevel: medium
+    allowedRoles:
+      - coder_a
+      - coder_b
+      - repairer
+  mimo:
+    testGeneration: 0.78
+    coding: 0.68
+    longContext: 0.62
+    costTier: cheap
+    trustLevel: medium
+    allowedRoles:
+      - explorer
+      - runner
+      - summarizer
+
+strong_agents:
+  max_calls_per_task: 8
+  max_cost_usd: 2
+  reserve_for_roles:
+    - planner
+    - reviewer
+    - judge

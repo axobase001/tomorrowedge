@@ -5,6 +5,7 @@ import type { DelegatedTaskResult } from "../delegatedExecution/delegatedExecuti
 
 export type FinalChiefReview = {
   chiefAgentId: string;
+  source: "native" | "chief_agent";
   decision:
     | "approve_delivery"
     | "request_revision"
@@ -46,6 +47,7 @@ export function runFinalChiefReview(input: {
   const decision = unresolvedRisks.length ? "request_revision" : "approve_delivery";
   return {
     chiefAgentId: input.chiefAgentId,
+    source: "native",
     decision,
     architectureConsistency: failed.length ? "fail" : input.mutationCount > 0 ? "warning" : "pass",
     codeReviewSummary: failed.length

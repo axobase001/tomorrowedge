@@ -63,7 +63,7 @@ export class GeminiProvider implements ModelProvider {
 
   private async fetchGenerateContent(model: string, body: Record<string, unknown>): Promise<Response> {
     const controller = new AbortController();
-    const timeoutMs = this.options.requestTimeoutMs ?? 120_000;
+    const timeoutMs = this.options.requestTimeoutMs ?? 60_000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(`${this.baseUrl()}/models/${encodeURIComponent(model)}:generateContent`, {
@@ -89,8 +89,8 @@ export class GeminiProvider implements ModelProvider {
   }
 }
 
-export function createGeminiProvider(apiKey?: string, defaultModel?: string, baseUrl?: string, extraHeaders?: Record<string, string>): GeminiProvider {
-  return new GeminiProvider({ apiKey, defaultModel, baseUrl, extraHeaders });
+export function createGeminiProvider(apiKey?: string, defaultModel?: string, baseUrl?: string, extraHeaders?: Record<string, string>, requestTimeoutMs?: number): GeminiProvider {
+  return new GeminiProvider({ apiKey, defaultModel, baseUrl, extraHeaders, requestTimeoutMs });
 }
 
 function toGeminiContents(messages: ChatMessage[]): Array<{ role: "user" | "model"; parts: GeminiPart[] }> {

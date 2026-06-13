@@ -4,6 +4,7 @@ import type { RiskLevel } from "../../schemas/plan.js";
 import type { EventPhase } from "../events/eventTypes.js";
 import type { ObjectiveContractV1 } from "../contracts/objectiveContract.js";
 import type { ContractVerificationResult } from "../contracts/objectiveContract.js";
+import { boundedFileVerificationCommand, shouldUseDefaultNpmTest } from "../contracts/verificationCommandPolicy.js";
 import type { OrchestrationPolicyGenome } from "./orchestrationPolicy.js";
 
 export type ContractTool = "shell" | "patch_apply" | "file_write";
@@ -34,8 +35,10 @@ export function applyPolicyToContract(contract: ObjectiveContractV1, policy: Orc
     judgeChecks: tuneJudgeChecks(next.verificationRubric.judgeChecks, policy, next.riskLevel, patchLike)
   };
 
-  if (policy.verificationPolicy.requireCommandValidationForPatch && patchLike && !next.verificationRubric.requiredCommands.length) {
-    next.verificationRubric.requiredCommands.push("npm test");
+  if (policy.verificationPolicy.requireCommandValidationForPatch && !next.verificationRubric.requiredCommands.length) {
+    const boundedVerifier = boundedFileVerificationCommand(next.goal);
+    if (boundedVerifier) next.verificationRubric.requiredCommands.push(boundedVerifier);
+    else if (shouldUseDefaultNpmTest(next.goal, patchLike, "partial")) next.verificationRubric.requiredCommands.push("npm test");
   }
   if (light && !policy.verificationPolicy.requireCommandValidationForPatch && patchLike) {
     next.verificationRubric.requiredCommands = next.verificationRubric.requiredCommands.slice(0, 1);

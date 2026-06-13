@@ -4,6 +4,7 @@ import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
 import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitErrorLoopTimelineItem, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { buildCapabilityDashboard } from "./capabilityRegistry.js";
 import { eventSummary, inferWorkflowStage, isMissingPatchDeliverable, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
+import { resolveCockpitShellCommand } from "./verificationCommand.js";
 
 export type CockpitViewModelOptions = {
   source?: CockpitSessionSource;
@@ -605,12 +606,13 @@ function buildApprovals(state?: AgentGraphState): CockpitApproval[] {
     });
   }
   if (state.changedFiles.length && !state.runResults.length) {
+    const command = resolveCockpitShellCommand(state) ?? "verification command";
     approvals.push({
       id: "shell:test",
       kind: "shell",
       title: "Waiting for shell approval",
       status: state.approvals.shellApproved ? "approved" : "waiting",
-      command: state.plan?.verificationCommands?.[0] ?? "npm test",
+      command,
       filesChanged: state.changedFiles,
       testStatus: "not_run",
       summary: "Patch is ready. Waiting for verification command authorization."
@@ -914,8 +916,8 @@ function failureBody(state: AgentGraphState): string {
     `Task: ${summary?.task ?? state.goal}`,
     failedRun ? `Root cause candidate: verification command failed (${failedRun.command}, exit=${failedRun.exitCode}).` : summary?.risksRemaining[0] ? `Root cause candidate: ${summary.risksRemaining[0]}` : "Root cause candidate: workflow stopped before a successful summary.",
     failedShell && failedShell.type === "shell_run" && failedShell.error ? `Shell error: ${failedShell.error}` : undefined,
-    failedRun?.stdout ? `stdout:\n${clipText(failedRun.stdout, 900)}` : undefined,
-    failedRun?.stderr ? `stderr:\n${clipText(failedRun.stderr, 900)}` : undefined,
+    failedRun?.stdout ? `stdout:\n${clipText(stripAnsi(failedRun.stdout), 900)}` : undefined,
+    failedRun?.stderr ? `stderr:\n${clipText(stripAnsi(failedRun.stderr), 900)}` : undefined,
     "",
     "Evidence:",
     ...(summary?.evidence.length ? summary.evidence.map((item) => formatEvidenceItem(item)) : ["- No summary evidence was recorded."]),
@@ -924,6 +926,10 @@ function failureBody(state: AgentGraphState): string {
     ...(summary?.risksRemaining.length ? summary.risksRemaining.map((risk) => `- ${risk}`) : ["- Open Details for raw events and artifacts.", "- Re-run with live models or request re-review if the diagnosis is incomplete."])
   ].filter((item): item is string => item !== undefined);
   return sections.join("\n");
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
 }
 
 function formatEvidenceItem(item: string): string {

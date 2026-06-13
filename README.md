@@ -11,7 +11,7 @@ It gives engineering teams a GUI/runtime layer for strong-agent governance, budg
 It is not another chat bot, single-model CLI wrapper, benchmark dashboard, or general personal-agent OS. TomorrowEdge turns Codex, Claude Code, DeepSeek, MiMo, Ollama, OpenRouter models, local models, command agents, MCP agents, and custom adapters into replaceable capability nodes inside a governed software-engineering council.
 
 ```text
-Full autonomy, full visibility.
+Governed orchestration. Full traceability.
 Strong agents should decide. Efficient agents should execute.
 Codex and Claude Code give agents full access.
 TomorrowEdge gives heterogeneous full-access agents governance, trace, budgets, and policy evolution.
@@ -124,6 +124,7 @@ Run the Sirius council path:
 
 ```bash
 npm run dev -- council run "Rewrite a small TypeScript utility as a Rust module with tests" --headless --fixture-mode
+npm run dev -- council run "Rewrite a small TypeScript utility as a Rust module with tests" --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml --headless --fixture-mode
 ```
 
 Or through the normal `run` command:
@@ -200,7 +201,7 @@ Runtime artifacts are preserved for replay, while compact evidence packets are p
 
 ### Orchestration Policy Genome
 
-Inspired by evolutionary algorithms, TomorrowEdge makes orchestration policy the unit of evolution.
+Inspired by evolutionary algorithms, TomorrowEdge makes orchestration policy the unit of evolution. The unit of evolution is not answer, prompt, or agent; it is orchestration policy.
 
 The system does not evolve model weights, raw prompts, or individual answers. It evolves bounded runtime policies that decide how contracts are generated, how plans are derived, how roles are routed, how evidence is verified, how failures are repaired, how traces are retrieved, and when a run should stop or ask the user.
 
@@ -216,7 +217,7 @@ Safety boundaries cannot be mutated.
 | `partial` | Patch and shell actions require approval. |
 | `full` | Patch, shell, and repair can run automatically when policy permits. Every step is still logged. |
 
-Full access means full autonomy plus full visibility, not silent execution.
+Full access means governed autonomy plus full traceability, not silent execution.
 
 ## CLI Map
 
@@ -292,7 +293,7 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.5.0`.
+Current version: `1.5.1`.
 
 Release line: Sirius.
 

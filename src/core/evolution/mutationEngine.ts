@@ -5,6 +5,7 @@ import type { StrategyGenome } from "./strategyGenome.js";
 export type MutationType =
   | "split_task"
   | "switch_owner_agent"
+  | "retry_same_owner"
   | "add_reviewer"
   | "add_judge"
   | "increase_debate"
@@ -31,6 +32,11 @@ export type StrategyMutationEvent = {
   reason: string;
   affectedTaskNodeIds: string[];
   selected: boolean;
+  requestedChange?: string;
+  appliedChange?: string;
+  changedOwner?: boolean;
+  oldOwnerAgentId?: string;
+  newOwnerAgentId?: string;
 };
 
 export type StrategySelectionDecision = {
@@ -62,7 +68,13 @@ export function proposeStrategyMutations(input: {
     };
     return { mutations: [], selectedStrategy: input.strategy, decision };
   }
-  const mutationType = mutationTypeForTrigger(input.trigger);
+  const requestedMutationType = mutationTypeForTrigger(input.trigger);
+  const affectedNodes = input.taskGraph.nodes.filter((node) => input.affectedTaskNodeIds.includes(node.id));
+  const firstAffected = affectedNodes[0];
+  const canSwitchOwner = affectedNodes.some((node) => (node.fallbackAgents ?? []).some((agentId) => agentId !== node.ownerAgentId));
+  const mutationType: MutationType = requestedMutationType === "switch_owner_agent" && !canSwitchOwner
+    ? "retry_same_owner"
+    : requestedMutationType;
   const child = mutateStrategy(input.strategy, mutationType);
   const mutation: StrategyMutationEvent = {
     id: makeId("mutation"),
@@ -72,7 +84,16 @@ export function proposeStrategyMutations(input: {
     trigger: input.trigger,
     reason: mutationReason(input.trigger, mutationType),
     affectedTaskNodeIds: input.affectedTaskNodeIds,
-    selected: true
+    selected: true,
+    requestedChange: requestedMutationType === "switch_owner_agent"
+      ? `switch owner for ${input.affectedTaskNodeIds.join(", ")}`
+      : `${mutationType} for ${input.affectedTaskNodeIds.join(", ")}`,
+    appliedChange: mutationType === "retry_same_owner"
+      ? "no fallback owner available; retry same owner with tightened governance context"
+      : "pending runtime application",
+    changedOwner: false,
+    oldOwnerAgentId: firstAffected?.ownerAgentId,
+    newOwnerAgentId: mutationType === "retry_same_owner" ? firstAffected?.ownerAgentId : undefined
   };
   const decision: StrategySelectionDecision = {
     selectedStrategyId: child.id,
@@ -130,6 +151,10 @@ function mutateStrategy(parent: StrategyGenome, mutationType: MutationType): Str
     case "switch_owner_agent":
       child.agentAssignmentStrategy = parent.budgetPolicy === "cheap_first" ? "quality_first" : "cost_saver";
       child.budgetPolicy = parent.budgetPolicy === "cheap_first" ? "balanced" : "cheap_first";
+      break;
+    case "retry_same_owner":
+      child.reviewStrictness = "strict";
+      child.debateDepth = Math.min(3, parent.debateDepth + 1) as StrategyGenome["debateDepth"];
       break;
     case "add_judge":
     case "add_reviewer":

@@ -16,6 +16,8 @@ import { isBinaryLikePath } from "../../safety/fileRisk.js";
 import { textQualityIssueForUnifiedDiff } from "../patch/patchValidator.js";
 
 const maxPatchCompletionTokens = 3600;
+const maxPatchRepairCompletionTokens = 1200;
+const livePatchRequestTimeoutMs = 90_000;
 const maxFileChars = 2400;
 const maxExplicitFileChars = 16000;
 const maxContextFiles = 8;
@@ -43,6 +45,7 @@ export type LivePatchPlan = {
 export async function buildLivePatchPlans(input: LivePatchInput): Promise<LivePatchPlan[]> {
   const roles: Array<"coder_a" | "coder_b"> = input.allowParallelRoles === false ? ["coder_a"] : ["coder_a", "coder_b"];
   const context = await buildPatchContext(input.cwd, input.goal, input.contextSelection, input.config.privacy.allow_cloud_repo_context);
+  const expectedFiles = expectedTextOutputFiles(input.goal).length;
   return roles.map((role) => {
     const assignment = input.router.assignmentFor(role);
     return {
@@ -50,7 +53,7 @@ export async function buildLivePatchPlans(input: LivePatchInput): Promise<LivePa
       provider: assignment.provider,
       model: assignment.model,
       prompt: buildPatchPrompt(input, role, context),
-      maxOutputTokens: maxPatchCompletionTokens
+      maxOutputTokens: expectedFiles >= 3 ? Math.max(maxPatchCompletionTokens, 5200) : maxPatchCompletionTokens
     };
   });
 }
@@ -88,8 +91,10 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
   }
 
   if (result.response && parseError) {
+    const recovered = maybeRecoverDocumentCandidate(input, plan, noteBase, result, parseError, retryUsed);
+    if (recovered) return recovered;
     retryUsed = true;
-    const retry = await requestPatchJson(input, plan, buildRetryPrompt(plan.prompt, result.response.content, parseError));
+    const retry = await requestPatchJson(input, plan, buildRetryPrompt(plan.prompt, result.response.content, parseError), Math.min(plan.maxOutputTokens, maxPatchRepairCompletionTokens));
     result = retry.result;
     if (result.response) {
       try {
@@ -151,7 +156,7 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
   };
 }
 
-async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prompt: string) {
+async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prompt: string, maxOutputTokens = plan.maxOutputTokens) {
   const result = await chatWithProviderFallback({
     config: input.config,
     router: input.router,
@@ -165,12 +170,14 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
         {
           role: "system",
           content:
-            "You generate conservative code patches. Return ONLY JSON with keys summary, unifiedDiff, filesChanged, testPlan, knownTradeoffs, estimatedRisk. unifiedDiff must be a standard git-style unified diff. Do not use markdown fences."
+            "You generate conservative patch candidates. Return ONLY JSON with keys summary, unifiedDiff, filesChanged, testPlan, knownTradeoffs, estimatedRisk. For multi-file text generation tasks, you may return files: [{path, content}] instead of unifiedDiff; TomorrowEdge will convert that file bundle into a standard diff. Do not use markdown fences."
         },
         { role: "user", content: prompt }
       ],
       temperature: plan.role === "coder_a" ? 0.15 : 0.35,
-      maxCompletionTokens: plan.maxOutputTokens,
+      maxCompletionTokens: maxOutputTokens,
+      timeoutMs: livePatchRequestTimeoutMs,
+      maxRetries: 0,
       responseFormat: shouldUseJsonResponseFormat(provider, model) ? { type: "json_object" } : undefined
     })
   });
@@ -185,16 +192,24 @@ function buildCandidateFromResponse(input: LivePatchInput, plan: LivePatchPlan, 
   if (textQualityIssue) {
     throw new Error(`Live patch response text quality issue: ${textQualityIssue}`);
   }
+  const filesChanged = parsed.filesChanged.length ? parsed.filesChanged : inferFilesFromDiff(parsed.unifiedDiff);
+  const normalizedRisk = normalizeGeneratedArtifactRisk(input.goal, parsed.estimatedRisk, filesChanged);
+  const knownTradeoffs = normalizedRisk === parsed.estimatedRisk
+    ? parsed.knownTradeoffs
+    : [
+        ...parsed.knownTradeoffs,
+        "Patch application risk was normalized because changes are bounded to explicitly requested generated text artifacts; content correctness still requires review."
+      ];
   const candidate: PatchCandidate = {
     candidateId: makeId(`live_${plan.role}`),
     agentId: plan.role,
     approach: plan.role === "coder_a" ? "minimal_patch" : "alternative",
     summary: parsed.summary || "Live model patch candidate.",
-    filesChanged: parsed.filesChanged.length ? parsed.filesChanged : inferFilesFromDiff(parsed.unifiedDiff),
+    filesChanged,
     unifiedDiff: parsed.unifiedDiff,
     testPlan: parsed.testPlan.length ? parsed.testPlan : input.plan.verificationCommands ?? [],
-    knownTradeoffs: parsed.knownTradeoffs,
-    estimatedRisk: parsed.estimatedRisk
+    knownTradeoffs,
+    estimatedRisk: normalizedRisk
   };
   return {
     candidate,
@@ -273,6 +288,8 @@ function buildPatchPrompt(input: LivePatchInput, role: AgentRole, context: strin
     "- Target files explicitly mentioned in the task are pinned in context; use their exact content and line structure.",
     "- For exact replacement tasks, change only lines containing the exact old phrase from the task. Do not edit adjacent translations, garbled text, or similar descriptions.",
     "- Preserve requested wording exactly; do not invent ranges, stronger claims, or alternate numbers.",
+    "- If the task asks you to create multiple text, Markdown, HTML, SVG, JSON, or source files, prefer JSON key files: [{\"path\":\"relative/path\",\"content\":\"full UTF-8 content\"}] instead of hand-writing a giant unifiedDiff.",
+    "- For file-bundle output, include every required output file with its exact relative path and complete text content.",
     "- If no safe patch can be produced, return an empty unifiedDiff and explain why in summary.",
     input.visualSpec ? "Structured visual spec:" : "",
     input.visualSpec?.handoffPrompt ?? "",
@@ -287,10 +304,11 @@ function buildRetryPrompt(originalPrompt: string, previousResponse: string, erro
     "",
     "Your previous response could not be used as a patch.",
     `Patch error: ${error}`,
-    "Return ONLY one valid JSON object with exactly these keys: summary, unifiedDiff, filesChanged, testPlan, knownTradeoffs, estimatedRisk.",
-    "The unifiedDiff value must be a non-empty git-style unified diff with --- and +++ file headers and at least one hunk.",
+    "Return ONLY one valid JSON object.",
+    "Either include unifiedDiff as a non-empty git-style unified diff, or include files: [{path, content}] for generated text files.",
+    "If the task creates multiple files, prefer files: [{path, content}] so TomorrowEdge can convert the bundle into a patch safely.",
     "All generated text must be readable valid UTF-8. Do not return mojibake, replacement characters, or garbled Chinese/CJK text.",
-    "Do not include markdown fences. Escape newlines inside unifiedDiff as JSON string characters.",
+    "Do not include markdown fences. Escape newlines inside JSON string values.",
     "Previous invalid response excerpt:",
     previousResponse.slice(0, 1600)
   ].join("\n");
@@ -312,7 +330,7 @@ function parsePatchJson(raw: string): {
     .trim();
   let jsonText = extractFirstJsonObject(text);
   try {
-    const parsed = livePatchResponseSchema.safeParse(JSON.parse(jsonText));
+    const parsed = livePatchResponseSchema.safeParse(normalizePatchResponseJson(JSON.parse(jsonText)));
     if (!parsed.success) {
       throw new Error(`Live patch response schema mismatch: ${parsed.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
     }
@@ -322,12 +340,74 @@ function parsePatchJson(raw: string): {
       const nestedStart = jsonText.indexOf("{\n");
       if (nestedStart > 0) {
         jsonText = jsonText.slice(nestedStart);
-        const parsed = livePatchResponseSchema.safeParse(JSON.parse(jsonText));
+        const parsed = livePatchResponseSchema.safeParse(normalizePatchResponseJson(JSON.parse(jsonText)));
         if (parsed.success) return parsed.data;
       }
     }
-    throw firstError;
+  throw firstError;
   }
+}
+
+function normalizePatchResponseJson(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const object = { ...(input as Record<string, unknown>) };
+  const generatedFiles = generatedTextFilesFrom(object);
+  if (generatedFiles.length) {
+    const diff = typeof object.unifiedDiff === "string" ? object.unifiedDiff.trim() : "";
+    if (!diff) object.unifiedDiff = unifiedDiffForGeneratedFiles(generatedFiles);
+    const existingFiles = Array.isArray(object.filesChanged) ? object.filesChanged.filter((item): item is string => typeof item === "string") : [];
+    object.filesChanged = existingFiles.length ? existingFiles : generatedFiles.map((file) => file.path);
+  }
+  return object;
+}
+
+type GeneratedTextFile = {
+  path: string;
+  content: string;
+};
+
+function generatedTextFilesFrom(object: Record<string, unknown>): GeneratedTextFile[] {
+  for (const key of ["files", "generatedFiles", "fileBundle", "artifacts"]) {
+    const files = normalizeGeneratedFileList(object[key]);
+    if (files.length) return files;
+  }
+  return [];
+}
+
+function normalizeGeneratedFileList(value: unknown): GeneratedTextFile[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return undefined;
+        const record = item as Record<string, unknown>;
+        const pathValue = record.path ?? record.filePath ?? record.filename ?? record.name;
+        const contentValue = record.content ?? record.text ?? record.body ?? record.source;
+        if (typeof pathValue !== "string" || typeof contentValue !== "string") return undefined;
+        const normalizedPath = normalizeGeneratedFilePath(pathValue);
+        if (!normalizedPath || !contentValue.trim()) return undefined;
+        return { path: normalizedPath, content: contentValue };
+      })
+      .filter((item): item is GeneratedTextFile => Boolean(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([filePath, content]) => {
+        if (typeof content !== "string") return undefined;
+        const normalizedPath = normalizeGeneratedFilePath(filePath);
+        if (!normalizedPath || !content.trim()) return undefined;
+        return { path: normalizedPath, content };
+      })
+      .filter((item): item is GeneratedTextFile => Boolean(item));
+  }
+  return [];
+}
+
+function normalizeGeneratedFilePath(raw: string): string | undefined {
+  const normalized = raw.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/[),.;:]+$/g, "");
+  if (!normalized || path.isAbsolute(normalized) || normalized.includes("..")) return undefined;
+  if (/^(?:node_modules|\.git|\.tomorrowedge|dist|coverage)\//.test(normalized)) return undefined;
+  if (/(^|\/)\.env(?:\.|$)/.test(normalized)) return undefined;
+  return normalized;
 }
 
 function inferFilesFromDiff(diff: string): string[] {
@@ -439,6 +519,61 @@ function unifiedDiffForNewFile(filePath: string, content: string): string {
     `@@ -0,0 +1,${Math.max(1, lines.length)} @@`,
     ...lines.map((line) => `+${line}`)
   ].join("\n") + "\n";
+}
+
+function unifiedDiffForGeneratedFiles(files: GeneratedTextFile[]): string {
+  return files.map((file) => unifiedDiffForNewFile(file.path, file.content)).join("\n");
+}
+
+function maybeRecoverDocumentCandidate(
+  input: LivePatchInput,
+  plan: LivePatchPlan,
+  noteBase: ModelNote,
+  result: Awaited<ReturnType<typeof chatWithProviderFallback>>,
+  parseError: string,
+  retryUsed: boolean
+): { candidate: PatchCandidate; note: ModelNote } | undefined {
+  if (!result.response) return undefined;
+  const expectedFiles = expectedTextOutputFiles(input.goal);
+  if (expectedFiles.length > 1) return undefined;
+  const fallbackCandidate = buildDocumentFallbackCandidate(input, plan, result.response.content, parseError);
+  if (!fallbackCandidate) return undefined;
+  return {
+    candidate: fallbackCandidate,
+    note: {
+      ...noteBase,
+      provider: result.provider,
+      model: result.model,
+      fallbackUsed: result.fallbackUsed,
+      fallbackFrom: result.fallbackFrom,
+      fallbackReason: result.fallbackReason ?? "document_response_export",
+      error: parseError,
+      content: `Recovered long-form document content into ${fallbackCandidate.filesChanged.join(", ")} after patch JSON parsing failed.`,
+      usage: result.response.usage,
+      estimatedCostUsd: estimateCostUsd(result.provider, result.response.usage),
+      retryUsed
+    }
+  };
+}
+
+function expectedTextOutputFiles(goal: string): string[] {
+  const matches = [...goal.matchAll(/(?:^|[\s`"'(:])((?:(?:[A-Za-z0-9_.@()[\]-]+[\\/])+)?[A-Za-z0-9_.@()[\]-]+\.(?:md|markdown|html|htm|svg|txt|rst|adoc|json|css|js|ts|tsx|jsx|py|rs|go|java|cpp|c|h|hpp|toml|yaml|yml))(?:$|[\s`"',.;:)])/gi)]
+    .map((match) => normalizeGeneratedFilePath(match[1]))
+    .filter((value): value is string => Boolean(value));
+  return [...new Set(matches)];
+}
+
+function normalizeGeneratedArtifactRisk(goal: string, risk: PatchCandidate["estimatedRisk"], filesChanged: string[]): PatchCandidate["estimatedRisk"] {
+  if (risk !== "high") return risk;
+  const expectedFiles = expectedTextOutputFiles(goal);
+  if (!expectedFiles.length || !filesChanged.length) return risk;
+  const expected = new Set(expectedFiles);
+  const boundedToExpectedTextOutputs = filesChanged.every((file) => expected.has(file) && isTextOutputPath(file));
+  return boundedToExpectedTextOutputs ? "medium" : risk;
+}
+
+function isTextOutputPath(filePath: string): boolean {
+  return /\.(?:md|markdown|html|htm|svg|txt|rst|adoc|json|css|js|ts|tsx|jsx|py|rs|go|java|cpp|c|h|hpp|toml|yaml|yml)$/i.test(filePath);
 }
 
 function emptyCandidate(role: "coder_a" | "coder_b", reason: string, plan: Plan): PatchCandidate {

@@ -208,7 +208,7 @@ describe("fixture E2E workflow", () => {
     expect(output).toContain("AssertionError");
     expect(output).toContain("-  return a * b;");
     expect(output).toContain("+  return a + b;");
-    expect(output).toContain("completed: Implement test task");
+    expect(output).toContain("completed: Implement bugfix task");
   }, 15_000);
 
   it("static TUI fallback shows recent failed repair and passing events", async () => {

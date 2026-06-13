@@ -348,7 +348,76 @@ input, textarea, select {
   border-radius: 5px;
   background: var(--te-alt);
   color: var(--te-text);
-  font: 13px/1.55 var(--te-sans) !important;
+  font: 13px/1.55 var(--te-sans);
+}
+.te-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.te-markdown > *:first-child { margin-top: 0; }
+.te-markdown > *:last-child { margin-bottom: 0; }
+.te-markdown p,
+.te-markdown li {
+  color: var(--te-text);
+  line-height: 1.55;
+}
+.te-markdown h3,
+.te-markdown h4 {
+  margin: 14px 0 8px;
+  color: var(--te-text);
+  line-height: 1.3;
+}
+.te-markdown h3 { font-size: 15px; }
+.te-markdown h4 { font-size: 13px; }
+.te-markdown ul,
+.te-markdown ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.te-markdown code {
+  padding: 1px 4px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 4px;
+  background: var(--te-surface);
+  color: var(--te-text);
+  font: 12px/1.45 var(--te-mono);
+}
+.te-code-block {
+  margin: 12px 0;
+  border: 1px solid var(--te-border);
+  border-radius: 5px;
+  background: var(--te-surface);
+  overflow: hidden;
+}
+.te-code-block figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--te-border-soft);
+  color: var(--te-muted);
+  font: 12px var(--te-mono);
+}
+.te-code-copy {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.te-code-block pre {
+  max-width: 100%;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre;
+}
+.te-code-block pre code {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 12px/1.5 var(--te-mono);
 }
 .te-main-support {
   margin-top: 12px;

@@ -4,6 +4,7 @@ import { runAgentCouncilGovernance, type CouncilRunOptions } from "../../core/co
 import { saveSession } from "../../core/memory/sessionMemory.js";
 import { describeAccessPolicy } from "../../core/permissions/accessPolicy.js";
 import { prepareRunWorkspace, resolveRuntimeConfig } from "../../core/runtime/runPreparation.js";
+import { normalizeUserSuppliedText } from "../../utils/textEncoding.js";
 
 export type CouncilRunCliOptions = {
   cwd?: string;
@@ -17,7 +18,11 @@ export type CouncilRunCliOptions = {
 };
 
 export async function councilRunCommand(cwd: string, goal: string, options: CouncilRunCliOptions = {}): Promise<void> {
-  const effectiveGoal = goal.trim();
+  const normalizedGoal = normalizeUserSuppliedText(goal);
+  if (normalizedGoal.repaired) {
+    process.stderr.write(`Warning: repaired probable CLI text encoding issue: ${normalizedGoal.reason}.\n`);
+  }
+  const effectiveGoal = normalizedGoal.text;
   if (!effectiveGoal) throw new Error("Council goal is required.");
   const targetCwd = options.cwd || options.workdir ? path.resolve(cwd, options.cwd ?? options.workdir!) : cwd;
   const accessMode = parseAccessMode(options.accessMode);

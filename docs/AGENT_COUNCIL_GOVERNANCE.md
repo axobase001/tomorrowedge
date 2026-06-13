@@ -62,6 +62,33 @@ TomorrowEdge workflows:
 These events are replayable through trace export and projected into the GUI
 view model.
 
+## Adapter Source Semantics
+
+Chief and Council actions are source-tagged:
+
+- `chief_initial_plan.source = native | chief_agent`
+- `council_move.source = native | agent`
+- `chief_final_review.source = native | chief_agent`
+
+When a configured command/MCP adapter is invokable, Sirius records the real
+external-agent request/response artifacts and marks the corresponding source as
+agent-backed. If no command is configured, or if the adapter fails, the native
+deterministic governance structure remains authoritative and the trace records
+the native source or `fallback_to_native`.
+
+The external text does not silently rewrite the safety boundary. Objective
+Contract, EvidenceGate, BudgetGate, TaskGraph ownership, and final delivery
+approval remain structured runtime decisions.
+
+## Trace Completeness
+
+Sirius uses a council-specific trace completeness rubric. A complete council run
+is scored against chief selection, chief decision, chief plan, council moves,
+consensus TaskGraph, ownership assignment, delegated task results, evidence
+packets, final chief review, delivery decision, linked artifacts, and stop
+reason. It is not scored with the older patch-only rubric that requires
+`patch_apply` and `shell_run` for every run.
+
 ## CLI
 
 ```bash
@@ -79,6 +106,25 @@ tedge council run "rewrite this application in Rust" \
   --access-mode full \
   --simulate-failure rust_cli_structure
 ```
+
+Example configs:
+
+```bash
+tedge council run "rewrite this app in Rust" --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml --headless --fixture-mode
+tedge council run "rewrite this app in Rust" --config examples/configs/sirius-codex-deepseek-mimo.real.template.yaml --headless
+```
+
+The real template intentionally contains only environment variable names and
+empty command placeholders. Replace the Chief Agent and member profiles through
+`chief_agent`, `external_agents`, and `agent_capabilities`; Codex, DeepSeek, and
+MiMo are examples, not hard-coded requirements.
+
+## Runtime Status
+
+Sirius 1.5 uses dependency-aware TaskGraph scheduling for delegated execution.
+It is graph-driven at the ready-node level, while still reusing stable native
+phase actions internally. It should not yet be described as a fully asynchronous
+DAG executor.
 
 ## Boundary
 

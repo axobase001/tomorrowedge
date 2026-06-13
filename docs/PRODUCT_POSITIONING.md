@@ -11,7 +11,7 @@ Core positions:
 - Efficient agents should execute.
 - Local agents should protect privacy.
 - Humans should authorize important actions.
-- Full autonomy requires full visibility.
+- Governed autonomy requires full traceability.
 
 TomorrowEdge's product surface is the quality-cost-trace frontier: the system
 should make it cheaper, safer, and more inspectable to complete real coding

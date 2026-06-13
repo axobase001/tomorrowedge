@@ -117,6 +117,40 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("Task: hello");
   });
 
+  it("renders cockpit answers as Markdown with copyable code blocks", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: [
+          "### Summary",
+          "",
+          "- Use `tedge run`",
+          "- Keep trace visible",
+          "",
+          "```ts",
+          "const answer = 42;",
+          "```"
+        ].join("\n"),
+        supportingDetail: "stdout:\n\u001b[31mfailed\u001b[0m",
+        filesChanged: []
+      }
+    });
+
+    expect(html).toContain("data-testid=\"markdown-content\"");
+    expect(html).toContain("<h4>");
+    expect(html).toContain("Summary");
+    expect(html).toContain("<code>tedge run</code>");
+    expect(html).toContain("data-testid=\"markdown-code-block\"");
+    expect(html).toContain("data-testid=\"markdown-copy-code\"");
+    expect(html).toContain("const answer = 42;");
+    expect(html).not.toContain("\u001b[31m");
+  });
+
   it("renders self-iteration contract, trace, and policy sections in the drawer", () => {
     const html = renderApp(sampleViewModel(), { drawerOpen: true });
 

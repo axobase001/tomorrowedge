@@ -8,7 +8,7 @@ describe("Orchestration Policy Genome docs", () => {
     const selfIterating = await readFile(path.join(process.cwd(), "docs", "SELF_ITERATING_ORCHESTRATION.md"), "utf8");
     const policyEvolution = await readFile(path.join(process.cwd(), "docs", "POLICY_EVOLUTION.md"), "utf8");
     const combined = `${readme}\n${selfIterating}\n${policyEvolution}`;
-    const normalized = combined.replace(/\s+/g, " ");
+    const normalized = combined.replace(/\s+/g, " ").toLowerCase();
 
     expect(combined).toContain("Core innovation: Orchestration Policy Genome");
     expect(combined).toContain("inspired by evolutionary algorithms");

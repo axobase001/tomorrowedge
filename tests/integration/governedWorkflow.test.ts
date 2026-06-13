@@ -53,11 +53,13 @@ describe("governed workflow execution", () => {
       && ["planner", "reviewer", "judge"].includes(event.role ?? "")
     );
 
-    expect(blockedRoles).toEqual(expect.arrayContaining(["planner", "reviewer", "judge"]));
-    expect(blockedAgentRuns).toEqual(expect.arrayContaining(["planner", "reviewer", "judge"]));
+    expect(blockedRoles).toEqual(expect.arrayContaining(["planner"]));
+    expect(blockedAgentRuns).toEqual(expect.arrayContaining(["planner"]));
     expect(externalCalls).not.toEqual(expect.arrayContaining(["planner", "reviewer", "judge"]));
     expect(externalSuccesses).toEqual([]);
-    expect(state.agents.filter((agent) => agent.provider === "local_tool" && agent.model.startsWith("native_")).map((agent) => agent.role)).toEqual(expect.arrayContaining(["planner", "reviewer", "judge"]));
+    expect(state.events.some((event) => event.type === "fallback_to_native" && event.role === "planner")).toBe(true);
+    expect(state.agents.filter((agent) => agent.provider === "local_tool" && agent.model.startsWith("native_")).map((agent) => agent.role)).toEqual(expect.arrayContaining(["planner"]));
+    expect(["aborted", "partially_completed"]).toContain(state.finalSummary?.result);
   }, 15_000);
 
   it("enforces reviewer role budget without consuming planner or judge role budgets", async () => {

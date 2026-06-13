@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.5.0 Sirius. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.5.1 Sirius. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |

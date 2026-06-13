@@ -1,0 +1,98 @@
+project:
+  access_mode: partial
+  telemetry: false
+
+providers:
+  openrouter:
+    enabled: true
+    api_key_env: OPENROUTER_API_KEY
+    base_url: https://openrouter.ai/api/v1
+    model: moonshotai/kimi-k2.7-code
+  deepseek:
+    enabled: true
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    model: deepseek-v4-pro
+  mimo:
+    enabled: true
+    api_key_env: OPENROUTER_API_KEY
+    base_url: https://openrouter.ai/api/v1
+    model: qwen/qwen3.7
+
+chief_agent:
+  id: codex
+  provider: external:codex
+  model: Codex MCP
+  roles:
+    - lead_planner
+    - architecture_reviewer
+    - final_judge
+    - final_code_review
+  trustLevel: high
+  costTier: expensive
+
+external_agents:
+  codex:
+    enabled: true
+    name: Codex
+    transport: mcp
+    adapter: codex
+    responseMode: json
+    strictJson: true
+    command: ""
+    args: []
+    roles:
+      - core
+      - planner
+      - reviewer
+      - judge
+    capabilities:
+      - core
+      - planning
+      - architecture
+      - review
+      - judgment
+      - tool_use
+    trustLevel: high
+
+agent_capabilities:
+  codex:
+    planning: 0.95
+    architecture: 0.95
+    review: 0.92
+    judging: 0.95
+    costTier: expensive
+    trustLevel: high
+    allowedRoles:
+      - core
+      - planner
+      - reviewer
+      - judge
+  deepseek:
+    coding: 0.9
+    patchGeneration: 0.9
+    repair: 0.8
+    costTier: medium
+    trustLevel: medium
+    allowedRoles:
+      - coder_a
+      - coder_b
+      - repairer
+  mimo:
+    testGeneration: 0.78
+    coding: 0.68
+    longContext: 0.62
+    costTier: cheap
+    trustLevel: medium
+    allowedRoles:
+      - explorer
+      - runner
+      - summarizer
+
+strong_agents:
+  max_calls_per_task: 5
+  max_cost_usd: 2
+  reserve_for_roles:
+    - planner
+    - reviewer
+    - judge

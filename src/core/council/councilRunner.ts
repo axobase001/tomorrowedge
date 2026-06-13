@@ -27,6 +27,7 @@ export async function runAgentCouncil(input: {
     round: 0,
     type: "initial_proposal",
     speakerAgentId: input.chiefAgent.id,
+    source: "native",
     summary: `Chief proposes a governed rewrite plan for: ${input.goal}`,
     structuredPayload: emptyPayload({
       taskGraphChanges: nodes.map((node) => `create:${node.id}`),
@@ -55,6 +56,7 @@ export async function runAgentCouncil(input: {
       round: 1,
       type: "critique",
       speakerAgentId: implementer.agentId,
+      source: "native",
       targetMoveId: initialMove.id,
       summary: "Implementation critique adds boundaries and claims Rust structure work.",
       structuredPayload: payload
@@ -83,6 +85,7 @@ export async function runAgentCouncil(input: {
       round: 1,
       type: "gap_fill",
       speakerAgentId: testPlanner.agentId,
+      source: "native",
       targetMoveId: initialMove.id,
       summary: "Gap fill adds cheaper test/doc planning before chief final review.",
       structuredPayload: payload
@@ -112,6 +115,7 @@ export async function runAgentCouncil(input: {
     round: 2,
     type: "consensus_revision",
     speakerAgentId: input.chiefAgent.id,
+    source: "native",
     summary: "Chief integrates council critique and gap fill into consensus TaskGraph.",
     structuredPayload: emptyPayload({
       taskGraphChanges: taskGraph.nodes.map((node) => `consensus:${node.id}`),
@@ -127,6 +131,7 @@ export async function runAgentCouncil(input: {
     round: 2,
     type: "final_consensus",
     speakerAgentId: input.chiefAgent.id,
+    source: "native",
     summary: `Consensus accepted with ${taskGraph.nodes.length} task nodes and ${members.length} council members.`,
     structuredPayload: emptyPayload()
   });

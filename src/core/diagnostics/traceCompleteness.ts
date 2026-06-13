@@ -45,6 +45,22 @@ const ADVISORY_REQUIRED: TraceRequirement[] = [
   { label: "stop reason recorded", types: ["workflow_stop_reason"] }
 ];
 
+const SIRIUS_COUNCIL_REQUIRED: TraceRequirement[] = [
+  { label: "chief agent selected", types: ["chief_agent_selected"] },
+  { label: "chief agent decision", types: ["chief_agent_decision"] },
+  { label: "chief initial plan", types: ["chief_initial_plan"] },
+  { label: "council session started", types: ["council_session_started"] },
+  { label: "council move", types: ["council_move"] },
+  { label: "council consensus", types: ["council_consensus"] },
+  { label: "task ownership assignment", types: ["task_ownership_assignment"] },
+  { label: "delegated task result", types: ["delegated_task_result"] },
+  { label: "evidence packet", types: ["evidence_packet"] },
+  { label: "chief final review", types: ["chief_final_review"] },
+  { label: "chief delivery decision", types: ["chief_delivery_approved", "chief_revision_requested"] },
+  { label: "artifacts linked", types: ["task_graph", "artifact_projection", "chief_final_review", "council_consensus"] },
+  { label: "stop reason recorded", types: ["workflow_stop_reason"] }
+];
+
 export function computeTraceCompleteness(events: TomorrowEdgeEvent[], options: { workflowKind?: WorkflowKind; plan?: Plan } = {}): TraceCompleteness {
   const workflowKind = options.workflowKind ?? inferWorkflowKindFromEvents(events, options.plan);
   const required = requirementsForWorkflowKind(workflowKind);
@@ -61,6 +77,7 @@ export function computeTraceCompleteness(events: TomorrowEdgeEvent[], options: {
 }
 
 function requirementsForWorkflowKind(workflowKind: WorkflowKind): TraceRequirement[] {
+  if (workflowKind === "sirius_council") return SIRIUS_COUNCIL_REQUIRED;
   if (workflowKind === "read_only") return READ_ONLY_REQUIRED;
   if (workflowKind === "advisory" || workflowKind === "ask_user") return ADVISORY_REQUIRED;
   return PATCH_REQUIRED;

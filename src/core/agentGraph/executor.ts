@@ -37,7 +37,7 @@ import type { ExternalAgentProfile } from "../externalAgents/externalAgentTypes.
 import { externalAgentIdFromProvider } from "../externalAgents/externalAgentRouter.js";
 import { invokeExternalRole, releaseExternalAgentProcessPool } from "../externalAgents/externalRoleInvoker.js";
 import { buildReadOnlyTaskResult, isReadOnlyPlan } from "../goal/readOnlyTask.js";
-import { createModelBackedPlan } from "../goal/modelPlanner.js";
+import { createModelBackedPlan, MODEL_PLANNER_MAX_COMPLETION_TOKENS } from "../goal/modelPlanner.js";
 import { classifyTaskGovernance } from "../goal/taskGovernance.js";
 import { applyWorkflowIntentToPlan, classifyWorkflowIntent, type WorkflowIntentDecision } from "../goal/workflowIntent.js";
 import { runtimeArtifactFromText, type RuntimeArtifactKind } from "../contextProjection/artifactView.js";
@@ -657,7 +657,12 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     return plan;
   }, {
     agentKind: "external",
-    config
+    config,
+    budgetFallback: async () => {
+      if (contractPlan) return contractPlan;
+      throw new WorkflowBlockedError("External planner budget blocked and Objective Contract did not provide a native contract plan.");
+    },
+    budgetFallbackLabel: "native contract planner"
   });
   }
   state.plan = state.objectiveContract && state.plan ? overlayPlanWithContract(state.plan, state.objectiveContract, policy) : state.plan ?? contractPlan;
@@ -666,7 +671,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
       invocation: "model_planner",
       label: "model-backed planner",
       prompt: plannerGoal,
-      maxOutputTokens: 900,
+      maxOutputTokens: MODEL_PLANNER_MAX_COMPLETION_TOKENS,
       localOnly: options.fixtureMode || !access.cloudAllowed
     });
     let modelPlan: Awaited<ReturnType<typeof createModelBackedPlan>> | undefined;

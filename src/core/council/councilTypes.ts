@@ -47,6 +47,7 @@ export type CouncilMove = {
   summary: string;
   structuredPayload?: CouncilStructuredPayload;
   evidenceRefs?: string[];
+  source?: "native" | "agent";
 };
 
 export type TaskAssignmentProposal = {

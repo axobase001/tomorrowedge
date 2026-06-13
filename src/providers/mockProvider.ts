@@ -144,7 +144,7 @@ function classifyMockWorkflowIntent(text: string) {
   const visionPatch = hasVisionImplementationSignal(lower);
   const explicitMutation = hasPositiveMutationSignal(lower);
   const mutation = hasMutationSignal(lower);
-  const inspect = hasInspectSignal(lower) || (containsCjk(text) && !mutation);
+  const inspect = hasInspectSignal(lower) || hasReasoningQuestionSignal(lower) || (containsCjk(text) && !mutation);
   if (visionPatch || explicitMutation || (mutation && !inspect)) {
     return {
       intent: "patch",
@@ -240,6 +240,10 @@ function createMockUserReply(prompt: string): string {
 
 function hasInspectSignal(text: string): boolean {
   return /\b(read|list|show|inspect|scan|describe|summarize|summary|tree|structure|directory|folder|review architecture|suggest improvements)\b|\u8bfb\u53d6|\u67e5\u770b|\u5217\u51fa|\u8f93\u51fa|\u6587\u4ef6\u7ed3\u6784|\u76ee\u5f55\u7ed3\u6784|\u603b\u7ed3|\u5206\u6790|\u5efa\u8bae|\u4e0d\u8981\u4fee\u6539|\u4e0d\u4fee\u6539|\u53ea\u8bfb/.test(text);
+}
+
+function hasReasoningQuestionSignal(text: string): boolean {
+  return /\b(prove|proof|theorem|lemma|explain|answer|solve|derive|calculate|evaluate|show that|why|how)\b|\u8bc1\u660e|\u5b9a\u7406|\u5f15\u7406|\u89e3\u91ca|\u56de\u7b54|\u63a8\u5bfc|\u8ba1\u7b97/.test(text);
 }
 
 function hasMutationSignal(text: string): boolean {

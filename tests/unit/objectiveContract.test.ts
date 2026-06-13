@@ -68,6 +68,48 @@ describe("objective contracts", () => {
     expect(contract.verificationRubric.requiredCommands).not.toContain("npm test");
   });
 
+  it("does not reinsert npm test when the user explicitly asks for bounded verification only", () => {
+    const goal = [
+      "Create files under assignments/sine-integral-residue/: solution.md, solution.html, contour.svg, README.md, and solution.pdf if the environment supports PDF generation.",
+      "Verification must only check generated file existence, HTML openability, and SVG readability; do not run full npm test."
+    ].join("\n");
+    const workflowIntent = workflowIntentFixture(goal, "patch");
+    const scenarioProfile = scenarioProfileFixture({ scenarioType: "coding", workflowKind: "patch" });
+    const contract = generateNativeObjectiveContract({
+      goal,
+      workflowIntent,
+      scenarioProfile,
+      retrievedTraces: [],
+      config: defaultConfig,
+      accessMode: "full"
+    });
+
+    expect(contract.verificationRubric.requiredCommands).not.toContain("npm test");
+    expect(contract.verificationRubric.requiredCommands[0]).toContain("node scripts/bounded-file-verifier.mjs");
+    const payload = JSON.parse(Buffer.from(contract.verificationRubric.requiredCommands[0].split(/\s+/).at(-1) ?? "", "base64url").toString("utf8")) as { files: string[] };
+    expect(payload.files).toEqual([
+      "assignments/sine-integral-residue/solution.md",
+      "assignments/sine-integral-residue/solution.html",
+      "assignments/sine-integral-residue/contour.svg",
+      "assignments/sine-integral-residue/README.md"
+    ]);
+    expect(payload.files).not.toContain("assignments/sine-integral-residue/solution.pdf");
+
+    const overlaid = overlayPlanWithContract({
+      goal,
+      constraints: [],
+      riskLevel: "medium",
+      taskType: "feature",
+      workflowKind: "patch",
+      requiresPatchWorkflow: true,
+      acceptanceCriteria: [],
+      steps: [],
+      verificationCommands: ["test -f assignments/sine-integral-residue/solution.md && xmllint --noout assignments/sine-integral-residue/contour.svg"],
+      debateRecommended: false
+    }, contract);
+    expect(overlaid.verificationCommands).toEqual(contract.verificationRubric.requiredCommands);
+  });
+
   it("overlays model/native plans without relaxing the contract", () => {
     const workflowIntent = workflowIntentFixture("fix failing test", "patch");
     const scenarioProfile = scenarioProfileFixture({ scenarioType: "debugging", workflowKind: "patch" });

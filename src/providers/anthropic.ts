@@ -65,7 +65,7 @@ export class AnthropicProvider implements ModelProvider {
 
   private async fetchMessages(body: Record<string, unknown>): Promise<Response> {
     const controller = new AbortController();
-    const timeoutMs = this.options.requestTimeoutMs ?? 120_000;
+    const timeoutMs = this.options.requestTimeoutMs ?? 60_000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(`${this.baseUrl()}/messages`, {
@@ -92,8 +92,8 @@ export class AnthropicProvider implements ModelProvider {
   }
 }
 
-export function createAnthropicProvider(apiKey?: string, defaultModel?: string, baseUrl?: string, extraHeaders?: Record<string, string>): AnthropicProvider {
-  return new AnthropicProvider({ apiKey, defaultModel, baseUrl, extraHeaders });
+export function createAnthropicProvider(apiKey?: string, defaultModel?: string, baseUrl?: string, extraHeaders?: Record<string, string>, requestTimeoutMs?: number): AnthropicProvider {
+  return new AnthropicProvider({ apiKey, defaultModel, baseUrl, extraHeaders, requestTimeoutMs });
 }
 
 function systemPrompt(messages: ChatMessage[]): string | undefined {

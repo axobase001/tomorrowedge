@@ -4,6 +4,7 @@ import type { EventPhase } from "../events/eventTypes.js";
 import type { WorkflowIntentDecision } from "../goal/workflowIntent.js";
 import type { ScenarioProfile } from "../scenarios/scenarioTypes.js";
 import type { ContractVerificationResult, ObjectiveContractV1 } from "./objectiveContract.js";
+import { boundedFileVerificationCommand, shouldUseDefaultNpmTest } from "./verificationCommandPolicy.js";
 
 export type ContractVerificationInput = {
   accessMode: AccessMode;
@@ -49,7 +50,7 @@ export function verifyAndRepairContract(contract: ObjectiveContractV1, input: Co
   enforceBaselineBoundary(next, input.baseline, violations, repairs);
   enforceWorkflowIntent(next, input.workflowIntent, violations, repairs);
   enforceHighRiskGovernance(next, repairs);
-  enforcePatchVerification(next, repairs);
+  enforcePatchVerification(next, input.accessMode, repairs);
 
   const severeViolation = violations.some((item) => item.includes("forbidden action") || item.includes("safety boundary"));
   const downgraded = repairs.some((item) => item.includes("downgraded"));
@@ -213,12 +214,18 @@ function enforceHighRiskGovernance(contract: ObjectiveContractV1, repairs: strin
   }
 }
 
-function enforcePatchVerification(contract: ObjectiveContractV1, repairs: string[]): void {
+function enforcePatchVerification(contract: ObjectiveContractV1, accessMode: AccessMode, repairs: string[]): void {
   const patchLike = contract.workflowKind === "patch" || contract.workflowKind === "vision_patch" || contract.workflowKind === "repair";
   if (!patchLike) return;
   if (!contract.verificationRubric.requiredCommands.length) {
-    contract.verificationRubric.requiredCommands.push("npm test");
-    repairs.push("patch contract verification command repaired");
+    const boundedVerifier = boundedFileVerificationCommand(contract.goal);
+    if (boundedVerifier) {
+      contract.verificationRubric.requiredCommands.push(boundedVerifier);
+      repairs.push("patch contract bounded file verifier repaired");
+    } else if (shouldUseDefaultNpmTest(contract.goal, patchLike, accessMode)) {
+      contract.verificationRubric.requiredCommands.push("npm test");
+      repairs.push("patch contract verification command repaired");
+    }
   }
   for (const evidence of ["patch diff", "review decision", "judge decision"]) {
     if (!contract.requiredEvidence.includes(evidence)) {

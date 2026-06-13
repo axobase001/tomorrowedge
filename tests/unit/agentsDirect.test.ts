@@ -17,8 +17,10 @@ describe("direct agent contracts", () => {
       const plan = await new PlannerAgent().run({ goal: "fix failing npm test in index.js" });
       const context = await new ExplorerAgent().run({ plan }, { cwd });
 
-      expect(plan.taskType).toBe("test");
-      expect(plan.verificationCommands).toContain("npm test");
+      expect(plan.taskType).toBe("unknown");
+      expect(plan.workflowKind).toBe("ask_user");
+      expect(plan.verificationCommands).toEqual([]);
+      expect(plan.steps[0]?.id).toBe("semantic-route-required");
       expect(context.selectedFiles.some((file) => file.path === "index.js")).toBe(true);
       expect(context.selectedFiles.every((file) => file.risk === "safe")).toBe(true);
     } finally {

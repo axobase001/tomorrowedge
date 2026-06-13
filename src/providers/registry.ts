@@ -37,11 +37,11 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
   const openrouter = config.providers.openrouter;
   const openRouterKey = providerKey(config, "openrouter");
   if (isRegistrable(config, "openrouter")) {
-    registry.register(createOpenRouterProvider(openRouterKey, providerModel(config, "openrouter", "OPENROUTER_MODEL", "openai/gpt-5.2"), openrouter.base_url, openrouter.api_format, openrouter.auth_header, openrouter.extra_headers));
+    registry.register(createOpenRouterProvider(openRouterKey, providerModel(config, "openrouter", "OPENROUTER_MODEL", "openai/gpt-5.2"), openrouter.base_url, openrouter.api_format, openrouter.auth_header, openrouter.extra_headers, openrouter.requestTimeoutMs, openrouter.maxRetries, openrouter.retryBaseDelayMs));
   }
 
   const mimo = config.providers.mimo;
-  if (isRegistrable(config, "mimo")) registry.register(createMimoProvider(mimo.base_url, providerKey(config, "mimo"), providerModel(config, "mimo", "MIMO_MODEL", "mimo-v2.5-pro"), mimo.api_format, mimo.auth_header, mimo.extra_headers));
+  if (isRegistrable(config, "mimo")) registry.register(createMimoProvider(mimo.base_url, providerKey(config, "mimo"), providerModel(config, "mimo", "MIMO_MODEL", "mimo-v2.5-pro"), mimo.api_format, mimo.auth_header, mimo.extra_headers, mimo.requestTimeoutMs, mimo.maxRetries, mimo.retryBaseDelayMs));
 
   const openai = config.providers.openai_compatible;
   if (isRegistrable(config, "openai_compatible")) {
@@ -54,28 +54,31 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
         defaultModel: providerModel(config, "openai_compatible", "OPENAI_COMPATIBLE_MODEL", "configured-model"),
         apiFormat: openai.api_format,
         authHeader: openai.auth_header,
-        extraHeaders: openai.extra_headers
+        extraHeaders: openai.extra_headers,
+        requestTimeoutMs: openai.requestTimeoutMs,
+        maxRetries: openai.maxRetries,
+        retryBaseDelayMs: openai.retryBaseDelayMs
       })
     );
   }
 
   const deepseek = config.providers.deepseek;
   if (isRegistrable(config, "deepseek")) {
-    registry.register(createDeepSeekProvider(deepseek.base_url, providerKey(config, "deepseek"), providerModel(config, "deepseek", "DEEPSEEK_MODEL", "deepseek-v4-pro"), deepseek.api_format, deepseek.auth_header, deepseek.extra_headers));
+    registry.register(createDeepSeekProvider(deepseek.base_url, providerKey(config, "deepseek"), providerModel(config, "deepseek", "DEEPSEEK_MODEL", "deepseek-v4-pro"), deepseek.api_format, deepseek.auth_header, deepseek.extra_headers, deepseek.requestTimeoutMs, deepseek.maxRetries, deepseek.retryBaseDelayMs));
   }
 
   const kimi = config.providers.kimi;
   if (isRegistrable(config, "kimi")) {
-    registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2.6"), kimi.api_format, kimi.auth_header, kimi.extra_headers));
+    registry.register(createKimiProvider(kimi.base_url, providerKey(config, "kimi"), providerModel(config, "kimi", "KIMI_MODEL", "kimi-k2.6"), kimi.api_format, kimi.auth_header, kimi.extra_headers, kimi.requestTimeoutMs, kimi.maxRetries, kimi.retryBaseDelayMs));
   }
 
   const anthropic = config.providers.anthropic;
   if (isRegistrable(config, "anthropic")) {
-    registry.register(createAnthropicProvider(providerKey(config, "anthropic"), providerModel(config, "anthropic", "ANTHROPIC_MODEL", "claude-sonnet-4-5"), anthropic.base_url, anthropic.extra_headers));
+    registry.register(createAnthropicProvider(providerKey(config, "anthropic"), providerModel(config, "anthropic", "ANTHROPIC_MODEL", "claude-sonnet-4-5"), anthropic.base_url, anthropic.extra_headers, anthropic.requestTimeoutMs));
   }
   const gemini = config.providers.gemini;
   if (isRegistrable(config, "gemini")) {
-    registry.register(createGeminiProvider(providerKey(config, "gemini"), providerModel(config, "gemini", "GEMINI_MODEL", "gemini-2.5-pro"), gemini.base_url, gemini.extra_headers));
+    registry.register(createGeminiProvider(providerKey(config, "gemini"), providerModel(config, "gemini", "GEMINI_MODEL", "gemini-2.5-pro"), gemini.base_url, gemini.extra_headers, gemini.requestTimeoutMs));
   }
 
   if (config.providers.ollama?.enabled) {
@@ -93,7 +96,10 @@ export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegi
         defaultModel: providerModel(config, providerId, providerModelEnvName(providerId), "configured-model"),
         apiFormat: provider.api_format,
         authHeader: provider.auth_header,
-        extraHeaders: provider.extra_headers
+        extraHeaders: provider.extra_headers,
+        requestTimeoutMs: provider.requestTimeoutMs,
+        maxRetries: provider.maxRetries,
+        retryBaseDelayMs: provider.retryBaseDelayMs
       })
     );
   }

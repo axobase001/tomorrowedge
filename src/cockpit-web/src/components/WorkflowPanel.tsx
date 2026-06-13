@@ -2,6 +2,7 @@ import type { CockpitApprovalIntent, CockpitViewModel } from "../../../cockpit/c
 import type { Translator } from "../i18n.js";
 import { translateKnownValue } from "../i18n.js";
 import { ApprovalPanel } from "./ApprovalPanel.js";
+import { MarkdownContent } from "./MarkdownContent.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
 import { StatusChip } from "./StatusChip.js";
 
@@ -50,11 +51,11 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         <article className="te-main" data-testid="main-view">
           <h3>{translateKnownValue(t, viewModel.main.title)}</h3>
           <p>{translateKnownValue(t, viewModel.main.subtitle)}</p>
-          <pre className="te-main-answer">{viewModel.main.diff ?? viewModel.main.body}</pre>
+          <MarkdownContent className="te-main-answer" content={viewModel.main.diff ?? viewModel.main.body} />
           {viewModel.main.supportingDetail ? (
             <details className="te-main-support">
               <summary>{t("workflow.details")}</summary>
-              <pre>{viewModel.main.supportingDetail}</pre>
+              <MarkdownContent className="te-main-support-body" content={viewModel.main.supportingDetail} />
             </details>
           ) : null}
         </article>

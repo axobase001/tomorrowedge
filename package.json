@@ -1,6 +1,6 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Local governance and policy-evolution runtime for heterogeneous coding agents.",
   "type": "module",
   "bin": {
@@ -105,6 +105,7 @@
     "diff": "^8.0.4",
     "execa": "^9.5.2",
     "fast-glob": "^3.3.3",
+    "iconv-lite": "^0.6.3",
     "ignore": "^7.0.3",
     "ink": "^5.1.0",
     "react": "^18.3.1",

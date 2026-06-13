@@ -250,8 +250,95 @@ describe("live patch generator", () => {
       expect(result.candidates.every((candidate) => candidate.filesChanged.includes("docs/ramsey-review.md"))).toBe(true);
       expect(result.candidates.every((candidate) => candidate.unifiedDiff.startsWith("--- /dev/null\n+++ b/docs/ramsey-review.md"))).toBe(true);
       expect(result.candidates.every((candidate) => candidate.summary.includes("Recovered document draft"))).toBe(true);
-      expect(result.notes.every((note) => note.retryUsed)).toBe(true);
+      expect(result.notes.every((note) => note.retryUsed)).toBe(false);
       expect(result.notes.map((note) => note.fallbackReason).join("\n")).toContain("document_response_export");
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("converts structured multi-file generated output into a reviewable unified diff", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-file-bundle-"));
+    const originalFetch = globalThis.fetch;
+    const bodies: Array<Record<string, unknown>> = [];
+    try {
+      globalThis.fetch = (async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "Generated the requested assignment files.",
+                    files: [
+                      { path: "assignments/demo/solution.md", content: "# 解答\n\n中文证明。" },
+                      { path: "assignments/demo/solution.html", content: "<!doctype html><html><body>中文证明</body></html>" },
+                      { path: "assignments/demo/contour.svg", content: "<svg xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M0 0H10\"/></svg>" }
+                    ],
+                    testPlan: ["open assignments/demo/solution.html"],
+                    knownTradeoffs: [],
+                    estimatedRisk: "high"
+                  })
+                }
+              }
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 100 }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          openai_compatible: {
+            ...defaultConfig.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "openai_compatible", model: "free-test-model" },
+          coder_b: { provider: "openai_compatible", model: "free-test-model" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const goal = "Create assignments/demo/solution.md, assignments/demo/solution.html, and assignments/demo/contour.svg";
+      const plan = await planner.run({ goal });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal,
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "new assignment files"
+        }
+      });
+
+      expect(result.candidates).toHaveLength(2);
+      expect(result.candidates.map((candidate) => candidate.filesChanged)).toEqual([
+        ["assignments/demo/solution.md", "assignments/demo/solution.html", "assignments/demo/contour.svg"],
+        ["assignments/demo/solution.md", "assignments/demo/solution.html", "assignments/demo/contour.svg"]
+      ]);
+      expect(result.candidates.every((candidate) => candidate.unifiedDiff.includes("+++ b/assignments/demo/solution.md"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.unifiedDiff.includes("+++ b/assignments/demo/solution.html"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.unifiedDiff.includes("+++ b/assignments/demo/contour.svg"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.estimatedRisk === "medium")).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.knownTradeoffs.some((item) => item.includes("normalized")))).toBe(true);
+      expect(bodies).toHaveLength(2);
+      expect(bodies.every((body) => body.max_completion_tokens === 5200)).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
       await rm(cwd, { recursive: true, force: true });

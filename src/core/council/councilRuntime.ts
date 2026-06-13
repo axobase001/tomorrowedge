@@ -1,5 +1,6 @@
 import type { AccessMode, TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentGraphState } from "../agentGraph/state.js";
+import type { AgentRuntimeProfile } from "../agents/capabilityProfile.js";
 import { buildAgentRuntimeProfiles } from "../agents/defaultCapabilityProfiles.js";
 import { assignTaskOwners } from "../assignment/taskAssignmentEngine.js";
 import { createBudgetRuntimeState, commitRoleCall, evaluateRoleInvocation, reserveRoleCall } from "../budget/budgetGate.js";
@@ -19,8 +20,10 @@ import { runCommandExternalAgent } from "../externalAgents/runners/commandExtern
 import { defaultStrategyGenome, type StrategyGenome } from "../evolution/strategyGenome.js";
 import { mutateTaskGraphForStrategy, proposeStrategyMutations, type StrategyMutationEvent, type StrategySelectionDecision } from "../evolution/mutationEngine.js";
 import { makeId } from "../../utils/ids.js";
+import type { AgentRole } from "../../schemas/agentTask.js";
 import type { RiskLevel, TaskType } from "../../schemas/plan.js";
 import type { TaskGraph, TaskGraphNode } from "../planning/taskGraph.js";
+import { nextReadyTaskNodes } from "../planning/taskGraphScheduler.js";
 import { runAgentCouncil } from "./councilRunner.js";
 import type { CouncilSession } from "./councilTypes.js";
 import { maybeTriggerCouncilReplan } from "./councilReplan.js";
@@ -149,11 +152,28 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     initialRiskAssessment: chiefDecision.initialRiskAssessment
   });
 
+  const chiefInitialPlanInvocation = await maybeInvokeChiefAgentStage({
+    cwd,
+    config,
+    ledger,
+    chiefAgent,
+    role: "planner",
+    task: `Create initial Sirius governed architecture plan: ${goal}`,
+    context: { goal, objectiveContract, chiefDecision, strategyGenome, requiredEvidence: objectiveContract.requiredEvidence }
+  });
+  const chiefInitialPlanSource = chiefInitialPlanInvocation?.ok ? "chief_agent" : "native";
   const chiefPlanRef = ledger.writeArtifact("chief_initial_plan", JSON.stringify({
     goal,
+    source: chiefInitialPlanSource,
     strategy: strategyGenome,
     decision: chiefDecision,
-    requiredEvidence: objectiveContract.requiredEvidence
+    requiredEvidence: objectiveContract.requiredEvidence,
+    chiefAgentResult: chiefInitialPlanInvocation ? {
+      ok: chiefInitialPlanInvocation.ok,
+      externalAgentId: chiefInitialPlanInvocation.externalAgentId,
+      summary: chiefInitialPlanInvocation.summary,
+      refs: [chiefInitialPlanInvocation.requestRef, chiefInitialPlanInvocation.responseRef, chiefInitialPlanInvocation.resultRef].filter(Boolean)
+    } : undefined
   }, null, 2), "json");
   ledger.append({
     type: "chief_initial_plan",
@@ -162,10 +182,12 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     model: chiefAgent.model,
     chiefAgentId: chiefAgent.id,
     planRef: chiefPlanRef,
+    source: chiefInitialPlanSource,
     summary: "Chief produced an initial governed architecture plan and council policy."
   });
 
   const council = await runAgentCouncil({ goal, chiefAgent, availableAgents, riskLevel: objectiveContract.riskLevel, taskType: objectiveContract.taskType });
+  await invokeConfiguredCouncilAdapters({ cwd, config, ledger, council, availableAgents, goal, objectiveContract, strategyGenome });
   recordCouncilEvents(ledger, council);
   let taskGraph = assignTaskOwners({
     taskGraph: council.consensusTaskGraph!,
@@ -182,64 +204,76 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
   let selectedStrategy: StrategyGenome = strategyGenome;
   let strategySelection: StrategySelectionDecision | undefined;
   let failureConsumed = false;
-  let nodeIndex = 0;
-  while (nodeIndex < taskGraph.nodes.length) {
-    const node = taskGraph.nodes[nodeIndex]!;
-    if (node.status === "done" || node.status === "skipped") {
-      nodeIndex += 1;
-      continue;
+  let schedulerPasses = 0;
+  while (taskGraph.nodes.some((node) => node.status === "pending")) {
+    schedulerPasses += 1;
+    if (schedulerPasses > taskGraph.nodes.length * 8) {
+      throw new Error("Sirius TaskGraph scheduler exceeded safety pass limit; check for cyclic or unresolvable dependencies.");
     }
-    const firstAttemptShouldFail = !failureConsumed && node.id === (options.simulateFailureTaskId ?? "");
-    const result = await executeDelegatedNode({ cwd, node, config, ledger, budgetRuntime, shouldFail: firstAttemptShouldFail });
-    delegatedResults.push(result.result);
-    if (result.packet) evidencePackets.push(result.packet);
-    if (firstAttemptShouldFail) {
-      failureConsumed = true;
-      const mutation = proposeStrategyMutations({
-        strategy: selectedStrategy,
-        trigger: "test_failed",
-        taskGraph,
-        affectedTaskNodeIds: [node.id],
-        mutationCount: mutations.length,
-        maxMutations: options.maxMutations
-      });
-      mutations.push(...mutation.mutations);
-      selectedStrategy = mutation.selectedStrategy;
-      strategySelection = mutation.decision;
-      recordMutationEvents(ledger, mutation.mutations, mutation.decision);
-      taskGraph = mutateTaskGraphForStrategy(taskGraph, mutation.mutations);
-      taskGraph = assignTaskOwners({
-        taskGraph,
-        councilSession: council,
-        availableAgents,
-        budgetPolicy: { hardCapUsd: config.budget.hard_cap_usd, preferCheap: selectedStrategy.budgetPolicy === "cheap_first" },
-        strategyGenome: selectedStrategy
-      });
-      recordOwnershipEvents(ledger, taskGraph, "evolved");
-      const retryNode = taskGraph.nodes.find((item) => item.id === node.id) ?? node;
-      const retry = await executeDelegatedNode({ cwd, node: retryNode, config, ledger, budgetRuntime, shouldFail: false, retryAfterMutation: true });
-      delegatedResults.push(retry.result);
-      if (retry.packet) evidencePackets.push(retry.packet);
-      const replan = await maybeTriggerCouncilReplan({
-        state: partialState({ cwd, goal, access, objectiveContract, chiefAgent, chiefDecision, council, taskGraph, ledger, budgetRuntime, strategyGenome: selectedStrategy, delegatedResults, evidencePackets, mutations, strategySelection }),
-        failureSignal: { trigger: "test_failed", reason: "Delegated execution failed and was recovered by mutation.", taskNodeIds: [node.id], repeated: false },
-        currentStrategy: selectedStrategy
-      });
-      if (replan) {
-        const oldTaskGraphRef = ledger.writeArtifact("task_graph_old", JSON.stringify(taskGraph, null, 2), "json");
-        const newTaskGraphRef = ledger.writeArtifact("task_graph_replan", JSON.stringify(replan.consensusTaskGraph, null, 2), "json");
-        ledger.append({
-          type: "council_replan",
-          phase: "council",
-          councilSessionId: replan.sessionId,
-          reason: "Council replan considered after delegated execution failure.",
-          oldTaskGraphRef,
-          newTaskGraphRef,
-          graphDiffRef: ledger.writeArtifact("task_graph_diff", `old=${taskGraph.graphId}\nnew=${replan.consensusTaskGraph?.graphId}`, "txt")
+    const readyNodes = nextReadyTaskNodes(taskGraph);
+    if (!readyNodes.length) {
+      if (markNodesBlockedByDependencies({ ledger, taskGraph, delegatedResults })) continue;
+      break;
+    }
+    let restartScheduler = false;
+    for (const node of readyNodes) {
+      if (node.status !== "pending") continue;
+      const firstAttemptShouldFail = !failureConsumed && node.id === (options.simulateFailureTaskId ?? "");
+      const result = await executeDelegatedNode({ cwd, taskGraphId: taskGraph.graphId, node, config, ledger, budgetRuntime, availableAgents, shouldFail: firstAttemptShouldFail });
+      delegatedResults.push(result.result);
+      if (result.packet) evidencePackets.push(result.packet);
+      if (firstAttemptShouldFail) {
+        failureConsumed = true;
+        const mutation = proposeStrategyMutations({
+          strategy: selectedStrategy,
+          trigger: "test_failed",
+          taskGraph,
+          affectedTaskNodeIds: [node.id],
+          mutationCount: mutations.length,
+          maxMutations: options.maxMutations
         });
+        selectedStrategy = mutation.selectedStrategy;
+        strategySelection = mutation.decision;
+        taskGraph = mutateTaskGraphForStrategy(taskGraph, mutation.mutations);
+        taskGraph = assignTaskOwners({
+          taskGraph,
+          councilSession: council,
+          availableAgents,
+          budgetPolicy: { hardCapUsd: config.budget.hard_cap_usd, preferCheap: selectedStrategy.budgetPolicy === "cheap_first" },
+          strategyGenome: selectedStrategy
+        });
+        applyMutationOwnershipChanges(taskGraph, mutation.mutations, availableAgents);
+        mutations.push(...mutation.mutations);
+        recordMutationEvents(ledger, mutation.mutations, mutation.decision);
+        recordOwnershipEvents(ledger, taskGraph, "evolved");
+        const retryNode = taskGraph.nodes.find((item) => item.id === node.id) ?? node;
+        retryNode.status = "pending";
+        const retry = await executeDelegatedNode({ cwd, taskGraphId: taskGraph.graphId, node: retryNode, config, ledger, budgetRuntime, availableAgents, shouldFail: false, retryAfterMutation: true });
+        delegatedResults.push(retry.result);
+        if (retry.packet) evidencePackets.push(retry.packet);
+        const replan = await maybeTriggerCouncilReplan({
+          state: partialState({ cwd, goal, access, objectiveContract, chiefAgent, chiefDecision, council, taskGraph, ledger, budgetRuntime, strategyGenome: selectedStrategy, delegatedResults, evidencePackets, mutations, strategySelection }),
+          failureSignal: { trigger: "test_failed", reason: "Delegated execution failed and was recovered by mutation.", taskNodeIds: [node.id], repeated: false },
+          currentStrategy: selectedStrategy
+        });
+        if (replan) {
+          const oldTaskGraphRef = ledger.writeArtifact("task_graph_old", JSON.stringify(taskGraph, null, 2), "json");
+          const newTaskGraphRef = ledger.writeArtifact("task_graph_replan", JSON.stringify(replan.consensusTaskGraph, null, 2), "json");
+          ledger.append({
+            type: "council_replan",
+            phase: "council",
+            councilSessionId: replan.sessionId,
+            reason: "Council replan considered after delegated execution failure.",
+            oldTaskGraphRef,
+            newTaskGraphRef,
+            graphDiffRef: ledger.writeArtifact("task_graph_diff", `old=${taskGraph.graphId}\nnew=${replan.consensusTaskGraph?.graphId}`, "txt")
+          });
+        }
+        restartScheduler = true;
+        break;
       }
     }
-    nodeIndex += 1;
+    if (restartScheduler) continue;
   }
 
   const graphRef = ledger.writeArtifact("task_graph", JSON.stringify(taskGraph, null, 2), "json");
@@ -253,7 +287,7 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     terminalNodeIds: taskGraph.terminalNodeIds
   });
 
-  const finalChiefReview = runFinalChiefReview({
+  const nativeFinalChiefReview = runFinalChiefReview({
     chiefAgentId: chiefAgent.id,
     taskGraph,
     delegatedResults,
@@ -261,6 +295,22 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     artifacts: ledger.artifacts,
     mutationCount: mutations.length
   });
+  const finalChiefReviewInvocation = await maybeInvokeChiefAgentStage({
+    cwd,
+    config,
+    ledger,
+    chiefAgent,
+    role: "judge",
+    task: `Perform final Sirius chief review: ${goal}`,
+    context: { goal, taskGraph, delegatedResults, evidencePackets, nativeFinalChiefReview }
+  });
+  const finalChiefReview = {
+    ...nativeFinalChiefReview,
+    source: finalChiefReviewInvocation?.ok ? "chief_agent" as const : "native" as const,
+    codeReviewSummary: finalChiefReviewInvocation?.ok
+      ? `${nativeFinalChiefReview.codeReviewSummary} Chief adapter evidence: ${finalChiefReviewInvocation.summary}`
+      : nativeFinalChiefReview.codeReviewSummary
+  };
   const finalReviewRef = ledger.writeArtifact("chief_final_review", JSON.stringify(finalChiefReview, null, 2), "json");
   ledger.append({
     type: "chief_final_review",
@@ -273,7 +323,8 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     reviewRef: finalReviewRef,
     summary: finalChiefReview.codeReviewSummary,
     unresolvedRisks: finalChiefReview.unresolvedRisks,
-    requiredRevisions: finalChiefReview.requiredRevisions
+    requiredRevisions: finalChiefReview.requiredRevisions,
+    source: finalChiefReview.source
   });
   const deliverableRef = ledger.writeArtifact("deliverable", JSON.stringify({
     goal,
@@ -320,10 +371,51 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
 
 async function executeDelegatedNode(input: {
   cwd: string;
+  taskGraphId: string;
   node: TaskGraphNode;
   config: TomorrowEdgeConfig;
   ledger: ReturnType<typeof createEventLedger>;
   budgetRuntime: ReturnType<typeof createBudgetRuntimeState>;
+  availableAgents: AgentRuntimeProfile[];
+  shouldFail: boolean;
+  retryAfterMutation?: boolean;
+}): Promise<{ result: DelegatedTaskResult; packet?: EvidencePacket }> {
+  const attemptedOwnerIds = new Set<string>();
+  let shouldFail = input.shouldFail;
+  let retryAfterMutation = input.retryAfterMutation;
+  while (true) {
+    const ownerId = input.node.ownerAgentId ?? "unassigned";
+    attemptedOwnerIds.add(ownerId);
+    const attempt = await executeDelegatedNodeAttempt({ ...input, shouldFail, retryAfterMutation });
+    const failureSignal = attempt.result.failureSignals?.join("; ") ?? "";
+    const canRuntimeFallback = !shouldFail && (attempt.result.status === "blocked" || attempt.result.status === "failed");
+    const trigger = canRuntimeFallback
+      ? failureSignal.includes("budget blocked") ? "budget_blocked" : "agent_failure"
+      : undefined;
+    if (!trigger) return attempt;
+    const reassigned = reassignNodeToFallback({
+      taskGraphId: input.taskGraphId,
+      node: input.node,
+      availableAgents: input.availableAgents,
+      ledger: input.ledger,
+      attemptedOwnerIds,
+      trigger,
+      reason: failureSignal || `${input.node.id} failed under owner ${ownerId}`
+    });
+    if (!reassigned) return attempt;
+    shouldFail = false;
+    retryAfterMutation = true;
+  }
+}
+
+async function executeDelegatedNodeAttempt(input: {
+  cwd: string;
+  taskGraphId: string;
+  node: TaskGraphNode;
+  config: TomorrowEdgeConfig;
+  ledger: ReturnType<typeof createEventLedger>;
+  budgetRuntime: ReturnType<typeof createBudgetRuntimeState>;
+  availableAgents: AgentRuntimeProfile[];
   shouldFail: boolean;
   retryAfterMutation?: boolean;
 }): Promise<{ result: DelegatedTaskResult; packet?: EvidencePacket }> {
@@ -341,7 +433,7 @@ async function executeDelegatedNode(input: {
     assignment,
     estimatedCostUsd: estimateNodeCost(input.node),
     escalationSignals: input.node.riskLevel === "high" ? ["high_risk_patch"] : [],
-    canFallback: false
+    canFallback: Boolean(input.node.fallbackAgents?.length)
   });
   const reservation = decision.action === "allow" ? reserveRoleCall(input.budgetRuntime, decision) : undefined;
   input.ledger.append({
@@ -460,6 +552,76 @@ async function executeDelegatedNode(input: {
   return { result, packet };
 }
 
+function reassignNodeToFallback(input: {
+  taskGraphId: string;
+  node: TaskGraphNode;
+  availableAgents: AgentRuntimeProfile[];
+  ledger: ReturnType<typeof createEventLedger>;
+  attemptedOwnerIds: Set<string>;
+  trigger: "budget_blocked" | "agent_failure";
+  reason: string;
+}): boolean {
+  const oldOwnerAgentId = input.node.ownerAgentId ?? "unassigned";
+  const nextOwner = (input.node.fallbackAgents ?? [])
+    .map((agentId) => input.availableAgents.find((agent) => agent.agentId === agentId))
+    .filter((agent): agent is AgentRuntimeProfile => Boolean(agent))
+    .find((agent) => !input.attemptedOwnerIds.has(agent.agentId) && agent.allowedRoles.includes(input.node.ownerRole));
+  if (!nextOwner) return false;
+  input.node.ownerAgentId = nextOwner.agentId;
+  input.node.assignedProvider = nextOwner.provider;
+  input.node.assignedModel = nextOwner.model;
+  input.node.claimMode = "evolved";
+  input.node.status = "pending";
+  input.node.assignmentReason = `${input.node.assignmentReason ?? "Sirius task ownership assignment"}; reassigned from ${oldOwnerAgentId} to ${nextOwner.agentId} after ${input.trigger}: ${input.reason}`;
+  input.ledger.append({
+    type: "task_ownership_reassignment",
+    phase: "routing",
+    role: input.node.ownerRole,
+    provider: nextOwner.provider,
+    model: nextOwner.model,
+    taskGraphId: input.taskGraphId,
+    taskNodeId: input.node.id,
+    oldOwnerAgentId,
+    newOwnerAgentId: nextOwner.agentId,
+    assignedProvider: nextOwner.provider,
+    assignedModel: nextOwner.model,
+    trigger: input.trigger,
+    reason: input.node.assignmentReason
+  });
+  return true;
+}
+
+function markNodesBlockedByDependencies(input: {
+  ledger: ReturnType<typeof createEventLedger>;
+  taskGraph: TaskGraph;
+  delegatedResults: DelegatedTaskResult[];
+}): boolean {
+  let changed = false;
+  for (const node of input.taskGraph.nodes) {
+    if (node.status !== "pending") continue;
+    const blockedDependencies = node.dependsOn.filter((dependency) =>
+      input.taskGraph.nodes.some((candidate) => candidate.id === dependency && candidate.status === "blocked")
+    );
+    if (!blockedDependencies.length) continue;
+    node.status = "blocked";
+    const result: DelegatedTaskResult = {
+      taskNodeId: node.id,
+      ownerAgentId: node.ownerAgentId ?? "unassigned",
+      provider: node.assignedProvider ?? "mock",
+      model: node.assignedModel ?? "mock-balanced",
+      status: "blocked",
+      evidenceRefs: [],
+      artifactRefs: [],
+      failureSignals: [`blocked dependencies: ${blockedDependencies.join(", ")}`],
+      summary: `${node.id} blocked because required dependencies did not complete: ${blockedDependencies.join(", ")}.`
+    };
+    input.delegatedResults.push(result);
+    recordDelegatedResult(input.ledger, result, node);
+    changed = true;
+  }
+  return changed;
+}
+
 function partialState(input: {
   cwd: string;
   goal: string;
@@ -479,7 +641,7 @@ function partialState(input: {
   finalChiefReview?: ReturnType<typeof runFinalChiefReview>;
 }): AgentGraphState {
   const plan = input.council.consensusPlan ? { ...input.council.consensusPlan, taskGraph: input.taskGraph } : undefined;
-  const traceCompleteness = computeTraceCompleteness(input.ledger.events, { workflowKind: "patch", plan });
+  const traceCompleteness = computeTraceCompleteness(input.ledger.events, { workflowKind: "sirius_council", plan });
   return {
     sessionId: input.ledger.sessionId,
     goal: input.goal,
@@ -519,7 +681,7 @@ function partialState(input: {
       totalTokens: 0,
       estimatedCostUsd: input.delegatedResults.reduce((sum, result) => sum + (result.costUsage?.estimatedCostUsd ?? 0), 0)
     },
-    workflowKind: "patch",
+    workflowKind: "sirius_council",
     objectiveContract: input.objectiveContract,
     contractVerification: { status: "passed", score: 1, missing: [], violations: [], repairs: [] },
     chiefAgent: input.chiefAgent,
@@ -576,6 +738,7 @@ function recordCouncilEvents(ledger: ReturnType<typeof createEventLedger>, counc
       speakerAgentId: move.speakerAgentId,
       targetMoveId: move.targetMoveId,
       summary: move.summary,
+      source: move.source ?? "native",
       moveRef: ledger.writeArtifact("council_move", JSON.stringify(move, null, 2), "json")
     });
   }
@@ -653,6 +816,11 @@ function recordMutationEvents(ledger: ReturnType<typeof createEventLedger>, muta
       reason: mutation.reason,
       affectedTaskNodeIds: mutation.affectedTaskNodeIds,
       selected: mutation.selected,
+      requestedChange: mutation.requestedChange,
+      appliedChange: mutation.appliedChange,
+      changedOwner: mutation.changedOwner,
+      oldOwnerAgentId: mutation.oldOwnerAgentId,
+      newOwnerAgentId: mutation.newOwnerAgentId,
       mutationRef: ledger.writeArtifact("strategy_mutation", JSON.stringify(mutation, null, 2), "json")
     });
   }
@@ -665,13 +833,148 @@ function recordMutationEvents(ledger: ReturnType<typeof createEventLedger>, muta
   });
 }
 
+async function maybeInvokeChiefAgentStage(input: {
+  cwd: string;
+  config: TomorrowEdgeConfig;
+  ledger: ReturnType<typeof createEventLedger>;
+  chiefAgent: ChiefAgentProfile;
+  role: AgentRole;
+  task: string;
+  context: unknown;
+}): Promise<Awaited<ReturnType<typeof runCommandExternalAgent>> | undefined> {
+  const profile = externalProfileForAgentId(input.config, input.chiefAgent.id);
+  if (!profile?.command) return undefined;
+  const result = await runCommandExternalAgent({
+    cwd: input.cwd,
+    profile,
+    role: input.role,
+    task: input.task,
+    context: input.context,
+    ledger: input.ledger,
+    timeoutMs: profile.requestTimeoutMs
+  });
+  if (!result.ok) {
+    input.ledger.append({
+      type: "fallback_to_native",
+      phase: input.role === "judge" ? "delivery" : "planning",
+      role: input.role,
+      provider: input.chiefAgent.provider,
+      model: input.chiefAgent.model,
+      externalAgentId: input.chiefAgent.id,
+      fallbackRole: input.role,
+      reason: `Chief adapter ${input.chiefAgent.id} failed; native Sirius governance artifact remains authoritative. ${result.error ?? result.summary}`
+    });
+  }
+  return result;
+}
+
+async function invokeConfiguredCouncilAdapters(input: {
+  cwd: string;
+  config: TomorrowEdgeConfig;
+  ledger: ReturnType<typeof createEventLedger>;
+  council: CouncilSession;
+  availableAgents: AgentRuntimeProfile[];
+  goal: string;
+  objectiveContract: ObjectiveContractV1;
+  strategyGenome: StrategyGenome;
+}): Promise<void> {
+  for (const move of input.council.moves) {
+    const profile = externalProfileForAgentId(input.config, move.speakerAgentId);
+    if (!profile?.command) continue;
+    const role = roleForCouncilMove(move.type);
+    const result = await runCommandExternalAgent({
+      cwd: input.cwd,
+      profile,
+      role,
+      task: `Sirius council ${move.type}: ${input.goal}`,
+      context: {
+        goal: input.goal,
+        move,
+        councilSessionId: input.council.sessionId,
+        objectiveContract: input.objectiveContract,
+        strategyGenome: input.strategyGenome,
+        availableAgents: input.availableAgents.map((agent) => ({
+          agentId: agent.agentId,
+          provider: agent.provider,
+          model: agent.model,
+          allowedRoles: agent.allowedRoles,
+          capabilities: agent.capabilities
+        }))
+      },
+      ledger: input.ledger,
+      timeoutMs: profile.requestTimeoutMs
+    });
+    if (result.ok) {
+      move.source = "agent";
+      move.evidenceRefs = [...(move.evidenceRefs ?? []), ...[result.requestRef, result.responseRef, result.resultRef].filter((ref): ref is string => Boolean(ref))];
+      move.summary = `${move.summary} Adapter evidence: ${result.summary}`;
+    } else {
+      input.ledger.append({
+        type: "fallback_to_native",
+        phase: "council",
+        role,
+        provider: `external:${profile.id}`,
+        model: profile.name,
+        externalAgentId: profile.id,
+        fallbackRole: role,
+        reason: `Council move ${move.id} kept native source because adapter failed: ${result.error ?? result.summary}`
+      });
+    }
+  }
+}
+
+function roleForCouncilMove(type: CouncilSession["moves"][number]["type"]): AgentRole {
+  if (type === "critique" || type === "risk_objection") return "reviewer";
+  if (type === "gap_fill") return "runner";
+  if (type === "final_consensus") return "judge";
+  return "planner";
+}
+
+function applyMutationOwnershipChanges(taskGraph: TaskGraph, mutations: StrategyMutationEvent[], availableAgents: AgentRuntimeProfile[]): void {
+  for (const mutation of mutations) {
+    const node = taskGraph.nodes.find((item) => mutation.affectedTaskNodeIds.includes(item.id));
+    if (!node) continue;
+    const oldOwnerAgentId = mutation.oldOwnerAgentId ?? node.ownerAgentId ?? "unassigned";
+    mutation.oldOwnerAgentId = oldOwnerAgentId;
+    if (mutation.type !== "switch_owner_agent") {
+      mutation.changedOwner = false;
+      mutation.newOwnerAgentId = node.ownerAgentId ?? oldOwnerAgentId;
+      mutation.appliedChange = mutation.appliedChange ?? `kept owner ${mutation.newOwnerAgentId}`;
+      continue;
+    }
+    const fallback = (node.fallbackAgents ?? [])
+      .map((agentId) => availableAgents.find((agent) => agent.agentId === agentId))
+      .filter((agent): agent is AgentRuntimeProfile => Boolean(agent))
+      .find((agent) => agent.agentId !== oldOwnerAgentId && agent.allowedRoles.includes(node.ownerRole));
+    if (!fallback) {
+      mutation.type = "retry_same_owner";
+      mutation.changedOwner = false;
+      mutation.newOwnerAgentId = node.ownerAgentId ?? oldOwnerAgentId;
+      mutation.appliedChange = "no fallback owner available; retried same owner";
+      return;
+    }
+    node.ownerAgentId = fallback.agentId;
+    node.assignedProvider = fallback.provider;
+    node.assignedModel = fallback.model;
+    node.claimMode = "evolved";
+    node.assignmentReason = `${node.assignmentReason ?? "Sirius task ownership assignment"}; StrategyMutation switched owner from ${oldOwnerAgentId} to ${fallback.agentId}.`;
+    mutation.changedOwner = true;
+    mutation.newOwnerAgentId = fallback.agentId;
+    mutation.appliedChange = `switched owner from ${oldOwnerAgentId} to ${fallback.agentId}`;
+  }
+}
+
 function externalProfileForNode(config: TomorrowEdgeConfig, node: TaskGraphNode): ExternalAgentProfile | undefined {
   if (!node.ownerAgentId || !node.assignedProvider?.startsWith("external:")) return undefined;
-  const configured = config.external_agents[node.ownerAgentId];
+  return externalProfileForAgentId(config, node.ownerAgentId);
+}
+
+function externalProfileForAgentId(config: TomorrowEdgeConfig, agentId: string): ExternalAgentProfile | undefined {
+  const configured = config.external_agents[agentId];
   if (!configured?.enabled) return undefined;
   return {
-    id: node.ownerAgentId,
-    name: configured.name ?? node.ownerAgentId,
+    id: agentId,
+    name: configured.name ?? agentId,
     transport: configured.transport,
     adapter: configured.adapter,
     responseMode: configured.responseMode,

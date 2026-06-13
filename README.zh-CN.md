@@ -11,7 +11,7 @@ TomorrowEdge / 明日边缘是一个**面向异构 Coding Agent 的本地编排�
 它不是聊天机器人，不是某个模型的一层 CLI 壳，不是 benchmark dashboard，也不是泛个人 Agent OS。TomorrowEdge 把 Codex、Claude Code、DeepSeek、MiMo、Ollama、OpenRouter 模型、本地模型、命令行 Agent、MCP Agent 和自定义 adapter 变成可替换的能力节点，放进一个可治理的软件工程 Council。
 
 ```text
-Full autonomy, full visibility.
+Governed orchestration. Full traceability.
 强 Agent 负责决策，高性价比 Agent 负责执行。
 Codex / Claude Code 给 Agent full access。
 TomorrowEdge 给异构 full-access Agent 治理、trace、预算和策略演化。
@@ -216,7 +216,7 @@ TaskGraph node 不只是抽象 label。核心节点会带上具体所有权：
 | `partial` | patch 和 shell 需要审批。 |
 | `full` | 在 policy 允许时自动执行 patch、shell 和 repair，但每一步仍然写入 ledger。 |
 
-Full access 的含义是 full autonomy + full visibility，不是静默执行。
+Full access 的含义是 governed autonomy + full traceability，不是静默执行。
 
 ## 常用命令
 
@@ -292,7 +292,7 @@ Screenshot / diagram / error image
 
 ## 当前状态
 
-当前版本：`1.5.0` Sirius。
+当前版本：`1.5.1` Sirius。
 
 主要已实现能力：
 

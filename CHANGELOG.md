@@ -7,6 +7,52 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-06-13
+
+1.5.1 hardens the Sirius real-workflow path after running a live Agent Council
+style task with an OpenRouter Chief model and delegated implementation models.
+It focuses on preserving the user request boundary, keeping verification
+bounded to the requested deliverables, and absorbing two GUI community fixes.
+
+### Added
+
+- Added a bounded file verifier for tasks that explicitly request checking only
+  generated files, HTML readability, and SVG readability. Planner overlays now
+  preserve this focused verifier instead of widening validation to stale project
+  commands such as `npm test`.
+- Added conservative CLI text normalization for user-supplied goals so Windows
+  GBK/UTF-8 mojibake does not corrupt Chinese task text before it reaches the
+  Objective Contract, council, or run pipeline.
+- Added structured multi-file live patch support. Live patch models can now
+  return a `files` array with full file contents, which TomorrowEdge converts
+  into stable multi-file unified diffs.
+- Added per-request provider timeout/retry controls for model planner,
+  scenario profiler, and live patch calls.
+- Added GUI Markdown rendering for final cockpit answers, including copyable
+  fenced code blocks and ANSI-stripped supporting details.
+
+### Changed
+
+- OpenRouter/OpenAI-compatible JSON-mode requests now explicitly suppress
+  reasoning output where supported, reducing malformed/truncated JSON from
+  reasoning-first models.
+- Model planner and scenario profiler prompts now request compact structured
+  JSON and use the same configured model for bounded JSON repair instead of
+  inventing native fallback answers.
+- Generated-document artifact tasks now receive risk normalization when the
+  patch is bounded to explicitly requested output files.
+- Cockpit shell approval now prefers a selected patch candidate's focused test
+  plan over stale repository-wide plan commands.
+
+### Fixed
+
+- Fixed a failure mode where high-level file-generation tasks could be widened
+  into unrelated project verification despite the user's explicit "do not run
+  full tests" boundary.
+- Fixed live patch truncation on multi-file deliverables by expanding the token
+  budget for tasks with several expected output files.
+- Fixed GUI display of Markdown answers and terminal-colored support output.
+
 ## [1.5.0] - 2026-06-13
 
 1.5.0 starts the Sirius release line and moves TomorrowEdge back to the main

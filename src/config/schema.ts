@@ -35,7 +35,10 @@ export const providerConfigSchema = z.object({
   models: z.array(providerModelConfigSchema).default([]),
   api_format: providerApiFormatSchema.default("openai_chat"),
   auth_header: providerAuthHeaderSchema.default("bearer"),
-  extra_headers: z.record(z.string()).default({})
+  extra_headers: z.record(z.string()).default({}),
+  requestTimeoutMs: z.number().int().positive().default(60_000),
+  maxRetries: z.number().int().nonnegative().default(1),
+  retryBaseDelayMs: z.number().int().positive().default(1000)
 });
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 

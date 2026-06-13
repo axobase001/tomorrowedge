@@ -45,7 +45,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
     const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
     if (req.maxCompletionTokens) body[tokenField] = req.maxCompletionTokens;
     if (req.responseFormat) body.response_format = req.responseFormat;
-    const response = await this.fetchWithRetry(body);
+    if (this.options.id === "openrouter" && req.responseFormat?.type === "json_object") {
+      body.reasoning = { effort: "none", exclude: true };
+      body.reasoning_effort = "none";
+    }
+    const response = await this.fetchWithRetry(body, req);
     if (!response.ok) {
       throw new Error(`${this.id} request failed: ${response.status} ${await response.text()}`);
     }
@@ -67,13 +71,13 @@ export class OpenAICompatibleProvider implements ModelProvider {
     return Boolean(this.options.baseUrl && (this.options.authHeader === "none" || this.options.apiKey));
   }
 
-  private async fetchWithRetry(body: Record<string, unknown>): Promise<Response> {
-    const maxRetries = this.options.maxRetries ?? 2;
+  private async fetchWithRetry(body: Record<string, unknown>, req: ChatRequest): Promise<Response> {
+    const maxRetries = req.maxRetries ?? this.options.maxRetries ?? 1;
     const retryBaseDelayMs = this.options.retryBaseDelayMs ?? 1000;
     let lastError: unknown;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
-        const response = await this.fetchOnce(body);
+        const response = await this.fetchOnce(body, req);
         if (!isRetryableStatus(response.status) || attempt === maxRetries) return response;
         lastError = new Error(`${this.id} retryable response: ${response.status}`);
       } catch (error) {
@@ -85,10 +89,13 @@ export class OpenAICompatibleProvider implements ModelProvider {
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
-  private async fetchOnce(body: Record<string, unknown>): Promise<Response> {
+  private async fetchOnce(body: Record<string, unknown>, req: ChatRequest): Promise<Response> {
     const controller = new AbortController();
-    const timeoutMs = this.options.requestTimeoutMs ?? 120_000;
+    const timeoutMs = req.timeoutMs ?? this.options.requestTimeoutMs ?? 60_000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const abortFromRequest = () => controller.abort(req.signal?.reason);
+    if (req.signal?.aborted) controller.abort(req.signal.reason);
+    req.signal?.addEventListener("abort", abortFromRequest, { once: true });
     try {
       return await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
@@ -107,6 +114,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       throw error;
     } finally {
       clearTimeout(timeout);
+      req.signal?.removeEventListener("abort", abortFromRequest);
     }
   }
 

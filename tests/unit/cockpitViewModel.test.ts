@@ -459,6 +459,26 @@ describe("cockpit view model", () => {
     expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["shell", "pending"]);
   });
 
+  it("prefers a selected candidate focused verifier over stale plan commands", () => {
+    const command = "node scripts/bounded-file-verifier.mjs eyJmaWxlcyI6WyJpbmRleC5qcyJdfQ";
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      changedFiles: ["index.js"],
+      approvals: { patchApproved: true, shellApproved: false, repairApproved: false },
+      plan: {
+        ...sampleCockpitState().plan!,
+        verificationCommands: ["npm test"]
+      },
+      candidates: [{
+        ...sampleCockpitState().candidates[0],
+        testPlan: [command]
+      }]
+    }));
+
+    expect(vm.currentApproval?.kind).toBe("shell");
+    expect(vm.currentApproval?.command).toBe(command);
+    expect(vm.approvalHistory.at(-1)?.command).toBe(command);
+  });
+
   it("surfaces pending repair approval after failed verification", () => {
     const repairDiff = "--- a/index.js\n+++ b/index.js\n@@\n-return a + b\n+return Number(a) + Number(b)\n";
     const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({

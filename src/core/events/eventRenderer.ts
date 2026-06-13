@@ -112,6 +112,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.blocking ? "blocking" : "nonblocking"} ${event.risk}: ${event.reason}`;
     case "task_ownership_assignment":
       return `${event.taskNodeId} -> ${event.ownerAgentId} ${event.assignedProvider}${event.assignedModel ? `/${event.assignedModel}` : ""} ${event.claimMode}: ${event.assignmentReason}`;
+    case "task_ownership_reassignment":
+      return `${event.taskNodeId} ${event.oldOwnerAgentId} -> ${event.newOwnerAgentId} ${event.assignedProvider}${event.assignedModel ? `/${event.assignedModel}` : ""} trigger=${event.trigger}: ${event.reason}`;
     case "delegated_task_result":
       return `${event.taskNodeId} ${event.status} by ${event.ownerAgentId}: ${event.summary}`;
     case "strategy_mutation":
