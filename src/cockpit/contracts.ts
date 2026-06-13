@@ -74,11 +74,81 @@ export type CockpitTaskGraphSummary = {
     title: string;
     status: string;
     role: AgentRole;
+    ownerAgentId?: string;
+    assignedProvider?: string;
+    assignedModel?: string;
+    assignmentReason?: string;
     dependencies: string[];
     evidenceRefs: string[];
     artifactRefs: string[];
   }>;
   terminalNodeIds: string[];
+};
+
+export type CockpitChiefAgentSummary = {
+  chiefAgentId: string;
+  provider: string;
+  model?: string;
+  decision?: string;
+  reason?: string;
+  trustLevel: string;
+};
+
+export type CockpitCouncilSummary = {
+  sessionId: string;
+  status: string;
+  members: Array<{
+    agentId: string;
+    provider: string;
+    model?: string;
+    role: string;
+  }>;
+  moves: Array<{
+    id: string;
+    round: number;
+    type: string;
+    speakerAgentId: string;
+    summary: string;
+  }>;
+  unresolvedRisks: string[];
+};
+
+export type CockpitTaskOwnershipSummary = {
+  assignments: Array<{
+    taskNodeId: string;
+    title: string;
+    ownerAgentId: string;
+    provider: string;
+    model?: string;
+    reason: string;
+    claimMode?: string;
+    fallbackAgents: string[];
+  }>;
+};
+
+export type CockpitPolicyMutationSummary = {
+  count: number;
+  selectedStrategyId?: string;
+  mutations: Array<{
+    id: string;
+    type: string;
+    trigger: string;
+    reason: string;
+    affectedTaskNodeIds: string[];
+    selected: boolean;
+  }>;
+};
+
+export type CockpitFinalReviewSummary = {
+  chiefAgentId: string;
+  decision: string;
+  architectureConsistency: string;
+  codeReviewSummary: string;
+  taskCompletionSummary: string;
+  unresolvedRisks: string[];
+  requiredRevisions: string[];
+  evidenceRefs: string[];
+  artifactRefs: string[];
 };
 
 export type CockpitTelemetry = {
@@ -310,6 +380,11 @@ export type CockpitViewModel = {
   objectiveContract?: CockpitObjectiveContractSummary;
   objectiveTrace?: CockpitObjectiveTraceSummary;
   orchestrationPolicy?: CockpitOrchestrationPolicySummary;
+  chiefAgent?: CockpitChiefAgentSummary;
+  council?: CockpitCouncilSummary;
+  taskOwnership?: CockpitTaskOwnershipSummary;
+  policyMutations?: CockpitPolicyMutationSummary;
+  finalReview?: CockpitFinalReviewSummary;
   currentApproval?: CockpitApproval;
   main: {
     title: string;
@@ -326,7 +401,7 @@ export type CockpitViewModel = {
   artifacts: Array<{ ref: string; kind: string }>;
 };
 
-export type CockpitRunMode = "auto" | "fixture" | "offline" | "live";
+export type CockpitRunMode = "auto" | "fixture" | "offline" | "live" | "council";
 
 export type CockpitRunRequest = {
   goal?: string;

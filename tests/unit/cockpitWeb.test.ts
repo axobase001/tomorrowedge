@@ -190,6 +190,15 @@ describe("cockpit web React surface", () => {
       liveAdvisory: true,
       to: "planner"
     });
+    expect(buildCockpitRunRequest({ goal: "rewrite this app in Rust", accessMode: "full", setupReady: false, runMode: "council", target: "core" })).toMatchObject({
+      runMode: "council",
+      fixtureMode: false,
+      livePatch: false,
+      liveAdvisory: false,
+      repairOnFail: true,
+      approveRepair: true,
+      to: "core"
+    });
   });
 
   it("renders the first-run setup wizard with provider and model controls", () => {

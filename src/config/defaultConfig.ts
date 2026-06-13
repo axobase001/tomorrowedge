@@ -143,6 +143,17 @@ export const defaultConfig: TomorrowEdgeConfig = {
       notes: "Mock MCP bridge profile; real Codex invocation is configured by the user."
     }
   },
+  agent_capabilities: {},
+  chief_agent: {
+    id: "",
+    provider: "",
+    model: undefined,
+    adapterId: undefined,
+    roles: ["lead_planner", "architecture_reviewer", "final_judge", "final_code_review"],
+    trustLevel: "high",
+    costTier: "expensive",
+    fallbackAgentId: undefined
+  },
   agents: {
     vision: { provider: "auto", model: "auto" },
     planner: { provider: "auto", model: "auto" },

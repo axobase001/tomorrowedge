@@ -221,7 +221,7 @@ function arrayOfStrings(value: unknown): string[] {
 }
 
 function eventPhase(value: unknown): EventPhase | undefined {
-  return ["routing", "vision", "planning", "exploration", "coding", "review", "judge", "patch", "shell", "repair", "summary", "memory", "verification"].includes(String(value)) ? value as EventPhase : undefined;
+  return ["routing", "vision", "planning", "exploration", "coding", "review", "judge", "patch", "shell", "repair", "summary", "memory", "verification", "council", "execution", "evolution", "delivery"].includes(String(value)) ? value as EventPhase : undefined;
 }
 
 function taskNodeKind(value: unknown): TaskNodeKind | undefined {

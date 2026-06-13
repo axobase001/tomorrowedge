@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -57,7 +57,10 @@ async function listBuiltCockpitAssetPaths(cwd: string): Promise<string[]> {
 }
 
 async function assertInstalledClientServesCockpit(installDir: string): Promise<void> {
-  const cliPath = path.join(installDir, "node_modules", "tomorrowedge", "dist", "cli", "index.js");
+  const cliPath = await firstExistingPath([
+    path.join(installDir, "node_modules", "@axobase001", "tomorrowedge", "dist", "cli", "index.js"),
+    path.join(installDir, "node_modules", "tomorrowedge", "dist", "cli", "index.js")
+  ]);
   const child = spawn(process.execPath, [cliPath, "client", "--no-open", "--port", "0"], {
     cwd: installDir,
     stdio: ["ignore", "pipe", "pipe"]
@@ -78,6 +81,18 @@ async function assertInstalledClientServesCockpit(installDir: string): Promise<v
   } finally {
     child.kill("SIGTERM");
   }
+}
+
+async function firstExistingPath(candidates: string[]): Promise<string> {
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Try the next install layout.
+    }
+  }
+  throw new Error(`Could not find installed TomorrowEdge CLI. Checked:\n${candidates.join("\n")}`);
 }
 
 function waitForOutput(child: ReturnType<typeof spawn>, pattern: RegExp): Promise<string> {

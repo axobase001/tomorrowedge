@@ -9,6 +9,7 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
   const runningAgent = viewModel.agents?.find((a) => a.status === "running");
   const activePhases = ["planning", "routing", "editing", "reviewing", "testing"] as string[];
   const isActive = activePhases.includes(viewModel.status) || viewModel.statusText === "Running";
+  const governanceActive = Boolean(viewModel.chiefAgent || viewModel.council || viewModel.taskOwnership || viewModel.finalReview);
 
   return (
     <section className="te-panel te-workflow" data-testid="workflow-panel">
@@ -34,6 +35,15 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
             : t("workflow.waitingNextAgent")}
         </div>
       )}
+      {governanceActive ? (
+        <section className="te-governance-strip" data-testid="governance-strip" aria-label="Agent Council governance">
+          <div><span>Chief</span><strong>{viewModel.chiefAgent?.chiefAgentId ?? "-"}</strong></div>
+          <div><span>Council</span><strong>{viewModel.council?.members.length ?? 0} agents</strong></div>
+          <div><span>Ownership</span><strong>{viewModel.taskOwnership?.assignments.length ?? 0} tasks</strong></div>
+          <div><span>Mutations</span><strong>{viewModel.policyMutations?.count ?? 0}</strong></div>
+          <div><span>Final</span><strong>{viewModel.finalReview?.decision ?? "-"}</strong></div>
+        </section>
+      ) : null}
       {viewModel.currentApproval ? (
         <ApprovalPanel approval={viewModel.currentApproval} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
       ) : (

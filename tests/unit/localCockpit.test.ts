@@ -480,6 +480,34 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("can start a Sirius Agent Council run from the GUI API", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-council-run-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "rewrite this application in Rust", runMode: "council", accessMode: "full" })
+      });
+      expect(response.status).toBe(202);
+      const session = await waitForLatestSession(server.url, server.nonce);
+
+      expect(session.state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+        "chief_agent_selected",
+        "council_session_started",
+        "council_consensus",
+        "task_ownership_assignment",
+        "chief_final_review"
+      ]));
+      expect(session.state.chiefAgent?.id).toBeTruthy();
+      expect(session.state.council?.status).toBe("consensus");
+      expect(session.state.finalSummary?.result).toBe("completed");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("runs GUI fixture demos in an isolated sample workspace", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-isolated-fixture-"));
     await mkdir(path.join(cwd, "tests", "fixtures"), { recursive: true });

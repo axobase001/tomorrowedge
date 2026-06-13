@@ -27,6 +27,12 @@ import type { ObjectiveContractV1, ContractVerificationResult } from "../contrac
 import type { ObjectiveTraceV1 } from "../traces/objectiveTrace.js";
 import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import type { ToolSkillRouteDecision } from "../skills/toolSkillRouter.js";
+import type { ChiefAgentDecision, ChiefAgentProfile } from "../chiefAgent/chiefAgentTypes.js";
+import type { FinalChiefReview } from "../chiefAgent/finalChiefReview.js";
+import type { CouncilSession } from "../council/councilTypes.js";
+import type { DelegatedTaskResult } from "../delegatedExecution/delegatedExecutionTypes.js";
+import type { StrategyGenome } from "../evolution/strategyGenome.js";
+import type { StrategyMutationEvent, StrategySelectionDecision } from "../evolution/mutationEngine.js";
 
 export type AgentGraphState = {
   sessionId: string;
@@ -58,6 +64,14 @@ export type AgentGraphState = {
   contractVerification?: ContractVerificationResult;
   retrievedObjectiveTraces?: ObjectiveTraceV1[];
   orchestrationPolicy?: OrchestrationPolicyGenome;
+  chiefAgent?: ChiefAgentProfile;
+  chiefDecision?: ChiefAgentDecision;
+  council?: CouncilSession;
+  delegatedTaskResults?: DelegatedTaskResult[];
+  strategyGenome?: StrategyGenome;
+  strategyMutations?: StrategyMutationEvent[];
+  strategySelection?: StrategySelectionDecision;
+  finalChiefReview?: FinalChiefReview;
   toolSkillRoutes?: ToolSkillRouteDecision[];
   objectiveTrace?: ObjectiveTraceV1;
   workflowBlockedReason?: string;

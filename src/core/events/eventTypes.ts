@@ -16,7 +16,11 @@ export type EventPhase =
   | "verification"
   | "summary"
   | "routing"
-  | "memory";
+  | "memory"
+  | "council"
+  | "execution"
+  | "evolution"
+  | "delivery";
 
 export type BaseEvent = {
   id: string;
@@ -462,6 +466,148 @@ export type BudgetPreviewEvent = BaseEvent & {
   strongAgentCallsRemaining?: number;
 };
 
+export type ChiefAgentSelectedEvent = BaseEvent & {
+  type: "chief_agent_selected";
+  chiefAgentId: string;
+  provider: string;
+  model?: string;
+  reason: string;
+  trustLevel: "low" | "medium" | "high";
+};
+
+export type ChiefAgentDecisionEvent = BaseEvent & {
+  type: "chief_agent_decision";
+  chiefAgentId: string;
+  action: "plan_directly" | "convene_council" | "delegate_simple" | "ask_user" | "abort";
+  reason: string;
+  requiredCouncilRoles?: string[];
+  initialRiskAssessment: "low" | "medium" | "high";
+};
+
+export type ChiefInitialPlanEvent = BaseEvent & {
+  type: "chief_initial_plan";
+  chiefAgentId: string;
+  planRef: string;
+  summary: string;
+};
+
+export type CouncilSessionStartedEvent = BaseEvent & {
+  type: "council_session_started";
+  councilSessionId: string;
+  chiefAgentId: string;
+  memberAgentIds: string[];
+  reason: string;
+};
+
+export type CouncilMoveEvent = BaseEvent & {
+  type: "council_move";
+  councilSessionId: string;
+  moveId: string;
+  round: number;
+  moveType: "initial_proposal" | "critique" | "gap_fill" | "alternative_plan" | "task_claim" | "risk_objection" | "consensus_revision" | "final_consensus";
+  speakerAgentId: string;
+  targetMoveId?: string;
+  summary: string;
+  moveRef?: string;
+};
+
+export type CouncilConsensusEvent = BaseEvent & {
+  type: "council_consensus";
+  councilSessionId: string;
+  taskGraphRef: string;
+  nodeCount: number;
+  unresolvedRisks: string[];
+  status: "consensus" | "ask_user" | "aborted";
+};
+
+export type CouncilUnresolvedRiskEvent = BaseEvent & {
+  type: "council_unresolved_risk";
+  councilSessionId: string;
+  risk: string;
+  blocking: boolean;
+  reason: string;
+};
+
+export type TaskOwnershipAssignmentEvent = BaseEvent & {
+  type: "task_ownership_assignment";
+  taskGraphId: string;
+  taskNodeId: string;
+  ownerAgentId: string;
+  assignedProvider: string;
+  assignedModel?: string;
+  assignmentReason: string;
+  claimMode: "assigned" | "volunteered" | "evolved";
+  fallbackAgents: string[];
+};
+
+export type DelegatedTaskResultEvent = BaseEvent & {
+  type: "delegated_task_result";
+  taskNodeId: string;
+  ownerAgentId: string;
+  provider: string;
+  model?: string;
+  status: "success" | "failed" | "blocked" | "skipped";
+  summary: string;
+  evidenceRefs: string[];
+  artifactRefs: string[];
+  estimatedCostUsd?: number;
+  failureSignals?: string[];
+};
+
+export type StrategyMutationRuntimeEvent = BaseEvent & {
+  type: "strategy_mutation";
+  mutationId: string;
+  parentStrategyId: string;
+  childStrategyId: string;
+  mutationType: "split_task" | "switch_owner_agent" | "add_reviewer" | "add_judge" | "increase_debate" | "trigger_council_replan" | "relax_cost" | "tighten_evidence" | "fallback_to_chief";
+  trigger: "test_failed" | "review_blocked" | "judge_request_revision" | "budget_blocked" | "evidence_gap" | "agent_failure" | "timeout";
+  reason: string;
+  affectedTaskNodeIds: string[];
+  selected: boolean;
+  mutationRef: string;
+};
+
+export type StrategySelectionDecisionEvent = BaseEvent & {
+  type: "strategy_selection_decision";
+  selectedStrategyId: string;
+  candidatesRef: string;
+  selectionReason: string;
+};
+
+export type CouncilReplanEvent = BaseEvent & {
+  type: "council_replan";
+  councilSessionId: string;
+  reason: string;
+  oldTaskGraphRef: string;
+  newTaskGraphRef: string;
+  graphDiffRef: string;
+};
+
+export type ChiefFinalReviewEvent = BaseEvent & {
+  type: "chief_final_review";
+  chiefAgentId: string;
+  decision: "approve_delivery" | "request_revision" | "ask_user" | "abort";
+  architectureConsistency: "pass" | "warning" | "fail";
+  reviewRef: string;
+  summary: string;
+  unresolvedRisks: string[];
+  requiredRevisions: string[];
+};
+
+export type ChiefDeliveryApprovedEvent = BaseEvent & {
+  type: "chief_delivery_approved";
+  chiefAgentId: string;
+  deliverableRef: string;
+  summary: string;
+};
+
+export type ChiefRevisionRequestedEvent = BaseEvent & {
+  type: "chief_revision_requested";
+  chiefAgentId: string;
+  requiredRevisions: string[];
+  reason: string;
+};
+
 export type WorkflowStopReasonEvent = BaseEvent & {
   type: "workflow_stop_reason";
   reason: string;
@@ -688,6 +834,21 @@ export type TomorrowEdgeEvent =
   | EvidencePacketEvent
   | BudgetPreviewEvent
   | BudgetDecisionEvent
+  | ChiefAgentSelectedEvent
+  | ChiefAgentDecisionEvent
+  | ChiefInitialPlanEvent
+  | CouncilSessionStartedEvent
+  | CouncilMoveEvent
+  | CouncilConsensusEvent
+  | CouncilUnresolvedRiskEvent
+  | TaskOwnershipAssignmentEvent
+  | DelegatedTaskResultEvent
+  | StrategyMutationRuntimeEvent
+  | StrategySelectionDecisionEvent
+  | CouncilReplanEvent
+  | ChiefFinalReviewEvent
+  | ChiefDeliveryApprovedEvent
+  | ChiefRevisionRequestedEvent
   | WorkflowStopReasonEvent
   | FallbackToNativeEvent
   | TraceCompletenessEvent

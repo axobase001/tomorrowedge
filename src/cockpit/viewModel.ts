@@ -62,6 +62,11 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     objectiveContract: buildObjectiveContractSummary(state),
     objectiveTrace: buildObjectiveTraceSummary(state),
     orchestrationPolicy: buildOrchestrationPolicySummary(state),
+    chiefAgent: buildChiefAgentSummary(state),
+    council: buildCouncilSummary(state),
+    taskOwnership: buildTaskOwnershipSummary(state),
+    policyMutations: buildPolicyMutationSummary(state),
+    finalReview: buildFinalReviewSummary(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -223,6 +228,94 @@ function buildRoleGraphSummary(state?: AgentGraphState): CockpitViewModel["roleG
   };
 }
 
+function buildChiefAgentSummary(state?: AgentGraphState): CockpitViewModel["chiefAgent"] {
+  const chief = state?.chiefAgent;
+  if (!chief) return undefined;
+  return {
+    chiefAgentId: chief.id,
+    provider: chief.provider,
+    model: chief.model,
+    decision: state?.chiefDecision?.action,
+    reason: state?.chiefDecision?.reason,
+    trustLevel: chief.trustLevel
+  };
+}
+
+function buildCouncilSummary(state?: AgentGraphState): CockpitViewModel["council"] {
+  const council = state?.council;
+  if (!council) return undefined;
+  return {
+    sessionId: council.sessionId,
+    status: council.status,
+    members: council.members.map((member) => ({
+      agentId: member.agentId,
+      provider: member.provider,
+      model: member.model,
+      role: member.assignedCouncilRole
+    })),
+    moves: council.moves.map((move) => ({
+      id: move.id,
+      round: move.round,
+      type: move.type,
+      speakerAgentId: move.speakerAgentId,
+      summary: move.summary
+    })),
+    unresolvedRisks: council.unresolvedRisks
+  };
+}
+
+function buildTaskOwnershipSummary(state?: AgentGraphState): CockpitViewModel["taskOwnership"] {
+  const graph = state?.plan?.taskGraph;
+  if (!graph) return undefined;
+  return {
+    assignments: graph.nodes
+      .filter((node) => node.ownerAgentId || node.assignedProvider)
+      .map((node) => ({
+        taskNodeId: node.id,
+        title: node.title,
+        ownerAgentId: node.ownerAgentId ?? "unassigned",
+        provider: node.assignedProvider ?? "unknown",
+        model: node.assignedModel,
+        reason: node.assignmentReason ?? "No assignment reason recorded",
+        claimMode: node.claimMode,
+        fallbackAgents: node.fallbackAgents ?? []
+      }))
+  };
+}
+
+function buildPolicyMutationSummary(state?: AgentGraphState): CockpitViewModel["policyMutations"] {
+  const mutations = state?.strategyMutations ?? [];
+  if (!mutations.length && !state?.strategySelection) return undefined;
+  return {
+    count: mutations.length,
+    selectedStrategyId: state?.strategySelection?.selectedStrategyId ?? state?.strategyGenome?.id,
+    mutations: mutations.map((mutation) => ({
+      id: mutation.id,
+      type: mutation.type,
+      trigger: mutation.trigger,
+      reason: mutation.reason,
+      affectedTaskNodeIds: mutation.affectedTaskNodeIds,
+      selected: mutation.selected
+    }))
+  };
+}
+
+function buildFinalReviewSummary(state?: AgentGraphState): CockpitViewModel["finalReview"] {
+  const review = state?.finalChiefReview;
+  if (!review) return undefined;
+  return {
+    chiefAgentId: review.chiefAgentId,
+    decision: review.decision,
+    architectureConsistency: review.architectureConsistency,
+    codeReviewSummary: review.codeReviewSummary,
+    taskCompletionSummary: review.taskCompletionSummary,
+    unresolvedRisks: review.unresolvedRisks,
+    requiredRevisions: review.requiredRevisions,
+    evidenceRefs: review.evidenceRefs,
+    artifactRefs: review.artifactRefs
+  };
+}
+
 function buildTaskGraphSummary(state?: AgentGraphState): CockpitViewModel["taskGraph"] {
   const graph = state?.plan?.taskGraph;
   if (!graph) return undefined;
@@ -234,6 +327,10 @@ function buildTaskGraphSummary(state?: AgentGraphState): CockpitViewModel["taskG
       title: node.title,
       status: node.status,
       role: node.ownerRole,
+      ownerAgentId: node.ownerAgentId,
+      assignedProvider: node.assignedProvider,
+      assignedModel: node.assignedModel,
+      assignmentReason: node.assignmentReason,
       dependencies: node.dependsOn,
       evidenceRefs: node.evidenceRefs ?? [],
       artifactRefs: node.artifactRefs ?? []

@@ -4,32 +4,53 @@
 
 **中文** | [English](#english)
 
-明日边缘是一个 **面向用户场景的自迭代 Agent 编排层 GUI/runtime**：它以 **多模型强治理** 和 **多 Agent 工作流编排** 为核心，通过 **Objective Contract、objective-action-feedback trace 与 Orchestration Policy Genome** 把编排策略本身变成可审计、可评分、可离线改进的运行时对象。
+TomorrowEdge is the **local governance and policy-evolution runtime for heterogeneous coding agents**: a local GUI/runtime orchestration layer for strong-agent governance, budget-bounded multi-model execution, and policy evolution over real software-engineering workflows.
 
-它位于模型 API、外部 coding agents 与真实代码仓库之间，不负责替某一个模型赢，而是把强模型、高性价比模型、本地模型、外部 agents、人类授权、目标契约、证据验证和执行反馈组织成一个可监督、可审计、可回滚、可迭代的软件工程工作流。
+It is not another chat bot, single-model CLI wrapper, benchmark dashboard, or general personal-agent OS. It turns Codex, Claude Code, DeepSeek, MiMo, local models, external command agents, and custom adapters into replaceable capability nodes inside a governed software-engineering council.
+
+The core AI-coding problem is no longer only model strength. Strong agents can already write code. The hard part is governance: deciding when to spend strong-agent calls, when to delegate implementation to cheaper or local agents, who reviews and judges, how to reassign work after failure, whether evidence is enough to deliver, and how full-access autonomy remains visible instead of black-boxed.
 
 ```text
 Full autonomy, full visibility.
-完全自治，完全可见。
+Codex and Claude Code give agents full access.
+TomorrowEdge gives heterogeneous full-access agents governance, trace, budgets, and policy evolution.
 ```
 
-当前 AI Coding 的核心问题不是模型不够强，而是编排不够好。强模型已经能写代码，但真实工程任务仍然会卡在上下文选择、角色分工、预算约束、风险审查、失败修复、证据留存和人类授权上。单模型 full-access agent 可以很猛，但也容易变成黑盒：它为什么改这个文件、为什么跑这个命令、为什么信这个 patch、为什么花掉这次强模型调用，用户往往看不清。
+## Sirius 1.5: Agent Council Governance Runtime
 
-TomorrowEdge 的目标是做这个中间编排层：**强模型负责高价值判断，高性价比模型负责大规模执行，本地模型保护隐私，人类授权关键动作。**
+Sirius 1.5 makes **Agent Council Governance Runtime** the main line. A user gives a high-level engineering goal; TomorrowEdge routes it to a Chief Agent first, convenes replaceable Council Members for critique / gap fill / alternative plans / task claims, forms a consensus TaskGraph with concrete owners, delegates node execution, applies bounded strategy mutation on failure, and returns the deliverable to the Chief Agent for final review.
 
-Full 模式是完整工作区工具权限下的自治执行。TomorrowEdge 会自动应用 patch、运行 shell、执行 repair loop，并继续迭代，不会每一步都打断用户确认。
+Core modules:
 
-它与黑盒 full-access agent 的区别不是限制权限，而是治理和可见性：每次模型调用、上下文选择、路由理由、patch、命令、review、judge 裁决、fallback、成本更新和验证结果都会显示在 GUI client 中，并写入可回放事件账本。
+- **Chief Agent Router** sends high-level engineering goals to a chief agent first.
+- **AgentCapabilityProfile** makes Codex, Claude Code, DeepSeek, MiMo, Ollama, mock, fixture, and custom agents replaceable capability nodes.
+- **Agent Council Planning** records critique, gap fill, alternative planning, task claims, and consensus.
+- **Task Ownership Assignment** gives every core TaskGraph node an `ownerAgentId`, `assignedProvider`, `assignedModel`, and `assignmentReason`.
+- **Delegated Execution Runtime** executes owned task nodes while preserving Objective Contract, TaskGraph, RoleGraph, EvidenceGate, BudgetGate, Debate v2, Strategy Memory, and the trace ledger.
+- **Bounded Strategy Mutation** can split tasks, switch owner agents, add reviewers/judges, increase debate, or trigger council replan when execution fails.
+- **Chief Final Review / Judge** returns every deliverable to the chief agent before completion.
 
-## 为什么存在
+Docs:
 
-明日边缘存在的原因，是 AI coding 的未来不会是单模型的。
+- [Agent Council Governance Runtime](docs/AGENT_COUNCIL_GOVERNANCE.md)
+- [Agent Capability Profiles](docs/AGENT_CAPABILITY_PROFILES.md)
+- [Chief Agent Runtime](docs/CHIEF_AGENT_RUNTIME.md)
+- [Delegated Execution Runtime](docs/DELEGATED_EXECUTION_RUNTIME.md)
+- [Policy Evolution Runtime](docs/POLICY_EVOLUTION_RUNTIME.md)
+- [Capability Status](docs/CAPABILITY_STATUS.md)
+- [README Promise Map](docs/README_PROMISE_MAP.md)
 
-不同模型有不同的能力、价格、上下文长度、延迟与隐私边界。模型厂有动力把用户留在自家模型栈里，但工程团队真正需要的是跨模型的最优组合：用强模型做架构判断、审查和裁决，用高性价比模型做探索、实现和重复劳动，用本地模型守住隐私，用外部 coding agents 承担关键角色，用人类授权真正重要的动作。
+Current version: `1.5.0`.
 
-TomorrowEdge 关注的不是“接入更多模型”本身，而是 **预算约束下的异构模型系统效率**：哪些步骤值得调用强模型，哪些步骤应该交给便宜模型，什么时候需要外部 agent，什么时候需要本地模型，什么时候必须让人类确认。它把这些选择变成可解释、可追踪、可复盘的工作流。
+`1.5.0` introduces Sirius, the Agent Council Governance Runtime: chief-agent routing, replaceable agent capability profiles, structured council planning, TaskGraph ownership assignment, delegated execution, bounded strategy mutation, external command-agent invocation, and chief final review.
 
-OpenRouter 解决“怎么调用多个模型”；TomorrowEdge 解决“怎么让多个模型和多个 agents 在一个真实工程任务里分工、争辩、监督、交付”。
+## Why It Exists
+
+TomorrowEdge exists because the future of AI coding will not be single-model.
+
+Different models and coding agents have different capabilities, prices, context lengths, latency profiles, tool access, and privacy boundaries. Engineering teams need the best cross-agent composition: use strong agents for architecture judgment, review, and arbitration; use cost-efficient agents for exploration, implementation, and repetitive work; use local models for privacy; and preserve human authorization for actions that matter.
+
+OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, ownership, strategy mutation, and engineering delivery.
 
 ## Self-Iterating Agent Orchestration Layer
 
@@ -115,8 +136,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## 当前版本
 
-当前版本：`1.4.3`。
+当前版本：`1.5.0`。
 
+- `1.5.0` introduces Sirius, the Agent Council Governance Runtime: chief-agent routing, replaceable agent capability profiles, structured council planning, TaskGraph ownership assignment, delegated execution, bounded strategy mutation, external command-agent invocation, and chief final review.
 - `1.4.3` clears the older experiment/fixture issue queue: error-loop experiments now support explicit baseline aliases (`direct`, `reflection_only`, `preference_feedback`, `error_memory`), the deterministic fixture catalog covers wrong-API / wrong-file / hidden-invariant traps, and `tedge experiment dashboard` builds an offline cohort dashboard from experiment bundles.
 - `1.4.2` polishes the 1.4.1 alpha candidate: fixture-mode is now clearly bounded as a deterministic sample workflow provider, stored strategy memory normalizes failing-test repairs as `bugfix` with a secondary `test_failure` signal, cockpit RoleGraph state comes from authoritative execution nodes, summarize TaskGraph nodes link final summary / trace-completeness / objective-trace artifacts, and targeted test groups cover integration, UI, memory, core, and adaptive runtime checks.
 - `1.4.1` hardens the Adaptive Orchestration Runtime: patch workflows dispatch from RoleGraph-ready and TaskGraph-ready intersections, the summarizer is an executable graph node, `design_patch` / high-risk `risk_map` / review / judge / test nodes retain artifact and EvidencePacket refs, approval-blocked trace completeness is classified separately from workflow result, budget telemetry separates committed real strong-agent calls from simulated governance calls, and deterministic benchmarks include reproducibility metadata without claiming hidden-test, cost, or winner evidence.
@@ -182,6 +204,7 @@ git clone https://github.com/axobase001/tomorrowedge
 cd tomorrowedge
 npm ci
 npm run verify
+npm run dev -- council run "rewrite this application in Rust" --headless --fixture-mode --access-mode full
 npm run dev -- recipes
 npm run dev -- run --recipe bugfix-sprint --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
@@ -536,24 +559,23 @@ vision roles.
 
 ## English
 
-TomorrowEdge is not another coding agent. It is a **contract-first, multi-model, multi-agent orchestration GUI/runtime for user-facing software engineering workflows**.
+TomorrowEdge is the **local governance and policy-evolution runtime for heterogeneous coding agents**: a local GUI/runtime orchestration layer for strong-agent governance, budget-bounded multi-model execution, and policy evolution over real software-engineering workflows.
 
-It sits between model APIs, external coding agents, and real repositories. It is not trying to make one model win. It organizes strong models, cost-efficient models, local models, external agents, human authorization, objective contracts, evidence verification, and execution feedback into a supervised, auditable, replayable, self-improving engineering runtime.
+It is not another chat bot, single-model CLI wrapper, benchmark dashboard, or general personal-agent OS. It turns Codex, Claude Code, DeepSeek, MiMo, local models, and custom agents into replaceable capability nodes inside a governed software-engineering council.
 
-TomorrowEdge is not another agent framework. It is a full-access cockpit for native workflows and existing agent frameworks, plus an evolution-inspired orchestration layer that learns which policies should define objectives, route roles, verify evidence, repair failures, and stop safely.
+The core AI-coding problem is no longer only model strength. Strong agents can already write code. The hard part is governance: deciding when to spend strong-agent calls, when to delegate implementation to cheaper or local agents, who reviews and judges, how to reassign work after failure, whether evidence is enough to deliver, and how full-access autonomy remains visible instead of black-boxed.
 
-```text
-Full autonomy, full visibility.
-```
+Sirius 1.5 makes **Agent Council Governance Runtime** the main line:
 
-The core problem in AI coding is no longer simply that models are not strong enough. The harder problem is orchestration that is governed and improved as runtime policy: context selection, role assignment, budget discipline, risk review, repair loops, evidence capture, human authorization, and a clear definition of what it means for the task to be done correctly. A single full-access agent can be powerful, but it can also become a black box: why this file, why this command, why this patch, why this strong-model call?
+- **Chief Agent Router** sends high-level engineering goals to a chief agent first.
+- **AgentCapabilityProfile** makes Codex, Claude Code, DeepSeek, MiMo, Ollama, mock, fixture, and custom agents replaceable capability nodes.
+- **Agent Council Planning** records critique, gap fill, alternative planning, task claims, and consensus.
+- **Task Ownership Assignment** gives every core TaskGraph node an owner agent, provider, model, and assignment reason.
+- **Delegated Execution Runtime** executes owned task nodes under Objective Contract, TaskGraph, RoleGraph, EvidenceGate, BudgetGate, Debate v2, Strategy Memory, and the trace ledger.
+- **Bounded Strategy Mutation** can split tasks, switch owner agents, add reviewers/judges, increase debate, or trigger council replan when execution fails.
+- **Chief Final Review / Judge** returns every deliverable to the chief agent before completion.
 
-TomorrowEdge is the orchestration layer for that problem: **strong models decide, efficient models execute, local models protect privacy, humans authorize the actions that matter, Objective Contracts define task boundaries, objective-action-feedback traces preserve execution experience, and Orchestration Policy Genomes improve orchestration inside immutable safety boundaries.**
-
-Full mode is autonomous execution with complete workspace tool access. TomorrowEdge will apply patches, run shell commands, execute repair loops, and continue iterating without per-step confirmation.
-
-The difference from black-box full-access agents is governance, visibility, and self-iteration: every model call, context selection, routing reason, objective contract, patch, command, review, judge decision, fallback, cost update, verification result, and policy feedback signal is rendered in the local GUI client and saved to a replayable event ledger.
-
+In one line: **Codex and Claude Code give agents full access. TomorrowEdge gives heterogeneous full-access agents governance, trace, budgets, and policy evolution.**
 ## Why It Exists
 
 TomorrowEdge exists because the future of AI coding will not be single-model.
@@ -579,7 +601,9 @@ In one line: **OpenRouter routes requests. TomorrowEdge routes objectives, capab
 
 ## Current Version
 
-Current version: `1.4.3`.
+Current version: `1.5.0`.
+
+`1.5.0` introduces Sirius, the Agent Council Governance Runtime: chief-agent routing, replaceable agent capability profiles, structured council planning, TaskGraph ownership assignment, delegated execution, bounded strategy mutation, external command-agent invocation, and chief final review.
 
 `1.4.3` clears the older experiment/fixture issue queue: error-loop experiments
 now support explicit baseline aliases (`direct`, `reflection_only`,
@@ -852,6 +876,7 @@ git clone https://github.com/axobase001/tomorrowedge
 cd tomorrowedge
 npm ci
 npm run verify
+npm run dev -- council run "rewrite this application in Rust" --headless --fixture-mode --access-mode full
 npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch --approve-shell
 npm run dev -- trace latest --verbose
 npm run client

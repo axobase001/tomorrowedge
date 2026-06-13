@@ -7,6 +7,7 @@ import type { OfflineGraphOptions } from "../core/agentGraph/executor.js";
 import { deleteSession, loadLatestSession, loadSession, listSessions, renameSessionGoal, saveSession } from "../core/memory/sessionMemory.js";
 import { NativeBackend } from "../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../core/orchestration/registry.js";
+import { runAgentCouncilGovernance } from "../core/council/councilRuntime.js";
 import { prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, liveOption } from "../core/runtime/runPreparation.js";
 import { TomorrowEdgeMcpBridge } from "../mcp/bridge.js";
 import { cockpitIconSvg, cockpitManifest } from "./brand.js";
@@ -265,8 +266,17 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
         }
       };
-      const backend = createOrchestrationBackend(config);
-      void runCockpitBackend(backend, workspace.executionCwd, goal, options)
+      const runPromise = requestedRunMode === "council"
+        ? runAgentCouncilGovernance(workspace.executionCwd, goal, config, {
+          accessMode,
+          fixtureMode: runFlags.fixtureMode,
+          approvePatch: Boolean(body.approvePatch),
+          approveShell: Boolean(body.approveShell),
+          sessionId,
+          onEvent: options.onEvent
+        })
+        : runCockpitBackend(createOrchestrationBackend(config), workspace.executionCwd, goal, options);
+      void runPromise
         .then(async (state) => {
           await saveSession(cwd, state, { failureMemory: config.failure_memory });
           cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
@@ -360,9 +370,10 @@ async function runCockpitBackend(
 function resolveRunFlags(runMode: CockpitRunMode, body: Record<string, unknown>, config: TomorrowEdgeConfig): { fixtureMode: boolean; livePatch: boolean; liveAdvisory: boolean } {
   const live = runMode === "live";
   const offline = runMode === "offline";
+  const council = runMode === "council";
   const fixtureMode = runMode === "fixture"
     ? true
-    : live || offline
+    : live || offline || council
       ? false
       : body.fixtureMode !== false;
   const autoLive = shouldAutoLive(config, { fixtureMode, live, offline });
@@ -571,8 +582,8 @@ function parseAccessMode(value: unknown): AccessMode | undefined {
 
 function parseRunMode(value: unknown): CockpitRunMode {
   if (value === undefined) return "auto";
-  if (value === "auto" || value === "fixture" || value === "offline" || value === "live") return value;
-  throw new HttpError(400, "invalid_run_mode", "runMode must be auto, fixture, offline, or live.");
+  if (value === "auto" || value === "fixture" || value === "offline" || value === "live" || value === "council") return value;
+  throw new HttpError(400, "invalid_run_mode", "runMode must be auto, fixture, offline, live, or council.");
 }
 
 function isMutatingMethod(method?: string): boolean {

@@ -3,6 +3,8 @@ export type EvidencePhase = "plan" | "patch" | "test" | "repair" | "review" | "j
 export type EvidencePacket = {
   id: string;
   phase: EvidencePhase;
+  taskNodeId?: string;
+  ownerAgentId?: string;
   summary: string;
   claims: string[];
   supportingArtifacts: string[];

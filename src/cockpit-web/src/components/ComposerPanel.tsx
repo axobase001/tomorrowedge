@@ -73,6 +73,7 @@ export function ComposerPanel({
           <option value="fixture">{t("composer.runModeFixture")}</option>
           <option value="offline">{t("composer.runModeOffline")}</option>
           <option value="live">{t("composer.runModeLive")}</option>
+          <option value="council">{t("composer.runModeCouncil")}</option>
         </select>
       </label>
       <label className="te-mode-control">

@@ -453,6 +453,7 @@ function CockpitWebRoot() {
 }
 
 function statusForRunRequest(runMode: CockpitRunMode, usesLiveModels: boolean, t: ReturnType<typeof createTranslator>): string {
+  if (runMode === "council") return t("status.startingCouncil");
   if (runMode === "fixture") return t("status.startingFixture");
   if (runMode === "offline") return t("status.startingOffline");
   if (runMode === "live" || usesLiveModels) return t("status.startingLive");

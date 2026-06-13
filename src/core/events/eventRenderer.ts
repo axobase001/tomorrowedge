@@ -96,6 +96,36 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.invocationKind ? `${event.invocationKind} ` : ""}${event.status}${event.simulated ? " simulated" : event.realProvider ? " real" : ""}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
     case "budget_preview":
       return `preview ${event.status}: ${event.reason}${event.estimatedCostUsd === undefined ? "" : ` est=$${event.estimatedCostUsd.toFixed(6)}`}`;
+    case "chief_agent_selected":
+      return `${event.chiefAgentId} selected ${event.provider}${event.model ? `/${event.model}` : ""} trust=${event.trustLevel}: ${event.reason}`;
+    case "chief_agent_decision":
+      return `${event.chiefAgentId} ${event.action} risk=${event.initialRiskAssessment}: ${event.reason}`;
+    case "chief_initial_plan":
+      return `${event.chiefAgentId}: ${event.summary}`;
+    case "council_session_started":
+      return `${event.councilSessionId} chief=${event.chiefAgentId} members=${event.memberAgentIds.join(",") || "-"}: ${event.reason}`;
+    case "council_move":
+      return `${event.councilSessionId} r${event.round} ${event.speakerAgentId}/${event.moveType}: ${event.summary}`;
+    case "council_consensus":
+      return `${event.councilSessionId} ${event.status} nodes=${event.nodeCount} unresolved=${event.unresolvedRisks.length}`;
+    case "council_unresolved_risk":
+      return `${event.blocking ? "blocking" : "nonblocking"} ${event.risk}: ${event.reason}`;
+    case "task_ownership_assignment":
+      return `${event.taskNodeId} -> ${event.ownerAgentId} ${event.assignedProvider}${event.assignedModel ? `/${event.assignedModel}` : ""} ${event.claimMode}: ${event.assignmentReason}`;
+    case "delegated_task_result":
+      return `${event.taskNodeId} ${event.status} by ${event.ownerAgentId}: ${event.summary}`;
+    case "strategy_mutation":
+      return `${event.mutationType} ${event.selected ? "selected" : "candidate"} trigger=${event.trigger}: ${event.reason}`;
+    case "strategy_selection_decision":
+      return `${event.selectedStrategyId}: ${event.selectionReason}`;
+    case "council_replan":
+      return `${event.councilSessionId}: ${event.reason}`;
+    case "chief_final_review":
+      return `${event.chiefAgentId} ${event.decision} architecture=${event.architectureConsistency}: ${event.summary}`;
+    case "chief_delivery_approved":
+      return `${event.chiefAgentId}: ${event.summary}`;
+    case "chief_revision_requested":
+      return `${event.chiefAgentId}: ${event.reason}`;
     case "workflow_stop_reason":
       return `${event.result}: ${event.reason}`;
     case "fallback_to_native":
@@ -181,6 +211,14 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("sessionRef" in event && event.sessionRef) refs.push(event.sessionRef);
   if ("traceRef" in event && event.traceRef) refs.push(event.traceRef);
   if ("traceCompletenessRef" in event && event.traceCompletenessRef) refs.push(event.traceCompletenessRef);
+  if ("planRef" in event && event.planRef) refs.push(event.planRef);
+  if ("moveRef" in event && event.moveRef) refs.push(event.moveRef);
+  if ("taskGraphRef" in event && event.taskGraphRef) refs.push(event.taskGraphRef);
+  if ("oldTaskGraphRef" in event && event.oldTaskGraphRef) refs.push(event.oldTaskGraphRef);
+  if ("newTaskGraphRef" in event && event.newTaskGraphRef) refs.push(event.newTaskGraphRef);
+  if ("graphDiffRef" in event && event.graphDiffRef) refs.push(event.graphDiffRef);
+  if ("candidatesRef" in event && event.candidatesRef) refs.push(event.candidatesRef);
+  if ("deliverableRef" in event && event.deliverableRef) refs.push(event.deliverableRef);
   return refs;
 }
 

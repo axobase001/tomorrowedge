@@ -122,7 +122,7 @@ function enforceRoleAndPhaseValidity(contract: ObjectiveContractV1, violations: 
     contract.allowedRoles = ["planner", "summarizer"];
     repairs.push("allowedRoles repaired to planner/summarizer");
   }
-  const validPhases = new Set<EventPhase>(["planning", "vision", "exploration", "coding", "review", "judge", "patch", "shell", "repair", "verification", "summary", "routing", "memory"]);
+  const validPhases = new Set<EventPhase>(["planning", "vision", "exploration", "coding", "review", "judge", "patch", "shell", "repair", "verification", "summary", "routing", "memory", "council", "execution", "evolution", "delivery"]);
   const beforePhases = contract.allowedPhases.length;
   contract.allowedPhases = contract.allowedPhases.filter((phase): phase is EventPhase => validPhases.has(phase));
   if (contract.allowedPhases.length !== beforePhases) repairs.push("invalid allowedPhases removed");

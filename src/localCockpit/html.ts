@@ -357,6 +357,19 @@ select { min-height: 30px; padding: 4px 8px; }
 .step.done .dot { border-color: #8bc9a7; background: #f0faf4; color: var(--success); }
 .step.running .dot, .step.waiting .dot { border-color: var(--deep-blue); background: var(--deep-blue); color: #fff; }
 .step.failed .dot { border-color: var(--danger); background: #fff4f4; color: var(--danger); }
+.governance-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 14px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fbfdfe;
+}
+.governance-strip div { min-width: 0; display: grid; gap: 2px; }
+.governance-strip span { color: var(--muted); font: 10.5px var(--mono); text-transform: uppercase; }
+.governance-strip strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); }
 .main-view {
   min-height: 0;
   overflow: auto;
@@ -825,10 +838,11 @@ function renderStep(step) {
 
 function renderMain(vm) {
   const main = vm.main;
+  const governance = renderGovernanceStrip(vm);
   if (vm.currentApproval) {
     const approval = vm.currentApproval;
     const title = approval.kind === "shell" ? "Waiting for shell approval" : "Waiting for patch approval";
-    return '<section class="approval-focus"><div class="approval-kicker">Approval · summary-first</div><h3>' + title + '</h3><p class="muted mono">' + esc(approval.candidateId || approval.command || "candidate") + '</p><div class="approval-stats">' +
+    return governance + '<section class="approval-focus"><div class="approval-kicker">Approval · summary-first</div><h3>' + title + '</h3><p class="muted mono">' + esc(approval.candidateId || approval.command || "candidate") + '</p><div class="approval-stats">' +
       chip((approval.filesChanged?.length || 0) + " file") +
       chip(changeCount(approval.diff)) +
       chip("risk " + (approval.riskLevel || "low")) +
@@ -837,7 +851,17 @@ function renderMain(vm) {
       renderApprovalActions(approval) + '</section>';
   }
   const diff = main.diff ? renderDiff(main.diff) : '<pre class="body-pre">' + esc(main.body || "No details yet.") + '</pre>';
-  return '<div class="main-grid"><aside class="summary-box"><h3>' + esc(main.title) + '</h3><dl><div><dt>Stage</dt><dd>' + esc(vm.statusText) + '</dd></div><div><dt>Target</dt><dd>' + esc(main.subtitle) + '</dd></div><div><dt>Files</dt><dd>' + esc(main.filesChanged.join(", ") || "-") + '</dd></div><div><dt>Risk</dt><dd>' + chip(main.riskLevel || "low") + '</dd></div><div><dt>Tests</dt><dd>' + chip(main.testStatus || "not_run") + '</dd></div></dl></aside><section class="diff-box">' + diff + '</section></div>';
+  return governance + '<div class="main-grid"><aside class="summary-box"><h3>' + esc(main.title) + '</h3><dl><div><dt>Stage</dt><dd>' + esc(vm.statusText) + '</dd></div><div><dt>Target</dt><dd>' + esc(main.subtitle) + '</dd></div><div><dt>Files</dt><dd>' + esc(main.filesChanged.join(", ") || "-") + '</dd></div><div><dt>Risk</dt><dd>' + chip(main.riskLevel || "low") + '</dd></div><div><dt>Tests</dt><dd>' + chip(main.testStatus || "not_run") + '</dd></div></dl></aside><section class="diff-box">' + diff + '</section></div>';
+}
+function renderGovernanceStrip(vm) {
+  if (!vm.chiefAgent && !vm.council && !vm.taskOwnership && !vm.finalReview) return "";
+  return '<section class="governance-strip" aria-label="Agent Council governance">' +
+    '<div><span>Chief</span><strong>' + esc(vm.chiefAgent?.chiefAgentId || "-") + '</strong></div>' +
+    '<div><span>Council</span><strong>' + esc((vm.council?.members?.length || 0) + " agents") + '</strong></div>' +
+    '<div><span>Ownership</span><strong>' + esc((vm.taskOwnership?.assignments?.length || 0) + " tasks") + '</strong></div>' +
+    '<div><span>Mutations</span><strong>' + esc(vm.policyMutations?.count || 0) + '</strong></div>' +
+    '<div><span>Final</span><strong>' + esc(vm.finalReview?.decision || "-") + '</strong></div>' +
+    '</section>';
 }
 function renderDiff(diff) {
   return '<pre>' + esc(diff).split("\\n").map((line) => {
@@ -900,6 +924,7 @@ function renderDrawer(open) {
     return;
   }
   el("drawer-content").innerHTML =
+    '<h3>Agent Council governance</h3><pre class="body-pre">' + esc(JSON.stringify({ chiefAgent: currentVm.chiefAgent, council: currentVm.council, taskOwnership: currentVm.taskOwnership, policyMutations: currentVm.policyMutations, finalReview: currentVm.finalReview }, null, 2)) + '</pre>' +
     '<h3>Full diff</h3><pre class="body-pre">' + esc(currentVm.main.diff || currentVm.currentApproval?.diff || "No diff in the current main view.") + '</pre>' +
     '<h3>Changed files</h3><pre class="body-pre">' + esc(currentVm.main.filesChanged.join("\\n") || "-") + '</pre>' +
     '<h3>Telemetry details</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.telemetry, null, 2)) + '</pre>' +

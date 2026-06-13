@@ -7,6 +7,56 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-13
+
+1.5.0 starts the Sirius release line and moves TomorrowEdge back to the main
+product thesis: local governance and policy-evolution runtime for
+heterogeneous coding agents. The center of gravity is now Agent Council
+Governance Runtime rather than benchmark/dashboard expansion.
+
+### Added
+
+- Added Chief Agent Router and `chief_agent` config. High-level engineering
+  goals can now enter through a configured or capability-selected Chief Agent
+  before task planning.
+- Added replaceable `AgentCapabilityProfile` runtime profiles for providers
+  and external agents, including capability scores, trust, cost tier, latency,
+  JSON/patch/MCP support, allowed roles, and config overrides.
+- Added Agent Council Planning. The Chief Agent can convene council members
+  that produce structured critique, gap fill, task claims, consensus revision,
+  and final consensus moves.
+- Added Task Ownership Assignment. Consensus TaskGraph nodes now carry
+  `ownerAgentId`, assigned provider/model, claim mode, fallback candidates, and
+  human-readable assignment reasons.
+- Added Delegated Execution Runtime for Sirius council runs. Owned TaskGraph
+  nodes execute under BudgetGate and emit EvidencePackets, artifacts,
+  `delegated_task_result`, and `task_node_result` events.
+- Added a Sirius external command-agent path: when a council-owned node is
+  assigned to `external:<id>` with `external_agents.<id>.command`, TomorrowEdge
+  spawns the configured command, passes the task/context envelope, and records
+  request/response/result/error refs in the ledger.
+- Added bounded execution-time Strategy Mutation. Failed delegated nodes can
+  select a safe mutation such as owner switch, reviewer/judge insertion,
+  debate increase, task split, or council replan without mutating the Objective
+  Contract safety boundary.
+- Added Chief Final Review / Judge. Deliverables return to the Chief Agent for
+  final approval or revision before the workflow reports completion.
+- Added `tedge council run <goal>` and `tedge run <goal> --agent-council`.
+- Added cockpit view-model sections for chief agent, council moves, task
+  ownership, policy mutations, and final chief review.
+- Added Sirius docs for Agent Council Governance, capability profiles, chief
+  runtime, delegated execution, and runtime policy evolution.
+
+### Changed
+
+- README and product positioning now define TomorrowEdge as the local
+  governance and policy-evolution runtime for heterogeneous coding agents.
+  Benchmarks and dashboards are framed as evaluation utilities, not product
+  core.
+- Event phases and trace rendering now understand `council`, `execution`,
+  `evolution`, and `delivery` events.
+- `npm run test:council` covers the Sirius runtime path.
+
 ## [1.4.3] - 2026-06-12
 
 1.4.3 clears the older experiment and fixture issue queue by making baseline

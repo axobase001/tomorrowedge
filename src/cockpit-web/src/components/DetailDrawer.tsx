@@ -9,6 +9,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
   const routeText = formatRoutes(viewModel);
   const roleGraphText = formatRoleGraph(viewModel);
   const taskGraphText = formatTaskGraph(viewModel);
+  const governanceText = formatGovernance(viewModel);
   const rawEventsText = viewModel.rawEvents.length ? JSON.stringify(viewModel.rawEvents.slice(-40), null, 2) : "";
   return (
     <>
@@ -24,6 +25,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <pre>{formatObjectiveTrace(viewModel)}</pre>
       <h3>{t("drawer.orchestrationPolicy")}</h3>
       <pre>{formatOrchestrationPolicy(viewModel)}</pre>
+      <h3>Agent Council governance</h3>
+      {governanceText ? <pre>{governanceText}</pre> : <EmptyState title="No council governance yet." testId="drawer-governance-empty-state" />}
       <h3>{t("drawer.approvalHistory")}</h3>
       {approvalHistoryText ? <pre>{approvalHistoryText}</pre> : <EmptyState title={t("state.noApprovalHistory")} testId="drawer-approval-empty-state" />}
       <h3>{t("drawer.memoryInfluence")}</h3>
@@ -117,6 +120,24 @@ function formatRoutes(viewModel: CockpitViewModel): string {
   ].filter(Boolean).join("\n")).join("\n\n");
 }
 
+function formatGovernance(viewModel: CockpitViewModel): string {
+  if (!viewModel.chiefAgent && !viewModel.council && !viewModel.taskOwnership && !viewModel.policyMutations && !viewModel.finalReview) return "";
+  return [
+    "chief:",
+    viewModel.chiefAgent ? `  ${viewModel.chiefAgent.chiefAgentId} ${viewModel.chiefAgent.provider}/${viewModel.chiefAgent.model ?? "-"} decision=${viewModel.chiefAgent.decision ?? "-"} trust=${viewModel.chiefAgent.trustLevel}` : "  -",
+    "council:",
+    ...(viewModel.council?.members ?? []).map((member) => `  ${member.agentId} ${member.provider}/${member.model ?? "-"} role=${member.role}`),
+    "moves:",
+    ...(viewModel.council?.moves ?? []).slice(0, 12).map((move) => `  r${move.round} ${move.speakerAgentId}/${move.type}: ${move.summary}`),
+    "ownership:",
+    ...(viewModel.taskOwnership?.assignments ?? []).map((assignment) => `  ${assignment.taskNodeId} -> ${assignment.ownerAgentId} ${assignment.provider}/${assignment.model ?? "-"} ${assignment.claimMode ?? "assigned"} because ${assignment.reason}`),
+    "mutations:",
+    ...(viewModel.policyMutations?.mutations ?? []).map((mutation) => `  ${mutation.type} trigger=${mutation.trigger} selected=${mutation.selected}: ${mutation.reason}`),
+    "final:",
+    viewModel.finalReview ? `  ${viewModel.finalReview.chiefAgentId} ${viewModel.finalReview.decision} architecture=${viewModel.finalReview.architectureConsistency}` : "  -"
+  ].join("\n");
+}
+
 function artifactHref(sessionId: string | undefined, ref: string): string {
   return `/api/sessions/${encodeURIComponent(sessionId ?? "latest")}/artifacts/${encodeURIComponent(ref)}`;
 }
@@ -146,6 +167,8 @@ function formatTaskGraph(viewModel: CockpitViewModel): string {
   if (!graph) return "";
   const nodes = graph.nodes.map((node) => [
     `${node.id} (${node.kind}/${node.role}) status=${node.status}`,
+    node.ownerAgentId ? `owner=${node.ownerAgentId} provider=${node.assignedProvider ?? "-"} model=${node.assignedModel ?? "-"}` : undefined,
+    node.assignmentReason ? `reason=${node.assignmentReason}` : undefined,
     `after=${node.dependencies.join(", ") || "-"}`,
     node.evidenceRefs.length ? `evidence=${node.evidenceRefs.join(", ")}` : undefined,
     node.artifactRefs.length ? `artifacts=${node.artifactRefs.join(", ")}` : undefined

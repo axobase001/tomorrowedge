@@ -39,6 +39,12 @@ export type TaskGraphNode = {
   detail: string;
   phase: EventPhase;
   ownerRole: AgentRole;
+  ownerAgentId?: string;
+  assignedProvider?: string;
+  assignedModel?: string;
+  assignmentReason?: string;
+  claimMode?: "assigned" | "volunteered" | "evolved";
+  fallbackAgents?: string[];
   roleHints: AgentRole[];
   dependsOn: string[];
   dependencies: string[];

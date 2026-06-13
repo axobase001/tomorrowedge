@@ -33,5 +33,5 @@ export function buildCockpitRunRequest({ goal, accessMode, setupReady, runMode =
 }
 
 function normalizeRunMode(value: CockpitRunMode): CockpitRunMode {
-  return value === "fixture" || value === "offline" || value === "live" ? value : "auto";
+  return value === "fixture" || value === "offline" || value === "live" || value === "council" ? value : "auto";
 }

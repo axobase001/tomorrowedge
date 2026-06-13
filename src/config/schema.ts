@@ -18,6 +18,8 @@ export const externalAgentTrustLevelSchema = z.enum(["low", "medium", "high", "o
 export const agentRoleSchema = z.enum(agentRoles);
 export const selfIterationModeSchema = z.enum(["off", "trace_guided", "offline_evolution", "experimental_online"]);
 export type SelfIterationMode = z.infer<typeof selfIterationModeSchema>;
+export const capabilityCostTierSchema = z.enum(["cheap", "medium", "expensive"]);
+export const capabilityLatencyTierSchema = z.enum(["fast", "medium", "slow"]);
 
 export const providerModelConfigSchema = z.object({
   id: z.string().min(1),
@@ -73,6 +75,40 @@ export const externalAgentConfigSchema = z.object({
   trustLevel: externalAgentTrustLevelSchema.default("medium"),
   costProfile: z.record(z.unknown()).optional(),
   notes: z.string().optional()
+});
+
+export const agentCapabilityConfigSchema = z.object({
+  planning: z.number().min(0).max(1).optional(),
+  architecture: z.number().min(0).max(1).optional(),
+  coding: z.number().min(0).max(1).optional(),
+  review: z.number().min(0).max(1).optional(),
+  judging: z.number().min(0).max(1).optional(),
+  repair: z.number().min(0).max(1).optional(),
+  longContext: z.number().min(0).max(1).optional(),
+  toolUse: z.number().min(0).max(1).optional(),
+  patchGeneration: z.number().min(0).max(1).optional(),
+  testGeneration: z.number().min(0).max(1).optional(),
+  costTier: capabilityCostTierSchema.optional(),
+  latencyTier: capabilityLatencyTierSchema.optional(),
+  reliabilityScore: z.number().min(0).max(1).optional(),
+  supportsMcp: z.boolean().optional(),
+  supportsJson: z.boolean().optional(),
+  supportsPatch: z.boolean().optional(),
+  supportsShell: z.boolean().optional(),
+  allowedRoles: z.array(agentRoleSchema).optional(),
+  trustLevel: z.enum(["low", "medium", "high"]).optional(),
+  maxParallelTasks: z.number().int().positive().optional()
+});
+
+export const chiefAgentConfigSchema = z.object({
+  id: z.string().default(""),
+  provider: z.string().default(""),
+  model: z.string().optional(),
+  adapterId: z.string().optional(),
+  roles: z.array(z.enum(["lead_planner", "architecture_reviewer", "final_judge", "final_code_review"])).default(["lead_planner", "architecture_reviewer", "final_judge", "final_code_review"]),
+  trustLevel: z.enum(["low", "medium", "high"]).default("high"),
+  costTier: capabilityCostTierSchema.default("expensive"),
+  fallbackAgentId: z.string().optional()
 });
 
 export const orchestrationAdapterConfigSchema = z.object({
@@ -194,6 +230,8 @@ export const configSchema = z.object({
   providers: z.record(providerConfigSchema),
   agents: z.record(agentConfigSchema),
   external_agents: z.record(externalAgentConfigSchema).default({}),
+  agent_capabilities: z.record(agentCapabilityConfigSchema).default({}),
+  chief_agent: chiefAgentConfigSchema.default({}),
   orchestration: z.object({
     backend: orchestrationBackendSchema.default("native"),
     langgraph: orchestrationAdapterConfigSchema.default({}),

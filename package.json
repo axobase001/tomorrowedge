@@ -1,7 +1,7 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.4.3",
-  "description": "A contract-first, self-iterating orchestration GUI/runtime for multi-model, multi-agent coding workflows.",
+  "version": "1.5.0",
+  "description": "Local governance and policy-evolution runtime for heterogeneous coding agents.",
   "type": "module",
   "bin": {
     "tedge": "./dist/cli/index.js"
@@ -18,6 +18,8 @@
     "test": "vitest run --fileParallelism=false",
     "test:core": "vitest run tests/unit/taskMemory.test.ts tests/unit/benchmark.test.ts tests/unit/cockpitViewModel.test.ts tests/unit/preferences.test.ts --fileParallelism=false",
     "test:adaptive": "vitest run tests/unit/objectiveContract.test.ts tests/unit/objectiveTracePolicy.test.ts tests/unit/agentGraph.test.ts tests/unit/roleGraph.test.ts tests/unit/roleGraphScheduler.test.ts tests/unit/taskGraph.test.ts tests/unit/taskGraphScheduler.test.ts tests/unit/adaptiveRuntime.test.ts tests/unit/budgetGate.test.ts --fileParallelism=false",
+    "test:council": "vitest run tests/unit/agentCouncilRuntime.test.ts --fileParallelism=false",
+    "test:evolution": "vitest run tests/unit/objectiveTracePolicy.test.ts tests/unit/agentCouncilRuntime.test.ts --fileParallelism=false",
     "test:integration": "vitest run tests/integration --fileParallelism=false",
     "test:ui": "vitest run tests/unit/cockpitViewModel.test.ts tests/unit/localCockpit.test.ts tests/unit/cockpitWeb.test.ts --fileParallelism=false",
     "test:memory": "vitest run tests/unit/taskMemory.test.ts tests/unit/failureMemoryInfluence.test.ts tests/unit/errorLoopExperiment.test.ts --fileParallelism=false",
@@ -57,6 +59,11 @@
     "scripts/pack-dry.ts",
     "scripts/package-smoke.ts",
     "scripts/package-zip.ts",
+    "docs/AGENT_COUNCIL_GOVERNANCE.md",
+    "docs/AGENT_CAPABILITY_PROFILES.md",
+    "docs/CHIEF_AGENT_RUNTIME.md",
+    "docs/DELEGATED_EXECUTION_RUNTIME.md",
+    "docs/POLICY_EVOLUTION_RUNTIME.md",
     "scripts/secret-scan.ts",
     "examples/tiny-local-lm/ARCHITECTURE.md",
     "examples/tiny-local-lm/README.md",
@@ -65,13 +72,16 @@
     "examples/tiny-local-lm/public",
     "examples/tiny-local-lm/scripts",
     "examples/tiny-local-lm/src",
-    "examples/tiny-local-lm/tests"
+    "examples/tiny-local-lm/tests",
+    "examples/agent-council-rust-rewrite/README.md"
   ],
   "keywords": [
     "gui-client",
     "coding-agent",
     "multi-model",
-    "agent-orchestration"
+    "agent-orchestration",
+    "agent-governance",
+    "policy-evolution"
   ],
   "author": "",
   "repository": {
@@ -110,7 +120,7 @@
     "playwright": "^1.60.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^7.3.5",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   }
 }

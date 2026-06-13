@@ -30,6 +30,7 @@ import { askCommand, targetsCommand } from "./commands/conversation.js";
 import { recipesCommand } from "./commands/recipes.js";
 import { experimentDashboardCommand, experimentErrorLoopCommand } from "./commands/experiment.js";
 import { skillsCandidatesCommand, skillsInspectCommand, skillsListCommand, skillsPacksCommand, skillsProposeCommand, skillsValidateCommand } from "./commands/skills.js";
+import { councilRunCommand } from "./commands/council.js";
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -73,10 +74,30 @@ program
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
   .option("--recipe <id>", "workflow recipe: review-only, bugfix-sprint, or security-audit")
+  .option("--agent-council", "run through the Sirius Agent Council Governance Runtime")
+  .option("--simulate-failure <task-node-id>", "Sirius council mode only: simulate a delegated task failure to exercise bounded mutation")
   .option("--to <target>", "conversation target: core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core")
   .option("--cwd <path>", "run against another project directory")
   .option("--workdir <path>", "alias for --cwd")
-  .action((task: string | undefined, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; recipe?: string; to?: string; cwd?: string; workdir?: string }) => runCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir }));
+  .action((task: string | undefined, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; recipe?: string; agentCouncil?: boolean; simulateFailure?: string; to?: string; cwd?: string; workdir?: string }) => {
+    if (options.agentCouncil) return councilRunCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir });
+    return runCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir });
+  });
+
+const council = program.command("council").description("Run the Sirius Agent Council Governance Runtime");
+council
+  .command("run")
+  .description("Route a high-level engineering task through chief agent, council planning, task ownership, delegated execution, mutation, and final chief review")
+  .argument("<goal>", "high-level engineering goal")
+  .option("--headless", "print JSON result metadata")
+  .option("--fixture-mode", "use deterministic local workspace preparation")
+  .option("--access-mode <mode>", "access mode: restricted, partial, or full")
+  .option("--approve-patch", "mark patch actions approved in the run access policy")
+  .option("--approve-shell", "mark shell actions approved in the run access policy")
+  .option("--simulate-failure <task-node-id>", "simulate a delegated task failure to exercise bounded mutation")
+  .option("--cwd <path>", "run against another project directory")
+  .option("--workdir <path>", "alias for --cwd")
+  .action((goal: string, options: { headless?: boolean; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: string; simulateFailure?: string; cwd?: string; workdir?: string }) => councilRunCommand(cwd, goal, { ...options, cwd: options.cwd ?? options.workdir }));
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
 

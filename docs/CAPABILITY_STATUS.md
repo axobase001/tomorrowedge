@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.4.3. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.5.0 Sirius. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -8,6 +8,11 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Offline fixture/mock workflow | stable | No API key required; covered by CI. |
 | Access modes and full-access trace | stable | Restricted, partial, and full modes are implemented with event-ledger visibility. |
 | Event ledger, artifacts, trace/export | stable | Sessions, events, artifact refs, markdown/json export, and trace diagnostics are implemented. |
+| Agent Council Governance Runtime | experimental | Sirius introduces Chief Agent routing, structured council planning, task ownership assignment, delegated execution, bounded Strategy Mutation, and Chief final review. It is the 1.5 mainline but still experimental. |
+| Chief Agent Router | experimental | A configured `chief_agent` or the strongest available capability profile is selected before council planning. The Chief records initial plan, council decision, and final review/judge events. |
+| AgentCapabilityProfile | experimental | Providers and external agents are converted into replaceable capability profiles with planning, architecture, coding, review, judging, repair, cost, trust, latency, JSON/patch/MCP support, allowed roles, and config overrides. |
+| Council task ownership | experimental | Consensus TaskGraph nodes now carry `ownerAgentId`, provider, model, claim mode, fallback candidates, and assignment reason. The cockpit view model exposes chief, council, ownership, mutations, and final review summaries. |
+| Sirius delegated execution | experimental | Owned TaskGraph nodes emit `budget_decision`, `evidence_packet`, `delegated_task_result`, and `task_node_result` events. Fixture runs can simulate a delegated failure and recover through bounded Strategy Mutation before Chief final review. |
 | Adaptive planner and post-plan role routing | stable | The planner can use a routed model for structured plans with native adaptive fallback. Plans have variable task-specific steps, and high-risk or specialized planner output can trigger post-plan rerouting for downstream roles. |
 | Strong-agent and per-role budget audit | stable | Routing emits `budget_preview` events without consuming budget, and invocation-time `budget_decision` events record allow/fallback/block outcomes. |
 | Strong-agent and per-role budget enforcement | stable | Live and external role invocations pass through BudgetGate before execution. Blocked planner/reviewer/judge/coder roles use native fallback where available, and tests guard against blocked+success contradictions. |
