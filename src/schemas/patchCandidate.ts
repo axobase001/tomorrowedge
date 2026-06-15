@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const patchRiskSchema = z.enum(["low", "medium", "high"]);
+export const patchRiskSchema = z.preprocess((value) => normalizePatchRisk(value), z.enum(["low", "medium", "high"]));
 export const patchApproachSchema = z.enum(["minimal_patch", "refactor", "test_first", "alternative", "repair"]);
 
 export const patchCandidateSchema = z.object({
@@ -40,3 +40,23 @@ export type PatchCandidate = {
   knownTradeoffs: string[];
   estimatedRisk: "low" | "medium" | "high";
 };
+
+function normalizePatchRisk(value: unknown): unknown {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (["low", "minimal", "minor", "safe", "bounded"].includes(normalized) || normalized.includes("lowrisk")) return "low";
+    if (["medium", "moderate", "normal"].includes(normalized) || normalized.includes("mediumrisk") || normalized.includes("moderaterisk")) return "medium";
+    if (["high", "severe", "critical", "dangerous"].includes(normalized) || normalized.includes("highrisk") || normalized.includes("criticalrisk")) return "high";
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value >= 0.67) return "high";
+    if (value >= 0.34) return "medium";
+    if (value >= 0) return "low";
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    return normalizePatchRisk(record.level ?? record.risk ?? record.estimatedRisk ?? record.value);
+  }
+  return value;
+}

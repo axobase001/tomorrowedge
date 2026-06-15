@@ -624,6 +624,8 @@ function parseSetupRequest(value: Record<string, unknown>) {
     baseUrl: typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined,
     apiKeyEnv: typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined,
     apiKey: typeof value.apiKey === "string" ? value.apiKey : undefined,
+    requestTimeoutMs: parseOptionalPositiveInteger(value.requestTimeoutMs, "requestTimeoutMs"),
+    maxRetries: parseOptionalNonNegativeInteger(value.maxRetries, "maxRetries"),
     bindRoles: Boolean(value.bindRoles)
   };
 }
@@ -633,7 +635,29 @@ function parseProviderKeyRequest(provider: string, value: Record<string, unknown
   const model = typeof value.model === "string" ? value.model.trim() : undefined;
   const baseUrl = typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined;
   const apiKeyEnv = typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined;
-  return { provider, model, baseUrl, apiKeyEnv, apiKey };
+  return {
+    provider,
+    model,
+    baseUrl,
+    apiKeyEnv,
+    apiKey,
+    requestTimeoutMs: parseOptionalPositiveInteger(value.requestTimeoutMs, "requestTimeoutMs"),
+    maxRetries: parseOptionalNonNegativeInteger(value.maxRetries, "maxRetries")
+  };
+}
+
+function parseOptionalPositiveInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new HttpError(400, `invalid_${field}`, `${field} must be a positive integer.`);
+  return parsed;
+}
+
+function parseOptionalNonNegativeInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new HttpError(400, `invalid_${field}`, `${field} must be a non-negative integer.`);
+  return parsed;
 }
 
 function parseLimitParam(value: string | null, fallback: number): number {

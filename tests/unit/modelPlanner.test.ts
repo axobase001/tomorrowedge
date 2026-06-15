@@ -19,6 +19,31 @@ describe("model planner", () => {
     expect(result.error).toMatch(/Unterminated string|JSON/i);
   });
 
+  it("accepts model-classified read-only analysis plans", () => {
+    const result = parsePlannerResponseWithDiagnostics("explain the proof without editing files", JSON.stringify({
+      taskType: "analysis",
+      riskLevel: "low",
+      workflowKind: "read_only",
+      constraints: ["no file mutation"],
+      steps: [
+        { id: "inspect", title: "Inspect context", detail: "Read selected context only." },
+        { id: "summarize", title: "Summarize answer", detail: "Return a direct answer with evidence." }
+      ],
+      taskGraph: null,
+      verificationCommands: [],
+      debateRecommended: false,
+      reasonForDebate: ""
+    }));
+
+    expect(result.error).toBeUndefined();
+    expect(result.plan).toMatchObject({
+      taskType: "analysis",
+      workflowKind: "read_only",
+      requiresPatchWorkflow: false
+    });
+    expect(result.plan?.taskGraph?.nodes.map((node) => node.kind)).toEqual(["inspect", "summarize"]);
+  });
+
   it("repairs invalid planner JSON through the same configured model instead of native fallback", async () => {
     const bodies: Array<Record<string, unknown>> = [];
     globalThis.fetch = (async (_url, init) => {

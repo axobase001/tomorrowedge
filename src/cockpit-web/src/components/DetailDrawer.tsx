@@ -25,8 +25,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       <pre>{formatObjectiveTrace(viewModel)}</pre>
       <h3>{t("drawer.orchestrationPolicy")}</h3>
       <pre>{formatOrchestrationPolicy(viewModel)}</pre>
-      <h3>Agent Council governance</h3>
-      {governanceText ? <pre>{governanceText}</pre> : <EmptyState title="No council governance yet." testId="drawer-governance-empty-state" />}
+      <h3>{t("drawer.governance")}</h3>
+      {governanceText ? <pre>{governanceText}</pre> : <EmptyState title={t("state.noGovernance")} testId="drawer-governance-empty-state" />}
       <h3>{t("drawer.approvalHistory")}</h3>
       {approvalHistoryText ? <pre>{approvalHistoryText}</pre> : <EmptyState title={t("state.noApprovalHistory")} testId="drawer-approval-empty-state" />}
       <h3>{t("drawer.memoryInfluence")}</h3>
@@ -73,8 +73,8 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       {routeText ? <pre>{routeText}</pre> : <EmptyState title={t("state.noRouteDetails")} detail={t("state.noRoutesDetail")} testId="drawer-routes-empty-state" />}
       <h3>{t("drawer.roleGraph")}</h3>
       {roleGraphText ? <pre>{roleGraphText}</pre> : <EmptyState title={t("state.noRoleGraph")} testId="drawer-role-graph-empty-state" />}
-      <h3>TaskGraph</h3>
-      {taskGraphText ? <pre>{taskGraphText}</pre> : <EmptyState title="No task graph yet." testId="drawer-task-graph-empty-state" />}
+      <h3>{t("drawer.taskGraph")}</h3>
+      {taskGraphText ? <pre>{taskGraphText}</pre> : <EmptyState title={t("state.noTaskGraph")} testId="drawer-task-graph-empty-state" />}
       <h3>{t("drawer.artifacts")}</h3>
       <div className="te-artifact-list" data-testid="drawer-artifacts">
         {viewModel.artifacts.length ? viewModel.artifacts.map((artifact) => (

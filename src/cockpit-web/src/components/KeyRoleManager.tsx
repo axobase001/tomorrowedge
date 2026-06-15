@@ -56,6 +56,8 @@ export function KeyRoleManager({
   const [model, setModel] = useState(initialDraft.model);
   const [baseUrl, setBaseUrl] = useState(initialDraft.baseUrl);
   const [apiKeyEnv, setApiKeyEnv] = useState(initialDraft.apiKeyEnv);
+  const [requestTimeoutMs, setRequestTimeoutMs] = useState(String(initialDraft.requestTimeoutMs));
+  const [maxRetries, setMaxRetries] = useState(String(initialDraft.maxRetries));
   const [apiKey, setApiKey] = useState("");
   const [catalogModels, setCatalogModels] = useState<CockpitProviderModelOption[]>([]);
   const [catalogMessage, setCatalogMessage] = useState("");
@@ -76,6 +78,8 @@ export function KeyRoleManager({
     setModel(nextDraft.model);
     setBaseUrl(nextDraft.baseUrl);
     setApiKeyEnv(nextDraft.apiKeyEnv);
+    setRequestTimeoutMs(String(nextDraft.requestTimeoutMs));
+    setMaxRetries(String(nextDraft.maxRetries));
     setApiKey("");
     setCatalogModels([]);
     setCatalogMessage("");
@@ -104,7 +108,7 @@ export function KeyRoleManager({
           </div>
           <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">{t("keymgr.close")}</button>
         </header>
-        <nav className="te-keymgr-tabs" aria-label="Key manager tabs">
+        <nav className="te-keymgr-tabs" aria-label={t("keymgr.tabsLabel")}>
           <button type="button" className={tab === "keys" ? "active" : ""} onClick={() => setTab("keys")} data-testid="keymgr-tab-keys">{t("keymgr.tabKeys")}</button>
           <button type="button" className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")} data-testid="keymgr-tab-roles">{t("keymgr.tabRoles")}</button>
         </nav>
@@ -139,7 +143,7 @@ export function KeyRoleManager({
                     if (event.target.value !== "__custom") setModel(event.target.value);
                   }} data-testid="keymgr-model-select">
                     {modelOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                    <option value="__custom">Custom model...</option>
+                    <option value="__custom">{t("keymgr.customModel")}</option>
                   </select>
                   <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
                 </div>
@@ -153,13 +157,21 @@ export function KeyRoleManager({
                 <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} data-testid="keymgr-env" />
               </label>
               <label>
+                <span>{t("keymgr.requestTimeout")}</span>
+                <input value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(event.target.value)} inputMode="numeric" data-testid="keymgr-request-timeout" />
+              </label>
+              <label>
+                <span>{t("keymgr.maxRetries")}</span>
+                <input value={maxRetries} onChange={(event) => setMaxRetries(event.target.value)} inputMode="numeric" data-testid="keymgr-max-retries" />
+              </label>
+              <label>
                 <span>{t("keymgr.apiKey")}</span>
                 <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t("keymgr.apiKeyPlaceholder")} data-testid="keymgr-key" />
               </label>
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={!canSaveKey} onClick={() => {
-                onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey: apiKey || undefined });
+                onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey: apiKey || undefined, requestTimeoutMs: numericDraft(requestTimeoutMs), maxRetries: numericDraft(maxRetries) });
                 setApiKey("");
               }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || catalogBusy || !normalizedProvider} onClick={async () => {
@@ -216,7 +228,7 @@ export function KeyRoleManager({
                     {roleModelOptionIds(assignment.provider, roleProviders, assignment.model).map((item) => (
                       <option key={item} value={item}>{item}</option>
                     ))}
-                    <option value="__custom">Custom model...</option>
+                    <option value="__custom">{t("keymgr.customModel")}</option>
                   </select>
                   <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
                 </div>
@@ -245,13 +257,15 @@ function updateAssignment(assignments: CockpitRoleAssignment[], role: string, pa
   return assignments.map((assignment) => assignment.role === role ? { ...assignment, ...patch } : assignment);
 }
 
-export function providerFormDefaults(provider: string, providers: Array<{ id: string; model: string; baseUrl: string; apiKeyEnv?: string }>, selectedModel?: string): { model: string; baseUrl: string; apiKeyEnv: string } {
+export function providerFormDefaults(provider: string, providers: Array<{ id: string; model: string; baseUrl: string; apiKeyEnv?: string; requestTimeoutMs?: number; maxRetries?: number }>, selectedModel?: string): { model: string; baseUrl: string; apiKeyEnv: string; requestTimeoutMs: number; maxRetries: number } {
   const providerId = normalizeProviderId(provider);
   const selectedProvider = providers.find((item) => item.id === providerId);
   return {
     model: selectedModel ?? selectedProvider?.model ?? suggestedModelFor(providerId),
     baseUrl: selectedProvider?.baseUrl ?? defaultBaseUrlFor(providerId),
-    apiKeyEnv: selectedProvider?.apiKeyEnv ?? defaultEnvFor(providerId)
+    apiKeyEnv: selectedProvider?.apiKeyEnv ?? defaultEnvFor(providerId),
+    requestTimeoutMs: selectedProvider?.requestTimeoutMs ?? 60_000,
+    maxRetries: selectedProvider?.maxRetries ?? 1
   };
 }
 
@@ -343,4 +357,11 @@ function labelProvider(provider: string, externalAgents: CockpitExternalAgentOpt
 
 function normalizeProviderId(provider: string): string {
   return provider.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+}
+
+function numericDraft(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : undefined;
 }

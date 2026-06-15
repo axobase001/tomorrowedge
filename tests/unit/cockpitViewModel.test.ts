@@ -583,6 +583,85 @@ describe("cockpit view model", () => {
     expect(vm.main.body).toContain("No files were changed");
     expect(vm.main.supportingDetail).toContain("No patch was applied.");
   });
+
+  it("projects changed files as main result deliverables", () => {
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      goal: "write monkey sort in Python",
+      changedFiles: ["monkey_sort.py"],
+      finalSummary: {
+        task: "write monkey sort in Python",
+        result: "completed",
+        userReply: "Done. I created monkey_sort.py.",
+        userReplySource: "system",
+        changedFiles: ["monkey_sort.py"],
+        testsRun: [],
+        evidence: ["Created monkey_sort.py"],
+        risksRemaining: [],
+        suggestedCommitMessage: "feat: add monkey sort script"
+      }
+    }));
+
+    expect(vm.main.deliverables).toContainEqual({ type: "file", path: "monkey_sort.py" });
+  });
+
+  it("projects raw code replies as copyable code deliverables for code requests", () => {
+    const rawCode = [
+      "import random",
+      "",
+      "def monkey_sort(values):",
+      "    items = list(values)",
+      "    while items != sorted(items):",
+      "        random.shuffle(items)",
+      "    return items"
+    ].join("\n");
+    const base = sampleCockpitState();
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      goal: "write monkey sort in Python",
+      plan: { ...base.plan!, goal: "write monkey sort in Python", taskType: "analysis", expectedFiles: [] },
+      candidates: [],
+      review: undefined,
+      judge: undefined,
+      finalSummary: {
+        task: "write monkey sort in Python",
+        result: "completed",
+        userReply: rawCode,
+        userReplySource: "model",
+        changedFiles: [],
+        testsRun: [],
+        evidence: ["Returned Python code."],
+        risksRemaining: [],
+        suggestedCommitMessage: "chore: no file changes"
+      }
+    }));
+
+    expect(vm.main.deliverables).toContainEqual({ type: "code", language: "python", content: rawCode });
+  });
+
+  it("calls out code requests that complete without a file or code block", () => {
+    const base = sampleCockpitState();
+    const vm = buildCockpitViewModel(process.cwd(), sampleCockpitState({
+      goal: "write monkey sort in Python",
+      plan: { ...base.plan!, goal: "write monkey sort in Python", taskType: "analysis", expectedFiles: [] },
+      candidates: [],
+      review: undefined,
+      judge: undefined,
+      finalSummary: {
+        task: "write monkey sort in Python",
+        result: "completed",
+        userReply: "I completed the workflow without applying file changes.",
+        userReplySource: "system",
+        changedFiles: [],
+        testsRun: [],
+        evidence: ["Workflow ended."],
+        risksRemaining: [],
+        suggestedCommitMessage: "chore: no file changes"
+      }
+    }));
+
+    expect(vm.main.title).toBe("No code deliverable");
+    expect(vm.main.subtitle).toBe("needs revision");
+    expect(vm.main.body).toContain("Expected a changed file");
+  });
 });
 
 function eventBase<T extends TomorrowEdgeEvent["type"]>(id: string, type: T, fields: Omit<Extract<TomorrowEdgeEvent, { type: T }>, "id" | "timestamp" | "sessionId" | "mode" | "type">): Extract<TomorrowEdgeEvent, { type: T }> {

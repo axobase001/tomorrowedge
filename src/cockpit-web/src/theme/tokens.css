@@ -350,6 +350,52 @@ input, textarea, select {
   color: var(--te-text);
   font: 13px/1.55 var(--te-sans);
 }
+.te-deliverables {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 5px;
+  background: var(--te-alt);
+}
+.te-deliverables h4 {
+  margin: 0;
+  color: var(--te-muted);
+  font: 12px var(--te-mono);
+}
+.te-deliverable-files {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.te-deliverable-files li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--te-text);
+  font: 12px var(--te-mono);
+}
+.te-deliverable-files span {
+  flex: 0 0 auto;
+  color: var(--te-muted);
+}
+.te-deliverable-files code,
+.te-deliverable-files a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-deliverable-files a {
+  color: var(--te-deep-blue);
+}
+.te-deliverable-code .te-code-block {
+  margin: 0;
+}
 .te-markdown {
   min-width: 0;
   overflow-wrap: anywhere;

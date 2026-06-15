@@ -46,8 +46,8 @@ export function TopBar({
           {translateKnownValue(t, viewModel.sessionMeta.connectionLabel)}
         </span>
         {dailySavedUsd !== undefined && dailySavedUsd > 0 ? (
-          <span className="te-chip te-chip-green" title="Today unused budget across completed sessions">
-            saved today ${dailySavedUsd.toFixed(2)}
+          <span className="te-chip te-chip-green" title={t("topbar.savedBudgetTitle")}>
+            {t("topbar.savedBudget", { amount: dailySavedUsd.toFixed(2) })}
           </span>
         ) : null}
         {viewModel.sessionMeta.fixtureMode ? <span className="te-chip te-chip-blue">{t("topbar.fixture")}</span> : null}

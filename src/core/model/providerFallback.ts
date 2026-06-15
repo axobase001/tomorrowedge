@@ -34,6 +34,7 @@ export async function chatWithProviderFallback(input: {
   buildRequest: (model: string, provider: string) => ChatRequest;
   ledger?: EventLedger;
   allowFallback?: boolean;
+  allowSyntheticFallback?: boolean;
   markProviderUnavailable?: boolean;
 }): Promise<ProviderFallbackResult> {
   const primary = { provider: input.provider, model: input.model };
@@ -46,6 +47,21 @@ export async function chatWithProviderFallback(input: {
   const fallback = input.router.fallbackFor(input.role);
   if (!fallback || fallback.provider === primary.provider) {
     return { ...primary, ...primaryResult };
+  }
+  if (input.allowSyntheticFallback === false && isSyntheticProvider(fallback.provider) && !isSyntheticProvider(primary.provider)) {
+    const reason = `${primaryResult.error ?? "primary provider failed"} Synthetic fallback ${fallback.provider}/${fallback.model} was skipped for live provider execution.`;
+    input.ledger?.append({
+      type: "provider_fallback",
+      phase: "routing",
+      role: input.role,
+      fromProvider: primary.provider,
+      fromModel: primary.model,
+      toProvider: fallback.provider,
+      toModel: fallback.model,
+      reason,
+      skipped: true
+    });
+    return { ...primary, error: reason, errorCategory: primaryResult.errorCategory, fallbackReason: primaryResult.error };
   }
 
   const fallbackResult = await tryChat(input.config, input.role, fallback.provider, fallback.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true);
@@ -209,4 +225,8 @@ function phaseForRole(role: AgentRole) {
   if (role === "summarizer") return "summary";
   if (role === "runner") return "shell";
   return "coding";
+}
+
+function isSyntheticProvider(provider: string): boolean {
+  return provider === "mock" || provider === "fixture" || provider === "local_tool";
 }

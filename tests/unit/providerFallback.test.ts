@@ -97,6 +97,47 @@ describe("provider fallback", () => {
     expect(errorServer.requests()).toBe(afterFirstCall);
     expect(JSON.stringify(ledger.events)).toContain("skipped openai_compatible/free-test-model");
   }, 10_000);
+
+  it("can block mock or fixture fallback for live provider execution", async () => {
+    const errorServer = await startErrorServer();
+    servers.push(errorServer.server);
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openai_compatible: {
+          ...defaultConfig.providers.openai_compatible,
+          enabled: true,
+          api_key_env: "",
+          base_url: errorServer.url,
+          model: "free-test-model",
+          auth_header: "none"
+        }
+      }
+    };
+    const ledger = createEventLedger("partial", "session_provider_synthetic_skip_test");
+
+    const result = await chatWithProviderFallback({
+      config,
+      router: new ModelRouter(config),
+      role: "coder_a",
+      provider: "openai_compatible",
+      model: "free-test-model",
+      ledger,
+      allowSyntheticFallback: false,
+      buildRequest: (model) => ({
+        model,
+        messages: [{ role: "user", content: "produce a patch" }],
+        maxCompletionTokens: 16
+      })
+    });
+    const serialized = JSON.stringify({ result, events: ledger.events });
+
+    expect(result.response).toBeUndefined();
+    expect(result.fallbackUsed).toBeUndefined();
+    expect(serialized).toContain("Synthetic fallback mock/mock-balanced was skipped");
+    expect(serialized).toContain("\"skipped\":true");
+  }, 10_000);
 });
 
 async function startErrorServer(): Promise<{ server: Server; url: string; requests: () => number }> {

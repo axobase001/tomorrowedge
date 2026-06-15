@@ -25,6 +25,8 @@ export type CockpitProviderReadiness = {
   keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
+  requestTimeoutMs: number;
+  maxRetries: number;
 };
 
 export type CockpitRoleAssignment = {
@@ -60,6 +62,8 @@ export type CockpitSetupRequest = {
   apiKeyEnv?: string;
   apiKey?: string;
   bindRoles?: boolean;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
 };
 
 export type CockpitProviderKeyRequest = {
@@ -68,6 +72,8 @@ export type CockpitProviderKeyRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
 };
 
 export type CockpitProviderModelOption = {

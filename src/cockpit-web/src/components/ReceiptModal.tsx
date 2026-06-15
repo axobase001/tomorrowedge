@@ -1,35 +1,38 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
+import type { Translator } from "../i18n.js";
 
 export function ReceiptModal({
   telemetry,
   goal,
+  t,
   onDismiss
 }: {
   telemetry: CockpitTelemetry;
   goal?: string;
+  t: Translator;
   onDismiss: () => void;
 }) {
   return (
     <div className="te-receipt-backdrop" role="presentation" onMouseDown={onDismiss}>
-      <section className="te-receipt-card" role="dialog" aria-modal="true" aria-label="Cost receipt" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="te-receipt-card" role="dialog" aria-modal="true" aria-label={t("receipt.title")} onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <h2>Cost receipt</h2>
-            <p>{goal?.trim() || "TomorrowEdge workflow"}</p>
+            <h2>{t("receipt.title")}</h2>
+            <p>{goal?.trim() || t("receipt.defaultGoal")}</p>
           </div>
-          <button type="button" onClick={onDismiss} aria-label="Close cost receipt">x</button>
+          <button type="button" onClick={onDismiss} aria-label={t("receipt.closeLabel")}>x</button>
         </header>
         <div className="te-receipt-summary">
-          <Metric label="actual" value={money(telemetry.currentCostUsd)} />
-          <Metric label="budget" value={money(telemetry.budgetUsd)} />
-          <Metric label="remaining" value={money(telemetry.budgetRemainingUsd)} />
-          <Metric label="used" value={telemetry.budgetUsedPercent === undefined ? "-" : `${telemetry.budgetUsedPercent}%`} />
+          <Metric label={t("receipt.actual")} value={money(telemetry.currentCostUsd)} />
+          <Metric label={t("receipt.budget")} value={money(telemetry.budgetUsd)} />
+          <Metric label={t("receipt.remaining")} value={money(telemetry.budgetRemainingUsd)} />
+          <Metric label={t("receipt.used")} value={telemetry.budgetUsedPercent === undefined ? "-" : `${telemetry.budgetUsedPercent}%`} />
         </div>
         <div className="te-receipt-table">
           <div className="te-receipt-row te-receipt-head">
-            <span>role</span>
-            <span>model</span>
-            <span>cost</span>
+            <span>{t("receipt.role")}</span>
+            <span>{t("receipt.model")}</span>
+            <span>{t("receipt.cost")}</span>
           </div>
           {telemetry.roleCosts?.length ? telemetry.roleCosts.map((item) => (
             <div className="te-receipt-row" key={`${item.role}:${item.model}`}>
@@ -38,11 +41,11 @@ export function ReceiptModal({
               <span>{money(item.costUsd)} / {item.percent}%</span>
             </div>
           )) : (
-            <div className="te-receipt-empty">No measured role costs for this session.</div>
+            <div className="te-receipt-empty">{t("receipt.empty")}</div>
           )}
         </div>
         <footer>
-          <button type="button" onClick={onDismiss}>Close</button>
+          <button type="button" onClick={onDismiss}>{t("receipt.close")}</button>
         </footer>
       </section>
     </div>

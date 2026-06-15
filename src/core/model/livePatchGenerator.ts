@@ -176,10 +176,11 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
       ],
       temperature: plan.role === "coder_a" ? 0.15 : 0.35,
       maxCompletionTokens: maxOutputTokens,
-      timeoutMs: livePatchRequestTimeoutMs,
+      timeoutMs: providerRequestTimeoutMs(input.config, provider),
       maxRetries: 0,
       responseFormat: shouldUseJsonResponseFormat(provider, model) ? { type: "json_object" } : undefined
-    })
+    }),
+    allowSyntheticFallback: false
   });
   return { result };
 }
@@ -351,6 +352,8 @@ function parsePatchJson(raw: string): {
 function normalizePatchResponseJson(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
   const object = { ...(input as Record<string, unknown>) };
+  const risk = normalizePatchRiskValue(object.estimatedRisk ?? object.riskLevel ?? object.risk ?? object.riskEstimate);
+  if (risk) object.estimatedRisk = risk;
   const generatedFiles = generatedTextFilesFrom(object);
   if (generatedFiles.length) {
     const diff = typeof object.unifiedDiff === "string" ? object.unifiedDiff.trim() : "";
@@ -359,6 +362,25 @@ function normalizePatchResponseJson(input: unknown): unknown {
     object.filesChanged = existingFiles.length ? existingFiles : generatedFiles.map((file) => file.path);
   }
   return object;
+}
+
+function normalizePatchRiskValue(value: unknown): "low" | "medium" | "high" | undefined {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (["low", "minimal", "minor", "safe", "bounded"].includes(normalized) || normalized.includes("lowrisk")) return "low";
+    if (["medium", "moderate", "normal"].includes(normalized) || normalized.includes("mediumrisk") || normalized.includes("moderaterisk")) return "medium";
+    if (["high", "severe", "critical", "dangerous"].includes(normalized) || normalized.includes("highrisk") || normalized.includes("criticalrisk")) return "high";
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value >= 0.67) return "high";
+    if (value >= 0.34) return "medium";
+    if (value >= 0) return "low";
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    return normalizePatchRiskValue(record.level ?? record.risk ?? record.estimatedRisk ?? record.value);
+  }
+  return undefined;
 }
 
 type GeneratedTextFile = {
@@ -472,7 +494,7 @@ function buildDocumentFallbackCandidate(input: LivePatchInput, plan: LivePatchPl
     summary: `Recovered document draft as ${filePath} after live patch parsing failed: ${reason}`,
     filesChanged: [filePath],
     unifiedDiff,
-    testPlan: [],
+    testPlan: documentFallbackTestPlan(filePath, input.plan.verificationCommands),
     knownTradeoffs: [
       "Generated as Markdown fallback because the provider did not return a valid patch JSON response.",
       "HTML/PDF conversion, if requested, should be handled in a follow-up verified step."
@@ -574,6 +596,18 @@ function normalizeGeneratedArtifactRisk(goal: string, risk: PatchCandidate["esti
 
 function isTextOutputPath(filePath: string): boolean {
   return /\.(?:md|markdown|html|htm|svg|txt|rst|adoc|json|css|js|ts|tsx|jsx|py|rs|go|java|cpp|c|h|hpp|toml|yaml|yml)$/i.test(filePath);
+}
+
+function providerRequestTimeoutMs(config: TomorrowEdgeConfig, provider: string): number {
+  return config.providers[provider]?.requestTimeoutMs ?? livePatchRequestTimeoutMs;
+}
+
+function documentFallbackTestPlan(filePath: string, verificationCommands?: string[]): string[] {
+  const commands = (verificationCommands ?? []).filter((command) => command.trim());
+  if (commands.length) return commands;
+  if (/\.(?:html|htm)$/i.test(filePath)) return [`open ${filePath}`];
+  if (/\.(?:md|markdown|txt|rst|adoc)$/i.test(filePath)) return [`inspect ${filePath}`];
+  return [`verify generated artifact ${filePath}`];
 }
 
 function emptyCandidate(role: "coder_a" | "coder_b", reason: string, plan: Plan): PatchCandidate {

@@ -393,6 +393,7 @@ export type CockpitViewModel = {
     supportingDetail?: string;
     diff?: string;
     filesChanged: string[];
+    deliverables?: CockpitDeliverable[];
     riskLevel?: "low" | "medium" | "high";
     testStatus?: "passed" | "failed" | "not_run";
   };
@@ -400,6 +401,10 @@ export type CockpitViewModel = {
   rawEvents: TomorrowEdgeEvent[];
   artifacts: Array<{ ref: string; kind: string }>;
 };
+
+export type CockpitDeliverable =
+  | { type: "file"; path: string; artifactRef?: string }
+  | { type: "code"; language: string; content: string; filename?: string };
 
 export type CockpitRunMode = "auto" | "fixture" | "offline" | "live" | "council";
 

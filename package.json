@@ -1,6 +1,6 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Local orchestration, governance, and strategy-evolution runtime for heterogeneous Coding Agents.",
   "type": "module",
   "bin": {

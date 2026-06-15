@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
 import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleModelOptionIds, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
+import { ReceiptModal } from "../../src/cockpit-web/src/components/ReceiptModal.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/providerConnectionMessage.js";
@@ -151,6 +152,58 @@ describe("cockpit web React surface", () => {
     expect(html).not.toContain("\u001b[31m");
   });
 
+  it("renders main result file deliverables before workflow details", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: "Done. I prepared the requested script.",
+        supportingDetail: "Task: write monkey sort in Python",
+        filesChanged: ["monkey_sort.py"],
+        deliverables: [{ type: "file", path: "monkey_sort.py" }]
+      }
+    });
+
+    expect(html).toContain("data-testid=\"main-deliverables\"");
+    expect(html).toContain("Deliverables");
+    expect(html).toContain("monkey_sort.py");
+    expect(html).toContain("Done. I prepared the requested script.");
+  });
+
+  it("renders raw code deliverables as copyable code blocks", () => {
+    const rawCode = [
+      "import random",
+      "",
+      "def monkey_sort(values):",
+      "    items = list(values)",
+      "    while items != sorted(items):",
+      "        random.shuffle(items)",
+      "    return items"
+    ].join("\n");
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: rawCode,
+        filesChanged: [],
+        deliverables: [{ type: "code", language: "python", content: rawCode }]
+      }
+    });
+
+    expect(html).toContain("data-testid=\"main-deliverables\"");
+    expect(html).toContain("data-testid=\"markdown-code-block\"");
+    expect(html).toContain("data-testid=\"markdown-copy-code\"");
+    expect(html).toContain("def monkey_sort(values):");
+  });
+
   it("renders self-iteration contract, trace, and policy sections in the drawer", () => {
     const html = renderApp(sampleViewModel(), { drawerOpen: true });
 
@@ -243,6 +296,8 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("list=\"setup-provider-options\"");
     expect(html).toContain("data-testid=\"setup-model\"");
     expect(html).toContain("data-testid=\"setup-base-url\"");
+    expect(html).toContain("data-testid=\"setup-request-timeout\"");
+    expect(html).toContain("data-testid=\"setup-max-retries\"");
     expect(html).toContain("moonshotai/kimi-k2.6:free");
   });
 
@@ -256,6 +311,8 @@ describe("cockpit web React surface", () => {
     expect(open).toContain("list=\"keymgr-provider-options\"");
     expect(open).toContain("data-testid=\"keymgr-model-select\"");
     expect(open).toContain("data-testid=\"keymgr-base-url\"");
+    expect(open).toContain("data-testid=\"keymgr-request-timeout\"");
+    expect(open).toContain("data-testid=\"keymgr-max-retries\"");
     expect(open).toContain("data-testid=\"keymgr-save-key\"");
     expect(open).toContain("data-testid=\"keymgr-refresh-models\"");
     expect(open).toContain("qwen/qwen3-coder:free");
@@ -270,7 +327,9 @@ describe("cockpit web React surface", () => {
 
     expect(providerFormDefaults("openrouter", providers)).toMatchObject({
       model: "moonshotai/kimi-k2.6:free",
-      baseUrl: "https://openrouter.ai/api/v1"
+      baseUrl: "https://openrouter.ai/api/v1",
+      requestTimeoutMs: 60000,
+      maxRetries: 1
     });
     expect(providerFormDefaults("deepseek", providers)).toMatchObject({
       model: "deepseek-chat",
@@ -379,6 +438,80 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("命令");
     expect(html).toContain("密钥与角色管理");
     expect(html).toContain("至少连接一个模型");
+  });
+
+  it("localizes React cockpit telemetry, council, drawer, key-manager, and markdown chrome in Chinese", () => {
+    const html = renderApp(localizedZhViewModel(), { language: "zh", keyManagerOpen: true });
+
+    expect(html).toContain("降级 1");
+    expect(html).toContain("剩余 $0.8800");
+    expect(html).toContain("实时成本");
+    expect(html).toContain("强模型调用");
+    expect(html).toContain("真实 2 / 模拟 5");
+    expect(html).toContain("成本明细");
+    expect(html).toContain("规划");
+    expect(html).toContain("路由");
+    expect(html).toContain("编辑");
+    expect(html).toContain("审查");
+    expect(html).toContain("审批");
+    expect(html).toContain("主控");
+    expect(html).toContain("评议会");
+    expect(html).toContain("1 个成员");
+    expect(html).toContain("归属");
+    expect(html).toContain("1 个任务");
+    expect(html).toContain("策略变更");
+    expect(html).toContain("最终审查");
+    expect(html).toContain("Agent Council 治理");
+    expect(html).toContain("任务图");
+    expect(html).toContain("服务商");
+    expect(html).toContain("基础地址");
+    expect(html).toContain("API 密钥环境变量");
+    expect(html).toContain("保存服务商");
+    expect(html).toContain("自定义模型...");
+    expect(html).toContain("复制");
+    expect(html).not.toContain("live cost");
+    expect(html).not.toContain("strong calls");
+    expect(html).not.toContain(">receipt<");
+    expect(html).not.toContain("Open cost receipt");
+    expect(html).not.toContain("Custom model...");
+    expect(html).not.toContain("TaskGraph");
+    expect(html).not.toContain(">Provider<");
+    expect(html).not.toContain(">Base URL<");
+    expect(html).not.toContain("保存 provider");
+    expect(html).not.toContain("Copy</button>");
+  });
+
+  it("localizes the cost receipt modal in Chinese", () => {
+    const viewModel = localizedZhViewModel();
+    const html = renderToStaticMarkup(
+      React.createElement(ReceiptModal, {
+        telemetry: viewModel.telemetry,
+        t: createTranslator("zh"),
+        onDismiss: () => undefined
+      })
+    );
+    const emptyHtml = renderToStaticMarkup(
+      React.createElement(ReceiptModal, {
+        telemetry: { ...viewModel.telemetry, roleCosts: [] },
+        t: createTranslator("zh"),
+        onDismiss: () => undefined
+      })
+    );
+
+    expect(html).toContain("成本明细");
+    expect(html).toContain("TomorrowEdge 工作流");
+    expect(html).toContain("实际");
+    expect(html).toContain("预算");
+    expect(html).toContain("剩余");
+    expect(html).toContain("已用");
+    expect(html).toContain("角色");
+    expect(html).toContain("模型");
+    expect(html).toContain("成本");
+    expect(html).toContain("关闭");
+    expect(emptyHtml).toContain("这个会话还没有可计量的角色成本。");
+    expect(html).not.toContain("Cost receipt");
+    expect(html).not.toContain("TomorrowEdge workflow");
+    expect(emptyHtml).not.toContain("No measured role costs for this session.");
   });
 
   it("formats provider connection guidance in Chinese for missing keys", () => {
@@ -831,5 +964,72 @@ function sampleViewModel(): CockpitViewModel {
     trace: [{ id: "event_1", timestamp: "2026-06-07T00:00:00.000Z", type: "plan", phase: "plan", summary: "planned" }],
     rawEvents: [],
     artifacts: []
+  };
+}
+
+function localizedZhViewModel(): CockpitViewModel {
+  const base = sampleViewModel();
+  return {
+    ...base,
+    status: "running",
+    statusText: "Running",
+    telemetry: {
+      ...base.telemetry,
+      currentCostUsd: 0.12,
+      budgetUsd: 1,
+      budgetRemainingUsd: 0.88,
+      budgetUsedPercent: 12,
+      liveRunningCostUsd: 0.03,
+      realStrongAgentCallsUsed: 2,
+      simulatedStrongAgentCallsUsed: 5,
+      fallbackCount: 1,
+      roleCosts: [{ role: "planner", model: "fixture-scripted", costUsd: 0.01, percent: 8 }]
+    },
+    chiefAgent: {
+      chiefAgentId: "chief_1",
+      provider: "fixture",
+      model: "fixture-chief",
+      decision: "approve",
+      trustLevel: "high"
+    },
+    council: {
+      sessionId: "session_test",
+      status: "running",
+      members: [{ agentId: "agent_1", provider: "fixture", model: "fixture-agent", role: "reviewer" }],
+      moves: [],
+      unresolvedRisks: []
+    },
+    taskOwnership: {
+      assignments: [{
+        taskNodeId: "task_1",
+        title: "review patch",
+        ownerAgentId: "agent_1",
+        provider: "fixture",
+        model: "fixture-agent",
+        reason: "coverage",
+        fallbackAgents: []
+      }]
+    },
+    policyMutations: {
+      count: 1,
+      mutations: []
+    },
+    finalReview: {
+      chiefAgentId: "chief_1",
+      decision: "approved",
+      architectureConsistency: "ok",
+      codeReviewSummary: "reviewed",
+      taskCompletionSummary: "complete",
+      unresolvedRisks: [],
+      requiredRevisions: [],
+      evidenceRefs: [],
+      artifactRefs: []
+    },
+    main: {
+      title: "Main",
+      subtitle: "subtitle",
+      body: ["```ts", "const answer = 42;", "```"].join("\n"),
+      filesChanged: []
+    }
   };
 }

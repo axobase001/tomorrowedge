@@ -7,6 +7,47 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-06-16
+
+1.6.2 is a Canopus/Cockpit issue cleanup release focused on live-provider
+failure honesty, document deliverables, read-only analysis planning, and GUI
+provider controls.
+
+### Added
+
+- Added Cockpit provider controls for per-request timeout and provider retry
+  count in first-run setup and the Keys/role manager.
+- Added Cockpit main-result deliverables so generated files and raw code blocks
+  are surfaced as copyable or artifact-backed outputs.
+- Added regression coverage for read-only `analysis` planner output, flexible
+  `estimatedRisk` values, provider synthetic-fallback blocking, and provider
+  timeout/retry persistence.
+
+### Changed
+
+- Live patch generation now uses `providers.<id>.requestTimeoutMs` instead of a
+  fixed internal timeout.
+- Live patch generation can still use real provider fallback, but skips
+  synthetic `mock` / `fixture` fallbacks for live provider execution so timeout
+  or upstream failures cannot become fake patch candidates.
+- Document-recovery candidates now include a minimal verification plan when the
+  model returns long-form Markdown/text instead of valid patch JSON.
+- The React Cockpit Chinese surface now localizes remaining telemetry,
+  governance, key-manager, drawer, receipt, and Markdown chrome.
+
+### Fixed
+
+- Fixed document/PDF generation tasks that produced useful long-form content but
+  were rejected after patch JSON recovery due to missing verification plans.
+- Fixed live patch parsing for provider responses that return risk as
+  `medium risk`, nested `{ level }`, or numeric estimates.
+- Fixed read-only explanation/inspection planner output with
+  `taskType=analysis` and `workflowKind=read_only` so it produces an executable
+  read-only TaskGraph instead of failing the planning phase.
+- Fixed GUI code-writing runs completing without visible code deliverables by
+  marking missing deliverables as needs-revision and showing available files or
+  raw code in the main result area.
+
 ## [1.6.1] - 2026-06-15
 
 1.6.1 is a Canopus hardening release focused on release hygiene, schema naming,

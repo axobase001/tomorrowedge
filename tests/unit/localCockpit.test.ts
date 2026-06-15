@@ -743,6 +743,39 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("persists per-request timeout and retry controls separately from workflow iterations", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-provider-runtime-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "moonshotai/kimi-k2.6:free",
+          apiKeyEnv: "TEST_RUNTIME_OPENROUTER",
+          apiKey: "test-runtime-key",
+          requestTimeoutMs: 120000,
+          maxRetries: 2
+        })
+      });
+      const payload = await response.json() as { providers: Array<{ id: string; requestTimeoutMs: number; maxRetries: number }> };
+      const config = loadConfig(cwd);
+
+      expect(response.status).toBe(200);
+      expect(payload.providers.find((provider) => provider.id === "openrouter")).toMatchObject({
+        requestTimeoutMs: 120000,
+        maxRetries: 2
+      });
+      expect(config.providers.openrouter.requestTimeoutMs).toBe(120000);
+      expect(config.providers.openrouter.maxRetries).toBe(2);
+      expect(config.autonomy.max_iterations).toBe(defaultConfig.autonomy.max_iterations);
+    } finally {
+      delete process.env.TEST_RUNTIME_OPENROUTER;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects model-only provider saves when no key is configured", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-only-missing-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });

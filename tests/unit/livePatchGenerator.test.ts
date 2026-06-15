@@ -184,6 +184,134 @@ describe("live patch generator", () => {
     }
   });
 
+  it("normalizes flexible estimatedRisk values in live patch JSON", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-risk-normalize-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      await writeFile(path.join(cwd, "index.js"), "export const value = 1;\n", "utf8");
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "Updated value.",
+                    filesChanged: ["index.js"],
+                    unifiedDiff: "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+                    testPlan: ["node index.js"],
+                    knownTradeoffs: [],
+                    estimatedRisk: { level: "medium risk" }
+                  })
+                }
+              }
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 10 }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          openai_compatible: {
+            ...defaultConfig.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "openai_compatible", model: "free-test-model" },
+          coder_b: { provider: "openai_compatible", model: "free-test-model" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const plan = await planner.run({ goal: "update index.js" });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal: "Update index.js",
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [{ path: "index.js", reason: "target file", risk: "safe" }],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "single file"
+        }
+      });
+
+      expect(result.candidates.every((candidate) => candidate.estimatedRisk === "medium")).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.filesChanged.length > 0)).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not turn live provider failures into mock patch candidates", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-no-mock-fallback-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      await writeFile(path.join(cwd, "index.js"), "export const value = 1;\n", "utf8");
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify({ error: { message: "upstream timeout" } }), {
+          status: 504,
+          headers: { "Content-Type": "application/json" }
+        })) as typeof fetch;
+      const config: TomorrowEdgeConfig = {
+        ...defaultConfig,
+        providers: {
+          ...defaultConfig.providers,
+          openai_compatible: {
+            ...defaultConfig.providers.openai_compatible,
+            enabled: true,
+            api_key_env: "",
+            base_url: "http://provider.test/v1",
+            model: "free-test-model",
+            auth_header: "none"
+          }
+        },
+        agents: {
+          ...defaultConfig.agents,
+          coder_a: { provider: "openai_compatible", model: "free-test-model" },
+          coder_b: { provider: "openai_compatible", model: "free-test-model" }
+        }
+      };
+      const router = new ModelRouter(config);
+      const planner = new PlannerAgent();
+      const plan = await planner.run({ goal: "update index.js" });
+
+      const result = await runLivePatchCandidates({
+        cwd,
+        goal: "Update index.js",
+        config,
+        router,
+        plan,
+        contextSelection: {
+          selectedFiles: [{ path: "index.js", reason: "target file", risk: "safe" }],
+          excludedFiles: [],
+          grepQueriesUsed: [],
+          contextSummary: "single file"
+        }
+      });
+
+      expect(result.candidates.every((candidate) => candidate.filesChanged.length === 0 && candidate.unifiedDiff === "")).toBe(true);
+      expect(result.notes.map((note) => note.error).join("\n")).toContain("Synthetic fallback mock/mock-balanced was skipped");
+      expect(result.notes.map((note) => note.fallbackReason).join("\n")).toContain("upstream_unavailable");
+      expect(result.notes.every((note) => note.fallbackUsed !== true)).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("recovers long document drafts as a new markdown patch when live patch JSON parsing fails", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-live-document-fallback-"));
     const originalFetch = globalThis.fetch;
@@ -249,6 +377,7 @@ describe("live patch generator", () => {
       expect(result.candidates).toHaveLength(2);
       expect(result.candidates.every((candidate) => candidate.filesChanged.includes("docs/ramsey-review.md"))).toBe(true);
       expect(result.candidates.every((candidate) => candidate.unifiedDiff.startsWith("--- /dev/null\n+++ b/docs/ramsey-review.md"))).toBe(true);
+      expect(result.candidates.every((candidate) => candidate.testPlan.includes("inspect docs/ramsey-review.md"))).toBe(true);
       expect(result.candidates.every((candidate) => candidate.summary.includes("Recovered document draft"))).toBe(true);
       expect(result.notes.every((note) => note.retryUsed)).toBe(false);
       expect(result.notes.map((note) => note.fallbackReason).join("\n")).toContain("document_response_export");

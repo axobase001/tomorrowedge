@@ -22,6 +22,8 @@ export type CockpitProviderReadiness = {
   keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
+  requestTimeoutMs: number;
+  maxRetries: number;
 };
 
 export type CockpitRoleAssignment = {
@@ -57,6 +59,8 @@ export type CockpitSetupRequest = {
   apiKeyEnv?: string;
   apiKey?: string;
   bindRoles?: boolean;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
 };
 
 export type CockpitProviderKeyRequest = {
@@ -65,6 +69,8 @@ export type CockpitProviderKeyRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
 };
 
 export type CockpitProviderModelOption = {
@@ -166,7 +172,9 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
     model,
     models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
     base_url: baseUrl,
-    api_key_env: apiKeyEnv
+    api_key_env: apiKeyEnv,
+    requestTimeoutMs: sanitizePositiveInt(request.requestTimeoutMs) ?? currentProvider.requestTimeoutMs ?? 60_000,
+    maxRetries: sanitizeNonNegativeInt(request.maxRetries) ?? currentProvider.maxRetries ?? 1
   };
   const nextConfig: TomorrowEdgeConfig = {
     ...config,
@@ -210,7 +218,9 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
         model,
         models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
         base_url: baseUrl,
-        api_key_env: apiKeyEnv
+        api_key_env: apiKeyEnv,
+        requestTimeoutMs: sanitizePositiveInt(request.requestTimeoutMs) ?? currentProvider.requestTimeoutMs ?? 60_000,
+        maxRetries: sanitizeNonNegativeInt(request.maxRetries) ?? currentProvider.maxRetries ?? 1
       }
     }
   });
@@ -417,7 +427,9 @@ function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<s
     keyConfigured: !authRequired || Boolean(keyValue),
     keySource,
     maskedKey: keyValue ? maskSecret(keyValue) : undefined,
-    authRequired
+    authRequired,
+    requestTimeoutMs: provider.requestTimeoutMs ?? 60_000,
+    maxRetries: provider.maxRetries ?? 1
   };
 }
 
@@ -461,7 +473,10 @@ function providerConfigForSetup(config: TomorrowEdgeConfig, providerId: string):
     models: [],
     api_format: "openai_chat",
     auth_header: "bearer",
-    extra_headers: {}
+    extra_headers: {},
+    requestTimeoutMs: 60_000,
+    maxRetries: 1,
+    retryBaseDelayMs: 1000
   };
 }
 
@@ -504,6 +519,18 @@ function sanitizeBaseUrl(value?: string): string | undefined {
     throw new Error("Base URL must use http or https.");
   }
   return trimmed;
+}
+
+function sanitizePositiveInt(value?: number): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value <= 0) throw new Error("Request timeout must be a positive integer in milliseconds.");
+  return value;
+}
+
+function sanitizeNonNegativeInt(value?: number): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < 0) throw new Error("Max retries must be a non-negative integer.");
+  return value;
 }
 
 async function writeLocalEnvValue(cwd: string, key: string, value: string): Promise<void> {

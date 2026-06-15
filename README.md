@@ -278,6 +278,12 @@ Recommended first setup:
 4. Assign cheaper or local agents to explorer/coder/test/documentation roles where risk allows.
 5. Keep `auto` when you want TomorrowEdge to choose by routing policy.
 
+Provider runtime controls are separate from workflow limits:
+
+- `providers.<id>.requestTimeoutMs` controls one HTTP/model request timeout.
+- `providers.<id>.maxRetries` controls provider-level retry attempts.
+- `autonomy.max_iterations` and repair/debate limits control workflow loops, not HTTP request timeouts.
+
 Example role intent:
 
 ```yaml
@@ -426,7 +432,7 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.6.1`.
+Current version: `1.6.2`.
 
 Release line: Canopus.
 

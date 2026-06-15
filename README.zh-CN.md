@@ -226,6 +226,12 @@ tedge run "rewrite this service with a safer architecture" --agent-council
 4. 把便宜或本地 Agent 分配给 explorer / coder / test / documentation 等低风险执行角色。
 5. 如果希望 TomorrowEdge 自动按策略选择，就保留 `auto`。
 
+Provider 运行时控制和工作流限制是分开的：
+
+- `providers.<id>.requestTimeoutMs` 控制单次 HTTP / 模型请求超时。
+- `providers.<id>.maxRetries` 控制 provider 级请求重试次数。
+- `autonomy.max_iterations`、repair 和 debate 限制控制工作流轮数，不控制 HTTP 请求超时。
+
 示例角色意图：
 
 ```yaml
@@ -374,7 +380,7 @@ Screenshot / diagram / error image
 
 ## 当前状态
 
-当前版本：`1.6.1` Canopus。
+当前版本：`1.6.2` Canopus。
 
 主要已实现能力：
 

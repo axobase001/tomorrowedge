@@ -36,6 +36,8 @@ export function SetupWizard({
   const [model, setModel] = useState(setupStatus?.selectedModel ?? suggestedModelFor(provider));
   const [baseUrl, setBaseUrl] = useState(initialProviderDefaults?.baseUrl ?? defaultBaseUrlFor(provider));
   const [apiKeyEnv, setApiKeyEnv] = useState(initialProviderDefaults?.apiKeyEnv ?? defaultEnvFor(provider));
+  const [requestTimeoutMs, setRequestTimeoutMs] = useState(String(initialProviderDefaults?.requestTimeoutMs ?? 60_000));
+  const [maxRetries, setMaxRetries] = useState(String(initialProviderDefaults?.maxRetries ?? 1));
   const [apiKey, setApiKey] = useState("");
   const [bindRoles, setBindRoles] = useState(true);
 
@@ -49,6 +51,8 @@ export function SetupWizard({
     setModel((current) => current || nextProvider?.model || suggestedModelFor(providerId));
     setBaseUrl(nextProvider?.baseUrl ?? defaultBaseUrlFor(providerId));
     setApiKeyEnv(nextProvider?.apiKeyEnv ?? defaultEnvFor(providerId));
+    setRequestTimeoutMs(String(nextProvider?.requestTimeoutMs ?? 60_000));
+    setMaxRetries(String(nextProvider?.maxRetries ?? 1));
   }, [provider, providers]);
 
   const canSubmit = Boolean(normalizedProvider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !busy;
@@ -91,6 +95,14 @@ export function SetupWizard({
             <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} placeholder="OPENROUTER_API_KEY" data-testid="setup-env" />
           </label>
           <label>
+            <span>{t("setup.requestTimeout")}</span>
+            <input value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(event.target.value)} inputMode="numeric" data-testid="setup-request-timeout" />
+          </label>
+          <label>
+            <span>{t("setup.maxRetries")}</span>
+            <input value={maxRetries} onChange={(event) => setMaxRetries(event.target.value)} inputMode="numeric" data-testid="setup-max-retries" />
+          </label>
+          <label>
             <span>{t("setup.apiKeyOptional")}</span>
             <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t("setup.apiKeyPlaceholder")} data-testid="setup-key" />
           </label>
@@ -100,7 +112,7 @@ export function SetupWizard({
           <span>{t("setup.bindRoles")}</span>
         </label>
         <div className="te-setup-actions">
-          <button type="button" onClick={() => onConfigure({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey, bindRoles })} disabled={!canSubmit} data-testid="setup-save">
+          <button type="button" onClick={() => onConfigure({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey, bindRoles, requestTimeoutMs: numericDraft(requestTimeoutMs), maxRetries: numericDraft(maxRetries) })} disabled={!canSubmit} data-testid="setup-save">
             {t("setup.save")}
           </button>
           <button type="button" className="te-quiet-button" onClick={() => onTest(normalizedProvider)} disabled={busy || !normalizedProvider || !selectedProvider} data-testid="setup-test">
@@ -157,4 +169,11 @@ function suggestedModelFor(provider: string): string {
 
 function normalizeProviderId(provider: string): string {
   return provider.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+}
+
+function numericDraft(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : undefined;
 }
