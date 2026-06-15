@@ -104,7 +104,7 @@ export function KeyRoleManager({
           </div>
           <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">{t("keymgr.close")}</button>
         </header>
-        <nav className="te-keymgr-tabs" aria-label="Key manager tabs">
+        <nav className="te-keymgr-tabs" aria-label={t("keymgr.tabsLabel")}>
           <button type="button" className={tab === "keys" ? "active" : ""} onClick={() => setTab("keys")} data-testid="keymgr-tab-keys">{t("keymgr.tabKeys")}</button>
           <button type="button" className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")} data-testid="keymgr-tab-roles">{t("keymgr.tabRoles")}</button>
         </nav>
@@ -139,7 +139,7 @@ export function KeyRoleManager({
                     if (event.target.value !== "__custom") setModel(event.target.value);
                   }} data-testid="keymgr-model-select">
                     {modelOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                    <option value="__custom">Custom model...</option>
+                    <option value="__custom">{t("keymgr.customModel")}</option>
                   </select>
                   <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
                 </div>
@@ -216,7 +216,7 @@ export function KeyRoleManager({
                     {roleModelOptionIds(assignment.provider, roleProviders, assignment.model).map((item) => (
                       <option key={item} value={item}>{item}</option>
                     ))}
-                    <option value="__custom">Custom model...</option>
+                    <option value="__custom">{t("keymgr.customModel")}</option>
                   </select>
                   <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
                 </div>

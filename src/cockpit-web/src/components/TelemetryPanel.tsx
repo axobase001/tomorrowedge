@@ -35,7 +35,7 @@ export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetr
         <div className={`te-budget-gauge te-budget-gauge-${budgetTone}`} data-testid="telemetry-budget-gauge">
           <div className="te-budget-gauge-header">
             <span>{telemetry.budgetUsedPercent}%</span>
-            <strong>{telemetry.budgetRemainingUsd === undefined ? "-" : `${money(telemetry.budgetRemainingUsd)} left`}</strong>
+            <strong>{telemetry.budgetRemainingUsd === undefined ? "-" : t("telemetry.budgetRemaining", { amount: money(telemetry.budgetRemainingUsd) })}</strong>
           </div>
           <div className="te-budget-track" aria-hidden="true">
             <span className="te-budget-fill" style={{ width: `${telemetry.budgetUsedPercent}%` }} />
@@ -43,12 +43,12 @@ export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetr
         </div>
       ) : null}
       {typeof telemetry.liveRunningCostUsd === "number" && telemetry.liveRunningCostUsd > 0 ? (
-        <Metric label="live cost" value={money(telemetry.liveRunningCostUsd)} />
+        <Metric label={t("telemetry.liveCost")} value={money(telemetry.liveRunningCostUsd)} />
       ) : null}
       <Metric label={t("telemetry.tokens")} value={compact(telemetry.totalTokens)} />
       <Metric label={t("telemetry.cache")} value={typeof telemetry.cacheHitPercent === "number" ? `${telemetry.cacheHitPercent}%` : "-"} />
       <Metric label={t("telemetry.agents")} value={t("telemetry.agentsValue", { done: telemetry.completed, waiting: telemetry.waiting })} />
-      <Metric label="strong calls" value={`real ${telemetry.realStrongAgentCallsUsed} / sim ${telemetry.simulatedStrongAgentCallsUsed}`} />
+      <Metric label={t("telemetry.strongCalls")} value={t("telemetry.strongCallsValue", { real: telemetry.realStrongAgentCallsUsed, sim: telemetry.simulatedStrongAgentCallsUsed })} />
       <Metric label={t("telemetry.latency")} value={telemetry.latencyMs ? `${Math.round(telemetry.latencyMs / 1000)}s` : "-"} />
       <Metric label={t("telemetry.risk")} value={telemetry.latestRiskLevel ?? "-"} />
       {telemetry.roleCosts?.length ? (
@@ -66,12 +66,12 @@ export function TelemetryPanel({ telemetry, t, goal, onOpenDetails }: { telemetr
           {t("telemetry.details")}
         </button>
         {hasCostDetails ? (
-          <button type="button" className="te-link-button" onClick={() => setReceiptOpen(true)} aria-label="Open cost receipt" data-testid="telemetry-receipt">
-            receipt
+          <button type="button" className="te-link-button" onClick={() => setReceiptOpen(true)} aria-label={t("telemetry.openCostReceipt")} data-testid="telemetry-receipt">
+            {t("telemetry.receipt")}
           </button>
         ) : null}
       </div>
-      {receiptOpen ? <ReceiptModal telemetry={telemetry} goal={goal} onDismiss={() => setReceiptOpen(false)} /> : null}
+      {receiptOpen ? <ReceiptModal telemetry={telemetry} goal={goal} t={t} onDismiss={() => setReceiptOpen(false)} /> : null}
     </aside>
   );
 }

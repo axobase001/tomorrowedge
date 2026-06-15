@@ -23,7 +23,7 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
       </header>
       <nav className="te-spine" data-testid="workflow-spine">
         {viewModel.workflow.length ? viewModel.workflow.map((step) => (
-          <span key={step.id} className={step.status}>{step.label}</span>
+          <span key={step.id} className={step.status}>{translateKnownValue(t, step.label)}</span>
         )) : (
           <EmptyState title={t("state.noWorkflow")} detail={t("state.noWorkflowDetail")} testId="workflow-empty-state" />
         )}
@@ -37,12 +37,12 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         </div>
       )}
       {governanceActive ? (
-        <section className="te-governance-strip" data-testid="governance-strip" aria-label="Agent Council governance">
-          <div><span>Chief</span><strong>{viewModel.chiefAgent?.chiefAgentId ?? "-"}</strong></div>
-          <div><span>Council</span><strong>{viewModel.council?.members.length ?? 0} agents</strong></div>
-          <div><span>Ownership</span><strong>{viewModel.taskOwnership?.assignments.length ?? 0} tasks</strong></div>
-          <div><span>Mutations</span><strong>{viewModel.policyMutations?.count ?? 0}</strong></div>
-          <div><span>Final</span><strong>{viewModel.finalReview?.decision ?? "-"}</strong></div>
+        <section className="te-governance-strip" data-testid="governance-strip" aria-label={t("workflow.councilGovernance")}>
+          <div><span>{t("workflow.chief")}</span><strong>{viewModel.chiefAgent?.chiefAgentId ?? "-"}</strong></div>
+          <div><span>{t("workflow.council")}</span><strong>{t("workflow.agentsCount", { count: viewModel.council?.members.length ?? 0 })}</strong></div>
+          <div><span>{t("workflow.ownership")}</span><strong>{t("workflow.tasksCount", { count: viewModel.taskOwnership?.assignments.length ?? 0 })}</strong></div>
+          <div><span>{t("workflow.mutations")}</span><strong>{viewModel.policyMutations?.count ?? 0}</strong></div>
+          <div><span>{t("workflow.final")}</span><strong>{viewModel.finalReview?.decision ?? "-"}</strong></div>
         </section>
       ) : null}
       {viewModel.currentApproval ? (
@@ -51,11 +51,11 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         <article className="te-main" data-testid="main-view">
           <h3>{translateKnownValue(t, viewModel.main.title)}</h3>
           <p>{translateKnownValue(t, viewModel.main.subtitle)}</p>
-          <MarkdownContent className="te-main-answer" content={viewModel.main.diff ?? viewModel.main.body} />
+          <MarkdownContent className="te-main-answer" content={viewModel.main.diff ?? viewModel.main.body} t={t} />
           {viewModel.main.supportingDetail ? (
             <details className="te-main-support">
               <summary>{t("workflow.details")}</summary>
-              <MarkdownContent className="te-main-support-body" content={viewModel.main.supportingDetail} />
+              <MarkdownContent className="te-main-support-body" content={viewModel.main.supportingDetail} t={t} />
             </details>
           ) : null}
         </article>
