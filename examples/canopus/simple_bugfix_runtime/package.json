@@ -1,0 +1,8 @@
+{
+  "name": "tomorrowedge-canopus-simple-bugfix-runtime",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node test.js"
+  }
+}

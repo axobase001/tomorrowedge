@@ -102,32 +102,35 @@ tedge canopus report
 ```
 
 `tedge control ...` remains supported as a compatibility alias for the same
-commands.
+commands and prints a deprecation warning on stderr. The legacy
+`goal/evaluation/loop` schema remains supported for v1.6 compatibility. New
+examples use `objective/acceptance/convergence`.
 
 Source-checkout blocking-check runtime demo:
 
 ```bash
-npm run dev -- control validate examples/control_plane/simple_bugfix_runtime/goal.yaml
-npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
-  --cwd examples/control_plane/simple_bugfix_runtime \
+npm run dev -- canopus validate examples/canopus/simple_bugfix_runtime/objective.yaml
+npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml \
+  --cwd examples/canopus/simple_bugfix_runtime \
   --adapter shell \
   --action-command "node fix-bug.mjs" \
   --run-id simple_bugfix_runtime
-npm run dev -- control status --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
-npm run dev -- control report --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus status --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus report --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
 ```
 
-`examples/control_plane/simple_bugfix_runtime` is the Canopus runtime
+`examples/canopus/simple_bugfix_runtime` is the public Canopus runtime
 acceptance demo: it starts from a failing `npm test`, records pre-action
 evidence, lets the shell AgentBridge fix `index.js`, then converges only after the
-post-action blocking check passes. `examples/control_plane/mock_artifact` remains a
-deterministic no-test smoke demo, not proof of runtime convergence.
+post-action blocking check passes. `examples/control_plane/*` remains available
+as legacy schema compatibility coverage. `examples/control_plane/mock_artifact`
+is a deterministic no-test smoke demo, not proof of runtime convergence.
 
 Source-checkout Council-backed AgentBridge demo:
 
 ```bash
-npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
-  --cwd examples/control_plane/simple_bugfix_runtime \
+npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml \
+  --cwd examples/canopus/simple_bugfix_runtime \
   --adapter sirius-council \
   --fixture-mode \
   --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
@@ -423,7 +426,7 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.6.0`.
+Current version: `1.6.1`.
 
 Release line: Canopus.
 

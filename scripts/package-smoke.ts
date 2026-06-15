@@ -2,7 +2,6 @@ import { access, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { execa } from "execa";
 
@@ -38,6 +37,30 @@ export function assertSiriusExamplePaths(paths: string[]): void {
   if (missing.length) throw new Error(`Package is missing Sirius example files: ${missing.join(", ")}`);
 }
 
+export function assertCanopusExamplePaths(paths: string[]): void {
+  const normalized = paths.map(normalizeArtifactPath);
+  const required = [
+    "examples/canopus/simple_bugfix_runtime/objective.yaml",
+    "examples/canopus/simple_bugfix_runtime/fix-bug.mjs",
+    "examples/canopus/simple_bugfix_runtime/index.js",
+    "examples/canopus/simple_bugfix_runtime/test.js"
+  ];
+  const missing = required.filter((item) => !normalized.includes(item));
+  if (missing.length) throw new Error(`Package is missing Canopus example files: ${missing.join(", ")}`);
+}
+
+export function assertReadmeScreenshotPaths(paths: string[]): void {
+  const normalized = paths.map(normalizeArtifactPath);
+  const required = [
+    "docs/ui/screenshots/gui-v1.5/council-main.png",
+    "docs/ui/screenshots/gui-v1.5/council-details.png",
+    "docs/ui/screenshots/gui-v1.5/key-role-manager.png",
+    "docs/ui/screenshots/gui-v1.5/role-assignment.png"
+  ];
+  const missing = required.filter((item) => !normalized.includes(item));
+  if (missing.length) throw new Error(`Package is missing README screenshot files: ${missing.join(", ")}`);
+}
+
 export async function runPackageSmoke(cwd = process.cwd()): Promise<void> {
   assertCockpitAssetPaths([
     "dist/cockpit-web/index.html",
@@ -50,6 +73,8 @@ export async function runPackageSmoke(cwd = process.cwd()): Promise<void> {
   const packFiles = parseNpmPackFiles(pack.stdout);
   assertCockpitAssetPaths(packFiles);
   assertSiriusExamplePaths(packFiles);
+  assertCanopusExamplePaths(packFiles);
+  assertReadmeScreenshotPaths(packFiles);
   const packed = JSON.parse(pack.stdout) as Array<{ filename: string }>;
   const tarball = path.join(packDir, packed[0]?.filename ?? "");
   if (!tarball) throw new Error("npm pack did not return a tarball filename.");
@@ -73,25 +98,16 @@ async function assertInstalledClientServesCockpit(installDir: string): Promise<v
     path.join(installDir, "node_modules", "@axobase001", "tomorrowedge", "dist", "cli", "index.js"),
     path.join(installDir, "node_modules", "tomorrowedge", "dist", "cli", "index.js")
   ]);
-  const child = spawn(process.execPath, [cliPath, "client", "--no-open", "--port", "0"], {
+  const run = await execa(process.execPath, [cliPath, "client", "--no-open", "--port", "0", "--smoke-once"], {
     cwd: installDir,
-    stdio: ["ignore", "pipe", "pipe"]
+    timeout: 20_000,
+    killSignal: "SIGKILL"
   });
-  try {
-    const cockpitUrlPattern = /TomorrowEdge GUI client:\s+(http:\/\/127\.0\.0\.1:\d+(?:\/\?nonce=[^\s]+)?)/;
-    const output = await waitForOutput(child, cockpitUrlPattern);
-    const url = output.match(cockpitUrlPattern)?.[1];
-    if (!url) throw new Error(`Installed client did not print a cockpit URL. Output:\n${output}`);
-    const html = await fetch(url).then((response) => response.text());
-    const assetPath = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
-    if (!html.includes('<div id="root"></div>') || !assetPath) {
-      throw new Error("Installed client did not serve the React cockpit index.");
-    }
-    const assetUrl = new URL(assetPath, url).toString();
-    const asset = await fetch(assetUrl);
-    if (!asset.ok) throw new Error(`Installed client cockpit asset failed: ${asset.status} ${assetUrl}`);
-  } finally {
-    child.kill("SIGTERM");
+  if (!/TomorrowEdge GUI client:\s+http:\/\/127\.0\.0\.1:\d+/.test(run.stdout)) {
+    throw new Error(`Installed client did not print a cockpit URL. Output:\n${run.stdout}\n${run.stderr}`);
+  }
+  if (!run.stdout.includes("Smoke check passed.")) {
+    throw new Error(`Installed client smoke check did not finish cleanly. Output:\n${run.stdout}\n${run.stderr}`);
   }
 }
 
@@ -152,34 +168,6 @@ async function firstExistingPath(candidates: string[]): Promise<string> {
     }
   }
   throw new Error(`Could not find installed TomorrowEdge CLI. Checked:\n${candidates.join("\n")}`);
-}
-
-function waitForOutput(child: ReturnType<typeof spawn>, pattern: RegExp): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let output = "";
-    const timeout = setTimeout(() => {
-      reject(new Error(`Timed out waiting for installed client output. Output:\n${output}`));
-    }, 15_000);
-    const append = (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-      if (pattern.test(output)) {
-        clearTimeout(timeout);
-        resolve(output);
-      }
-    };
-    child.stdout?.on("data", append);
-    child.stderr?.on("data", append);
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.once("exit", (code) => {
-      if (!pattern.test(output)) {
-        clearTimeout(timeout);
-        reject(new Error(`Installed client exited before printing a cockpit URL: ${code}\n${output}`));
-      }
-    });
-  });
 }
 
 function normalizeArtifactPath(value: string): string {

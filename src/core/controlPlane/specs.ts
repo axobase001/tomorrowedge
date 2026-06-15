@@ -150,6 +150,8 @@ export type EvalSpec = z.infer<typeof evalSpecSchema>;
 export type LoopSpec = z.infer<typeof loopSpecSchema>;
 export type ControlPlaneSpecDocument = z.infer<typeof controlPlaneSpecDocumentSchema>;
 
+const schemaWarnings = new WeakMap<ControlPlaneSpecDocument, string[]>();
+
 export type GateResult = {
   id: string;
   type: string;
@@ -236,7 +238,14 @@ export async function loadControlPlaneSpecDocument(specPath: string): Promise<Co
 
 export function parseControlPlaneSpecDocument(raw: string): ControlPlaneSpecDocument {
   const parsed = YAML.parse(raw) as unknown;
-  return controlPlaneSpecDocumentSchema.parse(parsed);
+  const normalized = normalizeControlPlaneSpecDocument(parsed);
+  const document = controlPlaneSpecDocumentSchema.parse(normalized.value);
+  schemaWarnings.set(document, normalized.warnings);
+  return document;
+}
+
+export function controlPlaneSchemaWarnings(document: ControlPlaneSpecDocument): string[] {
+  return schemaWarnings.get(document) ?? [];
 }
 
 export function defaultLoopSpec(goal: GoalSpec): LoopSpec {
@@ -305,6 +314,10 @@ export function controlPlaneSemanticWarnings(document: ControlPlaneSpecDocument)
   return warnings;
 }
 
+export function controlPlaneValidationWarnings(document: ControlPlaneSpecDocument): string[] {
+  return [...controlPlaneSchemaWarnings(document), ...controlPlaneSemanticWarnings(document)];
+}
+
 export function createDefaultControlPlaneDocument(title: string, mode: GoalMode = "coding"): ControlPlaneSpecDocument {
   const id = slugifyId(title || "control-goal");
   return {
@@ -344,7 +357,7 @@ export function createDefaultControlPlaneDocument(title: string, mode: GoalMode 
     evaluation: {
       hard_gates: [
         {
-          id: "verification",
+          id: "verification_passes",
           type: "command",
           command: "npm test",
           timeout_sec: 120,
@@ -391,6 +404,89 @@ export function createDefaultControlPlaneDocument(title: string, mode: GoalMode 
       }
     }
   };
+}
+
+export function toCanopusPublicSpecDocument(document: ControlPlaneSpecDocument): Record<string, unknown> {
+  const { desired_state, ...goalRest } = document.goal;
+  const publicGoal = {
+    ...goalRest,
+    target_state: desired_state
+  };
+  const publicDocument: Record<string, unknown> = { objective: publicGoal };
+  if (document.evaluation) {
+    const { hard_gates, soft_gates, judge, ...evaluationRest } = document.evaluation;
+    const { checker_role, ...judgeRest } = judge;
+    publicDocument.acceptance = {
+      ...evaluationRest,
+      blocking_checks: hard_gates,
+      advisory_checks: soft_gates,
+      judge: {
+        ...judgeRest,
+        reviewer_role: checker_role
+      }
+    };
+  }
+  if (document.loop) {
+    publicDocument.convergence = document.loop;
+  }
+  return publicDocument;
+}
+
+function normalizeControlPlaneSpecDocument(input: unknown): { value: unknown; warnings: string[] } {
+  if (!isRecord(input)) return { value: input, warnings: [] };
+  const warnings: string[] = [];
+  const hasLegacyRoot = hasAnyKey(input, ["goal", "evaluation", "loop"]);
+  const hasCanopusRoot = hasAnyKey(input, ["objective", "acceptance", "convergence"]);
+  if (hasLegacyRoot) {
+    warnings.push("legacy `goal/evaluation/loop` schema remains supported for v1.6 compatibility; prefer `objective/acceptance/convergence`.");
+  }
+  const goalInput = input.objective ?? input.goal;
+  const evaluationInput = input.acceptance ?? input.evaluation;
+  const loopInput = input.convergence ?? input.loop;
+  const value: Record<string, unknown> = {
+    goal: normalizeGoalLike(goalInput)
+  };
+  if (evaluationInput !== undefined) value.evaluation = normalizeEvaluationLike(evaluationInput);
+  if (loopInput !== undefined) value.loop = loopInput;
+  if (!hasLegacyRoot && !hasCanopusRoot) return { value: input, warnings };
+  return { value, warnings };
+}
+
+function normalizeGoalLike(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  const { target_state, desired_state, ...rest } = input;
+  return {
+    ...rest,
+    desired_state: desired_state ?? target_state
+  };
+}
+
+function normalizeEvaluationLike(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  const { blocking_checks, advisory_checks, hard_gates, soft_gates, judge, ...rest } = input;
+  return {
+    ...rest,
+    hard_gates: hard_gates ?? blocking_checks,
+    soft_gates: soft_gates ?? advisory_checks,
+    judge: normalizeJudgeLike(judge)
+  };
+}
+
+function normalizeJudgeLike(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  const { reviewer_role, checker_role, ...rest } = input;
+  return {
+    ...rest,
+    checker_role: checker_role ?? reviewer_role
+  };
+}
+
+function hasAnyKey(record: Record<string, unknown>, keys: string[]): boolean {
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(record, key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function slugifyId(value: string): string {

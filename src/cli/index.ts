@@ -107,6 +107,11 @@ registerCanopusCommand("control", "Run the Canopus convergence runtime (compatib
 
 function registerCanopusCommand(name: string, description: string): void {
   const command = program.command(name).description(description);
+  const warnIfLegacyAlias = () => {
+    if (name === "control") {
+      process.stderr.write("Warning: `tedge control` is a compatibility alias. Use `tedge canopus` instead.\n");
+    }
+  };
   command
     .command("init")
     .description("Create a structured Canopus objective/acceptance/policy YAML file")
@@ -114,13 +119,19 @@ function registerCanopusCommand(name: string, description: string): void {
     .option("--mode <mode>", "coding, research, refactor, test, docs, or generic", "coding")
     .option("--output <path>", "output YAML path", "goal.yaml")
     .option("--force", "overwrite the output file")
-    .action((options: { title?: string; mode?: string; output?: string; force?: boolean }) => controlInitCommand(cwd, options));
+    .action((options: { title?: string; mode?: string; output?: string; force?: boolean }) => {
+      warnIfLegacyAlias();
+      return controlInitCommand(cwd, options);
+    });
   command
     .command("validate")
     .description("Validate a Canopus objective YAML")
     .argument("<goal-path>", "goal YAML path")
     .option("--json", "print machine-readable validation")
-    .action((goalPath: string, options: { json?: boolean }) => controlValidateCommand(cwd, goalPath, options));
+    .action((goalPath: string, options: { json?: boolean }) => {
+      warnIfLegacyAlias();
+      return controlValidateCommand(cwd, goalPath, options);
+    });
   command
     .command("run")
     .description("Run observe/accept/delegate/re-accept/status convergence")
@@ -137,8 +148,10 @@ function registerCanopusCommand(name: string, description: string): void {
     .option("--cwd <path>", "workspace directory to reconcile")
     .option("--workdir <path>", "alias for --cwd")
     .option("--json", "print machine-readable result")
-    .action((goalPath: string, options: { adapter?: string; actionCommand?: string; config?: string; fixtureMode?: boolean; accessMode?: string; approvePatch?: boolean; approveShell?: boolean; simulateFailure?: string; runId?: string; cwd?: string; workdir?: string; json?: boolean }) =>
-      controlRunCommand(cwd, goalPath, { ...options, cwd: options.cwd ?? options.workdir }));
+    .action((goalPath: string, options: { adapter?: string; actionCommand?: string; config?: string; fixtureMode?: boolean; accessMode?: string; approvePatch?: boolean; approveShell?: boolean; simulateFailure?: string; runId?: string; cwd?: string; workdir?: string; json?: boolean }) => {
+      warnIfLegacyAlias();
+      return controlRunCommand(cwd, goalPath, { ...options, cwd: options.cwd ?? options.workdir });
+    });
   command
     .command("status")
     .description("Show latest Canopus RunState")
@@ -146,14 +159,20 @@ function registerCanopusCommand(name: string, description: string): void {
     .option("--cwd <path>", "workspace directory containing .runs")
     .option("--workdir <path>", "alias for --cwd")
     .option("--json", "print machine-readable status")
-    .action((options: { runId?: string; cwd?: string; workdir?: string; json?: boolean }) => controlStatusCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir }));
+    .action((options: { runId?: string; cwd?: string; workdir?: string; json?: boolean }) => {
+      warnIfLegacyAlias();
+      return controlStatusCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir });
+    });
   command
     .command("report")
     .description("Print the persisted Canopus progress report")
     .option("--run-id <id>", "run id; defaults to latest")
     .option("--cwd <path>", "workspace directory containing .runs")
     .option("--workdir <path>", "alias for --cwd")
-    .action((options: { runId?: string; cwd?: string; workdir?: string }) => controlReportCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir }));
+    .action((options: { runId?: string; cwd?: string; workdir?: string }) => {
+      warnIfLegacyAlias();
+      return controlReportCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir });
+    });
 }
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
@@ -164,8 +183,9 @@ program
   .option("--port <port>", "local port", "18792")
   .option("--host <host>", "bind host", "127.0.0.1")
   .option("--config <path>", "load an explicit TomorrowEdge config YAML for launched runs")
+  .option("--smoke-once", "start the local client, verify the cockpit shell once, then exit")
   .option("--no-open", "print the client URL without opening a browser")
-  .action((options: { port?: string; host?: string; config?: string; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
+  .action((options: { port?: string; host?: string; config?: string; smokeOnce?: boolean; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
 
 program
   .command("desktop")

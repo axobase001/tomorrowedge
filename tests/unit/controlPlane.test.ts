@@ -10,7 +10,8 @@ import { ReconciliationController, shouldConverge } from "../../src/core/control
 import { EvaluationRunner } from "../../src/core/controlPlane/evaluator.js";
 import { computeDesiredStateDiff, createWorkspaceSnapshot, findAllowedPathViolations, observeWorkspace } from "../../src/core/controlPlane/diff.js";
 import { createGate } from "../../src/core/controlPlane/gates.js";
-import { controlPlaneSemanticWarnings, loadControlPlaneSpecDocument, parseControlPlaneSpecDocument, requireRunnableControlPlaneDocument, type EvalSpec, type EvaluationResult, type GoalSpec, type LoopSpec } from "../../src/core/controlPlane/specs.js";
+import { controlPlaneSchemaWarnings, controlPlaneSemanticWarnings, controlPlaneValidationWarnings, loadControlPlaneSpecDocument, parseControlPlaneSpecDocument, requireRunnableControlPlaneDocument, type EvalSpec, type EvaluationResult, type GoalSpec, type LoopSpec } from "../../src/core/controlPlane/specs.js";
+import { parseCanopusSpecDocument, type AcceptanceMatrix, type CanopusObjective, type ConvergencePolicy, type RunState } from "../../src/core/canopus/index.js";
 import { StatusStore } from "../../src/core/controlPlane/statusStore.js";
 import type { ObjectiveContractV1 } from "../../src/core/contracts/objectiveContract.js";
 
@@ -21,6 +22,38 @@ describe("Canopus Runtime specs", () => {
     expect(spec.goal.id).toBe("simple_bugfix");
     expect(spec.goal.desired_state.success_conditions[0].id).toBe("unit_tests_pass");
     expect(spec.evaluation?.hard_gates[0].command).toBe(nodePassCommand());
+  });
+
+  it("parses the public Canopus objective/acceptance/convergence schema", () => {
+    const spec = parseControlPlaneSpecDocument(canopusObjectiveYaml());
+
+    expect(spec.goal.id).toBe("simple_bugfix");
+    expect(spec.goal.desired_state.success_conditions[0].id).toBe("unit_tests_pass");
+    expect(spec.evaluation?.hard_gates[0].id).toBe("unit_tests_pass");
+    expect(spec.evaluation?.judge.checker_role).toBe("reviewer");
+    expect(controlPlaneSchemaWarnings(spec)).toEqual([]);
+  });
+
+  it("parses the legacy control schema with a deprecation warning", () => {
+    const spec = parseControlPlaneSpecDocument(validGoalYaml());
+
+    expect(spec.goal.id).toBe("simple_bugfix");
+    expect(controlPlaneSchemaWarnings(spec).join("\n")).toContain("legacy `goal/evaluation/loop` schema");
+    expect(controlPlaneSemanticWarnings(spec)).toEqual([]);
+    expect(controlPlaneValidationWarnings(spec).join("\n")).toContain("legacy");
+  });
+
+  it("keeps the public src/core/canopus re-export layer importable", () => {
+    const spec = parseCanopusSpecDocument(canopusObjectiveYaml());
+    const objective: CanopusObjective = spec.goal;
+    const acceptance: AcceptanceMatrix | undefined = spec.evaluation;
+    const convergence: ConvergencePolicy | undefined = spec.loop;
+    const runState = null as RunState | null;
+
+    expect(objective.id).toBe("simple_bugfix");
+    expect(acceptance?.hard_gates[0].id).toBe("unit_tests_pass");
+    expect(convergence?.max_iterations).toBe(3);
+    expect(runState).toBeNull();
   });
 
   it("rejects a prompt-like goal without required structured success conditions", () => {
@@ -79,6 +112,13 @@ describe("Canopus Runtime specs", () => {
     expect(controlPlaneSemanticWarnings(document)).toEqual([]);
     expect(document.evaluation?.hard_gates[0].id).toBe("unit_tests_pass");
     expect(document.evaluation?.hard_gates[0].type).toBe("test");
+  });
+
+  it("keeps the public Canopus runtime demo semantically clean", async () => {
+    const document = await loadControlPlaneSpecDocument(path.join(process.cwd(), "examples", "canopus", "simple_bugfix_runtime", "objective.yaml"));
+
+    expect(controlPlaneValidationWarnings(document)).toEqual([]);
+    expect(document.evaluation?.hard_gates[0].id).toBe("unit_tests_pass");
   });
 });
 
@@ -769,91 +809,6 @@ describe("Canopus Runtime status store and ConvergenceEngine", () => {
   });
 });
 
-describe("Canopus Runtime CLI", () => {
-  it("validates a goal file from the CLI", async () => {
-    const cwd = await tempDir("tedge-control-cli-validate-");
-    try {
-      const goalPath = path.join(cwd, "goal.yaml");
-      await writeFile(goalPath, validGoalYaml(), "utf8");
-      const result = await execa("tsx", ["src/cli/index.ts", "control", "validate", goalPath], {
-        cwd: process.cwd(),
-        preferLocal: true
-      });
-
-      expect(result.stdout).toContain("valid CanopusObjective");
-      expect(result.stdout).toContain("blocking checks: 1");
-    } finally {
-      await rm(cwd, { recursive: true, force: true });
-    }
-  }, 20_000);
-
-  it("runs a mock reconciliation loop from the CLI", async () => {
-    const cwd = await tempDir("tedge-control-cli-run-");
-    try {
-      const goalPath = path.join(cwd, "goal.yaml");
-      await writeFile(goalPath, validGoalYaml({
-        conditionType: "file_exists",
-        conditionId: "result_exists",
-        artifactPath: "result.md",
-        hardGateType: "file_exists",
-        command: undefined,
-        hardGatePath: "result.md"
-      }), "utf8");
-      const result = await execa("tsx", [
-        "src/cli/index.ts",
-        "control",
-        "run",
-        goalPath,
-        "--cwd",
-        cwd,
-        "--run-id",
-        "cli_mock_run",
-        "--json"
-      ], {
-        cwd: process.cwd(),
-        preferLocal: true
-      });
-      const payload = JSON.parse(result.stdout) as { converged: boolean; runDir: string; status: { phase: string } };
-
-      expect(payload.converged).toBe(true);
-      expect(payload.status.phase).toBe("converged");
-      expect(existsSync(path.join(payload.runDir, "status.latest.json"))).toBe(true);
-      expect(existsSync(path.join(payload.runDir, "trace.jsonl"))).toBe(true);
-      expect(existsSync(path.join(payload.runDir, "progress.md"))).toBe(true);
-
-      const status = await execa("tsx", [
-        "src/cli/index.ts",
-        "control",
-        "status",
-        "--cwd",
-        cwd,
-        "--run-id",
-        "cli_mock_run"
-      ], {
-        cwd: process.cwd(),
-        preferLocal: true
-      });
-      const report = await execa("tsx", [
-        "src/cli/index.ts",
-        "control",
-        "report",
-        "--cwd",
-        cwd,
-        "--run-id",
-        "cli_mock_run"
-      ], {
-        cwd: process.cwd(),
-        preferLocal: true
-      });
-
-      expect(status.stdout).toContain("Phase: converged");
-      expect(report.stdout).toContain("# Run status");
-    } finally {
-      await rm(cwd, { recursive: true, force: true });
-    }
-  }, 25_000);
-});
-
 class WriteFilesAdapter implements ControlPlaneAgentAdapter {
   readonly id = "write-files";
 
@@ -1125,6 +1080,69 @@ function validGoalYaml(options: {
     "  evidence_required: true",
     "loop:",
     "  max_iterations: 5",
+    "  strategy: reconcile",
+    "  one_item_per_loop: true",
+    "  fresh_context_each_iteration: true",
+    "  retry_policy:",
+    "    type: none",
+    "    base_delay_sec: 0",
+    "    max_delay_sec: 0",
+    "  stop_when:",
+    "    all_hard_gates_pass: true",
+    "    all_required_conditions_met: true",
+    "    checker_confidence_above: 0.75",
+    "    no_unresolved_blockers: true",
+    "  abort_when:",
+    "    max_iterations_reached: true",
+    "    no_progress_rounds: 2",
+    "    repeated_failure_rounds: 3",
+    "    budget_exhausted: true",
+    ""
+  ].join("\n");
+}
+
+function canopusObjectiveYaml(): string {
+  return [
+    "objective:",
+    "  id: simple_bugfix",
+    "  title: Fix failing unit test",
+    "  description: Modify the project until the unit test passes.",
+    "  mode: coding",
+    "  target_state:",
+    "    summary: All required blocking checks pass.",
+    "    success_conditions:",
+    "      - id: unit_tests_pass",
+    "        description: Unit tests must pass.",
+    "        type: test",
+    "        required: true",
+    "  constraints:",
+    "    allowed_paths: ['.']",
+    "    denied_paths: ['.git', '.runs']",
+    "    max_files_changed: 10",
+    "    max_iterations: 3",
+    "    require_human_review: false",
+    "  artifacts:",
+    "    required: []",
+    "acceptance:",
+    "  blocking_checks:",
+    "    - id: unit_tests_pass",
+    "      type: command",
+    `      command: '${nodePassCommand()}'`,
+    "      timeout_sec: 10",
+    "      required: true",
+    "  advisory_checks:",
+    "    - id: checker_review",
+    "      type: checker_agent",
+    "      timeout_sec: 10",
+    "      required: false",
+    "      threshold: 0.75",
+    "  judge:",
+    "    mode: hard_plus_checker",
+    "    reviewer_role: reviewer",
+    "    min_confidence: 0.75",
+    "  evidence_required: true",
+    "convergence:",
+    "  max_iterations: 3",
     "  strategy: reconcile",
     "  one_item_per_loop: true",
     "  fresh_context_each_iteration: true",

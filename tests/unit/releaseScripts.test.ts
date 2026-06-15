@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
 import { assertCockpitWebZipEntries, assertNoLocalStateEntries, createZipArchive } from "../../scripts/package-zip.js";
-import { assertCockpitAssetPaths, assertSiriusExamplePaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
+import { assertCanopusExamplePaths, assertCockpitAssetPaths, assertReadmeScreenshotPaths, assertSiriusExamplePaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -141,6 +141,30 @@ describe("release verification scripts", () => {
     expect(() => assertSiriusExamplePaths([
       "package/examples/configs/sirius-codex-deepseek-mimo.mock.yaml"
     ])).toThrow("mock-command-agent.mjs");
+  });
+
+  it("requires packaged Canopus public example files", () => {
+    expect(() => assertCanopusExamplePaths([
+      "package/examples/canopus/simple_bugfix_runtime/objective.yaml",
+      "package/examples/canopus/simple_bugfix_runtime/fix-bug.mjs",
+      "package/examples/canopus/simple_bugfix_runtime/index.js",
+      "package/examples/canopus/simple_bugfix_runtime/test.js"
+    ])).not.toThrow();
+    expect(() => assertCanopusExamplePaths([
+      "package/examples/canopus/simple_bugfix_runtime/objective.yaml"
+    ])).toThrow("Canopus example");
+  });
+
+  it("requires README screenshot assets in package files", () => {
+    expect(() => assertReadmeScreenshotPaths([
+      "package/docs/ui/screenshots/gui-v1.5/council-main.png",
+      "package/docs/ui/screenshots/gui-v1.5/council-details.png",
+      "package/docs/ui/screenshots/gui-v1.5/key-role-manager.png",
+      "package/docs/ui/screenshots/gui-v1.5/role-assignment.png"
+    ])).not.toThrow();
+    expect(() => assertReadmeScreenshotPaths([
+      "package/docs/ui/screenshots/gui-v1.5/council-main.png"
+    ])).toThrow("README screenshot");
   });
 
   it("fails package asset checks when the cockpit build is missing", () => {

@@ -96,38 +96,42 @@ tedge canopus report
 ```
 
 `tedge control` remains the v1.6 compatibility alias for the same Canopus
-Runtime commands.
+Runtime commands and prints a deprecation warning on stderr. The legacy
+`goal/evaluation/loop` schema remains supported for v1.6 compatibility. New
+examples use `objective/acceptance/convergence`.
 
 ## Runtime Acceptance Demo
 
 From a source checkout, run the real hard-gate bugfix runtime demo:
 
 ```bash
-npm run dev -- control validate examples/control_plane/simple_bugfix_runtime/goal.yaml
-npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
-  --cwd examples/control_plane/simple_bugfix_runtime \
+npm run dev -- canopus validate examples/canopus/simple_bugfix_runtime/objective.yaml
+npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml \
+  --cwd examples/canopus/simple_bugfix_runtime \
   --adapter shell \
   --action-command "node fix-bug.mjs" \
   --run-id simple_bugfix_runtime
-npm run dev -- control status --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
-npm run dev -- control report --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus status --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus report --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
 ```
 
-`examples/control_plane/simple_bugfix_runtime` is the Canopus runtime
+`examples/canopus/simple_bugfix_runtime` is the public Canopus runtime
 acceptance fixture. It starts from a real failing `npm test`, records
 pre-action evidence, lets the shell AgentBridge fix `index.js`, and converges
 only after the post-action blocking check passes.
 
-The old mock-only artifact demo is now `examples/control_plane/mock_artifact`.
-It is useful smoke coverage, but it is not proof of runtime convergence.
+The old `examples/control_plane/*/goal.yaml` fixtures remain as legacy schema
+compatibility coverage. The old mock-only artifact demo is
+`examples/control_plane/mock_artifact`. It is useful smoke coverage, but it is
+not proof of runtime convergence.
 
 ## Sirius Council Bridge
 
 Run the same convergence layer through the Sirius Council AgentBridge:
 
 ```bash
-npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
-  --cwd examples/control_plane/simple_bugfix_runtime \
+npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml \
+  --cwd examples/canopus/simple_bugfix_runtime \
   --adapter sirius-council \
   --fixture-mode \
   --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \

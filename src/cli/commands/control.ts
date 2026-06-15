@@ -4,7 +4,7 @@ import path from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
 import { accessModeSchema, type AccessMode } from "../../config/schema.js";
-import { controlPlaneSemanticWarnings, createDefaultControlPlaneDocument, loadControlPlaneSpecDocument, requireRunnableControlPlaneDocument } from "../../core/controlPlane/specs.js";
+import { controlPlaneValidationWarnings, createDefaultControlPlaneDocument, loadControlPlaneSpecDocument, requireRunnableControlPlaneDocument, toCanopusPublicSpecDocument } from "../../core/controlPlane/specs.js";
 import { MockAgentAdapter, NoopAgentAdapter, ShellAgentAdapter, SiriusCouncilActuatorAdapter, type ControlPlaneAgentAdapter } from "../../core/controlPlane/adapters.js";
 import { ReconciliationController } from "../../core/controlPlane/controller.js";
 import { readControlPlaneReport, readControlPlaneStatus, StatusStore } from "../../core/controlPlane/statusStore.js";
@@ -19,13 +19,13 @@ export async function controlInitCommand(cwd: string, options: { title?: string;
   }
   await mkdir(path.dirname(outputPath), { recursive: true });
   const document = createDefaultControlPlaneDocument(title, mode);
-  await writeFile(outputPath, YAML.stringify(document), "utf8");
+  await writeFile(outputPath, YAML.stringify(toCanopusPublicSpecDocument(document)), "utf8");
   process.stdout.write(`Created Canopus objective spec: ${outputPath}\n`);
 }
 
 export async function controlValidateCommand(cwd: string, goalPath: string, options: { json?: boolean } = {}): Promise<void> {
   const document = await loadControlPlaneSpecDocument(path.resolve(cwd, goalPath));
-  const warnings = controlPlaneSemanticWarnings(document);
+  const warnings = controlPlaneValidationWarnings(document);
   if (options.json) {
     process.stdout.write(JSON.stringify({
       valid: true,

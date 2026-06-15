@@ -1,21 +1,32 @@
 import { startLocalCockpitServer } from "../../localCockpit/server.js";
 
-export async function serveCommand(cwd: string, options: { port?: string; host?: string; config?: string; open?: boolean } = {}): Promise<void> {
+export async function serveCommand(cwd: string, options: { port?: string; host?: string; config?: string; open?: boolean; smokeOnce?: boolean } = {}): Promise<void> {
   const port = parseServePort(options.port);
   const handle = await startLocalCockpitServer(cwd, { port, host: options.host, configPath: options.config });
-  if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
-    process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
-  }
-  if (!isLoopbackHost(options.host ?? "127.0.0.1")) {
-    process.stdout.write("Warning: local cockpit is bound to a non-loopback host. Keep the local cockpit session private and avoid exposing full-access workflows on shared networks.\n");
-  }
-  process.stdout.write(`TomorrowEdge GUI client: ${handle.openUrl}\n`);
-  if (options.config) {
-    process.stdout.write(`Config: ${options.config}\n`);
-  }
-  process.stdout.write("Press Ctrl+C to stop.\n");
-  if (options.open) {
-    await openBrowser(handle.openUrl);
+  try {
+    if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
+      process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
+    }
+    if (!isLoopbackHost(options.host ?? "127.0.0.1")) {
+      process.stdout.write("Warning: local cockpit is bound to a non-loopback host. Keep the local cockpit session private and avoid exposing full-access workflows on shared networks.\n");
+    }
+    process.stdout.write(`TomorrowEdge GUI client: ${handle.openUrl}\n`);
+    if (options.config) {
+      process.stdout.write(`Config: ${options.config}\n`);
+    }
+    if (options.smokeOnce) {
+      await assertCockpitServesOnce(handle.openUrl);
+      process.stdout.write("Smoke check passed.\n");
+      return;
+    }
+    process.stdout.write("Press Ctrl+C to stop.\n");
+    if (options.open) {
+      await openBrowser(handle.openUrl);
+    }
+  } finally {
+    if (options.smokeOnce) {
+      await handle.close();
+    }
   }
 }
 
@@ -35,4 +46,18 @@ async function openBrowser(url: string): Promise<void> {
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
   const child = spawn(command, args, { detached: true, stdio: "ignore" });
   child.unref();
+}
+
+async function assertCockpitServesOnce(url: string): Promise<void> {
+  const html = await fetch(url).then((response) => {
+    if (!response.ok) throw new Error(`Cockpit shell returned ${response.status}`);
+    return response.text();
+  });
+  const assetPath = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
+  if (!html.includes('<div id="root"></div>') || !assetPath) {
+    throw new Error("Cockpit shell did not include the React root and script asset.");
+  }
+  const assetUrl = new URL(assetPath, url).toString();
+  const asset = await fetch(assetUrl);
+  if (!asset.ok) throw new Error(`Cockpit script asset returned ${asset.status}`);
 }

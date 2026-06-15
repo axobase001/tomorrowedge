@@ -1,6 +1,6 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Local orchestration, governance, and strategy-evolution runtime for heterogeneous Coding Agents.",
   "type": "module",
   "bin": {
@@ -23,7 +23,7 @@
     "test:integration": "vitest run tests/integration --fileParallelism=false",
     "test:ui": "vitest run tests/unit/cockpitViewModel.test.ts tests/unit/localCockpit.test.ts tests/unit/cockpitWeb.test.ts --fileParallelism=false",
     "test:memory": "vitest run tests/unit/taskMemory.test.ts tests/unit/failureMemoryInfluence.test.ts tests/unit/errorLoopExperiment.test.ts --fileParallelism=false",
-    "test:control": "vitest run tests/unit/controlPlane.test.ts --fileParallelism=false",
+    "test:control": "vitest run tests/unit/controlPlane.test.ts tests/unit/canopusCli.test.ts --fileParallelism=false",
     "test:watch": "vitest",
     "e2e:cockpit": "npm run build && npm run web:build && tsx scripts/cockpit-e2e-smoke.ts",
     "verify:fast": "npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run test:core && npm run test:council",
@@ -57,6 +57,7 @@
     "desktop/*.cjs",
     "docs/*.md",
     "docs/adr/*.md",
+    "docs/ui/screenshots/gui-v1.5/*.png",
     "scripts/audit-check.ts",
     "scripts/cockpit-e2e-smoke.ts",
     "scripts/docs-status-check.ts",
@@ -86,6 +87,12 @@
     "examples/control_plane/simple_bugfix_runtime/index.js",
     "examples/control_plane/simple_bugfix_runtime/package.json",
     "examples/control_plane/simple_bugfix_runtime/test.js",
+    "examples/canopus/simple_bugfix_runtime/README.md",
+    "examples/canopus/simple_bugfix_runtime/objective.yaml",
+    "examples/canopus/simple_bugfix_runtime/fix-bug.mjs",
+    "examples/canopus/simple_bugfix_runtime/index.js",
+    "examples/canopus/simple_bugfix_runtime/package.json",
+    "examples/canopus/simple_bugfix_runtime/test.js",
     "src/core/controlPlane/templates"
   ],
   "keywords": [

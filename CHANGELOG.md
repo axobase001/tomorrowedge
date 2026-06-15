@@ -7,6 +7,43 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-06-15
+
+1.6.1 is a Canopus hardening release focused on release hygiene, schema naming,
+CLI stability, and package correctness.
+
+### Added
+
+- Added public Canopus schema aliases:
+  `objective/acceptance/convergence`, `target_state`, `blocking_checks`,
+  `advisory_checks`, and `reviewer_role`.
+- Added `examples/canopus/simple_bugfix_runtime/objective.yaml` as the public
+  Canopus runtime demo while keeping `examples/control_plane/*/goal.yaml`
+  fixtures as v1.6 compatibility examples.
+- Added `src/core/canopus/*` public re-export files for Canopus naming:
+  `CanopusObjective`, `AcceptanceMatrix`, `ConvergencePolicy`, `RunState`,
+  `ConvergenceEngine`, `AcceptanceRunner`, and `RunLedger`.
+- Added `tedge client --smoke-once` so package smoke can verify the installed
+  GUI client without relying on external process termination.
+- Added `tests/unit/canopusCli.test.ts` with timeout-bounded CLI coverage for
+  init, validate, alias warnings, mock runs, and the shell-backed runtime demo.
+
+### Changed
+
+- `tedge canopus init` now generates the public Canopus schema by default.
+- `tedge control ...` now prints a compatibility warning on stderr while keeping
+  stdout clean for `--json`.
+- `npm run test:control` now runs runtime tests and CLI tests as separate files.
+- Package files now include README GUI screenshots so the npm package README does
+  not render broken images.
+
+### Fixed
+
+- Fixed the default init template warning by aligning the required condition id
+  `verification_passes` with the blocking check id.
+- Hardened `package:smoke` so it completes predictably and prints
+  `Package smoke passed.`.
+
 ## [1.6.0] - 2026-06-15
 
 TomorrowEdge 1.6 Canopus adds a convergence layer to the existing heterogeneous

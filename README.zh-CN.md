@@ -49,7 +49,7 @@ Canopus 在现有编排治理运行时之上，引入目标收敛层。它不替
 - RunState 每轮落盘，写入 `.runs/<run_id>/trace.jsonl`、`status.latest.json`、`progress.md` 和 evidence artifacts。
 - ConvergenceEngine 执行 `observe -> pre-acceptance -> act -> observe -> post-acceptance -> write RunState -> decide next loop`。
 - AgentBridge 包含 mock、noop、shell 和 Sirius Council 执行路径。
-- `tedge control` 继续作为 1.6 的兼容 CLI alias 保留。
+- `tedge control` 继续作为 1.6 的兼容 CLI alias 保留，并会在 stderr 输出兼容提示。
 
 新旧命名 mapping：
 
@@ -79,19 +79,19 @@ tedge canopus status
 tedge canopus report
 ```
 
-`tedge control ...` 继续作为同一组命令的兼容 alias 保留。
+`tedge control ...` 继续作为同一组命令的兼容 alias 保留。旧版 `goal/evaluation/loop` schema 在 v1.6 中继续兼容；新的 Canopus 示例使用 `objective/acceptance/convergence`。
 
 源码 checkout 离线 demo：
 
 ```bash
-npm run dev -- control validate examples/control_plane/simple_bugfix_runtime/goal.yaml
-npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
-  --cwd examples/control_plane/simple_bugfix_runtime \
+npm run dev -- canopus validate examples/canopus/simple_bugfix_runtime/objective.yaml
+npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml \
+  --cwd examples/canopus/simple_bugfix_runtime \
   --adapter shell \
   --action-command "node fix-bug.mjs" \
   --run-id simple_bugfix_runtime
-npm run dev -- control status --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
-npm run dev -- control report --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus status --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- canopus report --cwd examples/canopus/simple_bugfix_runtime --run-id simple_bugfix_runtime
 ```
 
 完整设计见 [Canopus Runtime](docs/canopus_runtime.md)。
@@ -374,7 +374,7 @@ Screenshot / diagram / error image
 
 ## 当前状态
 
-当前版本：`1.6.0` Canopus。
+当前版本：`1.6.1` Canopus。
 
 主要已实现能力：
 
