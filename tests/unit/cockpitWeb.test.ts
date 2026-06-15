@@ -151,6 +151,58 @@ describe("cockpit web React surface", () => {
     expect(html).not.toContain("\u001b[31m");
   });
 
+  it("renders main result file deliverables before workflow details", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: "Done. I prepared the requested script.",
+        supportingDetail: "Task: write monkey sort in Python",
+        filesChanged: ["monkey_sort.py"],
+        deliverables: [{ type: "file", path: "monkey_sort.py" }]
+      }
+    });
+
+    expect(html).toContain("data-testid=\"main-deliverables\"");
+    expect(html).toContain("Deliverables");
+    expect(html).toContain("monkey_sort.py");
+    expect(html).toContain("Done. I prepared the requested script.");
+  });
+
+  it("renders raw code deliverables as copyable code blocks", () => {
+    const rawCode = [
+      "import random",
+      "",
+      "def monkey_sort(values):",
+      "    items = list(values)",
+      "    while items != sorted(items):",
+      "        random.shuffle(items)",
+      "    return items"
+    ].join("\n");
+    const html = renderApp({
+      ...sampleViewModel(),
+      status: "done",
+      statusText: "Done",
+      currentApproval: undefined,
+      main: {
+        title: "Answer",
+        subtitle: "completed",
+        body: rawCode,
+        filesChanged: [],
+        deliverables: [{ type: "code", language: "python", content: rawCode }]
+      }
+    });
+
+    expect(html).toContain("data-testid=\"main-deliverables\"");
+    expect(html).toContain("data-testid=\"markdown-code-block\"");
+    expect(html).toContain("data-testid=\"markdown-copy-code\"");
+    expect(html).toContain("def monkey_sort(values):");
+  });
+
   it("renders self-iteration contract, trace, and policy sections in the drawer", () => {
     const html = renderApp(sampleViewModel(), { drawerOpen: true });
 

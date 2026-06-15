@@ -51,7 +51,8 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
         <article className="te-main" data-testid="main-view">
           <h3>{translateKnownValue(t, viewModel.main.title)}</h3>
           <p>{translateKnownValue(t, viewModel.main.subtitle)}</p>
-          <MarkdownContent className="te-main-answer" content={viewModel.main.diff ?? viewModel.main.body} />
+          <MainDeliverables viewModel={viewModel} />
+          {shouldRenderMainBody(viewModel) ? <MarkdownContent className="te-main-answer" content={viewModel.main.diff ?? viewModel.main.body} /> : null}
           {viewModel.main.supportingDetail ? (
             <details className="te-main-support">
               <summary>{t("workflow.details")}</summary>
@@ -62,4 +63,45 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
       )}
     </section>
   );
+}
+
+function MainDeliverables({ viewModel }: { viewModel: CockpitViewModel }) {
+  const deliverables = viewModel.main.deliverables ?? [];
+  if (!deliverables.length) return null;
+  const files = deliverables.filter((item) => item.type === "file");
+  const codeBlocks = deliverables.filter((item) => item.type === "code");
+  return (
+    <section className="te-deliverables" data-testid="main-deliverables" aria-label="Deliverables">
+      <h4>Deliverables</h4>
+      {files.length ? (
+        <ul className="te-deliverable-files">
+          {files.map((item) => (
+            <li key={item.path}>
+              <span>File</span>
+              {item.artifactRef
+                ? <a href={artifactHref(viewModel.sessionId, item.artifactRef)} target="_blank" rel="noreferrer">{item.path}</a>
+                : <code>{item.path}</code>}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {codeBlocks.map((item, index) => (
+        <MarkdownContent key={`${item.language}-${index}`} className="te-deliverable-code" content={codeDeliverableMarkdown(item.language, item.content)} />
+      ))}
+    </section>
+  );
+}
+
+function shouldRenderMainBody(viewModel: CockpitViewModel): boolean {
+  const content = viewModel.main.diff ?? viewModel.main.body;
+  if (!content.trim()) return false;
+  return !(viewModel.main.deliverables ?? []).some((item) => item.type === "code" && item.content.trim() === content.trim());
+}
+
+function codeDeliverableMarkdown(language: string, content: string): string {
+  return [`\`\`\`${language}`, content.trim(), "```"].join("\n");
+}
+
+function artifactHref(sessionId: string | undefined, ref: string): string {
+  return `/api/sessions/${encodeURIComponent(sessionId ?? "latest")}/artifacts/${encodeURIComponent(ref)}`;
 }

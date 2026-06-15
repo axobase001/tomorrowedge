@@ -864,12 +864,26 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
       };
     }
     const failed = state.finalSummary.result === "failed" || state.finalSummary.result === "aborted";
+    const body = state.finalSummary.userReply ?? "No model-generated user reply was recorded. Open Details for trace evidence.";
+    const deliverables = buildDeliverables(state, body);
+    if (!failed && isMissingCodeDeliverable(state, body, deliverables)) {
+      return {
+        title: "No code deliverable",
+        subtitle: "needs revision",
+        body: missingCodeDeliverableBody(state),
+        supportingDetail: completedBody(state),
+        filesChanged: state.changedFiles,
+        deliverables,
+        testStatus: state.runResults.at(-1)?.success ? "passed" : state.runResults.length ? "failed" : "not_run"
+      };
+    }
     return {
       title: failed ? "Failure diagnosis" : "Answer",
       subtitle: state.finalSummary.result,
-      body: state.finalSummary.userReply ?? "No model-generated user reply was recorded. Open Details for trace evidence.",
+      body,
       supportingDetail: failed ? failureBody(state) : completedBody(state),
       filesChanged: state.changedFiles,
+      deliverables,
       testStatus: state.runResults.at(-1)?.success ? "passed" : state.runResults.length ? "failed" : "not_run"
     };
   }
@@ -880,6 +894,38 @@ function buildMainView(state?: AgentGraphState, approval?: CockpitApproval): Coc
     return { title: "Plan and route", subtitle: `${state.routing.mode} route`, body: state.plan.steps.map((item) => `- ${item.title}`).join("\n"), filesChanged: [] };
   }
   return { title: "Workflow running", subtitle: state.goal, body: "Collecting context and generating candidate changes.", filesChanged: [] };
+}
+
+function buildDeliverables(state: AgentGraphState, body: string): NonNullable<CockpitViewModel["main"]["deliverables"]> {
+  const changedFiles = uniqueStrings([...state.changedFiles, ...(state.finalSummary?.changedFiles ?? [])]);
+  const fileDeliverables: NonNullable<CockpitViewModel["main"]["deliverables"]> = changedFiles.map((filePath) => ({
+    type: "file",
+    path: filePath
+  }));
+  if (fileDeliverables.length || hasFencedCodeBlock(body) || !isLikelyCodeRequest(state) || !looksLikeStandaloneCode(body)) {
+    return fileDeliverables;
+  }
+  return [{
+    type: "code",
+    language: inferCodeLanguage(state),
+    content: body.trim()
+  }];
+}
+
+function isMissingCodeDeliverable(state: AgentGraphState, body: string, deliverables: NonNullable<CockpitViewModel["main"]["deliverables"]>): boolean {
+  if (!isLikelyCodeRequest(state)) return false;
+  if (hasFencedCodeBlock(body)) return false;
+  return !deliverables.some((item) => item.type === "file" || item.type === "code");
+}
+
+function missingCodeDeliverableBody(state: AgentGraphState): string {
+  const requested = state.finalSummary?.task ?? state.goal;
+  return [
+    "The run completed without surfacing a usable code deliverable.",
+    `Requested task: ${requested}`,
+    "Expected a changed file, a linked artifact, or a copyable fenced code block.",
+    "Re-run with a patch-capable route or ask for the code to be returned as a fenced code block."
+  ].join("\n");
 }
 
 function missingPatchBody(state: AgentGraphState): string {
@@ -943,6 +989,53 @@ function formatEvidenceItem(item: string): string {
 function clipText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   return `${value.slice(0, maxChars)}\n... omitted ${value.length - maxChars} character(s)`;
+}
+
+function hasFencedCodeBlock(value: string): boolean {
+  return /```[A-Za-z0-9_-]*\s*\n[\s\S]*?\n```/.test(value);
+}
+
+function isLikelyCodeRequest(state: AgentGraphState): boolean {
+  const text = [
+    state.goal,
+    state.finalSummary?.task,
+    state.plan?.goal,
+    state.plan?.expectedFiles?.join(" ")
+  ].filter(Boolean).join("\n").toLowerCase();
+  return /\b(code|script|program|function|class|component|python|typescript|javascript|java|rust|golang|go|c\+\+|c#|bash|shell|sql|html|css|monkey sort)\b/.test(text)
+    || /(写|生成|实现|创建).*(代码|脚本|程序|函数|组件|python|猴子排序)/.test(text);
+}
+
+function looksLikeStandaloneCode(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 20_000) return false;
+  const lines = trimmed.split("\n").filter((line) => line.trim());
+  if (lines.length < 2) return false;
+  const codeLikeLines = lines.filter((line) =>
+    /^\s*(def|class|import|from|for|while|if|elif|else|try|except|return|function|const|let|var|export|interface|type|public|private|fn|use|package|func|#include)\b/.test(line)
+    || /^\s*[}\])];]+$/.test(line)
+    || /[{};]\s*$/.test(line)
+  ).length;
+  return codeLikeLines >= 2 || codeLikeLines / lines.length >= 0.35;
+}
+
+function inferCodeLanguage(state: AgentGraphState): string {
+  const text = [
+    state.goal,
+    state.finalSummary?.task,
+    state.plan?.expectedFiles?.join(" ")
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/\bpython\b|\.py\b|猴子排序|monkey sort/.test(text)) return "python";
+  if (/\btypescript\b|\.tsx?\b/.test(text)) return "ts";
+  if (/\bjavascript\b|\.jsx?\b/.test(text)) return "js";
+  if (/\brust\b|\.rs\b/.test(text)) return "rust";
+  if (/\bgolang\b|\bgo\b|\.go\b/.test(text)) return "go";
+  if (/\bjava\b|\.java\b/.test(text)) return "java";
+  if (/\bbash\b|\bshell\b|\.sh\b/.test(text)) return "bash";
+  if (/\bsql\b|\.sql\b/.test(text)) return "sql";
+  if (/\bhtml\b|\.html?\b/.test(text)) return "html";
+  if (/\bcss\b|\.css\b/.test(text)) return "css";
+  return "code";
 }
 
 function compactRawEvents(events: TomorrowEdgeEvent[]): TomorrowEdgeEvent[] {
