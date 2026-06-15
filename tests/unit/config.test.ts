@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
-import { getConfigPath, loadConfig, writeConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
+import { getConfigPath, loadConfig, loadConfigWithSource, writeConfig, writeDefaultConfig } from "../../src/config/configLoader.js";
 import { initCommand } from "../../src/cli/commands/init.js";
 import { doctorCommand } from "../../src/cli/commands/doctor.js";
 import { modelsCommand } from "../../src/cli/commands/models.js";
@@ -498,6 +499,70 @@ describe("config loader", () => {
       expect(parsed.warnings.join("\n")).toContain("full mode is configured while the workspace is");
     } finally {
       await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("loads an explicit config instead of the project config", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-explicit-project-"));
+    const explicitDir = await mkdtemp(path.join(os.tmpdir(), "tedge-config-explicit-file-"));
+    try {
+      await writeDefaultConfig(cwd);
+      await writeFile(
+        getConfigPath(cwd),
+        [
+          "project:",
+          "  access_mode: restricted"
+        ].join("\n"),
+        "utf8"
+      );
+      const explicitPath = path.join(explicitDir, "explicit.yaml");
+      await writeFile(
+        explicitPath,
+        [
+          "project:",
+          "  access_mode: full"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const projectConfig = loadConfigWithSource(cwd);
+      const explicitConfig = loadConfigWithSource(cwd, { configPath: explicitPath });
+
+      expect(projectConfig.source).toBe("project");
+      expect(projectConfig.config.project.access_mode).toBe("restricted");
+      expect(explicitConfig.source).toBe("explicit");
+      expect(explicitConfig.path).toBe(explicitPath);
+      expect(explicitConfig.config.project.access_mode).toBe("full");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(explicitDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails clearly when an explicit config is missing", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-explicit-missing-"));
+    try {
+      expect(() => loadConfigWithSource(cwd, { configPath: "missing.yaml" })).toThrow(/Explicit config not found:/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves packaged Sirius mock command paths from an outside cwd", async () => {
+    const outsideCwd = await mkdtemp(path.join(os.tmpdir(), "tedge-config-outside-cwd-"));
+    try {
+      const exampleConfigPath = path.join(process.cwd(), "examples", "configs", "sirius-codex-deepseek-mimo.mock.yaml");
+      const loaded = loadConfigWithSource(outsideCwd, { configPath: exampleConfigPath });
+      const expectedMockAgent = path.join(process.cwd(), "examples", "agent-council-rust-rewrite", "mock-command-agent.mjs");
+
+      expect(loaded.source).toBe("explicit");
+      expect(loaded.path).toBe(exampleConfigPath);
+      expect(loaded.config.external_agents.codex.args).toContain(expectedMockAgent);
+      expect(loaded.config.external_agents.deepseek.args).toContain(expectedMockAgent);
+      expect(loaded.config.external_agents.mimo.args).toContain(expectedMockAgent);
+      expect(existsSync(expectedMockAgent)).toBe(true);
+    } finally {
+      await rm(outsideCwd, { recursive: true, force: true });
     }
   });
 });

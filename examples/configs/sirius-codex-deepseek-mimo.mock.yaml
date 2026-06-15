@@ -36,7 +36,7 @@ external_agents:
     strictJson: false
     command: node
     args:
-      - tests/fixtures/mock-command-agent.mjs
+      - ${TOMORROWEDGE_ROOT}/examples/agent-council-rust-rewrite/mock-command-agent.mjs
     roles:
       - core
       - planner
@@ -50,6 +50,52 @@ external_agents:
       - judgment
       - tool_use
     trustLevel: high
+  deepseek:
+    enabled: true
+    name: DeepSeek mock member
+    transport: mcp
+    adapter: generic
+    responseMode: json
+    strictJson: false
+    workingTreeMode: patch_proposal
+    normalizationStrictness: warn
+    command: node
+    args:
+      - ${TOMORROWEDGE_ROOT}/examples/agent-council-rust-rewrite/mock-command-agent.mjs
+    requestTimeoutMs: 10000
+    maxRetries: 0
+    roles:
+      - coder_a
+      - coder_b
+      - reviewer
+    capabilities:
+      - coding
+      - patch
+      - review
+    trustLevel: medium
+  mimo:
+    enabled: true
+    name: MiMo mock member
+    transport: mcp
+    adapter: generic
+    responseMode: json
+    strictJson: false
+    workingTreeMode: patch_proposal
+    normalizationStrictness: warn
+    command: node
+    args:
+      - ${TOMORROWEDGE_ROOT}/examples/agent-council-rust-rewrite/mock-command-agent.mjs
+    requestTimeoutMs: 10000
+    maxRetries: 0
+    roles:
+      - runner
+      - summarizer
+      - coder_b
+    capabilities:
+      - test
+      - coding
+      - long_context
+    trustLevel: medium
 
 agent_capabilities:
   codex:

@@ -1,0 +1,75 @@
+goal:
+  id: simple_bugfix_runtime
+  title: "Fix the failing add() unit test"
+  description: "Drive a real failing test to convergence by changing code, not by checking for a dummy artifact."
+  mode: coding
+  desired_state:
+    summary: "The add() implementation is corrected, a real test blocking check passes, no denied path is modified, and evidence is persisted."
+    success_conditions:
+      - id: unit_tests_pass
+        description: "The npm test blocking check must pass."
+        type: test
+        required: true
+      - id: diff_exists
+        description: "A code diff must exist after reconciliation."
+        type: diff_required
+        required: true
+      - id: no_denied_path_modified
+        description: "No denied path may be modified."
+        type: no_denied_path_modified
+        required: true
+      - id: evidence_collected
+        description: "Each iteration must collect gate evidence artifacts."
+        type: evidence_collected
+        required: true
+  constraints:
+    allowed_paths: ["."]
+    denied_paths: [".git", ".runs"]
+    max_files_changed: 3
+    max_iterations: 4
+    require_human_review: false
+  artifacts:
+    required: []
+
+evaluation:
+  hard_gates:
+    - id: unit_tests_pass
+      type: test
+      command: "npm test"
+      timeout_sec: 30
+      required: true
+    - id: diff_exists
+      type: diff_required
+      timeout_sec: 10
+      required: true
+  soft_gates:
+    - id: checker_review
+      type: checker_agent
+      required: false
+      threshold: 1.0
+      timeout_sec: 10
+  judge:
+    mode: hard_plus_checker
+    checker_role: "reviewer"
+    min_confidence: 1.0
+  evidence_required: true
+
+loop:
+  max_iterations: 4
+  strategy: reconcile
+  one_item_per_loop: true
+  fresh_context_each_iteration: true
+  retry_policy:
+    type: none
+    base_delay_sec: 0
+    max_delay_sec: 0
+  stop_when:
+    all_hard_gates_pass: true
+    all_required_conditions_met: true
+    checker_confidence_above: 1.0
+    no_unresolved_blockers: true
+  abort_when:
+    max_iterations_reached: true
+    no_progress_rounds: 2
+    repeated_failure_rounds: 3
+    budget_exhausted: true

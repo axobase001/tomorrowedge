@@ -1,8 +1,8 @@
 import { startLocalCockpitServer } from "../../localCockpit/server.js";
 
-export async function serveCommand(cwd: string, options: { port?: string; host?: string; open?: boolean } = {}): Promise<void> {
+export async function serveCommand(cwd: string, options: { port?: string; host?: string; config?: string; open?: boolean } = {}): Promise<void> {
   const port = parseServePort(options.port);
-  const handle = await startLocalCockpitServer(cwd, { port, host: options.host });
+  const handle = await startLocalCockpitServer(cwd, { port, host: options.host, configPath: options.config });
   if (handle.port !== handle.requestedPort && handle.requestedPort !== 0) {
     process.stdout.write(`Port ${handle.requestedPort} is in use; using ${handle.port} instead.\n`);
   }
@@ -10,6 +10,9 @@ export async function serveCommand(cwd: string, options: { port?: string; host?:
     process.stdout.write("Warning: local cockpit is bound to a non-loopback host. Keep the local cockpit session private and avoid exposing full-access workflows on shared networks.\n");
   }
   process.stdout.write(`TomorrowEdge GUI client: ${handle.openUrl}\n`);
+  if (options.config) {
+    process.stdout.write(`Config: ${options.config}\n`);
+  }
   process.stdout.write("Press Ctrl+C to stop.\n");
   if (options.open) {
     await openBrowser(handle.openUrl);

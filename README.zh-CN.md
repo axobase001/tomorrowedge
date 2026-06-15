@@ -35,6 +35,67 @@ AI coding 的核心问题已经不只是“模型不够强”。强模型已经�
 
 OpenRouter 路由请求。TomorrowEdge 路由目标、能力、角色、工具、预算、证据、任务所有权、策略变异和工程交付。
 
+## TomorrowEdge 1.6 Canopus
+
+TomorrowEdge 1.6 **Canopus** 是 **The Convergence Runtime Release**，也就是目标收敛运行时版本。
+
+Canopus 在现有编排治理运行时之上，引入目标收敛层。它不替代 TomorrowEdge “异构 Coding Agent 本地编排治理与策略演化运行时”的主定位，而是在其内部增加一条可验证目标收敛路径：Agent 不能因为“自称完成”就结束任务；一次运行必须满足 ObjectiveContract，通过 AcceptanceMatrix，留下 Evidence，更新 RunState，并服从有界 ConvergencePolicy。
+
+当前状态：Canopus 已提供可运行的 convergence runtime，支持 mock、noop、shell 和 Sirius Council AgentBridge 路径。AgentBridge 可以提出或执行动作，但是否收敛只由结构化目标条件和阻断验收检查决定。
+
+- ObjectiveContract / CanopusObjective：结构化目标定义，不能退化为 prompt。
+- AcceptanceMatrix：定义 blocking_check 和 advisory_check。
+- blocking_check 拥有否决权，review_agent 不能覆盖真实测试失败。
+- RunState 每轮落盘，写入 `.runs/<run_id>/trace.jsonl`、`status.latest.json`、`progress.md` 和 evidence artifacts。
+- ConvergenceEngine 执行 `observe -> pre-acceptance -> act -> observe -> post-acceptance -> write RunState -> decide next loop`。
+- AgentBridge 包含 mock、noop、shell 和 Sirius Council 执行路径。
+- `tedge control` 继续作为 1.6 的兼容 CLI alias 保留。
+
+新旧命名 mapping：
+
+| 早期 control-plane 命名 | Canopus 公开命名 |
+| --- | --- |
+| Agent Control Plane | Canopus convergence layer / Canopus Runtime |
+| GoalSpec | ObjectiveContract / CanopusObjective |
+| EvalSpec | AcceptanceMatrix |
+| LoopSpec | ConvergencePolicy |
+| StatusSpec | RunState / TraceState |
+| ReconciliationController | ConvergenceEngine |
+| EvaluationRunner | AcceptanceRunner |
+| StatusStore | TraceStateStore / RunLedger |
+| DesiredStateDiff | ObjectiveDelta |
+| hard_gate | blocking_check |
+| soft_gate | advisory_check |
+| checker_agent | reviewer_role / review_agent |
+| actuator | AgentBridge / worker_adapter |
+
+快速开始：
+
+```bash
+tedge canopus init --title "Fix bug" --mode coding
+tedge canopus validate goal.yaml
+tedge canopus run goal.yaml
+tedge canopus status
+tedge canopus report
+```
+
+`tedge control ...` 继续作为同一组命令的兼容 alias 保留。
+
+源码 checkout 离线 demo：
+
+```bash
+npm run dev -- control validate examples/control_plane/simple_bugfix_runtime/goal.yaml
+npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
+  --cwd examples/control_plane/simple_bugfix_runtime \
+  --adapter shell \
+  --action-command "node fix-bug.mjs" \
+  --run-id simple_bugfix_runtime
+npm run dev -- control status --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- control report --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+```
+
+完整设计见 [Canopus Runtime](docs/canopus_runtime.md)。
+
 ## Sirius 1.5
 
 **Sirius** 是 TomorrowEdge 1.5 版本线。它的主线运行时是 **Agent Council Governance Runtime**。
@@ -124,6 +185,27 @@ npm run dev -- run "fix failing test" --headless --fixture-mode --approve-patch 
 
 ```bash
 npm run dev -- council run "Rewrite a small TypeScript utility as a Rust module with tests" --headless --fixture-mode
+npm run dev -- council run \
+  --headless \
+  --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
+```
+
+Headless Sirius runs print `configSource` and `configPath`. The packaged mock
+config can run from outside the repo root and records `chief_agent` / `agent`
+sources when the mock command agents are invoked.
+
+Installed-package equivalent:
+
+```bash
+tedge council run \
+  --headless \
+  --fixture-mode \
+  --config node_modules/@axobase001/tomorrowedge/examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd node_modules/@axobase001/tomorrowedge/examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
 ```
 
 也可以通过普通 run 入口进入 council：
@@ -292,7 +374,7 @@ Screenshot / diagram / error image
 
 ## 当前状态
 
-当前版本：`1.5.1` Sirius。
+当前版本：`1.6.0` Canopus。
 
 主要已实现能力：
 

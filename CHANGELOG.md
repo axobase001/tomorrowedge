@@ -7,6 +7,105 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-15
+
+TomorrowEdge 1.6 Canopus adds a convergence layer to the existing heterogeneous
+Coding Agent orchestration runtime.
+
+Canopus adds verifiable objective completion: structured target definition,
+blocking/advisory acceptance, persistent RunState, evidence-based checks,
+bounded convergence loops, and explicit stop decisions. This release includes
+working mock, noop, shell, and Sirius Council AgentBridge paths; blocking
+checks remain authoritative and cannot be overridden by an agent result.
+
+### Added
+
+- Added `src/core/controlPlane` with the Canopus Runtime implementation:
+  ObjectiveContract-compatible target loading, AcceptanceMatrix checks,
+  ConvergencePolicy execution bounds, RunState persistence, ConvergenceEngine
+  loop control, gate implementations, diff/observe helpers, evidence helpers,
+  and Objective Contract adapter.
+- Added `tedge control init`, `tedge control validate`, `tedge control run`,
+  `tedge control status`, and `tedge control report` as compatibility aliases
+  for the Canopus Runtime command surface.
+- Added per-run `.runs/<run_id>/trace.jsonl`, `status.latest.json`,
+  `progress.md`, and per-iteration `evidence/` artifacts.
+- Added pre-action and post-action acceptance snapshots for each convergence
+  iteration so stale pre-action failures cannot masquerade as final status.
+- Added the `sirius-council` AgentBridge path, which routes action
+  through Chief Agent planning, Council moves, TaskGraph ownership, delegated
+  execution, mutation, and Chief final review before writing AgentBridge evidence.
+- Added Canopus templates and deterministic `examples/control_plane`
+  demos for success, hard-gate failure, and a real `npm test` bugfix runtime.
+- Added `npm run test:control` with schema, gate, evaluator, controller,
+  persistence, failure-mode, compatibility, and CLI coverage.
+- Added `docs/canopus_runtime.md`; `docs/agent_control_plane.md` remains as a
+  compatibility alias for early drafts.
+
+### Changed
+
+- README now keeps the project-level positioning as a local orchestration,
+  governance, and strategy-evolution runtime for heterogeneous Coding Agents.
+- README introduces `TomorrowEdge 1.6 Canopus` as
+  `The Convergence Runtime Release`.
+- Package metadata now uses the project-level TomorrowEdge positioning instead
+  of treating Canopus as the whole product identity.
+- The old mock-only artifact demo is now named
+  `examples/control_plane/mock_artifact`; the real Canopus runtime acceptance
+  path is `examples/control_plane/simple_bugfix_runtime`.
+
+### Fixed
+
+- Blocking checks now have explicit veto semantics in the Canopus acceptance
+  runner: reviewer/advisory checks cannot declare convergence when required
+  blocking checks fail.
+- `evidence_required` now requires required blocking checks to leave auditable
+  evidence before convergence.
+- ObjectiveContract validation rejects prompt-only objectives without required
+  structured success conditions.
+- Reconciliation loops are bounded by max iterations, executable
+  `ConvergencePolicy.stop_when`, post-action no-progress rounds, post-action
+  repeated-failure rounds, allowed/denied path checks, changed-file limits, and
+  budget abort signals.
+- `diff_required` now uses the run baseline when available, including inside
+  dirty git worktrees, so preexisting local changes do not satisfy progress.
+
+## [1.5.2] - 2026-06-13
+
+1.5.2 prepares Sirius for package release by making the mock Agent Council
+demo reproducible from source checkouts and installed packages, and by making
+headless output easier to audit without dumping full event ledgers.
+
+### Added
+
+- Added explicit `--config <path>` support for `tedge run`, `tedge council run`,
+  `tedge client`, and `tedge serve`. Headless run output now reports
+  `configSource` and `configPath` so Sirius demos can prove which config drove
+  the run.
+- Added Sirius headless event summaries: `eventCount`, `eventTypeCounts`, and a
+  compact `traceEventSample` for chief/council/delegated/final-review demos.
+- Added `npm run verify:fast` and `npm run verify:release-gates` for clearer
+  local versus release validation paths.
+
+### Changed
+
+- External command-agent paths in config files now support
+  `${TOMORROWEDGE_ROOT}`, `${CONFIG_DIR}`, and `${PROJECT_ROOT}`, and path-like
+  commands/args are resolved relative to the config file, package root, or
+  project root instead of only the execution cwd.
+- The packaged Sirius mock config now uses invokable Codex, DeepSeek, and MiMo
+  mock command agents so the demo records `chief_agent`/`agent` sources instead
+  of silently falling back to native by default.
+- Source zip packaging now excludes generated `assignments/**` task artifacts.
+
+### Fixed
+
+- Fixed the Sirius mock demo path used from outside the repository root. The
+  smoke test now asserts an explicit config source, Codex-backed chief plan and
+  final review, DeepSeek/MiMo-backed council moves, and high trace completeness.
+- The package smoke test now verifies that an installed package can run the
+  packaged Sirius mock config from `node_modules`.
+
 ## [1.5.1] - 2026-06-13
 
 1.5.1 hardens the Sirius real-workflow path after running a live Agent Council

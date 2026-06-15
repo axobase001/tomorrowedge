@@ -103,6 +103,35 @@ describe("provider registry", () => {
     expect(observedBody?.max_completion_tokens).toBeUndefined();
   });
 
+  it("suppresses reasoning output for OpenRouter JSON-mode OpenAI-compatible calls", async () => {
+    let observedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+      observedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ id: "ok", choices: [{ message: { content: "{\"ok\":true}" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openrouter",
+      name: "OpenRouter",
+      apiKey: "test-key",
+      baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "z-ai/glm-5.1"
+    });
+
+    await provider.chat({
+      model: "z-ai/glm-5.1",
+      messages: [{ role: "user", content: "return JSON" }],
+      responseFormat: { type: "json_object" }
+    });
+
+    expect(observedBody?.response_format).toEqual({ type: "json_object" });
+    expect(observedBody?.reasoning).toEqual({ effort: "none", exclude: true });
+    expect(observedBody?.reasoning_effort).toBe("none");
+  });
+
   it("retries transient OpenAI-compatible API failures", async () => {
     let calls = 0;
     vi.stubGlobal("fetch", async () => {

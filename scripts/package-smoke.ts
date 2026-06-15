@@ -28,6 +28,16 @@ export function assertCockpitAssetPaths(paths: string[]): void {
   if (missing.length) throw new Error(`Package is missing cockpit-web assets: ${missing.join(", ")}`);
 }
 
+export function assertSiriusExamplePaths(paths: string[]): void {
+  const normalized = paths.map(normalizeArtifactPath);
+  const required = [
+    "examples/configs/sirius-codex-deepseek-mimo.mock.yaml",
+    "examples/agent-council-rust-rewrite/mock-command-agent.mjs"
+  ];
+  const missing = required.filter((item) => !normalized.includes(item));
+  if (missing.length) throw new Error(`Package is missing Sirius example files: ${missing.join(", ")}`);
+}
+
 export async function runPackageSmoke(cwd = process.cwd()): Promise<void> {
   assertCockpitAssetPaths([
     "dist/cockpit-web/index.html",
@@ -39,6 +49,7 @@ export async function runPackageSmoke(cwd = process.cwd()): Promise<void> {
   const pack = await execa("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", packDir], { cwd });
   const packFiles = parseNpmPackFiles(pack.stdout);
   assertCockpitAssetPaths(packFiles);
+  assertSiriusExamplePaths(packFiles);
   const packed = JSON.parse(pack.stdout) as Array<{ filename: string }>;
   const tarball = path.join(packDir, packed[0]?.filename ?? "");
   if (!tarball) throw new Error("npm pack did not return a tarball filename.");
@@ -46,6 +57,7 @@ export async function runPackageSmoke(cwd = process.cwd()): Promise<void> {
   await writeFile(path.join(installDir, "package.json"), JSON.stringify({ name: "tomorrowedge-package-smoke", private: true }, null, 2), "utf8");
   await execa("npm", ["install", tarball, "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false"], { cwd: installDir });
   await assertInstalledClientServesCockpit(installDir);
+  await assertInstalledSiriusMockConfig(installDir);
   process.stdout.write(`Package smoke passed. Temp dirs kept: ${packDir} ${installDir}\n`);
 }
 
@@ -80,6 +92,53 @@ async function assertInstalledClientServesCockpit(installDir: string): Promise<v
     if (!asset.ok) throw new Error(`Installed client cockpit asset failed: ${asset.status} ${assetUrl}`);
   } finally {
     child.kill("SIGTERM");
+  }
+}
+
+async function assertInstalledSiriusMockConfig(installDir: string): Promise<void> {
+  const cliPath = await firstExistingPath([
+    path.join(installDir, "node_modules", "@axobase001", "tomorrowedge", "dist", "cli", "index.js"),
+    path.join(installDir, "node_modules", "tomorrowedge", "dist", "cli", "index.js")
+  ]);
+  const packageRoot = path.resolve(path.dirname(cliPath), "..", "..");
+  const configPath = path.join(packageRoot, "examples", "configs", "sirius-codex-deepseek-mimo.mock.yaml");
+  const exampleCwd = path.join(packageRoot, "examples", "agent-council-rust-rewrite");
+  const run = await execa(process.execPath, [
+    cliPath,
+    "council",
+    "run",
+    "--headless",
+    "--fixture-mode",
+    "--config",
+    configPath,
+    "--cwd",
+    exampleCwd,
+    "rebuild this JS CLI app in Rust"
+  ], {
+    cwd: installDir,
+    timeout: 30_000
+  });
+  const payload = JSON.parse(run.stdout) as {
+    configSource?: string;
+    chiefAgent?: { id?: string; provider?: string };
+    eventTypeCounts?: Record<string, number>;
+    finalChiefReview?: { source?: string };
+    traceCompleteness?: { score?: number };
+    traceEventSample?: Array<{ type?: string; source?: string }>;
+  };
+  if (payload.configSource !== "explicit") throw new Error(`Installed Sirius mock did not use explicit config: ${payload.configSource ?? "missing"}`);
+  if (payload.chiefAgent?.id !== "codex" || payload.chiefAgent.provider !== "external:codex") {
+    throw new Error(`Installed Sirius mock selected unexpected chief agent: ${JSON.stringify(payload.chiefAgent)}`);
+  }
+  if ((payload.eventTypeCounts?.council_move ?? 0) < 1) throw new Error("Installed Sirius mock did not record council moves.");
+  if (!payload.traceEventSample?.some((event) => event.type === "council_move" && event.source === "agent")) {
+    throw new Error("Installed Sirius mock did not record agent-backed council moves.");
+  }
+  if (payload.finalChiefReview?.source !== "chief_agent") {
+    throw new Error(`Installed Sirius mock final review was not chief-backed: ${payload.finalChiefReview?.source ?? "missing"}`);
+  }
+  if ((payload.traceCompleteness?.score ?? 0) < 90) {
+    throw new Error(`Installed Sirius mock trace completeness too low: ${payload.traceCompleteness?.score ?? "missing"}`);
   }
 }
 

@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.5.1 Sirius. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.6.0 Canopus. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |
@@ -8,6 +8,7 @@ whether a surface is stable, experimental, placeholder, or planned.
 | Offline fixture/mock workflow | stable | No API key required; covered by CI. |
 | Access modes and full-access trace | stable | Restricted, partial, and full modes are implemented with event-ledger visibility. |
 | Event ledger, artifacts, trace/export | stable | Sessions, events, artifact refs, markdown/json export, and trace diagnostics are implemented. |
+| Canopus Runtime / convergence layer | experimental | Canopus introduces ObjectiveContract-compatible target loading, AcceptanceMatrix checks, ConvergencePolicy bounds, RunState persistence, ConvergenceEngine loop control, blocking-check veto semantics, pre/post-action acceptance, run-baseline diff semantics, per-loop status persistence, per-iteration evidence artifacts, allowed/denied path enforcement, and the `tedge control` compatibility CLI. The `simple_bugfix_runtime` demo is the runtime acceptance path because it starts from a real failing `npm test` check and converges only after the shell AgentBridge fixes the code and the post-action blocking check passes. |
 | Agent Council Governance Runtime | experimental | Sirius introduces Chief Agent routing, structured council planning, task ownership assignment, delegated execution, bounded Strategy Mutation, and Chief final review. It is the 1.5 mainline but still experimental. |
 | Chief Agent Router | experimental | A configured `chief_agent` or the strongest available capability profile is selected before council planning. The Chief records initial plan, council decision, and final review/judge events. |
 | AgentCapabilityProfile | experimental | Providers and external agents are converted into replaceable capability profiles with planning, architecture, coding, review, judging, repair, cost, trust, latency, JSON/patch/MCP support, allowed roles, and config overrides. |

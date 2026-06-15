@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { auditExitCode, isUnsupportedAuditEndpoint, shouldSkipAudit } from "../../scripts/audit-check.js";
 import { findPackRelevantUntrackedFiles, packageFilesToGlobPatterns, runPackDry } from "../../scripts/pack-dry.js";
 import { assertCockpitWebZipEntries, assertNoLocalStateEntries, createZipArchive } from "../../scripts/package-zip.js";
-import { assertCockpitAssetPaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
+import { assertCockpitAssetPaths, assertSiriusExamplePaths, parseNpmPackFiles } from "../../scripts/package-smoke.js";
 
 describe("release verification scripts", () => {
   it("treats unsupported npm audit endpoints as warn-only", () => {
@@ -104,7 +104,11 @@ describe("release verification scripts", () => {
   it("rejects nested local TomorrowEdge state in zip archives", () => {
     expect(() => assertNoLocalStateEntries([
       { entryName: "tomorrowedge/tests/fixtures/sample/.tomorrowedge/objective-traces.jsonl", sourcePath: "ignored" }
-    ])).toThrow("local .tomorrowedge state");
+    ])).toThrow("local state");
+
+    expect(() => assertNoLocalStateEntries([
+      { entryName: "tomorrowedge/examples/control_plane/demo/.runs/run_001/status.latest.json", sourcePath: "ignored" }
+    ])).toThrow("local state");
   });
 
   it("parses npm pack output and requires cockpit web assets", () => {
@@ -127,6 +131,16 @@ describe("release verification scripts", () => {
       "tomorrowedge\\dist\\cockpit-web\\assets\\index.js",
       "tomorrowedge/dist/cockpit-web/assets/index.css"
     ])).not.toThrow();
+  });
+
+  it("requires packaged Sirius example config and mock command agent", () => {
+    expect(() => assertSiriusExamplePaths([
+      "package/examples/configs/sirius-codex-deepseek-mimo.mock.yaml",
+      "tomorrowedge\\examples\\agent-council-rust-rewrite\\mock-command-agent.mjs"
+    ])).not.toThrow();
+    expect(() => assertSiriusExamplePaths([
+      "package/examples/configs/sirius-codex-deepseek-mimo.mock.yaml"
+    ])).toThrow("mock-command-agent.mjs");
   });
 
   it("fails package asset checks when the cockpit build is missing", () => {

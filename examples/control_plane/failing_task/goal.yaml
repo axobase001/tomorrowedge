@@ -1,0 +1,59 @@
+goal:
+  id: failing_task
+  title: "Demonstrate hard-gate veto"
+  description: "Show that a reviewer/advisory check cannot declare success when a required blocking check fails."
+  mode: coding
+  desired_state:
+    summary: "The impossible command gate must pass before convergence."
+    success_conditions:
+      - id: impossible_gate
+        description: "This command intentionally fails."
+        type: command
+        required: true
+  constraints:
+    allowed_paths: ["."]
+    denied_paths: [".git", ".runs"]
+    max_files_changed: 5
+    max_iterations: 2
+    require_human_review: false
+  artifacts:
+    required: []
+
+evaluation:
+  hard_gates:
+    - id: impossible_gate
+      type: command
+      command: "node -e \"process.exit(1)\""
+      timeout_sec: 10
+      required: true
+  soft_gates:
+    - id: checker_review
+      type: checker_agent
+      required: false
+      threshold: 0.75
+      timeout_sec: 10
+  judge:
+    mode: hard_plus_checker
+    checker_role: "reviewer"
+    min_confidence: 0.75
+  evidence_required: true
+
+loop:
+  max_iterations: 2
+  strategy: reconcile
+  one_item_per_loop: true
+  fresh_context_each_iteration: true
+  retry_policy:
+    type: none
+    base_delay_sec: 0
+    max_delay_sec: 0
+  stop_when:
+    all_hard_gates_pass: true
+    all_required_conditions_met: true
+    checker_confidence_above: 0.75
+    no_unresolved_blockers: true
+  abort_when:
+    max_iterations_reached: true
+    no_progress_rounds: 2
+    repeated_failure_rounds: 2
+    budget_exhausted: true

@@ -1,0 +1,18 @@
+evaluation:
+  hard_gates:
+    - id: unit_tests_pass
+      type: command
+      command: "npm test"
+      timeout_sec: 120
+      required: true
+  soft_gates:
+    - id: checker_review
+      type: checker_agent
+      required: false
+      threshold: 0.75
+      timeout_sec: 30
+  judge:
+    mode: hard_plus_checker
+    checker_role: "reviewer"
+    min_confidence: 0.75
+  evidence_required: true

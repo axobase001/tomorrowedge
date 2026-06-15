@@ -42,6 +42,7 @@ export type LocalCockpitServerOptions = {
   port?: number;
   host?: string;
   webRoot?: string | false;
+  configPath?: string;
 };
 
 export type LocalCockpitHandle = {
@@ -61,7 +62,7 @@ export async function startLocalCockpitServer(cwd: string, options: LocalCockpit
   const host = options.host ?? "127.0.0.1";
   const requestedPort = options.port ?? 18792;
   const nonce = randomBytes(24).toString("base64url");
-  const { server, port } = await listenOnAvailablePort(cwd, host, requestedPort, nonce, options.webRoot);
+  const { server, port } = await listenOnAvailablePort(cwd, host, requestedPort, nonce, options.webRoot, options.configPath);
   const url = `http://${host}:${port}`;
   return {
     server,
@@ -74,14 +75,14 @@ export async function startLocalCockpitServer(cwd: string, options: LocalCockpit
   };
 }
 
-async function listenOnAvailablePort(cwd: string, host: string, requestedPort: number, nonce: string, webRoot: string | false | undefined): Promise<{ server: Server; port: number }> {
-  if (requestedPort === 0) return listenOnce(cwd, host, 0, nonce, webRoot);
+async function listenOnAvailablePort(cwd: string, host: string, requestedPort: number, nonce: string, webRoot: string | false | undefined, configPath?: string): Promise<{ server: Server; port: number }> {
+  if (requestedPort === 0) return listenOnce(cwd, host, 0, nonce, webRoot, configPath);
   const maxAttempts = 20;
   let lastError: unknown;
   for (let offset = 0; offset < maxAttempts; offset += 1) {
     const port = requestedPort + offset;
     try {
-      return await listenOnce(cwd, host, port, nonce, webRoot);
+      return await listenOnce(cwd, host, port, nonce, webRoot, configPath);
     } catch (error) {
       lastError = error;
       if (!isAddressInUse(error)) throw error;
@@ -90,9 +91,9 @@ async function listenOnAvailablePort(cwd: string, host: string, requestedPort: n
   throw lastError instanceof Error ? lastError : new Error(`No available port found starting at ${requestedPort}.`);
 }
 
-async function listenOnce(cwd: string, host: string, port: number, nonce: string, webRoot: string | false | undefined): Promise<{ server: Server; port: number }> {
+async function listenOnce(cwd: string, host: string, port: number, nonce: string, webRoot: string | false | undefined, configPath?: string): Promise<{ server: Server; port: number }> {
   const server = createServer((request, response) => {
-    void routeRequest(cwd, request, response, nonce, webRoot);
+    void routeRequest(cwd, request, response, nonce, webRoot, configPath);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -113,7 +114,7 @@ function isAddressInUse(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "EADDRINUSE");
 }
 
-async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string, webRoot?: string | false): Promise<void> {
+async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string, webRoot?: string | false, configPath?: string): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/cockpit")) {
@@ -238,7 +239,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const body = await readJsonBody(request);
       const goal = typeof body.goal === "string" ? body.goal.trim() : "";
       if (!goal) throw new HttpError(400, "goal_required", "Run requires a non-empty goal.");
-      const { prefs, memoryHints, config } = await resolveRuntimeConfig(cwd, { task: goal });
+      const { prefs, memoryHints, config } = await resolveRuntimeConfig(cwd, { task: goal, configPath });
       const sessionId = `session_${randomBytes(8).toString("hex")}`;
       const requestedRunMode = parseRunMode(body.runMode);
       const accessMode = parseAccessMode(body.accessMode) ?? prefs.accessMode ?? config.project.access_mode;
@@ -306,7 +307,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       validateApprovalIntent(cwd, session.state, parsedIntent);
       const intent = recordApprovalIntent(parsedIntent);
       const result = await executeCockpitApprovalAction(cwd, session.state, intent);
-      const { config } = await resolveRuntimeConfig(cwd);
+      const { config } = await resolveRuntimeConfig(cwd, { configPath });
       await saveSession(cwd, result.state, { failureMemory: config.failure_memory });
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
       return sendJson(response, 200, {

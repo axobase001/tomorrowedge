@@ -31,6 +31,7 @@ import { recipesCommand } from "./commands/recipes.js";
 import { experimentDashboardCommand, experimentErrorLoopCommand } from "./commands/experiment.js";
 import { skillsCandidatesCommand, skillsInspectCommand, skillsListCommand, skillsPacksCommand, skillsProposeCommand, skillsValidateCommand } from "./commands/skills.js";
 import { councilRunCommand } from "./commands/council.js";
+import { controlInitCommand, controlReportCommand, controlRunCommand, controlStatusCommand, controlValidateCommand } from "./commands/control.js";
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -74,12 +75,13 @@ program
   .option("--fixture-failing-patch", "fixture-only: make the initial patch fail so repair can be demonstrated")
   .option("--test-command <command>", "override the proposed verification command")
   .option("--recipe <id>", "workflow recipe: review-only, bugfix-sprint, or security-audit")
+  .option("--config <path>", "load an explicit TomorrowEdge config YAML")
   .option("--agent-council", "run through the Sirius Agent Council Governance Runtime")
   .option("--simulate-failure <task-node-id>", "Sirius council mode only: simulate a delegated task failure to exercise bounded mutation")
   .option("--to <target>", "conversation target: core, planner, reviewer, judge, coder, repairer, debate, or agent:<id>", "core")
   .option("--cwd <path>", "run against another project directory")
   .option("--workdir <path>", "alias for --cwd")
-  .action((task: string | undefined, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; recipe?: string; agentCouncil?: boolean; simulateFailure?: string; to?: string; cwd?: string; workdir?: string }) => {
+  .action((task: string | undefined, options: { headless?: boolean; provider?: string; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: "restricted" | "partial" | "full"; approveRepair?: boolean; repairOnFail?: boolean; redTeamReview?: boolean; live?: boolean; offline?: boolean; liveAdvisory?: boolean; livePatch?: boolean; liveVision?: boolean; image?: string[]; fixtureFailingPatch?: boolean; testCommand?: string; recipe?: string; config?: string; agentCouncil?: boolean; simulateFailure?: string; to?: string; cwd?: string; workdir?: string }) => {
     if (options.agentCouncil) return councilRunCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir });
     return runCommand(cwd, task ?? "", { ...options, cwd: options.cwd ?? options.workdir });
   });
@@ -92,12 +94,67 @@ council
   .option("--headless", "print JSON result metadata")
   .option("--fixture-mode", "use deterministic local workspace preparation")
   .option("--access-mode <mode>", "access mode: restricted, partial, or full")
+  .option("--config <path>", "load an explicit TomorrowEdge config YAML")
   .option("--approve-patch", "mark patch actions approved in the run access policy")
   .option("--approve-shell", "mark shell actions approved in the run access policy")
   .option("--simulate-failure <task-node-id>", "simulate a delegated task failure to exercise bounded mutation")
   .option("--cwd <path>", "run against another project directory")
   .option("--workdir <path>", "alias for --cwd")
-  .action((goal: string, options: { headless?: boolean; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: string; simulateFailure?: string; cwd?: string; workdir?: string }) => councilRunCommand(cwd, goal, { ...options, cwd: options.cwd ?? options.workdir }));
+  .action((goal: string, options: { headless?: boolean; fixtureMode?: boolean; approvePatch?: boolean; approveShell?: boolean; accessMode?: string; config?: string; simulateFailure?: string; cwd?: string; workdir?: string }) => councilRunCommand(cwd, goal, { ...options, cwd: options.cwd ?? options.workdir }));
+
+registerCanopusCommand("canopus", "Run the Canopus convergence runtime");
+registerCanopusCommand("control", "Run the Canopus convergence runtime (compatibility alias)");
+
+function registerCanopusCommand(name: string, description: string): void {
+  const command = program.command(name).description(description);
+  command
+    .command("init")
+    .description("Create a structured Canopus objective/acceptance/policy YAML file")
+    .option("--title <title>", "goal title", "Fix bug")
+    .option("--mode <mode>", "coding, research, refactor, test, docs, or generic", "coding")
+    .option("--output <path>", "output YAML path", "goal.yaml")
+    .option("--force", "overwrite the output file")
+    .action((options: { title?: string; mode?: string; output?: string; force?: boolean }) => controlInitCommand(cwd, options));
+  command
+    .command("validate")
+    .description("Validate a Canopus objective YAML")
+    .argument("<goal-path>", "goal YAML path")
+    .option("--json", "print machine-readable validation")
+    .action((goalPath: string, options: { json?: boolean }) => controlValidateCommand(cwd, goalPath, options));
+  command
+    .command("run")
+    .description("Run observe/accept/delegate/re-accept/status convergence")
+    .argument("<goal-path>", "goal YAML path")
+    .option("--adapter <adapter>", "mock, noop, shell, or sirius-council", "mock")
+    .option("--action-command <command>", "shell command for --adapter shell")
+    .option("--config <path>", "explicit TomorrowEdge config for --adapter sirius-council")
+    .option("--fixture-mode", "run Sirius Council AgentBridge in deterministic fixture mode")
+    .option("--access-mode <mode>", "restricted, partial, or full for --adapter sirius-council")
+    .option("--approve-patch", "pre-approve patch application for Sirius Council AgentBridge")
+    .option("--approve-shell", "pre-approve shell execution for Sirius Council AgentBridge")
+    .option("--simulate-failure <task-id>", "simulate a Sirius delegated task failure")
+    .option("--run-id <id>", "explicit run id")
+    .option("--cwd <path>", "workspace directory to reconcile")
+    .option("--workdir <path>", "alias for --cwd")
+    .option("--json", "print machine-readable result")
+    .action((goalPath: string, options: { adapter?: string; actionCommand?: string; config?: string; fixtureMode?: boolean; accessMode?: string; approvePatch?: boolean; approveShell?: boolean; simulateFailure?: string; runId?: string; cwd?: string; workdir?: string; json?: boolean }) =>
+      controlRunCommand(cwd, goalPath, { ...options, cwd: options.cwd ?? options.workdir }));
+  command
+    .command("status")
+    .description("Show latest Canopus RunState")
+    .option("--run-id <id>", "run id; defaults to latest")
+    .option("--cwd <path>", "workspace directory containing .runs")
+    .option("--workdir <path>", "alias for --cwd")
+    .option("--json", "print machine-readable status")
+    .action((options: { runId?: string; cwd?: string; workdir?: string; json?: boolean }) => controlStatusCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir }));
+  command
+    .command("report")
+    .description("Print the persisted Canopus progress report")
+    .option("--run-id <id>", "run id; defaults to latest")
+    .option("--cwd <path>", "workspace directory containing .runs")
+    .option("--workdir <path>", "alias for --cwd")
+    .action((options: { runId?: string; cwd?: string; workdir?: string }) => controlReportCommand(cwd, { ...options, cwd: options.cwd ?? options.workdir }));
+}
 
 program.command("tui").description("Start the cockpit in the current repo").argument("[goal]", "optional displayed goal").option("--to <target>", "conversation target shown in the cockpit", "core").option("--session <id>", "open a saved session id or latest").action((goal: string | undefined, options: { to?: string; session?: string }) => tuiCommand(cwd, goal, options));
 
@@ -106,8 +163,9 @@ program
   .description("Start the TomorrowEdge GUI client")
   .option("--port <port>", "local port", "18792")
   .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--config <path>", "load an explicit TomorrowEdge config YAML for launched runs")
   .option("--no-open", "print the client URL without opening a browser")
-  .action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
+  .action((options: { port?: string; host?: string; config?: string; open?: boolean }) => serveCommand(cwd, { ...options, open: options.open !== false }));
 
 program
   .command("desktop")
@@ -203,7 +261,7 @@ policy.command("eval").description("Evaluate the selected policy against stored 
 
 program.command("diagnostics").description("Inspect workflow diagnostics for a saved session").argument("[action]", "on, latest, or a session id", "latest").action((action: string) => diagnosticsCommand(cwd, action));
 
-program.command("serve").description("Start the local browser cockpit and narrow session API").option("--port <port>", "local port", "18792").option("--host <host>", "bind host", "127.0.0.1").option("--open", "open the cockpit in the default browser").action((options: { port?: string; host?: string; open?: boolean }) => serveCommand(cwd, options));
+program.command("serve").description("Start the local browser cockpit and narrow session API").option("--port <port>", "local port", "18792").option("--host <host>", "bind host", "127.0.0.1").option("--config <path>", "load an explicit TomorrowEdge config YAML for launched runs").option("--open", "open the cockpit in the default browser").action((options: { port?: string; host?: string; config?: string; open?: boolean }) => serveCommand(cwd, options));
 
 program.command("export").description("Export a saved session report").argument("[session-id]", "session id or latest", "latest").option("--format <format>", "markdown or json", "markdown").option("--include-artifacts", "include artifact file contents in JSON export").option("--brief", "print a compact terminal summary instead of full markdown").option("--cwd <path>", "project/session root to inspect").option("--workdir <path>", "alias for --cwd").action((sessionId: string, options: { format?: "markdown" | "json"; includeArtifacts?: boolean; brief?: boolean; cwd?: string; workdir?: string }) => exportCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
 

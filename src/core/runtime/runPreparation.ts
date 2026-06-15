@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig } from "../../config/configLoader.js";
+import { loadConfigWithSource, type ConfigSourceKind } from "../../config/configLoader.js";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import { loadProjectPreferences, type ProjectPreferences } from "../memory/preferences.js";
 import { buildStrategyMemoryHints, type StrategyMemoryHints } from "../memory/taskMemory.js";
@@ -24,10 +24,13 @@ export type RuntimeConfigResolution = {
   prefs: ProjectPreferences;
   memoryHints?: StrategyMemoryHints;
   config: TomorrowEdgeConfig;
+  configSource: ConfigSourceKind;
+  configPath?: string;
 };
 
-export async function resolveRuntimeConfig(cwd: string, options: { task?: string } = {}): Promise<RuntimeConfigResolution> {
-  const loadedConfig = loadConfig(cwd);
+export async function resolveRuntimeConfig(cwd: string, options: { task?: string; configPath?: string } = {}): Promise<RuntimeConfigResolution> {
+  const loaded = loadConfigWithSource(cwd, { configPath: options.configPath });
+  const loadedConfig = loaded.config;
   const prefs = loadProjectPreferences(cwd);
   const baseConfig: TomorrowEdgeConfig = {
     ...loadedConfig,
@@ -47,7 +50,7 @@ export async function resolveRuntimeConfig(cwd: string, options: { task?: string
       })
     : undefined;
   const config = memoryHints ? applyStrategyMemory(baseConfig, memoryHints) : baseConfig;
-  return { loadedConfig, prefs, memoryHints, config };
+  return { loadedConfig, prefs, memoryHints, config, configSource: loaded.source, configPath: loaded.path };
 }
 
 export async function prepareRunWorkspace(cwd: string, options: RuntimeRunOptions): Promise<RunWorkspace> {

@@ -11,11 +11,25 @@ real sessions.
 ## Run
 
 ```bash
-npm run dev -- council run "rewrite this application in Rust" \
+npm run dev -- council run \
   --headless \
   --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
+```
+
+To also exercise bounded Strategy Mutation:
+
+```bash
+npm run dev -- council run \
+  --headless \
+  --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd examples/agent-council-rust-rewrite \
   --access-mode full \
-  --simulate-failure rust_cli_structure
+  --simulate-failure rust_cli_structure \
+  "rebuild this JS CLI app in Rust"
 ```
 
 Expected trace shape:

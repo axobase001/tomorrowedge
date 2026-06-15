@@ -1,7 +1,7 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.5.1",
-  "description": "Local governance and policy-evolution runtime for heterogeneous coding agents.",
+  "version": "1.6.0",
+  "description": "Local orchestration, governance, and strategy-evolution runtime for heterogeneous Coding Agents.",
   "type": "module",
   "bin": {
     "tedge": "./dist/cli/index.js"
@@ -23,8 +23,11 @@
     "test:integration": "vitest run tests/integration --fileParallelism=false",
     "test:ui": "vitest run tests/unit/cockpitViewModel.test.ts tests/unit/localCockpit.test.ts tests/unit/cockpitWeb.test.ts --fileParallelism=false",
     "test:memory": "vitest run tests/unit/taskMemory.test.ts tests/unit/failureMemoryInfluence.test.ts tests/unit/errorLoopExperiment.test.ts --fileParallelism=false",
+    "test:control": "vitest run tests/unit/controlPlane.test.ts --fileParallelism=false",
     "test:watch": "vitest",
     "e2e:cockpit": "npm run build && npm run web:build && tsx scripts/cockpit-e2e-smoke.ts",
+    "verify:fast": "npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run test:core && npm run test:council",
+    "verify:release-gates": "npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run package:smoke && npm run pack:dry:strict",
     "verify": "npm test && npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run pack:dry",
     "release:verify": "npm run verify && npm run package:smoke && npm run pack:dry:strict",
     "site:serve": "node scripts/serve-site.mjs",
@@ -74,7 +77,16 @@
     "examples/tiny-local-lm/scripts",
     "examples/tiny-local-lm/src",
     "examples/tiny-local-lm/tests",
-    "examples/agent-council-rust-rewrite/README.md"
+    "examples/configs",
+    "examples/agent-council-rust-rewrite/README.md",
+    "examples/agent-council-rust-rewrite/mock-command-agent.mjs",
+    "examples/control_plane/*/README.md",
+    "examples/control_plane/*/goal.yaml",
+    "examples/control_plane/simple_bugfix_runtime/fix-bug.mjs",
+    "examples/control_plane/simple_bugfix_runtime/index.js",
+    "examples/control_plane/simple_bugfix_runtime/package.json",
+    "examples/control_plane/simple_bugfix_runtime/test.js",
+    "src/core/controlPlane/templates"
   ],
   "keywords": [
     "gui-client",

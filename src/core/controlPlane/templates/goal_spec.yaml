@@ -1,0 +1,24 @@
+goal:
+  id: simple_bugfix
+  title: "Fix failing unit test"
+  description: "Modify the project until the unit test passes."
+  mode: coding
+  desired_state:
+    summary: "All required blocking checks pass and requested artifacts exist."
+    success_conditions:
+      - id: unit_tests_pass
+        description: "Unit tests must pass."
+        type: test
+        required: true
+      - id: diff_exists
+        description: "A relevant workspace diff must exist."
+        type: diff_required
+        required: true
+  constraints:
+    allowed_paths: ["."]
+    denied_paths: [".git", ".runs"]
+    max_files_changed: 10
+    max_iterations: 5
+    require_human_review: false
+  artifacts:
+    required: []

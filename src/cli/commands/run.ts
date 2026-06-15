@@ -36,6 +36,7 @@ export type RunOptions = {
   to?: string;
   cwd?: string;
   recipe?: string;
+  config?: string;
 };
 
 export async function runCommand(cwd: string, goal: string, options: RunOptions = {}): Promise<void> {
@@ -50,7 +51,9 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   if (!effectiveGoal) throw new Error("Task goal is required unless --recipe supplies a default goal.");
   const accessMode = parseAccessMode(options.accessMode);
   const imagePaths = validateImageInputs(targetCwd, options.image ?? []);
-  const { prefs, memoryHints, config } = await resolveRuntimeConfig(targetCwd, { task: effectiveGoal });
+  const explicitConfigPath = options.config ? path.resolve(cwd, options.config) : undefined;
+  const runtimeConfig = await resolveRuntimeConfig(targetCwd, { task: effectiveGoal, configPath: explicitConfigPath });
+  const { prefs, memoryHints, config } = runtimeConfig;
   const effectiveAccessMode = accessMode ?? recipe?.accessMode ?? prefs.accessMode ?? config.project.access_mode;
   const autoLive = shouldAutoLive(config, options);
   if (options.live && options.offline) {
@@ -95,6 +98,8 @@ export async function runCommand(cwd: string, goal: string, options: RunOptions 
   if (options.headless) {
     const headlessPayload = {
       sessionPath,
+      configSource: runtimeConfig.configSource,
+      configPath: runtimeConfig.configPath,
       executionCwd: workspace.executionCwd,
       fixtureWorkspace: workspace.fixtureWorkspace,
       access: state.access,

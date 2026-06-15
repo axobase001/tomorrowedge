@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { councilRunCommand } from "../../src/cli/commands/council.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { buildCockpitViewModel } from "../../src/cockpit/viewModel.js";
@@ -7,6 +10,7 @@ import { buildAgentRuntimeProfiles } from "../../src/core/agents/defaultCapabili
 import { selectChiefAgent } from "../../src/core/chiefAgent/chiefAgentRouter.js";
 import { runAgentCouncilGovernance } from "../../src/core/council/councilRuntime.js";
 import { computeTraceCompleteness } from "../../src/core/diagnostics/traceCompleteness.js";
+import { loadSession } from "../../src/core/memory/sessionMemory.js";
 
 describe("Sirius Agent Council Governance Runtime", () => {
   it("routes high-level engineering tasks to the configured chief agent first", () => {
@@ -163,6 +167,56 @@ describe("Sirius Agent Council Governance Runtime", () => {
     expect(externalCalls.some((event) => event.externalAgentId === "mimo" && event.role === "runner")).toBe(true);
     expect(state.finalChiefReview?.source).toBe("chief_agent");
   });
+
+  it("runs the packaged Sirius mock config with agent-backed chief, council moves, and final review from an outside cwd", async () => {
+    const outsideCwd = await mkdtemp(path.join(os.tmpdir(), "tedge-sirius-example-config-"));
+    try {
+      const relativeConfigPath = path.join("examples", "configs", "sirius-codex-deepseek-mimo.mock.yaml");
+      const configPath = path.join(process.cwd(), relativeConfigPath);
+      const output = await captureStdout(() =>
+        councilRunCommand(process.cwd(), "rewrite this application in Rust", {
+          cwd: outsideCwd,
+          config: relativeConfigPath,
+          headless: true,
+          fixtureMode: true,
+          accessMode: "full"
+        })
+      );
+      const payload = JSON.parse(output) as {
+        sessionId: string;
+        configSource: string;
+        configPath?: string;
+        eventCount?: number;
+        eventTypeCounts?: Record<string, number>;
+        traceEventSample?: Array<{ type: string; source?: string; speakerAgentId?: string }>;
+        chiefAgent?: { id?: string };
+        finalChiefReview?: { source?: string };
+        traceCompleteness?: { score?: number };
+      };
+      const record = await loadSession(outsideCwd, payload.sessionId);
+      const events = record.state.events;
+
+      expect(payload.configSource).toBe("explicit");
+      expect(payload.configPath).toBe(configPath);
+      expect(payload.chiefAgent?.id).toBe("codex");
+      expect(payload.eventCount).toBe(events.length);
+      expect(payload.eventTypeCounts?.chief_initial_plan).toBe(1);
+      expect(payload.eventTypeCounts?.chief_final_review).toBe(1);
+      expect(payload.eventTypeCounts?.council_move ?? 0).toBeGreaterThan(0);
+      expect(payload.traceEventSample?.some((event) => event.type === "chief_initial_plan" && event.source === "chief_agent")).toBe(true);
+      expect(payload.traceEventSample?.some((event) => event.type === "council_move" && event.source === "agent")).toBe(true);
+      expect(payload.traceEventSample?.some((event) => event.type === "chief_final_review" && event.source === "chief_agent")).toBe(true);
+      expect(events.find((event) => event.type === "chief_initial_plan")).toMatchObject({ source: "chief_agent" });
+      expect(events.some((event) => event.type === "council_move" && event.source === "agent")).toBe(true);
+      expect(events.filter((event) => event.type === "council_move" && event.source === "agent").map((event) => event.speakerAgentId)).toEqual(expect.arrayContaining(["deepseek", "mimo"]));
+      expect(events.find((event) => event.type === "chief_final_review")).toMatchObject({ source: "chief_agent" });
+      expect(payload.finalChiefReview?.source).toBe("chief_agent");
+      expect(payload.traceCompleteness?.score ?? 0).toBeGreaterThanOrEqual(90);
+      expect(record.state.traceCompleteness.score).toBeGreaterThanOrEqual(90);
+    } finally {
+      await rm(outsideCwd, { recursive: true, force: true });
+    }
+  }, 20_000);
 
   it("keeps native source when command adapters are not configured", async () => {
     const state = await runAgentCouncilGovernance(
@@ -362,4 +416,19 @@ function singleChiefOnlyConfig(): TomorrowEdgeConfig {
     }
   };
   return config;
+}
+
+async function captureStdout(fn: () => Promise<void>): Promise<string> {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return output;
 }

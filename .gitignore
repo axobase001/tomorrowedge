@@ -5,6 +5,7 @@ coverage/
 .env.*
 !.env.example
 .tomorrowedge/
+.runs/
 *.log
 output/imagegen/
 output/site-qa/

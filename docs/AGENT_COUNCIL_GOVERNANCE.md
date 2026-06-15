@@ -76,6 +76,16 @@ agent-backed. If no command is configured, or if the adapter fails, the native
 deterministic governance structure remains authoritative and the trace records
 the native source or `fallback_to_native`.
 
+Interpret source fields literally:
+
+- `source = chief_agent` means a configured Chief adapter was invoked and
+  returned an accepted result for that stage.
+- `source = agent` means a configured Council member adapter was invoked and
+  returned an accepted result for that council move.
+- `source = native` means the deterministic TomorrowEdge governance path
+  produced the structure. It is the fixture/fallback path, not proof that a
+  real Codex, Claude Code, GPT, DeepSeek, or MiMo process reviewed the run.
+
 The external text does not silently rewrite the safety boundary. Objective
 Contract, EvidenceGate, BudgetGate, TaskGraph ownership, and final delivery
 approval remain structured runtime decisions.
@@ -114,10 +124,43 @@ tedge council run "rewrite this app in Rust" --config examples/configs/sirius-co
 tedge council run "rewrite this app in Rust" --config examples/configs/sirius-codex-deepseek-mimo.real.template.yaml --headless
 ```
 
+Canonical source-checkout mock demo:
+
+```bash
+tedge council run \
+  --headless \
+  --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
+```
+
+Installed-package equivalent:
+
+```bash
+tedge council run \
+  --headless \
+  --fixture-mode \
+  --config node_modules/@axobase001/tomorrowedge/examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd node_modules/@axobase001/tomorrowedge/examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
+```
+
+`--config <path>` may be relative to the current command directory or absolute.
+Headless output includes `configSource`, `configPath`, `eventCount`,
+`eventTypeCounts`, and a compact `traceEventSample`. The mock example uses
+`${TOMORROWEDGE_ROOT}` paths so it remains reproducible from outside the repo
+root and from packaged builds.
+
 The real template intentionally contains only environment variable names and
 empty command placeholders. Replace the Chief Agent and member profiles through
 `chief_agent`, `external_agents`, and `agent_capabilities`; Codex, DeepSeek, and
 MiMo are examples, not hard-coded requirements.
+
+The Sirius mock config demonstrates agent-backed command adapters. Native
+deterministic council remains the fallback/fixture path. Real Codex, DeepSeek,
+MiMo, Claude Code, or custom-agent usage requires provider configuration,
+API keys, command runners, or MCP access for those agents.
 
 ## Runtime Status
 

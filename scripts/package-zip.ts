@@ -20,10 +20,13 @@ const ignore = [
   "dist/**",
   ".tomorrowedge/**",
   "**/.tomorrowedge/**",
+  ".runs/**",
+  "**/.runs/**",
   ".vite/**",
   "**/.vite/**",
   "coverage/**",
   "output/**",
+  "assignments/**",
   ".env",
   ".env.*",
   "**/.env",
@@ -198,8 +201,9 @@ function assertNoEnvEntries(entries: ZipSourceEntry[]): void {
 }
 
 export function assertNoLocalStateEntries(entries: ZipSourceEntry[]): void {
-  const hits = entries.filter((entry) => normalizeZipEntryName(entry.entryName).split("/").includes(".tomorrowedge"));
-  if (hits.length) throw new Error(`Refusing to package local .tomorrowedge state: ${hits.map((entry) => entry.entryName).join(", ")}`);
+  const stateDirs = new Set([".tomorrowedge", ".runs"]);
+  const hits = entries.filter((entry) => normalizeZipEntryName(entry.entryName).split("/").some((part) => stateDirs.has(part)));
+  if (hits.length) throw new Error(`Refusing to package local state: ${hits.map((entry) => entry.entryName).join(", ")}`);
 }
 
 export function assertCockpitWebZipEntries(entryNames: string[]): void {

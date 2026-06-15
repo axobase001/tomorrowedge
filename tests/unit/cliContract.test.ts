@@ -48,7 +48,7 @@ describe("CLI contract", () => {
     });
   }, 15_000);
 
-  it.each(["run", "council", "client", "desktop", "models", "trace"])("keeps %s command help available", async (command) => {
+  it.each(["run", "council", "canopus", "control", "client", "desktop", "models", "trace"])("keeps %s command help available", async (command) => {
     const result = await execa("tsx", ["src/cli/index.ts", command, "--help"], {
       cwd: process.cwd(),
       preferLocal: true

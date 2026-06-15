@@ -1,0 +1,19 @@
+loop:
+  max_iterations: 5
+  strategy: reconcile
+  one_item_per_loop: true
+  fresh_context_each_iteration: true
+  retry_policy:
+    type: exponential_backoff
+    base_delay_sec: 1
+    max_delay_sec: 8
+  stop_when:
+    all_hard_gates_pass: true
+    all_required_conditions_met: true
+    checker_confidence_above: 0.75
+    no_unresolved_blockers: true
+  abort_when:
+    max_iterations_reached: true
+    no_progress_rounds: 2
+    repeated_failure_rounds: 3
+    budget_exhausted: true

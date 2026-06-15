@@ -4,9 +4,9 @@
 
 **English** | [中文](README.zh-CN.md)
 
-TomorrowEdge is a **local governance and policy-evolution runtime for heterogeneous coding agents**.
+TomorrowEdge is a **local orchestration, governance, and strategy-evolution runtime for heterogeneous Coding Agents**.
 
-It gives engineering teams a GUI/runtime layer for strong-agent governance, budget-bounded multi-model execution, Agent Council planning, delegated TaskGraph execution, traceable evidence, and offline policy evolution.
+It gives engineering teams a local GUI/runtime orchestration layer for governing strong agents, coordinating budget-bounded multi-model execution, convening an Agent Council, assigning TaskGraph ownership, recording traceable evidence, reviewing deliverables, and evolving orchestration policy from objective-action-feedback traces.
 
 It is not another chat bot, single-model CLI wrapper, benchmark dashboard, or general personal-agent OS. TomorrowEdge turns Codex, Claude Code, DeepSeek, MiMo, Ollama, OpenRouter models, local models, command agents, MCP agents, and custom adapters into replaceable capability nodes inside a governed software-engineering council.
 
@@ -35,9 +35,113 @@ The hard part is orchestration and governance:
 
 OpenRouter routes requests. TomorrowEdge routes objectives, capabilities, roles, tools, budgets, evidence, task ownership, strategy mutation, and engineering delivery.
 
+## TomorrowEdge 1.6 Canopus
+
+TomorrowEdge 1.6 **Canopus** is **The Convergence Runtime Release**.
+
+Canopus introduces a convergence layer inside the existing orchestration runtime. It does not replace TomorrowEdge's core identity as a heterogeneous Coding Agent orchestration and governance runtime. Instead, it adds a verifiable objective-convergence path: agents no longer finish because they claim completion; a run must satisfy an ObjectiveContract, pass an AcceptanceMatrix, leave evidence, update RunState, and respect a bounded ConvergencePolicy.
+
+Status: Canopus ships a working convergence runtime with mock, noop, shell, and Sirius Council AgentBridge paths. AgentBridge adapters can propose or perform work, but convergence is decided only by structured objective conditions and blocking acceptance checks.
+
+```text
+ObjectiveContract + AcceptanceMatrix
+        |
+        v
+ConvergenceEngine
+        |
+        v
+AgentBridge / worker adapter
+        |
+        v
+AcceptanceRunner
+        |
+        v
+RunState / Trace Ledger / Evidence
+        |
+        v
+Next iteration / Stop
+```
+
+Canopus adds:
+
+- **ObjectiveContract / CanopusObjective**: structured target definition, success conditions, constraints, and required artifacts. It is not a prompt.
+- **AcceptanceMatrix**: blocking and advisory verification checks. Blocking checks have veto power.
+- **ConvergencePolicy**: bounded execution policy with max iterations, no-progress detection, repeated-failure detection, and budget abort semantics.
+- **RunState / TraceState**: persistent observed state, objective delta, evidence, decision, and timestamps for every loop.
+- **ConvergenceEngine**: `observe -> pre-acceptance -> act -> observe -> post-acceptance -> write RunState -> decide next loop`.
+- **TraceStateStore / RunLedger**: `.runs/<run_id>/trace.jsonl`, `status.latest.json`, `progress.md`, and per-iteration evidence artifacts.
+- **AgentBridge**: mock/noop/shell adapters plus `sirius-council`, which routes action through the Agent Council Governance Runtime while leaving blocking checks authoritative.
+- **CLI compatibility alias**: `tedge control init`, `validate`, `run`, `status`, and `report` remain supported as the v1.6 command surface.
+
+Naming map:
+
+| Earlier control-plane term | Canopus public term |
+| --- | --- |
+| Agent Control Plane | Canopus convergence layer / Canopus Runtime |
+| GoalSpec | ObjectiveContract / CanopusObjective |
+| EvalSpec | AcceptanceMatrix |
+| LoopSpec | ConvergencePolicy |
+| StatusSpec | RunState / TraceState |
+| ReconciliationController | ConvergenceEngine |
+| EvaluationRunner | AcceptanceRunner |
+| StatusStore | TraceStateStore / RunLedger |
+| DesiredStateDiff | ObjectiveDelta |
+| hard gate | blocking check |
+| soft gate | advisory check |
+| checker_agent | reviewer_role / review_agent |
+| actuator | AgentBridge / worker adapter |
+
+Quickstart:
+
+```bash
+tedge canopus init --title "Fix bug" --mode coding
+tedge canopus validate goal.yaml
+tedge canopus run goal.yaml
+tedge canopus status
+tedge canopus report
+```
+
+`tedge control ...` remains supported as a compatibility alias for the same
+commands.
+
+Source-checkout blocking-check runtime demo:
+
+```bash
+npm run dev -- control validate examples/control_plane/simple_bugfix_runtime/goal.yaml
+npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
+  --cwd examples/control_plane/simple_bugfix_runtime \
+  --adapter shell \
+  --action-command "node fix-bug.mjs" \
+  --run-id simple_bugfix_runtime
+npm run dev -- control status --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+npm run dev -- control report --cwd examples/control_plane/simple_bugfix_runtime --run-id simple_bugfix_runtime
+```
+
+`examples/control_plane/simple_bugfix_runtime` is the Canopus runtime
+acceptance demo: it starts from a failing `npm test`, records pre-action
+evidence, lets the shell AgentBridge fix `index.js`, then converges only after the
+post-action blocking check passes. `examples/control_plane/mock_artifact` remains a
+deterministic no-test smoke demo, not proof of runtime convergence.
+
+Source-checkout Council-backed AgentBridge demo:
+
+```bash
+npm run dev -- control run examples/control_plane/simple_bugfix_runtime/goal.yaml \
+  --cwd examples/control_plane/simple_bugfix_runtime \
+  --adapter sirius-council \
+  --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --access-mode full \
+  --approve-patch \
+  --approve-shell \
+  --run-id canopus_sirius_control
+```
+
+Read the full design in [Canopus Runtime](docs/canopus_runtime.md).
+
 ## Sirius 1.5
 
-**Sirius** is the TomorrowEdge 1.5 release line. Its main runtime is the **Agent Council Governance Runtime**.
+**Sirius** is the TomorrowEdge 1.5 release line. Its main runtime is the **Agent Council Governance Runtime**. Canopus keeps Sirius, but adds a convergence layer around unreliable agent execution.
 
 A high-level engineering task enters a Chief Agent first. The Chief Agent can convene Council Members for critique, gap fill, alternative planning, and task claims. The council forms a consensus TaskGraph. Each core task node receives an owner agent, provider, model, and assignment reason. TomorrowEdge then delegates execution while EvidenceGate, BudgetGate, Debate v2, Objective Contract, Strategy Memory, and the event ledger govern the run. Final delivery returns to the Chief Agent for review and judge.
 
@@ -124,8 +228,34 @@ Run the Sirius council path:
 
 ```bash
 npm run dev -- council run "Rewrite a small TypeScript utility as a Rust module with tests" --headless --fixture-mode
-npm run dev -- council run "Rewrite a small TypeScript utility as a Rust module with tests" --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml --headless --fixture-mode
+npm run dev -- council run \
+  --headless \
+  --fixture-mode \
+  --config examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
 ```
+
+Headless Sirius runs print `configSource` and `configPath`. The packaged mock
+config is intentionally reproducible from outside the repo root and records
+`chief_agent` / `agent` sources when the mock command agents are actually
+invoked.
+
+Installed-package equivalent:
+
+```bash
+tedge council run \
+  --headless \
+  --fixture-mode \
+  --config node_modules/@axobase001/tomorrowedge/examples/configs/sirius-codex-deepseek-mimo.mock.yaml \
+  --cwd node_modules/@axobase001/tomorrowedge/examples/agent-council-rust-rewrite \
+  "rebuild this JS CLI app in Rust"
+```
+
+The Sirius mock config demonstrates agent-backed command adapters. Native
+deterministic council remains the fixture/fallback path, and real
+Codex/DeepSeek/MiMo usage requires provider keys, command runners, or MCP
+access configured for your own agents.
 
 Or through the normal `run` command:
 
@@ -293,9 +423,9 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.5.1`.
+Current version: `1.6.0`.
 
-Release line: Sirius.
+Release line: Canopus.
 
 Implemented mainline pieces include:
 
