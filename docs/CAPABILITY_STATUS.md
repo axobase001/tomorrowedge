@@ -1,6 +1,6 @@
 # Capability Status
 
-Authoritative status table for TomorrowEdge 1.6.2 Canopus. Use this page when deciding
+Authoritative status table for TomorrowEdge 1.6.3 Canopus. Use this page when deciding
 whether a surface is stable, experimental, placeholder, or planned.
 
 | Capability | Status | Notes |

@@ -6,7 +6,7 @@ import { councilRunCommand } from "../../src/cli/commands/council.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { buildCockpitViewModel } from "../../src/cockpit/viewModel.js";
-import { buildAgentRuntimeProfiles } from "../../src/core/agents/defaultCapabilityProfiles.js";
+import { buildAgentRuntimeProfiles, scoreAgentForRole } from "../../src/core/agents/defaultCapabilityProfiles.js";
 import { selectChiefAgent } from "../../src/core/chiefAgent/chiefAgentRouter.js";
 import { runAgentCouncilGovernance } from "../../src/core/council/councilRuntime.js";
 import { computeTraceCompleteness } from "../../src/core/diagnostics/traceCompleteness.js";
@@ -25,6 +25,31 @@ describe("Sirius Agent Council Governance Runtime", () => {
     expect(chief?.id).toBe("codex");
     expect(chief?.provider).toBe("external:codex");
     expect(chief?.roles).toContain("lead_planner");
+  });
+
+  it("prefers configured real providers over fixture/mock profiles for automatic chief selection", () => {
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        deepseek: { ...defaultConfig.providers.deepseek, enabled: true },
+        mock: { ...defaultConfig.providers.mock, enabled: true },
+        fixture: { ...defaultConfig.providers.fixture, enabled: true }
+      },
+      chief_agent: { ...defaultConfig.chief_agent, id: "", provider: "" }
+    };
+    const agents = buildAgentRuntimeProfiles(config);
+    const deepseek = agents.find((agent) => agent.agentId === "deepseek");
+    const fixture = agents.find((agent) => agent.agentId === "fixture");
+    const chief = selectChiefAgent({
+      config,
+      goal: "1+1=?",
+      availableAgents: agents
+    });
+
+    expect(deepseek?.allowedRoles).toContain("judge");
+    expect(deepseek && fixture ? scoreAgentForRole(deepseek, "chief") > scoreAgentForRole(fixture, "chief") : false).toBe(true);
+    expect(chief?.id).toBe("deepseek");
   });
 
   it("blocks a configured but unavailable chief agent instead of silently downgrading", async () => {

@@ -3,6 +3,7 @@ import { agentRoles, type AgentRole } from "../../schemas/agentTask.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { WorkflowIntentDecision } from "../goal/workflowIntent.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
+import { scenarioProfileResponseSchema, structuredJsonResponseFormat } from "../model/structuredOutput.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { ScenarioProfile, ScenarioType } from "./scenarioTypes.js";
@@ -39,11 +40,11 @@ export async function profileScenarioWithModel(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: SCENARIO_PROFILER_MAX_COMPLETION_TOKENS,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_scenario_profile", scenarioProfileResponseSchema),
       metadata: { tomorrowedgeTask: "scenario_profile" },
       messages: [
         {
@@ -159,11 +160,11 @@ async function repairScenarioProfile(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: SCENARIO_PROFILER_REPAIR_MAX_COMPLETION_TOKENS,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_scenario_profile_repair", scenarioProfileResponseSchema),
       metadata: { tomorrowedgeTask: "scenario_profile_repair" },
       messages: [
         {

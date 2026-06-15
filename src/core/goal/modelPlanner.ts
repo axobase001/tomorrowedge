@@ -1,6 +1,7 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { Plan, PlanStep, RiskLevel, TaskType } from "../../schemas/plan.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
+import { plannerPlanResponseSchema, structuredJsonResponseFormat } from "../model/structuredOutput.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
@@ -27,11 +28,11 @@ export async function createModelBackedPlan(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0.1,
       maxCompletionTokens: MODEL_PLANNER_MAX_COMPLETION_TOKENS,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_planner_plan", plannerPlanResponseSchema),
       metadata: { tomorrowedgeTask: "planner_plan" },
       messages: [
         {
@@ -170,11 +171,11 @@ async function repairModelPlannerResponse(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: MODEL_PLANNER_REPAIR_MAX_COMPLETION_TOKENS,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_planner_plan_repair", plannerPlanResponseSchema),
       metadata: { tomorrowedgeTask: "planner_plan_repair" },
       messages: [
         {

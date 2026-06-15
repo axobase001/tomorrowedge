@@ -432,7 +432,7 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.6.2`.
+Current version: `1.6.3`.
 
 Release line: Canopus.
 

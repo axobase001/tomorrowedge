@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
+import type { TomorrowEdgeConfig } from "../../src/config/schema.js";
 import { createEventLedger } from "../../src/core/events/eventLedger.js";
 import { classifyWorkflowIntent } from "../../src/core/goal/workflowIntent.js";
 import { ModelRouter } from "../../src/core/routing/router.js";
 
 describe("workflow intent routing", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it.each([
     ["list files and summarize structure", "read_only", false],
     ["\u8bfb\u53d6 quantum \u6587\u4ef6\u5939\u5185\u5bb9\uff0c\u8f93\u51fa\u6587\u4ef6\u7ed3\u6784", "read_only", false],
@@ -47,5 +52,55 @@ describe("workflow intent routing", () => {
     expect(decision.requiresPatchWorkflow).toBe(true);
     expect(decision.reason).toContain("Mock intent model");
     expect(ledger.events.some((event) => event.type === "model_call" && event.provider === "mock")).toBe(true);
+  });
+
+  it("uses json_schema and retries once when a real intent model returns invalid JSON", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      const content = bodies.length === 1
+        ? "not json"
+        : JSON.stringify({
+            intent: "inspect",
+            requiresPatchWorkflow: false,
+            workflowKind: "read_only",
+            confidence: 0.9,
+            reason: "Same-model repair produced valid structured intent."
+          });
+      return new Response(JSON.stringify({ id: `intent-${bodies.length}`, choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openai_compatible: {
+          ...defaultConfig.providers.openai_compatible,
+          enabled: true,
+          auth_header: "none",
+          base_url: "https://gateway.example/v1",
+          model: "structured-model"
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "openai_compatible", model: "structured-model" }
+      }
+    };
+    const ledger = createEventLedger("partial");
+    const decision = await classifyWorkflowIntent({
+      goal: "read the project structure",
+      config,
+      router: new ModelRouter(config),
+      ledger
+    });
+
+    expect(decision.workflowKind).toBe("read_only");
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]?.response_format).toMatchObject({ type: "json_schema" });
+    expect(JSON.stringify(bodies[1]?.messages)).toContain("Invalid previous output");
+    expect(ledger.events.filter((event) => event.type === "model_call" && event.provider === "openai_compatible")).toHaveLength(4);
   });
 });

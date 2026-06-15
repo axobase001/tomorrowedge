@@ -1,6 +1,7 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { Plan } from "../../schemas/plan.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
+import { structuredJsonResponseFormat, taskGovernanceResponseSchema } from "../model/structuredOutput.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { WorkflowIntentDecision } from "./workflowIntent.js";
@@ -41,11 +42,11 @@ export async function classifyTaskGovernance(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: 360,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_task_governance", taskGovernanceResponseSchema),
       metadata: { tomorrowedgeTask: "task_governance" },
       messages: [
         {
@@ -73,13 +74,23 @@ export async function classifyTaskGovernance(input: {
     })
   });
   const parsed = parseTaskGovernanceResponse(result.response?.content);
-  if (!parsed) {
-    throw new Error(`Governance model returned no valid semantic decision; no local fallback will be used.${result.error ? ` ${result.error}` : ""}`);
+  const repaired = !parsed && result.response?.content && !input.localOnly
+    ? await repairTaskGovernanceResponse({
+        ...input,
+        provider: result.provider,
+        model: result.model,
+        originalContent: result.response.content
+      })
+    : undefined;
+  const decision = parsed ?? repaired?.decision;
+  if (!decision) {
+    const repairError = result.error ?? repaired?.error;
+    throw new Error(`Governance model returned no valid semantic decision; no local fallback will be used.${repairError ? ` ${repairError}` : ""}`);
   }
   return {
-    ...parsed,
-    provider: result.provider,
-    model: result.model,
+    ...decision,
+    provider: repaired?.decision ? repaired.provider : result.provider,
+    model: repaired?.decision ? repaired.model : result.model,
     fallbackUsed: false
   };
 }
@@ -113,6 +124,74 @@ function parseJsonObject(content: string): Record<string, unknown> | undefined {
       return undefined;
     }
   }
+}
+
+async function repairTaskGovernanceResponse(input: {
+  goal: string;
+  plan: Plan;
+  workflowIntent: WorkflowIntentDecision;
+  config: TomorrowEdgeConfig;
+  router: ModelRouter;
+  ledger: EventLedger;
+  localOnly?: boolean;
+  modelDisabled?: boolean;
+  provider: string;
+  model: string;
+  originalContent: string;
+}): Promise<{ decision?: Omit<TaskGovernanceDecision, "provider" | "model" | "fallbackUsed">; provider: string; model: string; error?: string }> {
+  input.ledger.append({
+    type: "evidence_update",
+    phase: "planning",
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    evidence: ["task governance output invalid; requesting same-model structured JSON repair"]
+  });
+  const result = await chatWithProviderFallback({
+    config: input.config,
+    router: input.router,
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
+    buildRequest: (model, provider) => ({
+      model,
+      temperature: 0,
+      maxCompletionTokens: 320,
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_task_governance_repair", taskGovernanceResponseSchema),
+      metadata: { tomorrowedgeTask: "task_governance_repair" },
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Repair TomorrowEdge task governance output into one valid JSON object.",
+            "Return JSON only. No markdown.",
+            "Required keys: reasoningSensitivity, requiresReviewer, requiresJudge, confidence, reason."
+          ].join("\n")
+        },
+        {
+          role: "user",
+          content: [
+            `User request:\n${input.goal}`,
+            `Workflow intent: ${input.workflowIntent.intent}, requiresPatchWorkflow=${input.workflowIntent.requiresPatchWorkflow}`,
+            `Planner taskType: ${input.plan.taskType}, riskLevel=${input.plan.riskLevel}`,
+            "",
+            "Invalid previous output:",
+            input.originalContent.slice(0, 4000)
+          ].join("\n")
+        }
+      ]
+    })
+  });
+  const decision = parseTaskGovernanceResponse(result.response?.content);
+  return {
+    decision,
+    provider: result.response ? result.provider : input.provider,
+    model: result.response ? result.model : input.model,
+    error: decision ? undefined : result.error ?? "task governance repair returned invalid JSON"
+  };
 }
 
 function parseReasoningSensitivity(value: unknown): ReasoningSensitivity | undefined {

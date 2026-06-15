@@ -7,6 +7,40 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-06-16
+
+1.6.3 is a Canopus provider/council routing patch release focused on structured
+LLM output reliability and keeping demo fixtures from outranking configured
+real providers.
+
+### Added
+
+- Added JSON Schema response-format support for OpenAI-compatible providers
+  where supported, including OpenRouter, DeepSeek, Kimi, and custom
+  OpenAI-compatible gateways.
+- Added shared structured-output schemas for workflow intent, task governance,
+  planner plans, scenario profiles, objective contracts, and live patch JSON.
+- Added same-model repair retry for invalid workflow-intent and task-governance
+  JSON before the workflow is allowed to block.
+
+### Changed
+
+- Model-backed structured planning/profiling/contract/patch calls now request
+  `json_schema` output on supported providers instead of relying only on
+  `json_object` plus prompt wording.
+- Sirius/Canopus council routing now treats `mock` and `fixture` profiles as
+  synthetic fallback/demo agents. Automatic Chief selection ignores them when a
+  real configured provider can own the role.
+- DeepSeek's default capability roles now include `judge`, allowing it to own
+  reviewer/judge work when users configure it for council governance.
+
+### Fixed
+
+- Fixed brittle JSON parsing failures where a real provider returned prose,
+  fenced JSON, or malformed structured output during intent/governance calls.
+- Fixed council mode selecting `fixture` as Chief Agent ahead of configured
+  real providers such as DeepSeek.
+
 ## [1.6.2] - 2026-06-16
 
 1.6.2 is a Canopus/Cockpit issue cleanup release focused on live-provider

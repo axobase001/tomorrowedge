@@ -6,6 +6,7 @@ import { nowIso } from "../../utils/time.js";
 import type { EventPhase } from "../events/eventTypes.js";
 import type { WorkflowIntentDecision } from "../goal/workflowIntent.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
+import { objectiveContractResponseSchema, structuredJsonResponseFormat } from "../model/structuredOutput.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { ScenarioProfile } from "../scenarios/scenarioTypes.js";
@@ -123,11 +124,11 @@ export async function generateModelBackedObjectiveContract(input: NativeContract
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: 1100,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_objective_contract", objectiveContractResponseSchema),
       metadata: { tomorrowedgeTask: "objective_contract" },
       messages: [
         { role: "system", content: "Return a strict ObjectiveContractV1 JSON object for TomorrowEdge. Do not expand permissions beyond the supplied native baseline." },
@@ -135,7 +136,17 @@ export async function generateModelBackedObjectiveContract(input: NativeContract
       ]
     })
   });
-  const parsed = parseContract(result.response?.content);
+  let parsed = parseContract(result.response?.content);
+  if (!parsed && result.response?.content) {
+    const repaired = await repairObjectiveContractResponse({
+      ...input,
+      native,
+      provider: result.provider,
+      model: result.model,
+      originalContent: result.response.content
+    });
+    parsed = repaired.contract;
+  }
   if (!parsed) {
     return { contract: native, provider: result.response ? result.provider : "native", model: result.response ? result.model : "contract-generator", fallbackUsed: true, error: result.error ?? "invalid contract JSON" };
   }
@@ -152,6 +163,48 @@ export async function generateModelBackedObjectiveContract(input: NativeContract
     model: result.model,
     fallbackUsed: result.fallbackUsed || verification.verification.status !== "passed"
   };
+}
+
+async function repairObjectiveContractResponse(input: NativeContractGeneratorInput & {
+  router: ModelRouter;
+  ledger: EventLedger;
+  localOnly?: boolean;
+  native: ObjectiveContractV1;
+  provider: string;
+  model: string;
+  originalContent: string;
+}): Promise<{ contract?: ObjectiveContractV1; error?: string }> {
+  input.ledger.append({
+    type: "evidence_update",
+    phase: "planning",
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    evidence: ["objective contract output invalid; requesting same-model structured JSON repair"]
+  });
+  const result = await chatWithProviderFallback({
+    config: input.config,
+    router: input.router,
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
+    buildRequest: (model, provider) => ({
+      model,
+      temperature: 0,
+      maxCompletionTokens: 1100,
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_objective_contract_repair", objectiveContractResponseSchema),
+      metadata: { tomorrowedgeTask: "objective_contract_repair" },
+      messages: [
+        { role: "system", content: "Repair the invalid ObjectiveContractV1 into valid JSON only. Do not expand permissions beyond the native baseline." },
+        { role: "user", content: JSON.stringify({ nativeBaseline: input.native, invalidOutput: input.originalContent.slice(0, 5000) }, null, 2) }
+      ]
+    })
+  });
+  const contract = parseContract(result.response?.content);
+  return { contract, error: contract ? undefined : result.error ?? "objective contract repair returned invalid JSON" };
 }
 
 function parseContract(content?: string): ObjectiveContractV1 | undefined {

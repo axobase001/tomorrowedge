@@ -132,6 +132,49 @@ describe("provider registry", () => {
     expect(observedBody?.reasoning_effort).toBe("none");
   });
 
+  it("passes json_schema structured output formats through OpenAI-compatible providers", async () => {
+    let observedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+      observedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ id: "ok", choices: [{ message: { content: "{\"ok\":true}" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openrouter",
+      name: "OpenRouter",
+      apiKey: "test-key",
+      baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "z-ai/glm-5.1"
+    });
+
+    await provider.chat({
+      model: "z-ai/glm-5.1",
+      messages: [{ role: "user", content: "return structured JSON" }],
+      responseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: "test_schema",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: { ok: { type: "boolean" } },
+            required: ["ok"]
+          }
+        }
+      }
+    });
+
+    expect(observedBody?.response_format).toMatchObject({
+      type: "json_schema",
+      json_schema: { name: "test_schema", strict: true }
+    });
+    expect(observedBody?.reasoning).toEqual({ effort: "none", exclude: true });
+  });
+
   it("retries transient OpenAI-compatible API failures", async () => {
     let calls = 0;
     vi.stubGlobal("fetch", async () => {

@@ -26,7 +26,9 @@ export type ChatRequest = {
   timeoutMs?: number;
   maxRetries?: number;
   signal?: AbortSignal;
-  responseFormat?: { type: "text" | "json_object" };
+  responseFormat?:
+    | { type: "text" | "json_object" }
+    | { type: "json_schema"; json_schema: { name: string; strict?: boolean; schema: Record<string, unknown> } };
   metadata?: Record<string, unknown>;
 };
 

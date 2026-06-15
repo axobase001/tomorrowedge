@@ -104,25 +104,25 @@ export const defaultAgentCapabilityProfiles: Record<string, AgentCapabilityProfi
   },
   mock: {
     ...baselineCapabilityProfile,
-    planning: 0.7,
-    architecture: 0.65,
-    coding: 0.7,
-    review: 0.65,
-    judging: 0.62,
+    planning: 0.38,
+    architecture: 0.34,
+    coding: 0.42,
+    review: 0.32,
+    judging: 0.3,
     costTier: "cheap",
     latencyTier: "fast",
-    reliabilityScore: 0.8
+    reliabilityScore: 0.45
   },
   fixture: {
     ...baselineCapabilityProfile,
-    planning: 0.75,
-    architecture: 0.7,
-    coding: 0.75,
-    review: 0.7,
-    judging: 0.7,
+    planning: 0.4,
+    architecture: 0.36,
+    coding: 0.46,
+    review: 0.34,
+    judging: 0.32,
     costTier: "cheap",
     latencyTier: "fast",
-    reliabilityScore: 0.88
+    reliabilityScore: 0.48
   },
   ollama: {
     ...baselineCapabilityProfile,
@@ -193,6 +193,7 @@ export function defaultProfileFor(providerOrAgentId: string): AgentCapabilityPro
 export function scoreAgentForRole(profile: AgentRuntimeProfile, role: AgentRole | "chief" | "final_review" | "test_planner", risk: "low" | "medium" | "high" = "medium"): number {
   const caps = profile.capabilities;
   const costPenalty = caps.costTier === "expensive" ? 0.12 : caps.costTier === "medium" ? 0.04 : 0;
+  const syntheticPenalty = isSyntheticProfile(profile) ? 0.25 : 0;
   const reliabilityBoost = caps.reliabilityScore * 0.2;
   const riskDecisionBoost = risk === "high" ? (caps.review + caps.judging + caps.architecture) * 0.12 : 0;
   const roleScore = (() => {
@@ -221,14 +222,22 @@ export function scoreAgentForRole(profile: AgentRuntimeProfile, role: AgentRole 
         return caps.longContext * 0.25 + caps.planning * 0.25 + caps.toolUse * 0.25 + caps.reliabilityScore * 0.25;
     }
   })();
-  return Math.max(0, roleScore + reliabilityBoost + riskDecisionBoost - costPenalty);
+  return Math.max(0, roleScore + reliabilityBoost + riskDecisionBoost - costPenalty - syntheticPenalty);
 }
 
 function defaultRolesForProvider(provider: string): AgentRole[] {
-  if (/deepseek/i.test(provider)) return ["planner", "explorer", "coder_a", "coder_b", "reviewer", "repairer"];
+  if (/deepseek/i.test(provider)) return ["planner", "explorer", "coder_a", "coder_b", "reviewer", "judge", "repairer"];
   if (/mimo/i.test(provider)) return ["explorer", "coder_b", "reviewer", "runner", "summarizer"];
   if (/ollama|local/i.test(provider)) return ["explorer", "coder_b", "runner", "summarizer"];
   return allRoles;
+}
+
+export function isSyntheticAgentProfile(profile: Pick<AgentRuntimeProfile, "agentId" | "provider">): boolean {
+  return /^(mock|fixture|local_tool)$/i.test(profile.provider) || /^(mock|fixture|mock-chief)/i.test(profile.agentId);
+}
+
+function isSyntheticProfile(profile: Pick<AgentRuntimeProfile, "agentId" | "provider">): boolean {
+  return isSyntheticAgentProfile(profile);
 }
 
 function defaultTrustForProvider(provider: string): AgentTrustLevel {

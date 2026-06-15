@@ -2,6 +2,7 @@ import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { Plan } from "../../schemas/plan.js";
 import type { WorkflowKind } from "../orchestration/workflowKind.js";
 import { chatWithProviderFallback } from "../model/providerFallback.js";
+import { structuredJsonResponseFormat, workflowIntentResponseSchema } from "../model/structuredOutput.js";
 import type { ModelRouter } from "../routing/router.js";
 import type { EventLedger } from "../events/eventLedger.js";
 
@@ -38,11 +39,11 @@ export async function classifyWorkflowIntent(input: {
     ledger: input.ledger,
     allowFallback: false,
     markProviderUnavailable: false,
-    buildRequest: (model) => ({
+    buildRequest: (model, provider) => ({
       model,
       temperature: 0,
       maxCompletionTokens: 300,
-      responseFormat: { type: "json_object" },
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_workflow_intent", workflowIntentResponseSchema),
       metadata: { tomorrowedgeTask: "workflow_intent" },
       messages: [
         {
@@ -67,11 +68,19 @@ export async function classifyWorkflowIntent(input: {
     })
   });
   const parsed = parseIntentResponse(result.response?.content);
-  const decision = parsed ?? modelIntentBlocked(result.error);
+  const repaired = !parsed && result.response?.content && !input.fixtureMode && !input.localOnly
+    ? await repairWorkflowIntentResponse({
+        ...input,
+        provider: result.provider,
+        model: result.model,
+        originalContent: result.response.content
+      })
+    : undefined;
+  const decision = parsed ?? repaired?.decision ?? modelIntentBlocked(result.error ?? repaired?.error);
   return {
     ...decision,
-    provider: result.provider,
-    model: result.model,
+    provider: repaired?.decision ? repaired.provider : result.provider,
+    model: repaired?.decision ? repaired.model : result.model,
     fallbackUsed: false
   };
 }
@@ -124,6 +133,70 @@ function parseIntentResponse(content?: string): Omit<WorkflowIntentDecision, "pr
     workflowKind,
     confidence: clampConfidence(object.confidence),
     reason: typeof object.reason === "string" && object.reason.trim() ? object.reason.trim() : `Model classified workflow intent as ${intent}.`
+  };
+}
+
+async function repairWorkflowIntentResponse(input: {
+  goal: string;
+  config: TomorrowEdgeConfig;
+  router: ModelRouter;
+  ledger: EventLedger;
+  fixtureMode?: boolean;
+  localOnly?: boolean;
+  provider: string;
+  model: string;
+  originalContent: string;
+}): Promise<{ decision?: Omit<WorkflowIntentDecision, "provider" | "model" | "fallbackUsed">; provider: string; model: string; error?: string }> {
+  input.ledger.append({
+    type: "evidence_update",
+    phase: "planning",
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    evidence: ["workflow intent output invalid; requesting same-model structured JSON repair"]
+  });
+  const result = await chatWithProviderFallback({
+    config: input.config,
+    router: input.router,
+    role: "planner",
+    provider: input.provider,
+    model: input.model,
+    ledger: input.ledger,
+    allowFallback: false,
+    markProviderUnavailable: false,
+    buildRequest: (model, provider) => ({
+      model,
+      temperature: 0,
+      maxCompletionTokens: 260,
+      responseFormat: structuredJsonResponseFormat(provider, "tomorrowedge_workflow_intent_repair", workflowIntentResponseSchema),
+      metadata: { tomorrowedgeTask: "workflow_intent_repair" },
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Repair TomorrowEdge workflow intent output into one valid JSON object.",
+            "Return JSON only. No markdown.",
+            "Required keys: intent, requiresPatchWorkflow, workflowKind, confidence, reason."
+          ].join("\n")
+        },
+        {
+          role: "user",
+          content: [
+            `User command:\n${input.goal}`,
+            "",
+            "Invalid previous output:",
+            input.originalContent.slice(0, 4000)
+          ].join("\n")
+        }
+      ]
+    })
+  });
+  const decision = parseIntentResponse(result.response?.content);
+  return {
+    decision,
+    provider: result.response ? result.provider : input.provider,
+    model: result.response ? result.model : input.model,
+    error: decision ? undefined : result.error ?? "workflow intent repair returned invalid JSON"
   };
 }
 

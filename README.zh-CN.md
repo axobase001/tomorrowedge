@@ -380,7 +380,7 @@ Screenshot / diagram / error image
 
 ## 当前状态
 
-当前版本：`1.6.2` Canopus。
+当前版本：`1.6.3` Canopus。
 
 主要已实现能力：
 

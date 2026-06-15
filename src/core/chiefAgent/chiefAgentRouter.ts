@@ -1,5 +1,5 @@
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
-import { scoreAgentForRole } from "../agents/defaultCapabilityProfiles.js";
+import { isSyntheticAgentProfile, scoreAgentForRole } from "../agents/defaultCapabilityProfiles.js";
 import type { AgentRuntimeProfile } from "../agents/capabilityProfile.js";
 import type { ObjectiveContractV1 } from "../contracts/objectiveContract.js";
 import type { ChiefAgentDecision, ChiefAgentProfile, ChiefAgentRunContext } from "./chiefAgentTypes.js";
@@ -30,8 +30,10 @@ export function selectChiefAgent(input: {
   }
 
   const risk = input.objectiveContract?.riskLevel ?? "medium";
-  const candidates = input.availableAgents
-    .filter((agent) => agent.allowedRoles.includes("core") || agent.allowedRoles.includes("planner") || agent.allowedRoles.includes("judge"))
+  const eligible = input.availableAgents
+    .filter((agent) => agent.allowedRoles.includes("core") || agent.allowedRoles.includes("planner") || agent.allowedRoles.includes("judge"));
+  const realEligible = eligible.filter((agent) => !isSyntheticAgentProfile(agent));
+  const candidates = (realEligible.length ? realEligible : eligible)
     .map((agent) => ({ agent, score: scoreAgentForRole(agent, "chief", risk) }))
     .sort((a, b) => b.score - a.score);
   const selected = candidates[0]?.agent;

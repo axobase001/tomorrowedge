@@ -44,8 +44,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     };
     const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
     if (req.maxCompletionTokens) body[tokenField] = req.maxCompletionTokens;
-    if (req.responseFormat) body.response_format = req.responseFormat;
-    if (this.options.id === "openrouter" && req.responseFormat?.type === "json_object") {
+    if (req.responseFormat && req.responseFormat.type !== "text") body.response_format = req.responseFormat;
+    if (this.options.id === "openrouter" && req.responseFormat && req.responseFormat.type !== "text") {
       body.reasoning = { effort: "none", exclude: true };
       body.reasoning_effort = "none";
     }

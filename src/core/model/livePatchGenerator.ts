@@ -11,6 +11,7 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 import type { ModelNote } from "../../schemas/modelNote.js";
 import type { StructuredVisualSpec } from "../../schemas/visualSpec.js";
 import { chatWithProviderFallback } from "./providerFallback.js";
+import { livePatchResponseJsonSchema, structuredJsonResponseFormat } from "./structuredOutput.js";
 import type { EventLedger } from "../events/eventLedger.js";
 import { isBinaryLikePath } from "../../safety/fileRisk.js";
 import { textQualityIssueForUnifiedDiff } from "../patch/patchValidator.js";
@@ -178,7 +179,7 @@ async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prom
       maxCompletionTokens: maxOutputTokens,
       timeoutMs: providerRequestTimeoutMs(input.config, provider),
       maxRetries: 0,
-      responseFormat: shouldUseJsonResponseFormat(provider, model) ? { type: "json_object" } : undefined
+      responseFormat: shouldUseJsonResponseFormat(provider, model) ? structuredJsonResponseFormat(provider, "tomorrowedge_live_patch", livePatchResponseJsonSchema) : undefined
     }),
     allowSyntheticFallback: false
   });
