@@ -131,7 +131,39 @@ function rejectPatch(state: AgentGraphState, feedback?: string): CockpitApproval
 async function approveShell(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
   if (!state.access.shellAllowed) return { state, message: accessBlockedMessage(state, "shell") };
   const command = resolveCockpitShellCommand(state);
-  if (!command) return { state, message: "No verification command is available." };
+  if (!command) {
+    const next = await finalizePostApprovalTrace(cwd, await refreshSummary({
+      ...state,
+      approvals: { ...state.approvals, shellApproved: true },
+      agents: [
+        ...resolveWaitingAgents(state, "success", "Shell approval acknowledged; no verification command was available."),
+        {
+          id: makeId("cockpit_shell"),
+          role: "runner" as const,
+          provider: "local_tool",
+          model: "shell",
+          status: "success" as const,
+          summary: "No verification command was available."
+        }
+      ],
+      events: [
+        ...state.events,
+        makeEvent(state, {
+          type: "shell_run",
+          phase: "shell",
+          role: "runner",
+          provider: "local_tool",
+          model: "shell",
+          command: "verification command",
+          cwd,
+          success: true,
+          skipped: true,
+          skipReason: "no verification command available"
+        })
+      ]
+    }), "browser_cockpit");
+    return { state: next, message: "No verification command is available." };
+  }
   if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification." };
 
   const config = loadConfig(cwd);

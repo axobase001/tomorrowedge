@@ -271,6 +271,62 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("clears shell approval when no verification command is available", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-no-shell-command-"));
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
+    const state = await runOfflineGraph(cwd, "write a markdown delivery only without runnable verification", defaultConfig, { fixtureMode: true });
+    const patchedState = {
+      ...state,
+      changedFiles: ["docs/report.md"],
+      runResults: [],
+      plan: state.plan ? {
+        ...state.plan,
+        verificationCommands: []
+      } : state.plan,
+      approvals: { ...state.approvals, patchApproved: true, shellApproved: false },
+      finalSummary: {
+        task: state.goal,
+        result: "partially_completed" as const,
+        userReply: "Patch applied but shell verification is still pending.",
+        userReplySource: "model",
+        changedFiles: ["docs/report.md"],
+        testsRun: [],
+        evidence: ["patch applied"],
+        risksRemaining: ["shell verification pending"],
+        suggestedCommitMessage: "docs: add report"
+      }
+    };
+    await saveSession(cwd, patchedState);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:test" })
+      });
+      const payload = await response.json() as {
+        message: string;
+        viewModel: {
+          currentApproval?: { id: string };
+          rawEvents: Array<{ type: string; skipped?: boolean; skipReason?: string }>;
+          approvalHistory: Array<{ action: string; kind: string; summary: string }>;
+        };
+      };
+
+      expect(response.status).toBe(200);
+      expect(payload.message).toBe("No verification command is available.");
+      expect(payload.viewModel.currentApproval).toBeUndefined();
+      expect(payload.viewModel.rawEvents.some((event) => event.type === "shell_run" && event.skipped === true && event.skipReason === "no verification command available")).toBe(true);
+      expect(payload.viewModel.approvalHistory).toContainEqual(expect.objectContaining({
+        action: "approved",
+        kind: "shell"
+      }));
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("rejects stale patch approval ids before applying a patch", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-stale-patch-"));
     await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
