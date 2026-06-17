@@ -12,6 +12,7 @@ import { ReviewerAgent } from "../agents/reviewer.js";
 import { RepairerAgent } from "../agents/repairer.js";
 import { SummarizerAgent } from "../agents/summarizer.js";
 import { applyUnifiedDiffWithResult } from "../patch/patchApplier.js";
+import { validateUnifiedDiff } from "../patch/patchValidator.js";
 import { ModelRouter } from "../routing/router.js";
 import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
@@ -28,7 +29,7 @@ import { createEventLedger, type EventLedger } from "../events/eventLedger.js";
 import type { ModelBudgetStatus, ModelNote, ModelUsageSummary } from "../../schemas/modelNote.js";
 import type { PatchCandidate } from "../../schemas/patchCandidate.js";
 import type { Plan } from "../../schemas/plan.js";
-import type { FinalSummary, RunResult } from "../../schemas/evidence.js";
+import type { FinalSummary, RunResult, WorkflowStatusBreakdown } from "../../schemas/evidence.js";
 import type { JudgeDecision } from "../../schemas/judge.js";
 import type { ReviewReport } from "../../schemas/review.js";
 import { resolveConversationTarget, targetPromptPrefix } from "../conversation/conversationTargets.js";
@@ -863,6 +864,7 @@ async function runExplorationPhase(runtime: OfflineGraphRuntime, state: AgentGra
 async function runScheduledPatchWorkflow(runtime: OfflineGraphRuntime, state: AgentGraphState): Promise<void> {
   if (!state.roleGraphExecution) {
     await runCandidatePhase(runtime, state);
+    if (state.workflowBlockedReason) return;
     await runReviewAndJudgePhase(runtime, state);
     await runPostJudgeAdvisoryIfNeeded(runtime, state);
     await runPatchApplicationPhase(runtime, state);
@@ -1097,7 +1099,7 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
         try {
           const livePatchResult = await runLivePatchCandidates(livePatchInput);
           commitModelInvocationBudgetScope(state, budgetScope, livePatchResult.notes);
-          return { candidates: livePatchResult.candidates, notes: livePatchResult.notes };
+          return { candidates: filterValidPatchCandidates(cwd, state, ledger, livePatchResult.candidates), notes: livePatchResult.notes };
         } catch (error) {
           releaseModelInvocationBudgetScope(state, budgetScope.reservations, error instanceof Error ? error.message : String(error));
           throw error;
@@ -1204,8 +1206,9 @@ async function runCoderRoleNode(runtime: OfflineGraphRuntime, state: AgentGraphS
     try {
       const livePatchResult = await runLivePatchCandidates(livePatchInput);
       commitModelInvocationBudgetScope(state, budgetScope, livePatchResult.notes);
-      state.candidates.push(...livePatchResult.candidates);
-      for (const candidate of livePatchResult.candidates) {
+      const validCandidates = filterValidPatchCandidates(cwd, state, ledger, livePatchResult.candidates);
+      state.candidates.push(...validCandidates);
+      for (const candidate of validCandidates) {
         recordPatchCandidateEvent(state, ledger, candidate.agentId as AgentRole, candidate);
       }
       if (livePatchResult.notes.length) {
@@ -1213,7 +1216,7 @@ async function runCoderRoleNode(runtime: OfflineGraphRuntime, state: AgentGraphS
         refreshUsageSummary(state);
         recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
       }
-      const completedRoles = new Set(livePatchResult.candidates.map((candidate) => candidate.agentId as AgentRole));
+      const completedRoles = new Set(validCandidates.map((candidate) => candidate.agentId as AgentRole));
       for (const completedRole of completedRoles) {
         recordRoleNodeExecutionResult(state, ledger, completedRole, "success", `${completedRole} produced live patch candidate(s)`);
       }
@@ -1619,17 +1622,18 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
           budgetFallback: () => repairer.run({ plan, failedRun: result, appliedFiles: state.changedFiles, fixtureMode: (options.provider === "fixture" || options.fixtureMode), memoryContext: repairMemoryContext }),
           budgetFallbackLabel: "native repairer"
         } : "offline");
-        state.repairCandidates.push(repairCandidate);
-        recordPatchCandidateEvent(state, ledger, "repairer", repairCandidate);
-        const repairDiffRef = repairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff) : undefined;
-        const repairPrediction = recordPatchApplicationPrediction(ledger, repairCandidate, "repair", access.repairAllowed && access.repairApproved, "Repair candidate should update the files implicated by the failed verifier.");
-        ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef });
-        if (repairCandidate.unifiedDiff) {
+        const validRepairCandidate = assertPatchCandidateQuality(cwd, state, ledger, "repairer", repairCandidate);
+        state.repairCandidates.push(validRepairCandidate);
+        recordPatchCandidateEvent(state, ledger, "repairer", validRepairCandidate);
+        const repairDiffRef = validRepairCandidate.unifiedDiff ? ledger.writeArtifact("diffs", validRepairCandidate.unifiedDiff) : undefined;
+        const repairPrediction = recordPatchApplicationPrediction(ledger, validRepairCandidate, "repair", access.repairAllowed && access.repairApproved, "Repair candidate should update the files implicated by the failed verifier.");
+        ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: validRepairCandidate.candidateId, filesChanged: validRepairCandidate.filesChanged, diffRef: repairDiffRef });
+        if (validRepairCandidate.unifiedDiff) {
           if (!contractAllowsPatchMutation(state, ledger, "repair")) return;
           try {
-            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, repairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
+            const repairApplyResult = await runAgentState(state, ledger, router, "runner", () => applyUnifiedDiffWithResult(cwd, validRepairCandidate.unifiedDiff, access.repairAllowed && access.repairApproved), "offline");
             state.changedFiles = [...new Set([...state.changedFiles, ...repairApplyResult.changedFiles])];
-            ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: repairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", repairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
+            ledger.append({ type: "patch_apply", phase: "repair", role: "runner", provider: "local_tool", model: "patch", candidateId: validRepairCandidate.candidateId, filesChanged: repairApplyResult.changedFiles, diffRef: repairDiffRef ?? ledger.writeArtifact("diffs", validRepairCandidate.unifiedDiff), undoSnapshotIds: repairApplyResult.undoSnapshotIds, applied: true });
             recordOutcomeObservation(ledger, repairPrediction, "applied", `${repairApplyResult.changedFiles.length} repair file(s) changed.`);
             if (!canContinueAutonomy(config, state, ledger, startedAtMs, "shell")) return;
             if (!contractAllowsShell(state, ledger)) return;
@@ -1647,7 +1651,7 @@ async function runVerificationAndRepairPhase(runtime: OfflineGraphRuntime, state
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: repairCandidate.candidateId, filesChanged: repairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: message });
+            ledger.append({ type: "repair_attempt", phase: "repair", role: "repairer", candidateId: validRepairCandidate.candidateId, filesChanged: validRepairCandidate.filesChanged, diffRef: repairDiffRef, applied: false, error: message });
             recordOutcomeObservation(ledger, repairPrediction, "blocked", message);
             state.agents.push({
               id: "approval_repair",
@@ -1701,7 +1705,7 @@ async function runCoderCandidate(input: {
       memoryConstraints
     });
   return runAgentState(input.state, input.ledger, input.router, input.role, async () => {
-    if (!externalCoder) return fallback();
+    if (!externalCoder) return assertPatchCandidateQuality(input.cwd, input.state, input.ledger, input.role, await fallback());
     const result = await invokeExternalRole({
       cwd: input.cwd,
       profile: externalCoder,
@@ -1720,7 +1724,7 @@ async function runCoderCandidate(input: {
     const patch = normalizeExternalPatch(result.payload, input.role, input.variant === "a" ? "minimal_patch" : "alternative");
     if (!patch) recordExternalNormalizeFallback(input.ledger, input.role, externalCoder, "patch candidate", `native ${input.role}`);
     const candidate = patch ?? await fallback();
-    return applyCoderConstraintsToCandidate(candidate, memoryConstraints);
+    return assertPatchCandidateQuality(input.cwd, input.state, input.ledger, input.role, applyCoderConstraintsToCandidate(candidate, memoryConstraints));
   }, externalCoder ? {
     agentKind: "external",
     config: input.config,
@@ -1974,6 +1978,29 @@ async function finalizeBlockedByContract(runtime: OfflineGraphRuntime, state: Ag
 
 async function finalizeBlockedByEvidenceGate(runtime: OfflineGraphRuntime, state: AgentGraphState, reason: string): Promise<AgentGraphState> {
   const { ledger } = runtime;
+  if (/RoleGraphScheduler|TaskGraph refused|ready role nodes cannot run/i.test(reason)) {
+    state.finalSummary = {
+      task: state.goal,
+      result: "aborted",
+      userReply: `I blocked this workflow because scheduler and TaskGraph state diverged before a governed action could run. ${reason}`,
+      userReplySource: "blocked",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: [reason, ...state.evidencePackets.map((packet) => packet.summary)],
+      risksRemaining: ["scheduler/taskgraph mismatch: ready roles had no matching executable task action."],
+      suggestedCommitMessage: state.changedFiles.length ? `chore: review blocked changes in ${state.changedFiles[0]}` : "chore: no code changes"
+    };
+    ledger.append({
+      type: "workflow_stop_reason",
+      phase: "planning",
+      role: "planner",
+      reason,
+      result: "aborted"
+    });
+    await appendFinalSummaryEvents(state, ledger, runtime);
+    await releaseExternalAgentProcessPool();
+    return state;
+  }
   if (state.judge?.decision === "request_revision" || state.judge?.decision === "ask_user" || state.judge?.decision === "abort") {
     const userReply = state.judge.decision === "request_revision"
       ? `I stopped before applying changes because review and judgment did not clear any patch candidate for safe automatic application. ${state.judge.reason}`
@@ -2319,6 +2346,7 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
   refreshUsageSummary(state);
   const workflowKind = state.workflowKind ?? inferWorkflowKindFromEvents(ledger.events, state.plan);
   applyPolicyStopDecision(state, computeProjectedTraceCompleteness(ledger.events, workflowKind, state.plan));
+  applyStatusBreakdownToFinalSummary(state);
   ledger.append({
     type: "cost_usage",
     phase: "summary",
@@ -2330,6 +2358,24 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
   });
   const summaryRef = ledger.writeArtifact("summaries", JSON.stringify(state.finalSummary, null, 2), "json");
   attachSummaryTaskNodeRefs(state, { evidenceRefs: [summaryRef], artifactRefs: [summaryRef] });
+  const statusBreakdown = state.finalSummary.statusBreakdown ?? buildWorkflowStatusBreakdown(state);
+  const statusRef = ledger.writeArtifact("status_breakdowns", JSON.stringify(statusBreakdown, null, 2), "json");
+  ledger.append({
+    type: "workflow_status_breakdown",
+    phase: "summary",
+    role: "summarizer",
+    statusRef,
+    providerSmoke: statusBreakdown.providerSmoke,
+    modelInvocation: statusBreakdown.modelInvocation,
+    scheduler: statusBreakdown.scheduler,
+    patchApplication: statusBreakdown.patchApplication,
+    syntaxValidation: statusBreakdown.syntaxValidation,
+    artifactQuality: statusBreakdown.artifactQuality,
+    externalTests: statusBreakdown.externalTests,
+    reviewQuality: statusBreakdown.reviewQuality,
+    taskAcceptance: statusBreakdown.taskAcceptance,
+    summary: `acceptance=${statusBreakdown.taskAcceptance}; patch=${statusBreakdown.patchApplication}; tests=${statusBreakdown.externalTests}; quality=${statusBreakdown.artifactQuality}`
+  });
   ledger.append({
     type: "summary",
     phase: "summary",
@@ -2346,7 +2392,7 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
   });
   state.traceCompleteness = computeTraceCompleteness(ledger.events, { workflowKind, plan: state.plan });
   const traceCompletenessRef = ledger.writeArtifact("trace_completeness", JSON.stringify(state.traceCompleteness, null, 2), "json");
-  attachSummaryTaskNodeRefs(state, { evidenceRefs: [traceCompletenessRef], artifactRefs: [traceCompletenessRef] });
+  attachSummaryTaskNodeRefs(state, { evidenceRefs: [statusRef, traceCompletenessRef], artifactRefs: [statusRef, traceCompletenessRef] });
   ledger.append({
     type: "trace_completeness",
     phase: "summary",
@@ -2359,6 +2405,129 @@ async function appendFinalSummaryEvents(state: AgentGraphState, ledger: EventLed
     traceCompletenessRef
   });
   await writeObjectiveTraceAndPolicyEvents(state, ledger, runtime);
+}
+
+function applyStatusBreakdownToFinalSummary(state: AgentGraphState): void {
+  if (!state.finalSummary) return;
+  let breakdown = buildWorkflowStatusBreakdown(state);
+  const risks: string[] = [];
+  let result = state.finalSummary.result;
+  if (breakdown.syntaxValidation === "failed" || breakdown.artifactQuality === "failed") {
+    result = "failed";
+    risks.push("Artifact quality gate failed; output cannot be accepted until invalid syntax, duplicate declarations, or generated artifact defects are fixed.");
+  } else if (breakdown.reviewQuality === "incomplete" && result === "completed") {
+    result = "partially_completed";
+    risks.push("Reviewer/debate quality path was budget-blocked; final quality is incomplete.");
+  }
+  state.finalSummary = {
+    ...state.finalSummary,
+    result,
+    risksRemaining: uniqueStrings([...state.finalSummary.risksRemaining, ...risks]),
+    statusBreakdown: breakdown
+  };
+  breakdown = buildWorkflowStatusBreakdown(state);
+  state.finalSummary.statusBreakdown = breakdown;
+}
+
+function buildWorkflowStatusBreakdown(state: AgentGraphState): WorkflowStatusBreakdown {
+  const events = state.events;
+  const artifactGateEvents = events.filter((event): event is Extract<TomorrowEdgeEvent, { type: "artifact_quality_gate" }> => event.type === "artifact_quality_gate");
+  const failedArtifactGates = artifactGateEvents.filter((event) => event.status === "failed");
+  const patchApplyEvents = events.filter((event): event is Extract<TomorrowEdgeEvent, { type: "patch_apply" }> => event.type === "patch_apply");
+  const hasPatchCandidate = state.candidates.length > 0 || events.some((event) => event.type === "patch_candidate");
+  const hasModelAttempt = state.modelNotes.length > 0 || events.some((event) => event.type === "model_call" || event.type === "external_agent_cost_usage");
+  const budgetBlocked = events.some((event) => event.type === "budget_decision" && event.status === "blocked")
+    || events.some((event) => event.type === "autonomy_limit_reached" && event.status === "blocked_by_budget");
+  const failedRuns = state.runResults.filter((result) => !result.success && !result.skipped);
+  const passedRuns = state.runResults.filter((result) => result.success && !result.skipped);
+  const skippedRuns = state.runResults.filter((result) => result.skipped);
+  const reviewQuality = reviewQualityStatus(events, state);
+  const patchApplication = patchApplicationStatus({ failedArtifactGates, patchApplyEvents, hasPatchCandidate });
+  const artifactQuality = failedArtifactGates.length
+    ? "failed"
+    : artifactGateEvents.some((event) => event.status === "passed")
+      ? "passed"
+      : "not_run";
+  const syntaxValidation = failedArtifactGates.some((event) => event.issues.some((issue) => /duplicate|syntax|declaration|export/i.test(issue)))
+    ? "failed"
+    : artifactGateEvents.some((event) => event.status === "passed")
+      ? "passed"
+      : "not_run";
+  const externalTests = state.runResults.length === 0
+    ? "not_run"
+    : failedRuns.length
+      ? "failed"
+      : passedRuns.length
+        ? "passed"
+        : skippedRuns.length
+          ? "skipped"
+          : "not_run";
+  const scheduler = !state.roleGraphExecution
+    ? "not_run"
+    : state.workflowBlockedReason || events.some((event) => event.type === "workflow_stop_reason" && /RoleGraphScheduler|TaskGraph refused|ready role/i.test(event.reason))
+      ? "blocked"
+      : "completed";
+  const reasons = uniqueStrings([
+    state.workflowBlockedReason ?? "",
+    ...failedArtifactGates.flatMap((event) => event.issues),
+    ...failedRuns.map(evidenceFromRun),
+    ...events
+      .filter((event): event is Extract<TomorrowEdgeEvent, { type: "autonomy_limit_reached" }> => event.type === "autonomy_limit_reached" && event.status === "blocked_by_budget")
+      .map((event) => event.reason)
+  ]);
+  return {
+    providerSmoke: "not_recorded",
+    modelInvocation: hasModelAttempt ? "attempted" : budgetBlocked ? "blocked" : "not_run",
+    scheduler,
+    patchApplication,
+    syntaxValidation,
+    artifactQuality,
+    externalTests,
+    reviewQuality,
+    taskAcceptance: taskAcceptanceStatus(state, { artifactQuality, externalTests, reviewQuality }),
+    reasons
+  };
+}
+
+function patchApplicationStatus(input: {
+  failedArtifactGates: Array<Extract<TomorrowEdgeEvent, { type: "artifact_quality_gate" }>>;
+  patchApplyEvents: Array<Extract<TomorrowEdgeEvent, { type: "patch_apply" }>>;
+  hasPatchCandidate: boolean;
+}): WorkflowStatusBreakdown["patchApplication"] {
+  if (input.failedArtifactGates.length) return "invalid";
+  if (input.patchApplyEvents.some((event) => event.applied)) return "applied";
+  if (input.patchApplyEvents.some((event) => event.error)) return "blocked";
+  if (input.hasPatchCandidate) return "generated";
+  return "not_generated";
+}
+
+function reviewQualityStatus(events: TomorrowEdgeEvent[], state: AgentGraphState): WorkflowStatusBreakdown["reviewQuality"] {
+  const requiresReview = Boolean(state.plan?.debateRecommended || state.review || state.debateRounds.length || state.roleGraph?.nodes.some((node) => node.role === "reviewer" || node.role === "judge"));
+  if (!requiresReview) return "not_required";
+  const blockedReviewBudget = events.some((event) =>
+    event.type === "autonomy_limit_reached"
+    && event.status === "blocked_by_budget"
+    && (/pre-judge|debate|review|judge/i.test(event.reason) || event.phase === "review" || event.phase === "judge")
+  );
+  if (blockedReviewBudget) return "incomplete";
+  const reviewerFallback = events.some((event) =>
+    event.type === "fallback_to_native"
+    && (event.fallbackRole === "reviewer" || event.fallbackRole === "judge")
+    && /budget/i.test(event.reason)
+  );
+  return reviewerFallback ? "degraded" : "full";
+}
+
+function taskAcceptanceStatus(
+  state: AgentGraphState,
+  status: Pick<WorkflowStatusBreakdown, "artifactQuality" | "externalTests" | "reviewQuality">
+): WorkflowStatusBreakdown["taskAcceptance"] {
+  if (!state.finalSummary) return "incomplete";
+  if (status.artifactQuality === "failed" || status.externalTests === "failed") return "rejected";
+  if (status.reviewQuality === "incomplete") return "incomplete";
+  if (state.finalSummary.result === "completed") return "accepted";
+  if (state.finalSummary.result === "partially_completed") return "incomplete";
+  return "rejected";
 }
 
 function computeProjectedTraceCompleteness(events: TomorrowEdgeEvent[], workflowKind: ReturnType<typeof inferWorkflowKindFromEvents>, plan?: Plan) {
@@ -3853,6 +4022,87 @@ function recordPatchCandidateEvent(state: AgentGraphState, ledger: EventLedger, 
   });
 }
 
+function validatePatchCandidateQuality(cwd: string, state: AgentGraphState, ledger: EventLedger, role: AgentRole, candidate: PatchCandidate): boolean {
+  const phase = role === "repairer" ? "repair" : "coding";
+  if (!candidate.unifiedDiff.trim()) {
+    ledger.append({
+      type: "artifact_quality_gate",
+      phase,
+      role,
+      target: "patch_candidate",
+      status: "skipped",
+      candidateId: candidate.candidateId,
+      filesChanged: candidate.filesChanged,
+      issues: [],
+      summary: `Patch candidate ${candidate.candidateId} has no diff; artifact quality gate skipped.`
+    });
+    return true;
+  }
+  const validation = validateUnifiedDiff(cwd, candidate.unifiedDiff);
+  const issues = validation.issues.map((issue) => `${issue.path}: ${issue.reason}`);
+  const status = issues.length ? "failed" : "passed";
+  const gateRef = ledger.writeArtifact("quality_gates", JSON.stringify({
+    candidateId: candidate.candidateId,
+    role,
+    status,
+    filesChanged: candidate.filesChanged,
+    issues
+  }, null, 2), "json");
+  ledger.append({
+    type: "artifact_quality_gate",
+    phase,
+    role,
+    target: "patch_candidate",
+    status,
+    candidateId: candidate.candidateId,
+    filesChanged: candidate.filesChanged,
+    issues,
+    gateRef,
+    summary: issues.length
+      ? `Patch candidate ${candidate.candidateId} failed artifact quality gate: ${issues.join("; ")}`
+      : `Patch candidate ${candidate.candidateId} passed artifact quality gate.`
+  });
+  if (!issues.length) return true;
+  return false;
+}
+
+function assertPatchCandidateQuality(cwd: string, state: AgentGraphState, ledger: EventLedger, role: AgentRole, candidate: PatchCandidate): PatchCandidate {
+  if (validatePatchCandidateQuality(cwd, state, ledger, role, candidate)) return candidate;
+  const gate = [...state.events].reverse().find((event) => event.type === "artifact_quality_gate" && event.candidateId === candidate.candidateId && event.status === "failed");
+  const reason = gate?.type === "artifact_quality_gate" && gate.issues.length
+    ? `Patch candidate ${candidate.candidateId} failed artifact quality gate: ${gate.issues.join("; ")}`
+    : `Patch candidate ${candidate.candidateId} failed artifact quality gate.`;
+  state.workflowBlockedReason = reason;
+  throw new WorkflowBlockedError(reason);
+}
+
+function filterValidPatchCandidates(cwd: string, state: AgentGraphState, ledger: EventLedger, candidates: PatchCandidate[]): PatchCandidate[] {
+  const valid: PatchCandidate[] = [];
+  for (const candidate of candidates) {
+    const role = asAgentRole(candidate.agentId) ?? (candidate.approach === "repair" ? "repairer" : "coder_a");
+    if (validatePatchCandidateQuality(cwd, state, ledger, role, candidate)) {
+      valid.push(candidate);
+    }
+  }
+  return valid;
+}
+
+function asAgentRole(value: string): AgentRole | undefined {
+  return [
+    "core",
+    "planner",
+    "vision",
+    "explorer",
+    "coder_a",
+    "coder_b",
+    "reviewer",
+    "judge",
+    "runner",
+    "repairer",
+    "summarizer"
+  ].includes(value) ? value as AgentRole : undefined;
+}
+
 function recordShellRunEvent(state: AgentGraphState, ledger: EventLedger, cwd: string, result: RunResult): ShellRunEvent {
   const stdoutRef = ledger.writeArtifact("stdout", result.stdout);
   const stderrRef = ledger.writeArtifact("stderr", result.stderr);
@@ -4277,6 +4527,7 @@ function recordRepairPolicyDecision(state: AgentGraphState, ledger: EventLedger,
     failureSignature: policyDecision.failureSignature,
     occurrence: policyDecision.occurrence,
     action: policyDecision.action,
+    repairStatus: policyDecision.repairStatus,
     strategy: policyDecision.strategy,
     reason: policyDecision.reason
   });

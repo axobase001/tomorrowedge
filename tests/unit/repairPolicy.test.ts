@@ -19,6 +19,16 @@ describe("repair policy", () => {
     expect(decideRepairPolicy({ failedRun: run, changedFiles: ["index.js"] }).action).toBe("retry_schema");
   });
 
+  it("marks deterministic syntax failures as unsupported repair targets", () => {
+    const run = failedRun({ stderr: "SyntaxError: Identifier 'planRetries' has already been declared" });
+    const decision = decideRepairPolicy({ failedRun: run, changedFiles: ["index.js"] });
+
+    expect(decision.failureClass).toBe("deterministic_syntax_failure");
+    expect(decision.action).toBe("stop");
+    expect(decision.repairStatus).toBe("unsupported");
+    expect(decision.reason).toContain("rejected before selection");
+  });
+
   it("routes environment failures away from patch repair", () => {
     const run = failedRun({ stderr: "spawn cargo ENOENT" });
     const decision = decideRepairPolicy({ failedRun: run, changedFiles: ["index.js"] });

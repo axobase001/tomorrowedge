@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { applyUnifiedDiff } from "../../src/core/patch/patchApplier.js";
@@ -109,6 +109,56 @@ literal 0
 
     expect(validateUnifiedDiff(process.cwd(), mojibakeDiff).issues[0]?.reason).toContain("mojibake");
     expect(validateUnifiedDiff(process.cwd(), htmlDiff).issues[0]?.reason).toContain("malformed");
+  });
+
+  it("blocks duplicate top-level exports before patch application", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-duplicate-export-"));
+    const file = path.join(cwd, "index.js");
+    try {
+      await writeFile(file, "export function extractOutline(markdown) {\n  return [];\n}\n", "utf8");
+      const duplicateExportDiff = `--- a/index.js
++++ b/index.js
+@@ -1,3 +1,7 @@
+ export function extractOutline(markdown) {
+   return [];
+ }
++
++export function extractOutline(markdown) {
++  return markdown.split("\\n");
++}
+`.replace("++++", "+++");
+
+      const result = validateUnifiedDiff(cwd, duplicateExportDiff);
+
+      expect(result.ok).toBe(false);
+      expect(result.issues.map((issue) => issue.reason).join("\n")).toContain("duplicate top-level declaration extractOutline");
+      await expect(applyUnifiedDiff(cwd, duplicateExportDiff, true)).rejects.toThrow("duplicate top-level declaration extractOutline");
+    } finally {
+      await unlink(file).catch(() => undefined);
+      await rmdir(cwd).catch(() => undefined);
+    }
+  });
+
+  it("blocks README duplicate headings and unresolved TODO placeholders", () => {
+    const duplicateHeadingDiff = `--- /dev/null
++++ b/README.md
+@@ -0,0 +1,5 @@
++# Demo
++Content
++# Demo
++More content
++Done
+`.replace("++++", "+++");
+    const todoDiff = `--- /dev/null
++++ b/README.md
+@@ -0,0 +1,3 @@
++# Demo
++TODO: fill in production usage.
++Done
+`.replace("++++", "+++");
+
+    expect(validateUnifiedDiff(process.cwd(), duplicateHeadingDiff).issues[0]?.reason).toContain("duplicate heading");
+    expect(validateUnifiedDiff(process.cwd(), todoDiff).issues[0]?.reason).toContain("TODO");
   });
 
   it("rejects diffs that parse to no file targets", async () => {
