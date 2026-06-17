@@ -22,6 +22,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `read ${event.path}`;
     case "patch_candidate":
       return `${event.candidateId} ${event.filesChanged.length} files risk=${event.estimatedRisk}`;
+    case "artifact_quality_gate":
+      return `${event.target} ${event.status}${event.candidateId ? ` ${event.candidateId}` : ""}: ${event.summary}`;
     case "review_decision":
       return `review recommendation=${event.recommendation}`;
     case "judge_decision":
@@ -80,6 +82,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.resolution} selected=${event.selectedCandidateId ?? "-"} selectedResolution=${event.selectedCandidateResolution ?? "-"} global=${event.globalResolution ?? "-"} issues selected=${event.selectedIssueCount ?? 0} global=${event.globalIssueCount ?? 0} nonSelected=${event.nonSelectedIssueCount ?? 0} coverage=${event.evidenceCoverageScore} unresolved=${event.unresolvedBlockingIssues.length}`;
     case "summary":
       return `result=${event.result}`;
+    case "workflow_status_breakdown":
+      return `${event.taskAcceptance}: patch=${event.patchApplication} tests=${event.externalTests} quality=${event.artifactQuality} review=${event.reviewQuality}`;
     case "autonomy_limit_reached":
       return `${event.status}: ${event.reason}`;
     case "routing_decision":
@@ -192,6 +196,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("stderrRef" in event && event.stderrRef) refs.push(event.stderrRef);
   if ("evidenceRef" in event && event.evidenceRef) refs.push(event.evidenceRef);
   if ("summaryRef" in event && event.summaryRef) refs.push(event.summaryRef);
+  if ("statusRef" in event && event.statusRef) refs.push(event.statusRef);
   if ("messageRef" in event && event.messageRef) refs.push(event.messageRef);
   if ("requestRef" in event && event.requestRef) refs.push(event.requestRef);
   if ("resultRef" in event && event.resultRef) refs.push(event.resultRef);
@@ -200,6 +205,7 @@ export function artifactRefs(event: TomorrowEdgeEvent): string[] {
   if ("predictionRef" in event && event.predictionRef) refs.push(event.predictionRef);
   if ("observationRef" in event && event.observationRef) refs.push(event.observationRef);
   if ("artifactRef" in event && event.artifactRef) refs.push(event.artifactRef);
+  if ("gateRef" in event && event.gateRef) refs.push(event.gateRef);
   if ("graphRef" in event && event.graphRef) refs.push(event.graphRef);
   if ("profileRef" in event && event.profileRef) refs.push(event.profileRef);
   if ("contractRef" in event && event.contractRef) refs.push(event.contractRef);

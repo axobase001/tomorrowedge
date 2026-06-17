@@ -180,10 +180,19 @@ describe("offline agent graph", () => {
       ]));
       expect(taskNode("summarize")?.evidenceRefs).toEqual(expect.arrayContaining([
         expect.stringContaining("summaries"),
+        expect.stringContaining("status_breakdowns"),
         expect.stringContaining("trace_completeness"),
         expect.stringContaining("objective_traces")
       ]));
       expect(state.events.some((event) => event.type === "shell_run" && event.success === true)).toBe(true);
+      expect(state.events.some((event) => event.type === "artifact_quality_gate" && event.status === "passed" && event.candidateId === "fixture_candidate_a")).toBe(true);
+      expect(state.events.some((event) => event.type === "workflow_status_breakdown" && event.taskAcceptance === "accepted")).toBe(true);
+      expect(state.finalSummary?.statusBreakdown).toMatchObject({
+        patchApplication: "applied",
+        artifactQuality: "passed",
+        externalTests: "passed",
+        taskAcceptance: "accepted"
+      });
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

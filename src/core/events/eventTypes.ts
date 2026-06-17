@@ -1,5 +1,6 @@
 import type { AccessMode } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
+import type { WorkflowStatusBreakdown } from "../../schemas/evidence.js";
 import type { DebateIssue } from "../debate/debateProtocol.js";
 import type { TaskGraphNodeStatus } from "../planning/taskGraph.js";
 
@@ -80,6 +81,17 @@ export type PatchCandidateEvent = BaseEvent & {
   estimatedRisk: "low" | "medium" | "high";
 };
 
+export type ArtifactQualityGateEvent = BaseEvent & {
+  type: "artifact_quality_gate";
+  target: "patch_candidate" | "applied_artifact" | "final_artifact";
+  status: "passed" | "failed" | "skipped";
+  candidateId?: string;
+  filesChanged: string[];
+  issues: string[];
+  gateRef?: string;
+  summary: string;
+};
+
 export type ReviewEvent = BaseEvent & {
   type: "review_decision";
   reviewRef: string;
@@ -140,6 +152,7 @@ export type RepairPolicyEvent = BaseEvent & {
   failureSignature: string;
   occurrence: number;
   action: "repair" | "retry_schema" | "expand_context" | "stop" | "escalate";
+  repairStatus?: "repairable" | "unsupported" | "retry_schema" | "stopped";
   strategy: string;
   reason: string;
 };
@@ -372,6 +385,21 @@ export type SummaryEvent = BaseEvent & {
   type: "summary";
   summaryRef: string;
   result: string;
+};
+
+export type WorkflowStatusBreakdownEvent = BaseEvent & {
+  type: "workflow_status_breakdown";
+  statusRef: string;
+  providerSmoke: WorkflowStatusBreakdown["providerSmoke"];
+  modelInvocation: WorkflowStatusBreakdown["modelInvocation"];
+  scheduler: WorkflowStatusBreakdown["scheduler"];
+  patchApplication: WorkflowStatusBreakdown["patchApplication"];
+  syntaxValidation: WorkflowStatusBreakdown["syntaxValidation"];
+  artifactQuality: WorkflowStatusBreakdown["artifactQuality"];
+  externalTests: WorkflowStatusBreakdown["externalTests"];
+  reviewQuality: WorkflowStatusBreakdown["reviewQuality"];
+  taskAcceptance: WorkflowStatusBreakdown["taskAcceptance"];
+  summary: string;
 };
 
 export type AccessModeEvent = BaseEvent & {
@@ -819,6 +847,7 @@ export type TomorrowEdgeEvent =
   | ContextSelectEvent
   | FileReadEvent
   | PatchCandidateEvent
+  | ArtifactQualityGateEvent
   | ReviewEvent
   | JudgeEvent
   | PatchApplyEvent
@@ -848,6 +877,7 @@ export type TomorrowEdgeEvent =
   | DebateMoveEvent
   | DebateResolutionEvent
   | SummaryEvent
+  | WorkflowStatusBreakdownEvent
   | AccessModeEvent
   | AutonomyLimitEvent
   | RoutingDecisionEvent
