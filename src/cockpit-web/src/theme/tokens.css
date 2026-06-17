@@ -106,6 +106,12 @@ input, textarea, select {
   background: var(--te-control-bg);
   color: var(--te-text);
 }
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--te-danger);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--te-danger) 34%, transparent);
+}
 
 .te-shell {
   min-height: 100vh;
@@ -576,6 +582,8 @@ input, textarea, select {
   background: var(--te-backdrop);
 }
 .te-receipt-card {
+  position: relative;
+  z-index: 91;
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow: auto;
@@ -705,6 +713,11 @@ input, textarea, select {
   font-size: 12px;
 }
 .te-empty-state span {
+  overflow-wrap: anywhere;
+}
+.te-field-error {
+  color: var(--te-danger);
+  font: 11px/1.35 var(--te-mono);
   overflow-wrap: anywhere;
 }
 .te-loading-state {
@@ -949,6 +962,8 @@ input, textarea, select {
 }
 .te-setup-card,
 .te-keymgr-card {
+  position: relative;
+  z-index: 81;
   width: min(760px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow: auto;
@@ -1222,6 +1237,15 @@ input, textarea, select {
   .te-chip-amber,
   .te-chip-red {
     background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

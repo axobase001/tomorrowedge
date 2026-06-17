@@ -9,6 +9,7 @@ import { ReceiptModal } from "../../src/cockpit-web/src/components/ReceiptModal.
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/providerConnectionMessage.js";
+import { providerRuntimeErrors } from "../../src/cockpit-web/src/providerRuntimeValidation.js";
 import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
@@ -215,6 +216,25 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("policy_test");
   });
 
+  it("renders cockpit overlays with modal dialog semantics", () => {
+    const html = renderApp(sampleViewModel(), { setupVisible: true, keyManagerOpen: true, drawerOpen: true });
+    const receiptHtml = renderToStaticMarkup(
+      React.createElement(ReceiptModal, {
+        telemetry: localizedZhViewModel().telemetry,
+        t: createTranslator("en"),
+        onDismiss: () => undefined
+      })
+    );
+
+    expect(html).toContain("role=\"dialog\"");
+    expect(html).toContain("aria-modal=\"true\"");
+    expect(html).toContain("aria-labelledby=\"detail-drawer-title\"");
+    expect(html).toContain("aria-labelledby=\"setup-title\"");
+    expect(html).toContain("aria-labelledby=\"keymgr-title\"");
+    expect(receiptHtml).toContain("aria-labelledby=\"receipt-title\"");
+    expect(receiptHtml).toContain("Close cost receipt");
+  });
+
   it("shows composer connection status without clearing the controlled goal", () => {
     const html = renderApp(sampleViewModel(), { goal: "run a smoke task", statusMessage: "Workflow running..." });
 
@@ -356,6 +376,36 @@ describe("cockpit web React surface", () => {
       keyConfigured: false,
       busy: false
     })).toBe(false);
+  });
+
+  it("blocks provider runtime saves with invalid timeout and retry drafts", () => {
+    expect(providerRuntimeErrors({ requestTimeoutMs: "-1", maxRetries: "-2" })).toEqual({
+      requestTimeoutMs: "positive_integer",
+      maxRetries: "non_negative_integer"
+    });
+    expect(providerRuntimeErrors({ requestTimeoutMs: "60000", maxRetries: "0" })).toEqual({});
+    expect(canSaveProviderConfig({
+      provider: "openrouter",
+      model: "qwen/qwen3-coder:free",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      apiKey: "",
+      keyConfigured: true,
+      busy: false,
+      requestTimeoutMs: "-1",
+      maxRetries: "1"
+    })).toBe(false);
+    expect(canSaveProviderConfig({
+      provider: "openrouter",
+      model: "qwen/qwen3-coder:free",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      apiKey: "",
+      keyConfigured: true,
+      busy: false,
+      requestTimeoutMs: "60000",
+      maxRetries: "1"
+    })).toBe(true);
   });
 
   it("combines static and catalog model recommendations for the picker", () => {
@@ -740,6 +790,8 @@ describe("cockpit web React surface", () => {
 
     expect(tokens).toContain("prefers-color-scheme: dark");
     expect(tokens).toContain("button:focus-visible");
+    expect(tokens).toContain("prefers-reduced-motion: reduce");
+    expect(tokens).toContain(".te-field-error");
     expect(tokens).toContain("--te-mark-red");
     expect(tokens).toContain(".te-empty-state");
     expect(tinyLmCss).toContain("--lm-bg");
@@ -749,12 +801,15 @@ describe("cockpit web React surface", () => {
     expect(siteCss).toContain("--focus-ring");
     expect(siteCss).toContain("button:focus-visible");
     expect(fallback).toContain("prefers-color-scheme: dark");
+    expect(fallback).toContain("id=\"drawer-backdrop\"");
+    expect(fallback).toContain("role=\"dialog\"");
+    expect(fallback).toContain("trapDrawerFocus");
     expect(fallback).not.toContain("min-width: 1080px");
     expect(fallback).not.toContain("min-width: 980px");
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean }> = {}): string {
   const language = overrides.language ?? "en";
   const t = createTranslator(language);
   return renderToStaticMarkup(
@@ -802,7 +857,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       setupVisible: overrides.setupVisible ?? false,
       setupBusy: overrides.busy ?? false,
       keyManagerOpen: overrides.keyManagerOpen ?? false,
-      drawerOpen: true,
+      drawerOpen: overrides.drawerOpen ?? true,
       language,
       t,
       onGoalChange: () => undefined,

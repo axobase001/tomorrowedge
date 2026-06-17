@@ -9,6 +9,8 @@ import type {
 } from "../api.js";
 import type { Translator } from "../i18n.js";
 import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
+import { hasProviderRuntimeErrors, numericDraft, providerRuntimeErrors } from "../providerRuntimeValidation.js";
+import { ModalSurface } from "./ModalSurface.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
 import { staticModelIdsForProvider, suggestedModelForProvider } from "../../../providers/staticModels.js";
 
@@ -63,6 +65,7 @@ export function KeyRoleManager({
   const [catalogMessage, setCatalogMessage] = useState("");
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
+  const runtimeErrors = providerRuntimeErrors({ requestTimeoutMs, maxRetries });
 
   useEffect(() => {
     setProvider(initialProvider);
@@ -92,19 +95,28 @@ export function KeyRoleManager({
     apiKeyEnv,
     apiKey,
     keyConfigured: Boolean(selectedProvider?.keyConfigured),
-    busy
+    busy,
+    requestTimeoutMs,
+    maxRetries
   });
   const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, [...(selectedProvider?.models ?? []), ...catalogModels]);
   const selectedModelChoice = modelOptions.includes(model) ? model : "__custom";
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
-    <div className="te-keymgr-backdrop" data-testid="key-role-manager">
-      <section className="te-keymgr-card">
+    <ModalSurface
+      backdropClassName="te-keymgr-backdrop"
+      describedBy="keymgr-intro"
+      dismissOnBackdrop={false}
+      labelledBy="keymgr-title"
+      onDismiss={onClose}
+      surfaceClassName="te-keymgr-card"
+      surfaceTestId="key-role-manager"
+    >
         <header className="te-keymgr-header">
           <div>
             <span className="te-chip te-chip-blue">{t("keymgr.badge")}</span>
-            <h2>{t("keymgr.title")}</h2>
+            <h2 id="keymgr-title">{t("keymgr.title")}</h2>
           </div>
           <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">{t("keymgr.close")}</button>
         </header>
@@ -114,7 +126,7 @@ export function KeyRoleManager({
         </nav>
         {tab === "keys" ? (
           <section className="te-keymgr-body">
-            <p>{t("keymgr.keysIntro")}</p>
+            <p id="keymgr-intro">{t("keymgr.keysIntro")}</p>
             <div className="te-keymgr-provider-list">
               {providers.length ? providers.map((item) => (
                 <article key={item.id} className={item.id === normalizedProvider ? "selected" : ""}>
@@ -158,11 +170,27 @@ export function KeyRoleManager({
               </label>
               <label>
                 <span>{t("keymgr.requestTimeout")}</span>
-                <input value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(event.target.value)} inputMode="numeric" data-testid="keymgr-request-timeout" />
+                <input
+                  value={requestTimeoutMs}
+                  onChange={(event) => setRequestTimeoutMs(event.target.value)}
+                  inputMode="numeric"
+                  aria-describedby={runtimeErrors.requestTimeoutMs ? "keymgr-request-timeout-error" : undefined}
+                  aria-invalid={runtimeErrors.requestTimeoutMs ? "true" : undefined}
+                  data-testid="keymgr-request-timeout"
+                />
+                {runtimeErrors.requestTimeoutMs ? <span className="te-field-error" id="keymgr-request-timeout-error" role="alert">{t("validation.requestTimeoutPositiveInteger")}</span> : null}
               </label>
               <label>
                 <span>{t("keymgr.maxRetries")}</span>
-                <input value={maxRetries} onChange={(event) => setMaxRetries(event.target.value)} inputMode="numeric" data-testid="keymgr-max-retries" />
+                <input
+                  value={maxRetries}
+                  onChange={(event) => setMaxRetries(event.target.value)}
+                  inputMode="numeric"
+                  aria-describedby={runtimeErrors.maxRetries ? "keymgr-max-retries-error" : undefined}
+                  aria-invalid={runtimeErrors.maxRetries ? "true" : undefined}
+                  data-testid="keymgr-max-retries"
+                />
+                {runtimeErrors.maxRetries ? <span className="te-field-error" id="keymgr-max-retries-error" role="alert">{t("validation.maxRetriesNonNegativeInteger")}</span> : null}
               </label>
               <label>
                 <span>{t("keymgr.apiKey")}</span>
@@ -248,8 +276,7 @@ export function KeyRoleManager({
             <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {formatProviderConnectionMessage(connectionResult, t)}
           </p>
         ) : null}
-      </section>
-    </div>
+    </ModalSurface>
   );
 }
 
@@ -269,8 +296,12 @@ export function providerFormDefaults(provider: string, providers: Array<{ id: st
   };
 }
 
-export function canSaveProviderConfig(input: { provider: string; model: string; baseUrl: string; apiKeyEnv: string; apiKey?: string; keyConfigured: boolean; busy: boolean }): boolean {
-  return Boolean(input.provider && input.model.trim() && input.baseUrl.trim() && input.apiKeyEnv.trim() && (input.apiKey?.trim() || input.keyConfigured)) && !input.busy;
+export function canSaveProviderConfig(input: { provider: string; model: string; baseUrl: string; apiKeyEnv: string; apiKey?: string; keyConfigured: boolean; busy: boolean; requestTimeoutMs?: string; maxRetries?: string }): boolean {
+  const runtimeValid = !hasProviderRuntimeErrors(providerRuntimeErrors({
+    requestTimeoutMs: input.requestTimeoutMs ?? "",
+    maxRetries: input.maxRetries ?? ""
+  }));
+  return Boolean(input.provider && input.model.trim() && input.baseUrl.trim() && input.apiKeyEnv.trim() && (input.apiKey?.trim() || input.keyConfigured)) && runtimeValid && !input.busy;
 }
 
 export function modelOptionIds(provider: string, configuredModel: string | undefined, catalogModels: CockpitProviderModelOption[]): string[] {
@@ -357,11 +388,4 @@ function labelProvider(provider: string, externalAgents: CockpitExternalAgentOpt
 
 function normalizeProviderId(provider: string): string {
   return provider.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
-}
-
-function numericDraft(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  return Number.isInteger(parsed) ? parsed : undefined;
 }

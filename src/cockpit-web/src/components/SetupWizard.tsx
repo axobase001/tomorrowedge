@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { CockpitProviderConnectionResult, CockpitSetupRequest, CockpitSetupStatus } from "../api.js";
 import type { Translator } from "../i18n.js";
 import { formatProviderConnectionMessage } from "../providerConnectionMessage.js";
+import { hasProviderRuntimeErrors, numericDraft, providerRuntimeErrors } from "../providerRuntimeValidation.js";
+import { ModalSurface } from "./ModalSurface.js";
 import { EmptyState, LoadingState } from "./StateNotice.js";
 import { suggestedModelForProvider } from "../../../providers/staticModels.js";
 
@@ -40,6 +42,8 @@ export function SetupWizard({
   const [maxRetries, setMaxRetries] = useState(String(initialProviderDefaults?.maxRetries ?? 1));
   const [apiKey, setApiKey] = useState("");
   const [bindRoles, setBindRoles] = useState(true);
+  const runtimeErrors = providerRuntimeErrors({ requestTimeoutMs, maxRetries });
+  const hasRuntimeErrors = hasProviderRuntimeErrors(runtimeErrors);
 
   useEffect(() => {
     setProvider(initialProvider);
@@ -55,20 +59,27 @@ export function SetupWizard({
     setMaxRetries(String(nextProvider?.maxRetries ?? 1));
   }, [provider, providers]);
 
-  const canSubmit = Boolean(normalizedProvider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !busy;
+  const canSubmit = Boolean(normalizedProvider && model.trim() && baseUrl.trim() && apiKeyEnv.trim()) && !hasRuntimeErrors && !busy;
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
 
   return (
-    <div className="te-setup-backdrop" data-testid="setup-wizard">
-      <section className="te-setup-card">
+    <ModalSurface
+      backdropClassName="te-setup-backdrop"
+      describedBy="setup-intro"
+      dismissOnBackdrop={false}
+      labelledBy="setup-title"
+      onDismiss={onDismissDemo}
+      surfaceClassName="te-setup-card"
+      surfaceTestId="setup-wizard"
+    >
         <header>
           <div>
             <span className="te-chip te-chip-blue">{t("setup.badge")}</span>
-            <h2>{t("setup.title")}</h2>
+            <h2 id="setup-title">{t("setup.title")}</h2>
           </div>
           <button type="button" className="te-quiet-button" onClick={onDismissDemo} data-testid="setup-dismiss-demo">{t("setup.useFixture")}</button>
         </header>
-        <p>
+        <p id="setup-intro">
           {t("setup.intro")}
         </p>
         {!providers.length ? <EmptyState title={t("state.noProviders")} detail={t("state.noProvidersDetail")} testId="setup-providers-empty-state" /> : null}
@@ -96,11 +107,27 @@ export function SetupWizard({
           </label>
           <label>
             <span>{t("setup.requestTimeout")}</span>
-            <input value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(event.target.value)} inputMode="numeric" data-testid="setup-request-timeout" />
+            <input
+              value={requestTimeoutMs}
+              onChange={(event) => setRequestTimeoutMs(event.target.value)}
+              inputMode="numeric"
+              aria-describedby={runtimeErrors.requestTimeoutMs ? "setup-request-timeout-error" : undefined}
+              aria-invalid={runtimeErrors.requestTimeoutMs ? "true" : undefined}
+              data-testid="setup-request-timeout"
+            />
+            {runtimeErrors.requestTimeoutMs ? <span className="te-field-error" id="setup-request-timeout-error" role="alert">{t("validation.requestTimeoutPositiveInteger")}</span> : null}
           </label>
           <label>
             <span>{t("setup.maxRetries")}</span>
-            <input value={maxRetries} onChange={(event) => setMaxRetries(event.target.value)} inputMode="numeric" data-testid="setup-max-retries" />
+            <input
+              value={maxRetries}
+              onChange={(event) => setMaxRetries(event.target.value)}
+              inputMode="numeric"
+              aria-describedby={runtimeErrors.maxRetries ? "setup-max-retries-error" : undefined}
+              aria-invalid={runtimeErrors.maxRetries ? "true" : undefined}
+              data-testid="setup-max-retries"
+            />
+            {runtimeErrors.maxRetries ? <span className="te-field-error" id="setup-max-retries-error" role="alert">{t("validation.maxRetriesNonNegativeInteger")}</span> : null}
           </label>
           <label>
             <span>{t("setup.apiKeyOptional")}</span>
@@ -127,8 +154,7 @@ export function SetupWizard({
             <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {formatProviderConnectionMessage(connectionResult, t)}
           </p>
         ) : null}
-      </section>
-    </div>
+    </ModalSurface>
   );
 }
 
@@ -169,11 +195,4 @@ function suggestedModelFor(provider: string): string {
 
 function normalizeProviderId(provider: string): string {
   return provider.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
-}
-
-function numericDraft(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  return Number.isInteger(parsed) ? parsed : undefined;
 }

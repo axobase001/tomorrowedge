@@ -1,5 +1,6 @@
 import type { CockpitViewModel } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
+import { ModalSurface } from "./ModalSurface.js";
 import { EmptyState } from "./StateNotice.js";
 
 export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: CockpitViewModel; open: boolean; t: Translator; onClose: () => void }) {
@@ -12,11 +13,18 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
   const governanceText = formatGovernance(viewModel);
   const rawEventsText = viewModel.rawEvents.length ? JSON.stringify(viewModel.rawEvents.slice(-40), null, 2) : "";
   return (
-    <>
-      <div className="te-drawer-backdrop" onClick={onClose} data-testid="drawer-backdrop" />
-      <aside className="te-drawer open" aria-hidden={false} data-testid="detail-drawer">
+    <ModalSurface
+      backdropClassName="te-drawer-backdrop"
+      backdropTestId="drawer-backdrop"
+      labelledBy="detail-drawer-title"
+      onDismiss={onClose}
+      separateSurface
+      surface="aside"
+      surfaceClassName="te-drawer open"
+      surfaceTestId="detail-drawer"
+    >
         <header>
-          <h2>{t("drawer.title")}</h2>
+          <h2 id="detail-drawer-title">{t("drawer.title")}</h2>
           <button type="button" onClick={onClose} data-testid="detail-drawer-close">{t("drawer.close")}</button>
         </header>
       <h3>{t("drawer.objectiveContract")}</h3>
@@ -83,8 +91,7 @@ export function DetailDrawer({ viewModel, open, t, onClose }: { viewModel: Cockp
       </div>
       <h3>{t("drawer.rawEvents")}</h3>
       {rawEventsText ? <pre>{rawEventsText}</pre> : <EmptyState title={t("state.noRawEvents")} testId="drawer-raw-events-empty-state" />}
-    </aside>
-    </>
+    </ModalSurface>
   );
 }
 
