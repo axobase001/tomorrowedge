@@ -526,7 +526,15 @@ function writeSetupDismissed(value: boolean): void {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(message) as { message?: unknown; error?: unknown };
+    if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message;
+    if (typeof parsed.error === "string" && parsed.error.trim()) return parsed.error;
+  } catch {
+    // Non-JSON error strings are already displayable.
+  }
+  return message;
 }
 
 createRoot(document.getElementById("root")!).render(<CockpitWebRoot />);

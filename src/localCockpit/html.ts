@@ -97,9 +97,10 @@
     </section>
   </main>
 
-  <aside id="drawer" class="drawer" aria-label="Details drawer">
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true" tabindex="-1">
     <div class="drawer-head">
-      <strong>Details</strong>
+      <strong id="drawer-title">Details</strong>
       <button id="close-drawer" class="ghost-button">Close</button>
     </div>
     <div id="drawer-content"></div>
@@ -530,6 +531,13 @@ textarea {
   transition: transform 160ms ease;
   z-index: 50;
 }
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 49;
+}
+.drawer-backdrop[hidden] { display: none; }
 .drawer.open { transform: translateX(0); }
 .drawer-head {
   height: 52px;
@@ -572,6 +580,14 @@ textarea {
   .chip-amber,
   .chip-red {
     background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 @media (max-width: 1180px) {
@@ -683,6 +699,7 @@ let currentVm = null;
 let liveSource = null;
 let liveEventsBuffer = [];
 let liveReloadTimer = null;
+let drawerOpener = null;
 
 el("refresh").addEventListener("click", () => load());
 el("run-top").addEventListener("click", runWorkflow);
@@ -701,8 +718,10 @@ el("goal").addEventListener("keydown", (event) => {
   event.preventDefault();
   if (!el("run").disabled) void runWorkflow();
 });
-el("open-drawer").addEventListener("click", () => renderDrawer(true));
-el("close-drawer").addEventListener("click", () => el("drawer").classList.remove("open"));
+el("open-drawer").addEventListener("click", () => openDrawer());
+el("close-drawer").addEventListener("click", () => closeDrawer());
+el("drawer-backdrop").addEventListener("mousedown", () => closeDrawer());
+document.addEventListener("keydown", trapDrawerFocus, true);
 
 load();
 
@@ -897,7 +916,7 @@ function bindApprovalButtons(approval) {
 
 function bindDrawerButtons() {
   document.querySelectorAll("[data-drawer-action]").forEach((button) => {
-    button.addEventListener("click", () => renderDrawer(true));
+    button.addEventListener("click", () => openDrawer());
   });
 }
 
@@ -917,8 +936,7 @@ function renderTrace(event) {
 }
 
 function renderDrawer(open) {
-  const drawer = el("drawer");
-  if (open) drawer.classList.add("open");
+  setDrawerOpen(open);
   if (!currentVm) {
     el("drawer-content").innerHTML = '<p class="muted">No details yet.</p>';
     return;
@@ -933,6 +951,61 @@ function renderDrawer(open) {
     '<h3>Error-loop timeline</h3><pre class="body-pre">' + esc(currentVm.errorLoopTimeline ? JSON.stringify(currentVm.errorLoopTimeline, null, 2) : "-") + '</pre>' +
     '<h3>Artifacts</h3><pre class="body-pre">' + esc(currentVm.artifacts.slice(0, 40).map((item) => item.ref).join("\\n") || "-") + '</pre>' +
     '<h3>Raw event trace</h3><pre class="body-pre">' + esc(JSON.stringify(currentVm.rawEvents || currentVm.trace, null, 2)) + '</pre>';
+}
+
+function openDrawer() {
+  drawerOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  renderDrawer(true);
+}
+
+function closeDrawer() {
+  setDrawerOpen(false);
+  if (drawerOpener?.isConnected) drawerOpener.focus({ preventScroll: true });
+}
+
+function setDrawerOpen(open) {
+  const drawer = el("drawer");
+  const wasOpen = drawer.classList.contains("open");
+  drawer.classList.toggle("open", open);
+  drawer.setAttribute("aria-hidden", open ? "false" : "true");
+  el("drawer-backdrop").hidden = !open;
+  if (open && !wasOpen) {
+    requestAnimationFrame(() => {
+      const target = drawer.querySelector("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])") || drawer;
+      target.focus({ preventScroll: true });
+    });
+  }
+}
+
+function trapDrawerFocus(event) {
+  const drawer = el("drawer");
+  if (!drawer.classList.contains("open")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeDrawer();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(drawer.querySelectorAll("a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex='-1'])"))
+    .filter((item) => !item.hasAttribute("hidden") && item.getAttribute("aria-hidden") !== "true");
+  if (!focusable.length) {
+    event.preventDefault();
+    drawer.focus({ preventScroll: true });
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (!drawer.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus({ preventScroll: true });
+  } else if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  }
 }
 
 async function fetchJson(url) {

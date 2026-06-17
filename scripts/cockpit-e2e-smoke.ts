@@ -97,8 +97,20 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
         "setup-save",
         "setup-test"
       ], "setup wizard contract");
+      await assertDialogSemantics(page, "setup-wizard", "setup wizard");
+      await assertFocusRemainsInside(page, "setup-wizard", "setup wizard", 12);
+      await page.fill("[data-testid='setup-request-timeout']", "-1");
+      await page.fill("[data-testid='setup-max-retries']", "-2");
+      if (await page.locator("[data-testid='setup-save']").isEnabled()) {
+        throw new Error("setup save remained enabled for invalid provider runtime values");
+      }
+      await page.waitForSelector("#setup-request-timeout-error", { timeout: 5_000 });
+      await page.waitForSelector("#setup-max-retries-error", { timeout: 5_000 });
+      await page.fill("[data-testid='setup-request-timeout']", "60000");
+      await page.fill("[data-testid='setup-max-retries']", "1");
       await touchOptionalTestIds(page, ["setup-message", "setup-connection"]);
-      await setupDismiss.click();
+      await page.keyboard.press("Escape");
+      await page.waitForSelector("[data-testid='setup-wizard']", { state: "detached", timeout: 5_000 });
     }
     await page.click("[data-testid='topbar-keys']");
     await page.waitForSelector("[data-testid='key-role-manager']", { timeout: 5_000 });
@@ -114,11 +126,13 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
       "keymgr-test-key",
       "keymgr-delete-key"
     ], "key manager key contract");
+    await assertDialogSemantics(page, "key-role-manager", "key manager");
+    await assertFocusRemainsInside(page, "key-role-manager", "key manager", 18);
     await touchOptionalTestIds(page, ["keymgr-message", "keymgr-connection", "keymgr-models-message"]);
     await page.click("[data-testid='keymgr-tab-roles']");
     await page.waitForSelector("[data-testid='keymgr-role-list']", { timeout: 5_000 });
     await assertVisibleTestIds(page, ["keymgr-save-roles"], "key manager role contract");
-    await page.click("[data-testid='keymgr-close']");
+    await page.keyboard.press("Escape");
     await page.waitForSelector("[data-testid='key-role-manager']", { state: "detached", timeout: 5_000 });
     await page.fill("[data-testid='composer-input']", "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.");
     await page.press("[data-testid='composer-input']", "Enter");
@@ -141,6 +155,8 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await page.click("[data-testid='approval-open-drawer']");
     await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
     await assertVisibleTestIds(page, ["drawer-backdrop", "detail-drawer", "detail-drawer-close", "drawer-artifacts"], "drawer contract");
+    await assertDialogSemantics(page, "detail-drawer", "detail drawer");
+    await assertFocusRemainsInside(page, "detail-drawer", "detail drawer", 10);
     await waitForDrawerInViewport(page);
     await assertNoHorizontalOverflow(page, "drawer-open");
     await page.screenshot({ path: path.join(artifactDir, "waiting-approval.png"), fullPage: true });
@@ -152,7 +168,7 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
       await waitForDrawerInViewport(page);
     }
     await page.setViewportSize(viewports[0]);
-    await page.click("[data-testid='detail-drawer-close']");
+    await page.keyboard.press("Escape");
     await page.waitForSelector("[data-testid='detail-drawer']", { state: "detached", timeout: 5_000 });
     await page.click("[data-testid='open-drawer']");
     await page.waitForFunction(() => document.querySelector("[data-testid='detail-drawer']")?.classList.contains("open") === true, undefined, { timeout: 5_000 });
@@ -237,6 +253,38 @@ async function assertAtLeastOneVisible(page: Page, id: string, label: string): P
     if (await page.locator(`[data-testid='${id}']`).nth(index).isVisible().catch(() => false)) return;
   }
   throw new Error(`${label} has no visible data-testid='${id}' element`);
+}
+
+async function assertDialogSemantics(page: Page, id: string, label: string): Promise<void> {
+  const semantics = await page.locator(`[data-testid='${id}']`).first().evaluate((element) => ({
+    role: element.getAttribute("role"),
+    modal: element.getAttribute("aria-modal"),
+    labelledBy: element.getAttribute("aria-labelledby")
+  }));
+  if (semantics.role !== "dialog" || semantics.modal !== "true" || !semantics.labelledBy) {
+    throw new Error(`${label} is missing dialog semantics: ${JSON.stringify(semantics)}`);
+  }
+  await page.waitForFunction((testId) => {
+    const element = document.querySelector(`[data-testid='${testId}']`);
+    return Boolean(element && document.activeElement && element.contains(document.activeElement));
+  }, id, { timeout: 5_000 });
+}
+
+async function assertFocusRemainsInside(page: Page, id: string, label: string, tabCount: number): Promise<void> {
+  for (let index = 0; index < tabCount; index += 1) {
+    await page.keyboard.press("Tab");
+    const active = await page.evaluate((testId) => {
+      const element = document.querySelector(`[data-testid='${testId}']`);
+      return {
+        inside: Boolean(element && document.activeElement && element.contains(document.activeElement)),
+        activeTestId: document.activeElement?.getAttribute("data-testid"),
+        activeText: document.activeElement?.textContent?.replace(/\s+/g, " ").trim().slice(0, 80)
+      };
+    }, id);
+    if (!active.inside) {
+      throw new Error(`${label} let focus escape after Tab ${index + 1}: ${JSON.stringify(active)}`);
+    }
+  }
 }
 
 async function touchOptionalTestIds(page: Page, ids: string[]): Promise<void> {

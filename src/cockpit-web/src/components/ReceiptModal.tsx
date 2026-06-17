@@ -1,5 +1,6 @@
 import type { CockpitTelemetry } from "../../../cockpit/contracts.js";
 import type { Translator } from "../i18n.js";
+import { ModalSurface } from "./ModalSurface.js";
 
 export function ReceiptModal({
   telemetry,
@@ -13,14 +14,18 @@ export function ReceiptModal({
   onDismiss: () => void;
 }) {
   return (
-    <div className="te-receipt-backdrop" role="presentation" onMouseDown={onDismiss}>
-      <section className="te-receipt-card" role="dialog" aria-modal="true" aria-label={t("receipt.title")} onMouseDown={(event) => event.stopPropagation()}>
+    <ModalSurface
+      backdropClassName="te-receipt-backdrop"
+      labelledBy="receipt-title"
+      onDismiss={onDismiss}
+      surfaceClassName="te-receipt-card"
+    >
         <header>
           <div>
-            <h2>{t("receipt.title")}</h2>
+            <h2 id="receipt-title">{t("receipt.title")}</h2>
             <p>{goal?.trim() || t("receipt.defaultGoal")}</p>
           </div>
-          <button type="button" onClick={onDismiss} aria-label={t("receipt.closeLabel")}>x</button>
+          <button type="button" onClick={onDismiss} aria-label={t("receipt.closeLabel")}>{t("receipt.close")}</button>
         </header>
         <div className="te-receipt-summary">
           <Metric label={t("receipt.actual")} value={money(telemetry.currentCostUsd)} />
@@ -47,8 +52,7 @@ export function ReceiptModal({
         <footer>
           <button type="button" onClick={onDismiss}>{t("receipt.close")}</button>
         </footer>
-      </section>
-    </div>
+    </ModalSurface>
   );
 }
 
