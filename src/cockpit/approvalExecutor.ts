@@ -13,31 +13,39 @@ import { resolveCockpitShellCommand } from "./verificationCommand.js";
 export type CockpitApprovalExecutionResult = {
   state: AgentGraphState;
   message: string;
+  status: "applied" | "executed" | "failed" | "rejected" | "revision_requested" | "undone" | "blocked";
 };
 
-export async function executeCockpitApprovalAction(cwd: string, state: AgentGraphState, intent: CockpitApprovalIntent): Promise<CockpitApprovalExecutionResult> {
+export async function executeCockpitApprovalAction(
+  cwd: string,
+  state: AgentGraphState,
+  intent: CockpitApprovalIntent,
+  options: { executionCwd?: string; traceCwd?: string } = {}
+): Promise<CockpitApprovalExecutionResult> {
+  const executionCwd = options.executionCwd ?? cwd;
+  const traceCwd = options.traceCwd ?? cwd;
   switch (intent.action) {
     case "approve_patch":
-      return approvePatch(cwd, state);
+      return approvePatch(executionCwd, state);
     case "reject_patch":
       return rejectPatch(state, intent.feedback);
     case "approve_shell":
-      return approveShell(cwd, state);
+      return approveShell({ configCwd: cwd, executionCwd, traceCwd, state });
     case "reject_shell":
       return rejectShell(state, intent.feedback);
     case "request_re_review":
       return requestReReview(state, intent.feedback);
     case "undo_latest_patch":
-      return undoLatestPatch(cwd, state);
+      return undoLatestPatch(executionCwd, state);
   }
 }
 
 async function approvePatch(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
   const selected = selectedCandidate(state);
-  if (!selected?.unifiedDiff) return { state, message: "No patch candidate is available." };
+  if (!selected?.unifiedDiff) return { state, message: "No patch candidate is available.", status: "blocked" };
   const isRepair = selected.approach === "repair";
-  if (isRepair && !state.access.repairAllowed) return { state, message: accessBlockedMessage(state, "repair") };
-  if (!isRepair && !state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "patch") };
+  if (isRepair && !state.access.repairAllowed) return { state, message: accessBlockedMessage(state, "repair"), status: "blocked" };
+  if (!isRepair && !state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "patch"), status: "blocked" };
 
   try {
     const applyResult = await applyUnifiedDiffWithResult(cwd, selected.unifiedDiff, true);
@@ -73,7 +81,7 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
         })
       ]
     };
-    return { state: next, message: `Patch applied: ${applyResult.changedFiles.join(", ")}` };
+    return { state: next, message: `Patch applied: ${applyResult.changedFiles.join(", ")}`, status: "applied" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const next = withFailureSummary({
@@ -97,7 +105,7 @@ async function approvePatch(cwd: string, state: AgentGraphState): Promise<Cockpi
         })
       ]
     }, `Patch apply failed for ${selected.candidateId}: ${message}`);
-    return { state: next, message };
+    return { state: next, message, status: "failed" };
   }
 }
 
@@ -125,18 +133,19 @@ function rejectPatch(state: AgentGraphState, feedback?: string): CockpitApproval
       })
     ]
   }, feedback || "Patch rejected by cockpit operator.");
-  return { state: next, message: "Patch rejected." };
+  return { state: next, message: "Patch rejected.", status: "rejected" };
 }
 
-async function approveShell(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
-  if (!state.access.shellAllowed) return { state, message: accessBlockedMessage(state, "shell") };
+async function approveShell(input: { configCwd: string; executionCwd: string; traceCwd: string; state: AgentGraphState }): Promise<CockpitApprovalExecutionResult> {
+  const { configCwd, executionCwd, traceCwd, state } = input;
+  if (!state.access.shellAllowed) return { state, message: accessBlockedMessage(state, "shell"), status: "blocked" };
   const command = resolveCockpitShellCommand(state);
-  if (!command) return { state, message: "No verification command is available." };
-  if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification." };
+  if (!command) return { state, message: "No verification command is available.", status: "blocked" };
+  if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification.", status: "blocked" };
 
-  const config = loadConfig(cwd);
+  const config = loadConfig(configCwd);
   const policy = config.shell.policy ?? (state.access.mode === "full" ? "unrestricted" : "verification_allowlist");
-  const result = await runTestCommand(cwd, command, { approved: true, policy, verificationAllowlist: config.shell.verification_allowlist });
+  const result = await runTestCommand(executionCwd, command, { approved: true, policy, verificationAllowlist: config.shell.verification_allowlist });
   const stdoutRef = writeArtifact(state, "stdout", result.stdout || "", "txt");
   const stderrRef = writeArtifact(state, "stderr", result.stderr || "", "txt");
   const summarized = await refreshSummary({
@@ -163,7 +172,7 @@ async function approveShell(cwd: string, state: AgentGraphState): Promise<Cockpi
         provider: "local_tool",
         model: "shell",
         command,
-        cwd,
+        cwd: executionCwd,
         exitCode: result.exitCode,
         stdoutRef,
         stderrRef,
@@ -172,8 +181,8 @@ async function approveShell(cwd: string, state: AgentGraphState): Promise<Cockpi
       })
     ]
   });
-  const next = await finalizePostApprovalTrace(cwd, summarized, "browser_cockpit");
-  return { state: next, message: result.success ? `Shell verification passed: ${command}` : `Shell verification failed: ${command}` };
+  const next = await finalizePostApprovalTrace(traceCwd, summarized, "browser_cockpit");
+  return { state: next, message: result.success ? `Shell verification passed: ${command}` : `Shell verification failed: ${command}`, status: result.success ? "executed" : "failed" };
 }
 
 function rejectShell(state: AgentGraphState, feedback?: string): CockpitApprovalExecutionResult {
@@ -197,7 +206,7 @@ function rejectShell(state: AgentGraphState, feedback?: string): CockpitApproval
       })
     ]
   }, feedback || "Shell verification rejected by cockpit operator.");
-  return { state: next, message: "Shell verification rejected." };
+  return { state: next, message: "Shell verification rejected.", status: "rejected" };
 }
 
 function requestReReview(state: AgentGraphState, feedback?: string): CockpitApprovalExecutionResult {
@@ -229,11 +238,11 @@ function requestReReview(state: AgentGraphState, feedback?: string): CockpitAppr
       })
     ]
   };
-  return { state: next, message: "Re-review requested." };
+  return { state: next, message: "Re-review requested.", status: "revision_requested" };
 }
 
 async function undoLatestPatch(cwd: string, state: AgentGraphState): Promise<CockpitApprovalExecutionResult> {
-  if (!state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "undo") };
+  if (!state.access.patchAllowed) return { state, message: accessBlockedMessage(state, "undo"), status: "blocked" };
   const restored = await restoreLatestUndoSnapshot(cwd);
   const next = {
     ...state,
@@ -267,7 +276,7 @@ async function undoLatestPatch(cwd: string, state: AgentGraphState): Promise<Coc
       }
     ]
   };
-  return { state: next, message: `Undo restored ${restored.restoredPath}.` };
+  return { state: next, message: `Undo restored ${restored.restoredPath}.`, status: "undone" };
 }
 
 function selectedCandidate(state: AgentGraphState) {

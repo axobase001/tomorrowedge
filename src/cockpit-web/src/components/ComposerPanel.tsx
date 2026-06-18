@@ -10,26 +10,40 @@ export function ComposerPanel({
   goal,
   accessMode,
   runMode,
+  runPreview,
   target,
+  testCommand,
+  repairOnFail,
+  fixtureFailingPatch,
   busy,
   statusMessage,
   t,
   onGoalChange,
   onAccessModeChange,
   onRunModeChange,
+  onTestCommandChange,
+  onRepairOnFailChange,
+  onFixtureFailingPatchChange,
   onTargetChange,
   onSubmit
 }: {
   goal: string;
   accessMode: AccessMode;
   runMode: CockpitRunMode;
+  runPreview?: string;
   target: string;
+  testCommand: string;
+  repairOnFail: boolean;
+  fixtureFailingPatch: boolean;
   busy: boolean;
   statusMessage?: string;
   t: Translator;
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onRunModeChange: (mode: CockpitRunMode) => void;
+  onTestCommandChange: (command: string) => void;
+  onRepairOnFailChange: (enabled: boolean) => void;
+  onFixtureFailingPatchChange: (enabled: boolean) => void;
   onTargetChange: (target: string) => void;
   onSubmit: () => void;
 }) {
@@ -88,6 +102,37 @@ export function ComposerPanel({
           {composerTargets.map((item) => <option value={item} key={item}>{item}</option>)}
         </select>
       </label>
+      {runPreview ? <span className="te-run-preview" data-testid="composer-run-preview">{runPreview}</span> : null}
+      <details className="te-run-settings" data-testid="composer-run-settings">
+        <summary>{t("composer.runSettings")}</summary>
+        <label>
+          <span>{t("composer.testCommand")}</span>
+          <input
+            value={testCommand}
+            onChange={(event) => onTestCommandChange(event.target.value)}
+            placeholder={t("composer.testCommandPlaceholder")}
+            data-testid="composer-test-command"
+          />
+        </label>
+        <label className="te-run-settings-check">
+          <input
+            type="checkbox"
+            checked={repairOnFail}
+            onChange={(event) => onRepairOnFailChange(event.target.checked)}
+            data-testid="composer-repair-on-fail"
+          />
+          <span>{t("composer.repairOnFail")}</span>
+        </label>
+        <label className="te-run-settings-check">
+          <input
+            type="checkbox"
+            checked={fixtureFailingPatch}
+            onChange={(event) => onFixtureFailingPatchChange(event.target.checked)}
+            data-testid="composer-fixture-failing-patch"
+          />
+          <span>{t("composer.fixtureFailingPatch")}</span>
+        </label>
+      </details>
       {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
       <button type="submit" disabled={busy || isEmpty} data-testid="composer-submit">{t("composer.send")}</button>
     </form>

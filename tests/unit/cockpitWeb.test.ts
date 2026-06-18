@@ -10,7 +10,7 @@ import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPane
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
 import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/providerConnectionMessage.js";
 import { providerRuntimeErrors } from "../../src/cockpit-web/src/providerRuntimeValidation.js";
-import { buildCockpitRunRequest } from "../../src/cockpit-web/src/runRequest.js";
+import { buildCockpitRunRequest, describeCockpitRunPreview } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 import { staticModelIdsForProvider } from "../../src/providers/staticModels.js";
@@ -244,6 +244,9 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("data-testid=\"composer-mode\"");
     expect(html).toContain("data-testid=\"composer-run-mode\"");
     expect(html).toContain("data-testid=\"composer-target\"");
+    expect(html).toContain("data-testid=\"composer-run-preview\"");
+    expect(html).toContain("data-testid=\"composer-run-settings\"");
+    expect(html).toContain("data-testid=\"composer-test-command\"");
     expect(html).toContain("partial");
   });
 
@@ -305,6 +308,40 @@ describe("cockpit web React surface", () => {
       repairOnFail: true,
       approveRepair: true,
       to: "core"
+    });
+  });
+
+  it("passes advanced run settings through GUI request building", () => {
+    expect(buildCockpitRunRequest({
+      goal: "fix failing test",
+      accessMode: "partial",
+      setupReady: false,
+      runMode: "fixture",
+      target: "repairer",
+      testCommand: " npm test ",
+      repairOnFail: true,
+      fixtureFailingPatch: true
+    })).toMatchObject({
+      runMode: "fixture",
+      fixtureMode: true,
+      testCommand: "npm test",
+      repairOnFail: true,
+      approveRepair: false,
+      fixtureFailingPatch: true,
+      to: "repairer"
+    });
+  });
+
+  it("previews the effective execution mode before submitting auto runs", () => {
+    expect(describeCockpitRunPreview({ accessMode: "partial", setupReady: true, runMode: "auto" })).toMatchObject({
+      effectiveMode: "live",
+      usesLiveModels: true,
+      label: "auto -> live"
+    });
+    expect(describeCockpitRunPreview({ accessMode: "restricted", setupReady: true, runMode: "auto" })).toMatchObject({
+      effectiveMode: "fixture",
+      usesLiveModels: false,
+      label: "auto -> fixture"
     });
   });
 
@@ -820,7 +857,11 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       goal: overrides.goal ?? "",
       accessMode: "partial",
       runMode: "auto",
+      runPreview: "auto -> fixture · sample fixture workspace",
       conversationTarget: "core",
+      testCommand: "",
+      repairOnFail: false,
+      fixtureFailingPatch: false,
       busy: overrides.busy ?? false,
       statusMessage: overrides.statusMessage,
       setupStatus: {
@@ -863,6 +904,9 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
       onRunModeChange: () => undefined,
+      onTestCommandChange: () => undefined,
+      onRepairOnFailChange: () => undefined,
+      onFixtureFailingPatchChange: () => undefined,
       onConversationTargetChange: () => undefined,
       onLanguageChange: () => undefined,
       onConfigureSetup: () => undefined,

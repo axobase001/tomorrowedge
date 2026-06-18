@@ -244,14 +244,16 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const requestedRunMode = parseRunMode(body.runMode);
       const accessMode = parseAccessMode(body.accessMode) ?? prefs.accessMode ?? config.project.access_mode;
       const runFlags = resolveRunFlags(requestedRunMode, body, config);
-      const liveState = createLiveState(sessionId, goal, config, accessMode);
       const workspace = await prepareRunWorkspace(cwd, { fixtureMode: runFlags.fixtureMode, forceFixtureWorkspace: runFlags.fixtureMode });
+      const runContext = buildRunContext(workspace, requestedRunMode, runFlags, body);
+      const liveState = createLiveState(sessionId, goal, config, accessMode, runContext);
       const options: OfflineGraphOptions = {
         fixtureMode: runFlags.fixtureMode,
         accessMode,
         livePatch: runFlags.livePatch,
         liveAdvisory: runFlags.liveAdvisory,
         liveVision: Boolean(body.liveVision),
+        fixtureFailingPatch: Boolean(body.fixtureFailingPatch),
         approvePatch: Boolean(body.approvePatch),
         approveShell: Boolean(body.approveShell),
         repairOnFail: Boolean(body.repairOnFail),
@@ -267,6 +269,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
         }
       };
+      runContext.testCommand = options.testCommand;
       const runPromise = requestedRunMode === "council"
         ? runAgentCouncilGovernance(workspace.executionCwd, goal, config, {
           accessMode,
@@ -279,12 +282,13 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         : runCockpitBackend(createOrchestrationBackend(config), workspace.executionCwd, goal, options);
       void runPromise
         .then(async (state) => {
-          await saveSession(cwd, state, { failureMemory: config.failure_memory });
-          cockpitEventBus.setSnapshot({ sessionId: state.sessionId, state, done: true });
+          const stateWithContext = attachRunContext(state, runContext);
+          await saveSession(cwd, stateWithContext, { failureMemory: config.failure_memory });
+          cockpitEventBus.setSnapshot({ sessionId: stateWithContext.sessionId, state: stateWithContext, done: true });
         })
         .catch(async (error) => {
           const message = error instanceof Error ? error.message : String(error);
-          const failedState = markLiveRunFailed(liveState, message);
+          const failedState = attachRunContext(markLiveRunFailed(liveState, message), runContext);
           try {
             await saveSession(cwd, failedState, { failureMemory: config.failure_memory });
           } catch (saveError) {
@@ -306,12 +310,15 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const session = await loadRequiredSession(cwd, parsedIntent.sessionId);
       validateApprovalIntent(cwd, session.state, parsedIntent);
       const intent = recordApprovalIntent(parsedIntent);
-      const result = await executeCockpitApprovalAction(cwd, session.state, intent);
+      const result = await executeCockpitApprovalAction(cwd, session.state, intent, {
+        executionCwd: resolveApprovalExecutionCwd(cwd, session.state),
+        traceCwd: cwd
+      });
       const { config } = await resolveRuntimeConfig(cwd, { configPath });
       await saveSession(cwd, result.state, { failureMemory: config.failure_memory });
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: false });
       return sendJson(response, 200, {
-        status: "applied",
+        status: result.status,
         intent,
         message: result.message,
         viewModel: buildCockpitViewModel(cwd, result.state, { source: "saved" })
@@ -405,11 +412,12 @@ async function toSetupHttpResult<T>(action: () => Promise<T>): Promise<T> {
   }
 }
 
-function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeConfig, mode?: AccessMode): AgentGraphState {
+function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeConfig, mode?: AccessMode, runContext?: AgentGraphState["runContext"]): AgentGraphState {
   const access = buildAccessPolicy(config, { mode });
   return {
     sessionId,
     goal,
+    runContext,
     conversationTarget: undefined,
     routing: { mode: config.routing.mode, privacyLocked: false, assignments: [], fallbacks: [] },
     access,
@@ -433,6 +441,43 @@ function createLiveState(sessionId: string, goal: string, config: TomorrowEdgeCo
       repairApproved: access.repairApproved
     }
   };
+}
+
+function buildRunContext(
+  workspace: { executionCwd: string; fixtureWorkspace?: string },
+  requestedRunMode: CockpitRunMode,
+  runFlags: { fixtureMode: boolean; livePatch: boolean; liveAdvisory: boolean },
+  body: Record<string, unknown>
+): NonNullable<AgentGraphState["runContext"]> {
+  return {
+    executionCwd: workspace.executionCwd,
+    fixtureWorkspace: workspace.fixtureWorkspace,
+    requestedRunMode,
+    fixtureMode: runFlags.fixtureMode,
+    livePatch: runFlags.livePatch,
+    liveAdvisory: runFlags.liveAdvisory,
+    liveVision: Boolean(body.liveVision),
+    testCommand: typeof body.testCommand === "string" && body.testCommand.trim() ? body.testCommand.trim() : undefined,
+    repairOnFail: Boolean(body.repairOnFail),
+    approveRepair: Boolean(body.approveRepair),
+    fixtureFailingPatch: Boolean(body.fixtureFailingPatch)
+  };
+}
+
+function attachRunContext(state: AgentGraphState, runContext: AgentGraphState["runContext"]): AgentGraphState {
+  return { ...state, runContext };
+}
+
+function resolveApprovalExecutionCwd(projectCwd: string, state: AgentGraphState): string {
+  const executionCwd = state.runContext?.executionCwd;
+  if (!executionCwd) return projectCwd;
+  const resolved = path.resolve(executionCwd);
+  const fixtureWorkspace = state.runContext?.fixtureWorkspace ? path.resolve(state.runContext.fixtureWorkspace) : undefined;
+  if (fixtureWorkspace && resolved === fixtureWorkspace) return resolved;
+  const relative = path.relative(projectCwd, resolved);
+  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) return resolved;
+  if (resolved === path.resolve(projectCwd)) return resolved;
+  return projectCwd;
 }
 
 export function markLiveRunFailed(state: AgentGraphState, error: string): AgentGraphState {

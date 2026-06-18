@@ -20,7 +20,11 @@ export type AppProps = {
   goal: string;
   accessMode: AccessMode;
   runMode: CockpitRunMode;
+  runPreview?: string;
   conversationTarget: string;
+  testCommand: string;
+  repairOnFail: boolean;
+  fixtureFailingPatch: boolean;
   busy: boolean;
   statusMessage?: string;
   setupStatus?: CockpitSetupStatus;
@@ -35,6 +39,9 @@ export type AppProps = {
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onRunModeChange: (mode: CockpitRunMode) => void;
+  onTestCommandChange: (command: string) => void;
+  onRepairOnFailChange: (enabled: boolean) => void;
+  onFixtureFailingPatchChange: (enabled: boolean) => void;
   onConversationTargetChange: (target: string) => void;
   onLanguageChange: (language: GuiLanguage) => void;
   onConfigureSetup: (request: CockpitSetupRequest) => void;
@@ -64,7 +71,11 @@ export function App({
   goal,
   accessMode,
   runMode,
+  runPreview,
   conversationTarget,
+  testCommand,
+  repairOnFail,
+  fixtureFailingPatch,
   busy,
   statusMessage,
   setupStatus,
@@ -79,6 +90,9 @@ export function App({
   onGoalChange,
   onAccessModeChange,
   onRunModeChange,
+  onTestCommandChange,
+  onRepairOnFailChange,
+  onFixtureFailingPatchChange,
   onConversationTargetChange,
   onLanguageChange,
   onConfigureSetup,
@@ -114,13 +128,20 @@ export function App({
         goal={goal}
         accessMode={accessMode}
         runMode={runMode}
+        runPreview={runPreview}
         target={conversationTarget}
+        testCommand={testCommand}
+        repairOnFail={repairOnFail}
+        fixtureFailingPatch={fixtureFailingPatch}
         busy={busy}
         statusMessage={statusMessage}
         t={t}
         onGoalChange={onGoalChange}
         onAccessModeChange={onAccessModeChange}
         onRunModeChange={onRunModeChange}
+        onTestCommandChange={onTestCommandChange}
+        onRepairOnFailChange={onRepairOnFailChange}
+        onFixtureFailingPatchChange={onFixtureFailingPatchChange}
         onTargetChange={onConversationTargetChange}
         onSubmit={onRun}
       />

@@ -760,6 +760,49 @@ select[aria-invalid="true"] {
   color: var(--te-muted);
   font: 11px var(--te-mono);
 }
+.te-run-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--te-muted);
+  font: 11px var(--te-mono);
+}
+.te-run-settings {
+  grid-column: 2 / -1;
+  min-width: 0;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: var(--te-soft);
+  color: var(--te-muted);
+  font: 12px var(--te-mono);
+}
+.te-run-settings summary {
+  cursor: pointer;
+  color: var(--te-deep-blue);
+}
+.te-run-settings[open] {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(150px, auto));
+  gap: 8px;
+  align-items: center;
+}
+.te-run-settings label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.te-run-settings input[type="text"],
+.te-run-settings input:not([type]) {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+}
+.te-run-settings-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
 .te-mode-control {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1176,6 +1219,12 @@ select[aria-invalid="true"] {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .te-composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .te-run-settings {
+    grid-column: 1;
+  }
+  .te-run-settings[open] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
