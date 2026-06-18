@@ -533,6 +533,61 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("continues browser approvals in the prepared GUI fixture workspace", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-fixture-approval-"));
+    await mkdir(path.join(cwd, "tests", "fixtures"), { recursive: true });
+    await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), path.join(cwd, "tests", "fixtures", "sample-repo-basic"), { recursive: true });
+    await writeFile(path.join(cwd, "package.json"), "{\"scripts\":{\"test\":\"node test.js\"}}\n", "utf8");
+    await writeFile(path.join(cwd, "index.js"), "module.exports = { add: () => 'root should stay unchanged' };\n", "utf8");
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial" })
+      });
+      expect(response.status).toBe(202);
+      const session = await waitForLatestSession(server.url, server.nonce);
+      const vm = await fetch(`${server.url}/api/sessions/${session.state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as { currentApproval?: { id: string; kind: string } };
+
+      expect(session.state.runContext?.fixtureWorkspace).toBeTruthy();
+      expect(session.state.runContext?.executionCwd).toBe(session.state.runContext?.fixtureWorkspace);
+      expect(vm.currentApproval?.kind).toBe("patch");
+
+      const patchResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: session.state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
+      });
+      const patchPayload = await patchResponse.json() as { status: string; viewModel: { currentApproval?: { id: string; kind: string }; main: { filesChanged: string[] } } };
+      const rootIndexAfterPatch = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(patchResponse.status).toBe(200);
+      expect(patchPayload.status).toBe("applied");
+      expect(patchPayload.viewModel.currentApproval?.kind).toBe("shell");
+      expect(patchPayload.viewModel.main.filesChanged).toContain("index.js");
+      expect(rootIndexAfterPatch).toContain("root should stay unchanged");
+
+      const shellResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: session.state.sessionId, action: "approve_shell", approvalId: patchPayload.viewModel.currentApproval?.id })
+      });
+      const shellPayload = await shellResponse.json() as { status: string; viewModel: { status: string; objectiveTrace?: { outcomeStatus?: string }; rawEvents: Array<{ type: string; success?: boolean }> } };
+      const rootIndexAfterShell = await readFile(path.join(cwd, "index.js"), "utf8");
+
+      expect(shellResponse.status).toBe(200);
+      expect(shellPayload.status).toBe("executed");
+      expect(shellPayload.viewModel.status).toBe("done");
+      expect(shellPayload.viewModel.objectiveTrace?.outcomeStatus).toBe("success");
+      expect(shellPayload.viewModel.rawEvents.some((event) => event.type === "shell_run" && event.success)).toBe(true);
+      expect(rootIndexAfterShell).toContain("root should stay unchanged");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("passes GUI target and offline mode through the native backend", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-target-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -1499,11 +1554,11 @@ describe("local cockpit server", () => {
   });
 });
 
-async function waitForLatestSession(url: string, nonce: string): Promise<{ state: { access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } }> {
+async function waitForLatestSession(url: string, nonce: string): Promise<{ state: { sessionId: string; runContext?: { executionCwd?: string; fixtureWorkspace?: string }; access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } }> {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const response = await fetch(`${url}/api/sessions/latest?nonce=${nonce}`);
     if (response.status === 200) {
-      const session = await response.json() as { state: { access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } };
+      const session = await response.json() as { state: { sessionId: string; runContext?: { executionCwd?: string; fixtureWorkspace?: string }; access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } };
       if (session.state.finalSummary) return session;
     }
     await new Promise((resolve) => setTimeout(resolve, 50));

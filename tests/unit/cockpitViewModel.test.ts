@@ -308,6 +308,10 @@ describe("cockpit view model", () => {
       expect(vm.approvalHistory.at(-1)?.approvalId).toBe(vm.currentApproval?.id);
       expect(vm.approvalHistory.at(-1)?.blocksProgress).toBe(true);
       expect(vm.approvalHistory.at(-1)?.filterTags).toEqual(["patch", "pending"]);
+      const stopReason = state.events.find((event) => event.type === "workflow_stop_reason");
+      expect(stopReason).toMatchObject({
+        reason: "waiting for patch approval; workflow is not finalized"
+      });
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

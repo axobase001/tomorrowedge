@@ -27,7 +27,7 @@ import {
   type CockpitSetupStatus
 } from "./api.js";
 import { createTranslator, normalizeLanguage, type GuiLanguage } from "./i18n.js";
-import { buildCockpitRunRequest } from "./runRequest.js";
+import { buildCockpitRunRequest, describeCockpitRunPreview } from "./runRequest.js";
 
 const emptyViewModel: CockpitViewModel = {
   version: "1",
@@ -89,6 +89,9 @@ function CockpitWebRoot() {
   const [accessMode, setAccessMode] = useState<AccessMode>("partial");
   const [runMode, setRunMode] = useState<CockpitRunMode>("auto");
   const [conversationTarget, setConversationTarget] = useState("core");
+  const [testCommand, setTestCommand] = useState("");
+  const [repairOnFail, setRepairOnFail] = useState(false);
+  const [fixtureFailingPatch, setFixtureFailingPatch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
@@ -116,6 +119,9 @@ function CockpitWebRoot() {
     liveSource.current?.close();
     liveSource.current = undefined;
   }, []);
+  const setupReady = Boolean(setupStatus && !setupStatus.needsSetup);
+  const runPreview = useMemo(() => describeCockpitRunPreview({ accessMode, setupReady, runMode }), [accessMode, runMode, setupReady]);
+  const effectiveRepairOnFail = repairOnFail || accessMode === "full";
 
   const loadSession = useCallback(async (sessionId: string) => {
     const vm = await loadCockpitViewModel(sessionId, apiOptions);
@@ -232,8 +238,12 @@ function CockpitWebRoot() {
       return;
     }
     setBusy(true);
-    const setupReady = Boolean(setupStatus && !setupStatus.needsSetup);
-    const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget });
+    const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
+    if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
+      setBusy(false);
+      setStatusMessage(t("status.readyNewTask"));
+      return;
+    }
     setStatusMessage(statusForRunRequest(request.runMode ?? "auto", Boolean(request.livePatch || request.liveAdvisory || request.liveVision), t));
     try {
       const payload = await startCockpitRun(request, apiOptions);
@@ -245,7 +255,7 @@ function CockpitWebRoot() {
       setBusy(false);
       setStatusMessage(t("status.runFailed", { message: errorMessage(error) }));
     }
-  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, goal, runMode, setupStatus, t, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, effectiveRepairOnFail, fixtureFailingPatch, goal, runMode, setupReady, t, testCommand, updateSelectedSession]);
 
   const configureSetup = useCallback(async (request: CockpitSetupRequest) => {
     if (setupBusy) return;
@@ -402,6 +412,9 @@ function CockpitWebRoot() {
     setAccessMode("partial");
     setRunMode("auto");
     setConversationTarget("core");
+    setTestCommand("");
+    setRepairOnFail(false);
+    setFixtureFailingPatch(false);
     setStatusMessage(t("status.readyNewTask"));
   }, [closeLiveSource, t, updateSelectedSession]);
 
@@ -413,7 +426,11 @@ function CockpitWebRoot() {
       goal={goal}
       accessMode={accessMode}
       runMode={runMode}
+      runPreview={`${runPreview.label} · ${runPreview.detail}`}
       conversationTarget={conversationTarget}
+      testCommand={testCommand}
+      repairOnFail={effectiveRepairOnFail}
+      fixtureFailingPatch={fixtureFailingPatch}
       busy={busy}
       statusMessage={statusMessage}
       setupStatus={setupStatus}
@@ -428,6 +445,9 @@ function CockpitWebRoot() {
       onGoalChange={setGoal}
       onAccessModeChange={setAccessMode}
       onRunModeChange={setRunMode}
+      onTestCommandChange={setTestCommand}
+      onRepairOnFailChange={setRepairOnFail}
+      onFixtureFailingPatchChange={setFixtureFailingPatch}
       onConversationTargetChange={setConversationTarget}
       onLanguageChange={updateLanguage}
       onConfigureSetup={configureSetup}

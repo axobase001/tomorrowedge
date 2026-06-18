@@ -420,6 +420,8 @@ export type CockpitRunRequest = {
   approveShell?: boolean;
   approveRepair?: boolean;
   repairOnFail?: boolean;
+  testCommand?: string;
+  fixtureFailingPatch?: boolean;
   to?: string;
 };
 

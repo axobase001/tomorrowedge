@@ -37,6 +37,19 @@ import type { StrategyMutationEvent, StrategySelectionDecision } from "../evolut
 export type AgentGraphState = {
   sessionId: string;
   goal: string;
+  runContext?: {
+    executionCwd?: string;
+    fixtureWorkspace?: string;
+    requestedRunMode?: string;
+    fixtureMode?: boolean;
+    livePatch?: boolean;
+    liveAdvisory?: boolean;
+    liveVision?: boolean;
+    testCommand?: string;
+    repairOnFail?: boolean;
+    approveRepair?: boolean;
+    fixtureFailingPatch?: boolean;
+  };
   conversationTarget?: ConversationTarget;
   routing: RoutingPlan;
   access: AccessPolicy;

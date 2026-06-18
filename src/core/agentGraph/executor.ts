@@ -2468,6 +2468,7 @@ function buildWorkflowStatusBreakdown(state: AgentGraphState): WorkflowStatusBre
       ? "blocked"
       : "completed";
   const reasons = uniqueStrings([
+    waitingApprovalReason(state) ?? "",
     state.workflowBlockedReason ?? "",
     ...failedArtifactGates.flatMap((event) => event.issues),
     ...failedRuns.map(evidenceFromRun),
@@ -2951,6 +2952,8 @@ function workflowStopReason(state: AgentGraphState): string {
   if (state.finalSummary?.result === "failed" && state.finalSummary.userReplySource === "blocked") return "model-backed answer unavailable; workflow blocked without fallback";
   if (state.finalSummary?.result === "failed") return "workflow failed before completion";
   if (state.finalSummary?.result === "aborted") return "workflow aborted before execution";
+  const approvalReason = waitingApprovalReason(state);
+  if (approvalReason) return approvalReason;
   if (state.plan && isReadOnlyPlan(state.plan) && !state.candidates.length && !state.changedFiles.length) return "read-only request completed without patch workflow";
   if (state.judge?.decision === "abort") return "judge aborted workflow";
   if (state.judge?.decision === "ask_user") return "judge requested user decision";
@@ -2959,6 +2962,14 @@ function workflowStopReason(state: AgentGraphState): string {
   if (latestRun?.success && state.repairCandidates.length) return "repair applied and verification passed";
   if (state.changedFiles.length) return "selected patch applied and workflow finalized";
   return "no patch applied; workflow finalized after review and judge";
+}
+
+function waitingApprovalReason(state: AgentGraphState): string | undefined {
+  const waiting = state.agents.some((agent) => agent.status === "waiting_for_user");
+  if (!waiting) return undefined;
+  if (!state.changedFiles.length) return "waiting for patch approval; workflow is not finalized";
+  if (!state.runResults.length) return "waiting for shell approval; workflow is not finalized";
+  return "waiting for user approval; workflow is not finalized";
 }
 
 function applyTaskGovernanceToPlan(plan: Plan, governance: NonNullable<AgentGraphState["taskGovernance"]>): Plan {
