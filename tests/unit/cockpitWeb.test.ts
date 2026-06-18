@@ -366,8 +366,12 @@ describe("cockpit web React surface", () => {
     expect(open).toContain("API keys and role routing");
     expect(open).toContain("data-testid=\"key-role-manager\"");
     expect(open).toContain("list=\"keymgr-provider-options\"");
+    expect(open).toContain("data-testid=\"keymgr-add-relay\"");
     expect(open).toContain("data-testid=\"keymgr-model-select\"");
     expect(open).toContain("data-testid=\"keymgr-base-url\"");
+    expect(open).toContain("data-testid=\"keymgr-api-format\"");
+    expect(open).toContain("data-testid=\"keymgr-auth-header\"");
+    expect(open).toContain("data-testid=\"keymgr-extra-headers\"");
     expect(open).toContain("data-testid=\"keymgr-request-timeout\"");
     expect(open).toContain("data-testid=\"keymgr-max-retries\"");
     expect(open).toContain("data-testid=\"keymgr-save-key\"");
@@ -385,12 +389,23 @@ describe("cockpit web React surface", () => {
     expect(providerFormDefaults("openrouter", providers)).toMatchObject({
       model: "moonshotai/kimi-k2.6:free",
       baseUrl: "https://openrouter.ai/api/v1",
+      apiFormat: "openai_chat",
+      authHeader: "bearer",
+      extraHeadersText: "{}",
       requestTimeoutMs: 60000,
       maxRetries: 1
     });
     expect(providerFormDefaults("deepseek", providers)).toMatchObject({
       model: "deepseek-chat",
       baseUrl: "https://api.deepseek.com"
+    });
+    expect(providerFormDefaults("team-relay", [])).toMatchObject({
+      model: "",
+      baseUrl: "",
+      apiKeyEnv: "TEAM_RELAY_API_KEY",
+      apiFormat: "openai_chat",
+      authHeader: "bearer",
+      extraHeadersText: "{}"
     });
   });
 
@@ -411,6 +426,27 @@ describe("cockpit web React surface", () => {
       apiKeyEnv: "OPENROUTER_API_KEY",
       apiKey: "",
       keyConfigured: false,
+      busy: false
+    })).toBe(false);
+    expect(canSaveProviderConfig({
+      provider: "local_relay",
+      model: "local-model",
+      baseUrl: "http://localhost:9000/v1",
+      apiKeyEnv: "",
+      apiKey: "",
+      keyConfigured: false,
+      authHeader: "none",
+      busy: false
+    })).toBe(true);
+    expect(canSaveProviderConfig({
+      provider: "local_relay",
+      model: "local-model",
+      baseUrl: "http://localhost:9000/v1",
+      apiKeyEnv: "",
+      apiKey: "",
+      keyConfigured: false,
+      authHeader: "none",
+      extraHeadersValid: false,
       busy: false
     })).toBe(false);
   });
@@ -877,7 +913,12 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           apiKeyEnv: "OPENROUTER_API_KEY",
           keyConfigured: false,
           keySource: "missing",
-          authRequired: true
+          authRequired: true,
+          apiFormat: "openai_chat",
+          authHeader: "bearer",
+          extraHeaders: {},
+          requestTimeoutMs: 60000,
+          maxRetries: 1
         }, {
           id: "deepseek",
           enabled: false,
@@ -887,7 +928,12 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
           apiKeyEnv: "DEEPSEEK_API_KEY",
           keyConfigured: false,
           keySource: "missing",
-          authRequired: true
+          authRequired: true,
+          apiFormat: "openai_chat",
+          authHeader: "bearer",
+          extraHeaders: {},
+          requestTimeoutMs: 60000,
+          maxRetries: 1
         }],
         externalAgents: [],
         roleAssignments: [

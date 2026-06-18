@@ -12,7 +12,7 @@ import { prepareRunWorkspace, resolveRuntimeConfig, shouldAutoLive, liveOption }
 import { TomorrowEdgeMcpBridge } from "../mcp/bridge.js";
 import { cockpitIconSvg, cockpitManifest } from "./brand.js";
 import { renderCockpitHtml } from "./html.js";
-import type { AccessMode, TomorrowEdgeConfig } from "../config/schema.js";
+import type { AccessMode, ProviderApiFormat, ProviderAuthHeader, TomorrowEdgeConfig } from "../config/schema.js";
 import type { ExternalAgentRegistrationInput } from "../core/externalAgents/externalAgentTypes.js";
 import { agentRoles, type AgentRole } from "../schemas/agentTask.js";
 import { redactText } from "../safety/secretScanner.js";
@@ -669,6 +669,9 @@ function parseSetupRequest(value: Record<string, unknown>) {
     baseUrl: typeof value.baseUrl === "string" ? value.baseUrl.trim() : undefined,
     apiKeyEnv: typeof value.apiKeyEnv === "string" ? value.apiKeyEnv.trim() : undefined,
     apiKey: typeof value.apiKey === "string" ? value.apiKey : undefined,
+    apiFormat: parseProviderApiFormat(value.apiFormat),
+    authHeader: parseProviderAuthHeader(value.authHeader),
+    extraHeaders: parseProviderExtraHeaders(value.extraHeaders),
     requestTimeoutMs: parseOptionalPositiveInteger(value.requestTimeoutMs, "requestTimeoutMs"),
     maxRetries: parseOptionalNonNegativeInteger(value.maxRetries, "maxRetries"),
     bindRoles: Boolean(value.bindRoles)
@@ -686,9 +689,37 @@ function parseProviderKeyRequest(provider: string, value: Record<string, unknown
     baseUrl,
     apiKeyEnv,
     apiKey,
+    apiFormat: parseProviderApiFormat(value.apiFormat),
+    authHeader: parseProviderAuthHeader(value.authHeader),
+    extraHeaders: parseProviderExtraHeaders(value.extraHeaders),
     requestTimeoutMs: parseOptionalPositiveInteger(value.requestTimeoutMs, "requestTimeoutMs"),
     maxRetries: parseOptionalNonNegativeInteger(value.maxRetries, "maxRetries")
   };
+}
+
+function parseProviderApiFormat(value: unknown): ProviderApiFormat | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (value === "openai_chat" || value === "legacy_chat") return value;
+  throw new HttpError(400, "invalid_api_format", "apiFormat must be openai_chat or legacy_chat.");
+}
+
+function parseProviderAuthHeader(value: unknown): ProviderAuthHeader | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (value === "bearer" || value === "api-key" || value === "none") return value;
+  throw new HttpError(400, "invalid_auth_header", "authHeader must be bearer, api-key, or none.");
+}
+
+function parseProviderExtraHeaders(value: unknown): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "invalid_extra_headers", "extraHeaders must be an object with string values.");
+  const headers: Record<string, string> = {};
+  for (const [key, headerValue] of Object.entries(value)) {
+    if (typeof headerValue !== "string") throw new HttpError(400, "invalid_extra_headers", "extraHeaders values must be strings.");
+    const trimmedKey = key.trim();
+    const trimmedValue = headerValue.trim();
+    if (trimmedKey && trimmedValue) headers[trimmedKey] = trimmedValue;
+  }
+  return headers;
 }
 
 function parseOptionalPositiveInteger(value: unknown, field: string): number | undefined {

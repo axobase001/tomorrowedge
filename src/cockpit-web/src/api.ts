@@ -1,5 +1,8 @@
 import type { CockpitApprovalIntent, CockpitRunRequest, CockpitViewModel } from "../../cockpit/contracts.js";
 
+export type CockpitProviderApiFormat = "openai_chat" | "legacy_chat";
+export type CockpitProviderAuthHeader = "bearer" | "api-key" | "none";
+
 export type CockpitSessionSummary = {
   sessionId: string;
   createdAt: string;
@@ -25,6 +28,9 @@ export type CockpitProviderReadiness = {
   keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
+  apiFormat: CockpitProviderApiFormat;
+  authHeader: CockpitProviderAuthHeader;
+  extraHeaders: Record<string, string>;
   requestTimeoutMs: number;
   maxRetries: number;
 };
@@ -61,6 +67,9 @@ export type CockpitSetupRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  apiFormat?: CockpitProviderApiFormat;
+  authHeader?: CockpitProviderAuthHeader;
+  extraHeaders?: Record<string, string>;
   bindRoles?: boolean;
   requestTimeoutMs?: number;
   maxRetries?: number;
@@ -72,6 +81,9 @@ export type CockpitProviderKeyRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  apiFormat?: CockpitProviderApiFormat;
+  authHeader?: CockpitProviderAuthHeader;
+  extraHeaders?: Record<string, string>;
   requestTimeoutMs?: number;
   maxRetries?: number;
 };

@@ -720,6 +720,11 @@ select[aria-invalid="true"] {
   font: 11px/1.35 var(--te-mono);
   overflow-wrap: anywhere;
 }
+.te-field-help {
+  color: var(--te-muted);
+  font: 11px/1.35 var(--te-mono);
+  overflow-wrap: anywhere;
+}
 .te-loading-state {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1066,6 +1071,15 @@ select[aria-invalid="true"] {
   gap: 12px;
   padding-top: 12px;
 }
+.te-keymgr-provider-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.te-keymgr-provider-tools p {
+  margin: 0;
+}
 .te-keymgr-provider-list {
   display: grid;
   gap: 8px;
@@ -1109,10 +1123,27 @@ select[aria-invalid="true"] {
   font-size: 12px;
 }
 .te-keymgr-form input,
-.te-keymgr-form select {
+.te-keymgr-form select,
+.te-keymgr-form textarea {
   min-height: 34px;
   padding: 0 9px;
   font: 12px var(--te-mono);
+}
+.te-keymgr-form textarea {
+  min-height: 90px;
+  padding: 8px 9px;
+  resize: vertical;
+}
+.te-keymgr-wide {
+  grid-column: 1 / -1;
+}
+.te-keymgr-custom-banner {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--te-border);
+  border-radius: 6px;
+  background: var(--te-soft);
+  font: 12px/1.4 var(--te-mono);
 }
 .te-model-picker {
   display: grid;

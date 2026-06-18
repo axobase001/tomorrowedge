@@ -1130,44 +1130,98 @@ describe("local cockpit server", () => {
     }
   });
 
-  it("creates custom OpenAI-compatible gateway providers from the GUI key manager", async () => {
+  it("creates custom relay endpoint providers from the GUI key manager", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-custom-gateway-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/oneapi-gateway?nonce=${server.nonce}`, {
+      const response = await fetch(`${server.url}/api/setup/keys/team-relay?nonce=${server.nonce}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
-          baseUrl: "https://oneapi.example/v1/",
-          apiKeyEnv: "ONEAPI_GATEWAY_KEY",
-          apiKey: "test-oneapi-key"
+          model: "relay-model",
+          baseUrl: "https://relay.example/v1/",
+          apiKeyEnv: "TEAM_RELAY_KEY",
+          apiKey: "test-relay-key",
+          apiFormat: "legacy_chat",
+          authHeader: "api-key",
+          extraHeaders: {
+            "X-Relay-Name": "team-gateway"
+          },
+          requestTimeoutMs: 45000,
+          maxRetries: 2
         })
       });
-      const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; baseUrl: string; keyConfigured: boolean; keySource: string }> };
+      const afterSave = await response.json() as { selectedProvider?: string; providers: Array<{ id: string; baseUrl: string; keyConfigured: boolean; keySource: string; apiFormat: string; authHeader: string; extraHeaders: Record<string, string>; requestTimeoutMs: number; maxRetries: number }> };
       const config = loadConfig(cwd);
       const configText = await readFile(path.join(cwd, ".tomorrowedge", "config.yaml"), "utf8");
       const secretsFile = await readFile(path.join(cwd, ".tomorrowedge", "secrets.enc"), "utf8");
 
       expect(response.status).toBe(200);
-      expect(afterSave.selectedProvider).toBe("oneapi_gateway");
-      expect(afterSave.providers.find((provider) => provider.id === "oneapi_gateway")).toMatchObject({
-        baseUrl: "https://oneapi.example/v1",
+      expect(afterSave.selectedProvider).toBe("team_relay");
+      expect(afterSave.providers.find((provider) => provider.id === "team_relay")).toMatchObject({
+        baseUrl: "https://relay.example/v1",
         keyConfigured: true,
-        keySource: "encrypted_file"
+        keySource: "encrypted_file",
+        apiFormat: "legacy_chat",
+        authHeader: "api-key",
+        extraHeaders: { "X-Relay-Name": "team-gateway" },
+        requestTimeoutMs: 45000,
+        maxRetries: 2
       });
-      expect(config.providers.oneapi_gateway).toMatchObject({
+      expect(config.providers.team_relay).toMatchObject({
         enabled: true,
-        base_url: "https://oneapi.example/v1",
-        model: "gpt-4o-mini",
-        api_key_env: "ONEAPI_GATEWAY_KEY",
-        api_format: "openai_chat",
-        auth_header: "bearer"
+        base_url: "https://relay.example/v1",
+        model: "relay-model",
+        api_key_env: "TEAM_RELAY_KEY",
+        api_format: "legacy_chat",
+        auth_header: "api-key",
+        extra_headers: { "X-Relay-Name": "team-gateway" },
+        requestTimeoutMs: 45000,
+        maxRetries: 2
       });
-      expect(configText).not.toContain("test-oneapi-key");
-      expect(secretsFile).not.toContain("test-oneapi-key");
+      expect(configText).not.toContain("test-relay-key");
+      expect(secretsFile).not.toContain("test-relay-key");
     } finally {
-      delete process.env.ONEAPI_GATEWAY_KEY;
+      delete process.env.TEAM_RELAY_KEY;
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("saves no-auth custom relay endpoint providers from the GUI key manager", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-no-auth-gateway-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/setup/keys/local-relay?nonce=${server.nonce}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "local-relay-model",
+          baseUrl: "http://localhost:9000/v1",
+          apiFormat: "openai_chat",
+          authHeader: "none",
+          extraHeaders: {}
+        })
+      });
+      const afterSave = await response.json() as { providers: Array<{ id: string; keyConfigured: boolean; keySource: string; authRequired: boolean; apiKeyEnv?: string }> };
+      const config = loadConfig(cwd);
+
+      expect(response.status).toBe(200);
+      expect(afterSave.providers.find((provider) => provider.id === "local_relay")).toMatchObject({
+        keyConfigured: true,
+        keySource: "not_required",
+        authRequired: false
+      });
+      expect(config.providers.local_relay).toMatchObject({
+        enabled: true,
+        base_url: "http://localhost:9000/v1",
+        model: "local-relay-model",
+        api_format: "openai_chat",
+        auth_header: "none",
+        extra_headers: {}
+      });
+      expect(config.providers.local_relay.api_key_env).toBeUndefined();
+    } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }
