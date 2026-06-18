@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   CockpitExternalAgentOption,
+  CockpitProviderApiFormat,
+  CockpitProviderAuthHeader,
   CockpitProviderModelOption,
   CockpitProviderConnectionResult,
   CockpitProviderKeyRequest,
@@ -42,7 +44,7 @@ export function KeyRoleManager({
   onListProviderModels
 }: KeyRoleManagerProps) {
   const roleProviders = useMemo(() => setupStatus?.providers ?? [], [setupStatus]);
-  const providers = useMemo(() => roleProviders.filter((provider) => provider.authRequired), [roleProviders]);
+  const providers = useMemo(() => roleProviders.filter(isManageableProvider), [roleProviders]);
   const providerIds = providers.map((provider) => provider.id);
   const roleProviderIds = roleProviders.map((provider) => provider.id);
   const externalAgents = setupStatus?.externalAgents ?? [];
@@ -58,6 +60,9 @@ export function KeyRoleManager({
   const [model, setModel] = useState(initialDraft.model);
   const [baseUrl, setBaseUrl] = useState(initialDraft.baseUrl);
   const [apiKeyEnv, setApiKeyEnv] = useState(initialDraft.apiKeyEnv);
+  const [apiFormat, setApiFormat] = useState<CockpitProviderApiFormat>(initialDraft.apiFormat);
+  const [authHeader, setAuthHeader] = useState<CockpitProviderAuthHeader>(initialDraft.authHeader);
+  const [extraHeadersText, setExtraHeadersText] = useState(initialDraft.extraHeadersText);
   const [requestTimeoutMs, setRequestTimeoutMs] = useState(String(initialDraft.requestTimeoutMs));
   const [maxRetries, setMaxRetries] = useState(String(initialDraft.maxRetries));
   const [apiKey, setApiKey] = useState("");
@@ -66,6 +71,9 @@ export function KeyRoleManager({
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
   const runtimeErrors = providerRuntimeErrors({ requestTimeoutMs, maxRetries });
+  const extraHeadersDraft = parseExtraHeadersDraft(extraHeadersText);
+  const authRequiresKey = authHeader !== "none";
+  const isCustomProviderDraft = Boolean(normalizedProvider && !selectedProvider);
 
   useEffect(() => {
     setProvider(initialProvider);
@@ -81,6 +89,9 @@ export function KeyRoleManager({
     setModel(nextDraft.model);
     setBaseUrl(nextDraft.baseUrl);
     setApiKeyEnv(nextDraft.apiKeyEnv);
+    setApiFormat(nextDraft.apiFormat);
+    setAuthHeader(nextDraft.authHeader);
+    setExtraHeadersText(nextDraft.extraHeadersText);
     setRequestTimeoutMs(String(nextDraft.requestTimeoutMs));
     setMaxRetries(String(nextDraft.maxRetries));
     setApiKey("");
@@ -95,6 +106,8 @@ export function KeyRoleManager({
     apiKeyEnv,
     apiKey,
     keyConfigured: Boolean(selectedProvider?.keyConfigured),
+    authHeader,
+    extraHeadersValid: !extraHeadersDraft.error,
     busy,
     requestTimeoutMs,
     maxRetries
@@ -102,6 +115,19 @@ export function KeyRoleManager({
   const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, [...(selectedProvider?.models ?? []), ...catalogModels]);
   const selectedModelChoice = modelOptions.includes(model) ? model : "__custom";
   const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
+  const startRelayProfile = () => {
+    const nextProvider = nextRelayProviderId(providerIds);
+    setProvider(nextProvider);
+    setModel("");
+    setBaseUrl("");
+    setApiKeyEnv(defaultEnvFor(nextProvider));
+    setApiFormat("openai_chat");
+    setAuthHeader("bearer");
+    setExtraHeadersText("{}");
+    setApiKey("");
+    setCatalogModels([]);
+    setCatalogMessage("");
+  };
 
   return (
     <ModalSurface
@@ -126,13 +152,16 @@ export function KeyRoleManager({
         </nav>
         {tab === "keys" ? (
           <section className="te-keymgr-body">
-            <p id="keymgr-intro">{t("keymgr.keysIntro")}</p>
+            <div className="te-keymgr-provider-tools">
+              <p id="keymgr-intro">{t("keymgr.keysIntro")}</p>
+              <button type="button" className="te-quiet-button" onClick={startRelayProfile} data-testid="keymgr-add-relay">{t("keymgr.addRelay")}</button>
+            </div>
             <div className="te-keymgr-provider-list">
               {providers.length ? providers.map((item) => (
                 <article key={item.id} className={item.id === normalizedProvider ? "selected" : ""}>
                   <button type="button" className="te-provider-pick" onClick={() => setProvider(item.id)}>
                     <strong>{labelProvider(item.id)}</strong>
-                    <span>{item.keyConfigured ? item.maskedKey ?? item.keySource : t("keymgr.notConfigured")}</span>
+                    <span>{item.keyConfigured ? item.maskedKey ?? item.keySource : t("keymgr.notConfigured")} - {formatProviderTransport(item)}</span>
                   </button>
                   <span className={item.keyConfigured ? "te-chip te-chip-green" : "te-chip te-chip-red"}>{item.keyConfigured ? item.keySource : t("keymgr.missing")}</span>
                 </article>
@@ -148,6 +177,7 @@ export function KeyRoleManager({
                   {providers.map((item) => <option key={item.id} value={item.id} label={labelProvider(item.id)} />)}
                 </datalist>
               </label>
+              {isCustomProviderDraft ? <p className="te-keymgr-custom-banner te-keymgr-wide" data-testid="keymgr-custom-provider-note">{t("keymgr.customProviderDraft")}</p> : null}
               <label>
                 <span>{t("keymgr.model")}</span>
                 <div className="te-model-picker">
@@ -165,8 +195,30 @@ export function KeyRoleManager({
                 <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t("keymgr.baseUrlPlaceholder")} data-testid="keymgr-base-url" />
               </label>
               <label>
+                <span>{t("keymgr.apiFormat")}</span>
+                <select value={apiFormat} onChange={(event) => setApiFormat(event.target.value as CockpitProviderApiFormat)} data-testid="keymgr-api-format">
+                  <option value="openai_chat">{t("keymgr.apiFormatOpenaiChat")}</option>
+                  <option value="legacy_chat">{t("keymgr.apiFormatLegacyChat")}</option>
+                </select>
+              </label>
+              <label>
+                <span>{t("keymgr.authHeader")}</span>
+                <select value={authHeader} onChange={(event) => setAuthHeader(event.target.value as CockpitProviderAuthHeader)} data-testid="keymgr-auth-header">
+                  <option value="bearer">{t("keymgr.authBearer")}</option>
+                  <option value="api-key">{t("keymgr.authApiKey")}</option>
+                  <option value="none">{t("keymgr.authNone")}</option>
+                </select>
+              </label>
+              <label>
                 <span>{t("keymgr.apiKeyEnv")}</span>
-                <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())} data-testid="keymgr-env" />
+                <input
+                  value={apiKeyEnv}
+                  onChange={(event) => setApiKeyEnv(event.target.value.toUpperCase())}
+                  disabled={!authRequiresKey}
+                  aria-describedby={!authRequiresKey ? "keymgr-env-help" : undefined}
+                  data-testid="keymgr-env"
+                />
+                {!authRequiresKey ? <span className="te-field-help" id="keymgr-env-help">{t("keymgr.noAuthEnvHelp")}</span> : null}
               </label>
               <label>
                 <span>{t("keymgr.requestTimeout")}</span>
@@ -194,12 +246,44 @@ export function KeyRoleManager({
               </label>
               <label>
                 <span>{t("keymgr.apiKey")}</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t("keymgr.apiKeyPlaceholder")} data-testid="keymgr-key" />
+                <input
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  type="password"
+                  disabled={!authRequiresKey}
+                  placeholder={authRequiresKey ? t("keymgr.apiKeyPlaceholder") : t("keymgr.apiKeyNoAuthPlaceholder")}
+                  data-testid="keymgr-key"
+                />
+              </label>
+              <label className="te-keymgr-wide">
+                <span>{t("keymgr.extraHeaders")}</span>
+                <textarea
+                  value={extraHeadersText}
+                  onChange={(event) => setExtraHeadersText(event.target.value)}
+                  rows={4}
+                  aria-describedby={extraHeadersDraft.error ? "keymgr-extra-headers-error" : "keymgr-extra-headers-help"}
+                  aria-invalid={extraHeadersDraft.error ? "true" : undefined}
+                  placeholder={t("keymgr.extraHeadersPlaceholder")}
+                  data-testid="keymgr-extra-headers"
+                />
+                <span className="te-field-help" id="keymgr-extra-headers-help">{t("keymgr.extraHeadersHelp")}</span>
+                {extraHeadersDraft.error ? <span className="te-field-error" id="keymgr-extra-headers-error" role="alert">{t("validation.extraHeadersJson")}</span> : null}
               </label>
             </div>
             <div className="te-keymgr-actions">
               <button type="button" disabled={!canSaveKey} onClick={() => {
-                onSaveProviderKey({ provider: normalizedProvider, model, baseUrl, apiKeyEnv, apiKey: apiKey || undefined, requestTimeoutMs: numericDraft(requestTimeoutMs), maxRetries: numericDraft(maxRetries) });
+                onSaveProviderKey({
+                  provider: normalizedProvider,
+                  model,
+                  baseUrl,
+                  apiKeyEnv: authRequiresKey ? apiKeyEnv : undefined,
+                  apiKey: authRequiresKey ? apiKey || undefined : undefined,
+                  apiFormat,
+                  authHeader,
+                  extraHeaders: extraHeadersDraft.headers,
+                  requestTimeoutMs: numericDraft(requestTimeoutMs),
+                  maxRetries: numericDraft(maxRetries)
+                });
                 setApiKey("");
               }} data-testid="keymgr-save-key">{t("keymgr.saveKey")}</button>
               <button type="button" className="te-quiet-button" disabled={busy || catalogBusy || !normalizedProvider} onClick={async () => {
@@ -284,24 +368,66 @@ function updateAssignment(assignments: CockpitRoleAssignment[], role: string, pa
   return assignments.map((assignment) => assignment.role === role ? { ...assignment, ...patch } : assignment);
 }
 
-export function providerFormDefaults(provider: string, providers: Array<{ id: string; model: string; baseUrl: string; apiKeyEnv?: string; requestTimeoutMs?: number; maxRetries?: number }>, selectedModel?: string): { model: string; baseUrl: string; apiKeyEnv: string; requestTimeoutMs: number; maxRetries: number } {
+type ProviderFormDefaults = {
+  model: string;
+  baseUrl: string;
+  apiKeyEnv: string;
+  apiFormat: CockpitProviderApiFormat;
+  authHeader: CockpitProviderAuthHeader;
+  extraHeadersText: string;
+  requestTimeoutMs: number;
+  maxRetries: number;
+};
+
+export function providerFormDefaults(
+  provider: string,
+  providers: Array<{
+    id: string;
+    model: string;
+    baseUrl: string;
+    apiKeyEnv?: string;
+    apiFormat?: CockpitProviderApiFormat;
+    authHeader?: CockpitProviderAuthHeader;
+    extraHeaders?: Record<string, string>;
+    requestTimeoutMs?: number;
+    maxRetries?: number;
+  }>,
+  selectedModel?: string
+): ProviderFormDefaults {
   const providerId = normalizeProviderId(provider);
   const selectedProvider = providers.find((item) => item.id === providerId);
   return {
     model: selectedModel ?? selectedProvider?.model ?? suggestedModelFor(providerId),
     baseUrl: selectedProvider?.baseUrl ?? defaultBaseUrlFor(providerId),
     apiKeyEnv: selectedProvider?.apiKeyEnv ?? defaultEnvFor(providerId),
+    apiFormat: selectedProvider?.apiFormat ?? defaultApiFormatFor(providerId),
+    authHeader: selectedProvider?.authHeader ?? defaultAuthHeaderFor(providerId),
+    extraHeadersText: formatExtraHeaders(selectedProvider?.extraHeaders ?? {}),
     requestTimeoutMs: selectedProvider?.requestTimeoutMs ?? 60_000,
     maxRetries: selectedProvider?.maxRetries ?? 1
   };
 }
 
-export function canSaveProviderConfig(input: { provider: string; model: string; baseUrl: string; apiKeyEnv: string; apiKey?: string; keyConfigured: boolean; busy: boolean; requestTimeoutMs?: string; maxRetries?: string }): boolean {
+export function canSaveProviderConfig(input: {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  apiKeyEnv: string;
+  apiKey?: string;
+  keyConfigured: boolean;
+  authHeader?: CockpitProviderAuthHeader;
+  extraHeadersValid?: boolean;
+  busy: boolean;
+  requestTimeoutMs?: string;
+  maxRetries?: string;
+}): boolean {
   const runtimeValid = !hasProviderRuntimeErrors(providerRuntimeErrors({
     requestTimeoutMs: input.requestTimeoutMs ?? "",
     maxRetries: input.maxRetries ?? ""
   }));
-  return Boolean(input.provider && input.model.trim() && input.baseUrl.trim() && input.apiKeyEnv.trim() && (input.apiKey?.trim() || input.keyConfigured)) && runtimeValid && !input.busy;
+  const authRequiresKey = (input.authHeader ?? "bearer") !== "none";
+  const keyReady = !authRequiresKey || Boolean(input.apiKeyEnv.trim() && (input.apiKey?.trim() || input.keyConfigured));
+  return Boolean(input.provider && input.model.trim() && input.baseUrl.trim() && keyReady) && runtimeValid && input.extraHeadersValid !== false && !input.busy;
 }
 
 export function modelOptionIds(provider: string, configuredModel: string | undefined, catalogModels: CockpitProviderModelOption[]): string[] {
@@ -368,6 +494,61 @@ function defaultBaseUrlFor(provider: string): string {
     openai_compatible: "https://api.openai.com/v1"
   };
   return lookup[providerId] ?? "";
+}
+
+function defaultApiFormatFor(provider: string): CockpitProviderApiFormat {
+  const providerId = normalizeProviderId(provider);
+  return providerId === "anthropic" ? "legacy_chat" : "openai_chat";
+}
+
+function defaultAuthHeaderFor(provider: string): CockpitProviderAuthHeader {
+  const providerId = normalizeProviderId(provider);
+  if (providerId === "mimo" || providerId === "anthropic" || providerId === "gemini") return "api-key";
+  if (providerId === "ollama" || providerId === "mock" || providerId === "fixture") return "none";
+  return "bearer";
+}
+
+function isManageableProvider(provider: { id: string; authRequired: boolean; baseUrl: string; apiKeyEnv?: string }): boolean {
+  return provider.authRequired || Boolean(provider.baseUrl) || Boolean(provider.apiKeyEnv);
+}
+
+function nextRelayProviderId(existing: string[]): string {
+  const ids = new Set(existing.map((item) => normalizeProviderId(item)));
+  let index = 1;
+  let candidate = "custom_relay";
+  while (ids.has(candidate)) {
+    index += 1;
+    candidate = `custom_relay_${index}`;
+  }
+  return candidate;
+}
+
+function formatProviderTransport(provider: { apiFormat?: string; authHeader?: string; baseUrl?: string }): string {
+  return [provider.apiFormat ?? "openai_chat", provider.authHeader ?? "bearer", provider.baseUrl ?? ""].filter(Boolean).join(" / ");
+}
+
+function formatExtraHeaders(headers: Record<string, string>): string {
+  return Object.keys(headers).length ? JSON.stringify(headers, null, 2) : "{}";
+}
+
+function parseExtraHeadersDraft(value: string): { headers: Record<string, string>; error?: "invalid_json" | "invalid_shape" } {
+  const trimmed = value.trim();
+  if (!trimmed) return { headers: {} };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return { headers: {}, error: "invalid_json" };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { headers: {}, error: "invalid_shape" };
+  const headers: Record<string, string> = {};
+  for (const [key, headerValue] of Object.entries(parsed)) {
+    if (typeof headerValue !== "string") return { headers: {}, error: "invalid_shape" };
+    const headerName = key.trim();
+    const valueText = headerValue.trim();
+    if (headerName && valueText) headers[headerName] = valueText;
+  }
+  return { headers };
 }
 
 function suggestedModelFor(provider: string): string {

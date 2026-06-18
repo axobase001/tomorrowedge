@@ -5,7 +5,7 @@ type JsonSchema = Record<string, unknown>;
 const structuredJsonSchemaProviders = /^(openrouter|openai_compatible|deepseek|kimi)$/i;
 
 export function structuredJsonResponseFormat(provider: string, name: string, schema: JsonSchema): ChatRequest["responseFormat"] {
-  if (!supportsJsonSchemaResponseFormat(provider)) return { type: "json_object" };
+  if (!supportsJsonSchemaResponseFormat(provider)) return undefined;
   return {
     type: "json_schema",
     json_schema: {

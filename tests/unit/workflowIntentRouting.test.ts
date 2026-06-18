@@ -103,4 +103,61 @@ describe("workflow intent routing", () => {
     expect(JSON.stringify(bodies[1]?.messages)).toContain("Invalid previous output");
     expect(ledger.events.filter((event) => event.type === "model_call" && event.provider === "openai_compatible")).toHaveLength(4);
   });
+
+  it("does not force response_format for custom OpenAI-compatible providers", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({
+        id: "custom-intent",
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              intent: "inspect",
+              requiresPatchWorkflow: false,
+              workflowKind: "read_only",
+              confidence: 0.86,
+              reason: "Custom provider returned strict JSON without response_format."
+            })
+          }
+        }]
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+    const config: TomorrowEdgeConfig = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        volcengine_ark: {
+          enabled: true,
+          auth_header: "none",
+          base_url: "https://ark.example/api/plan/v3",
+          model: "glm-5.2",
+          models: [{ id: "glm-5.2", label: "GLM-5.2" }],
+          api_format: "openai_chat",
+          extra_headers: {},
+          requestTimeoutMs: 60_000,
+          maxRetries: 1,
+          retryBaseDelayMs: 1000
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        planner: { provider: "volcengine_ark", model: "glm-5.2" }
+      }
+    };
+    const ledger = createEventLedger("partial");
+    const decision = await classifyWorkflowIntent({
+      goal: "summarize the project",
+      config,
+      router: new ModelRouter(config),
+      ledger
+    });
+
+    expect(decision.workflowKind).toBe("read_only");
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.response_format).toBeUndefined();
+  });
 });

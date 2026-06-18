@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, writeConfig } from "../config/configLoader.js";
-import type { ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
+import type { ProviderApiFormat, ProviderAuthHeader, ProviderConfig, TomorrowEdgeConfig } from "../config/schema.js";
 import { deleteProviderSecret, getProviderSecret, maskSecret, readProviderSecrets, saveProviderSecret, type ProviderSecretMap } from "../core/secrets/secretManager.js";
 import { testProviderConnection, type ProviderConnectionResult } from "../providers/connectionTest.js";
 import { fetchProviderModelCatalog } from "../providers/modelCatalog.js";
@@ -22,6 +22,9 @@ export type CockpitProviderReadiness = {
   keySource: "env" | "local_env" | "encrypted_file" | "not_required" | "missing";
   maskedKey?: string;
   authRequired: boolean;
+  apiFormat: ProviderApiFormat;
+  authHeader: ProviderAuthHeader;
+  extraHeaders: Record<string, string>;
   requestTimeoutMs: number;
   maxRetries: number;
 };
@@ -58,6 +61,9 @@ export type CockpitSetupRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  apiFormat?: ProviderApiFormat;
+  authHeader?: ProviderAuthHeader;
+  extraHeaders?: Record<string, string>;
   bindRoles?: boolean;
   requestTimeoutMs?: number;
   maxRetries?: number;
@@ -69,6 +75,9 @@ export type CockpitProviderKeyRequest = {
   baseUrl?: string;
   apiKeyEnv?: string;
   apiKey?: string;
+  apiFormat?: ProviderApiFormat;
+  authHeader?: ProviderAuthHeader;
+  extraHeaders?: Record<string, string>;
   requestTimeoutMs?: number;
   maxRetries?: number;
 };
@@ -159,9 +168,13 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
   if (!model) throw new Error("At least one model id is required.");
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
-  assertProviderModelCompatible(providerId, model, { ...currentProvider, base_url: baseUrl });
-  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
-  if (requiresAuth(currentProvider) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
+  const apiFormat = sanitizeApiFormat(request.apiFormat) ?? currentProvider.api_format;
+  const authHeader = sanitizeAuthHeader(request.authHeader) ?? currentProvider.auth_header;
+  const extraHeaders = sanitizeExtraHeaders(request.extraHeaders) ?? currentProvider.extra_headers ?? {};
+  const draftProvider = { ...currentProvider, base_url: baseUrl, api_format: apiFormat, auth_header: authHeader, extra_headers: extraHeaders };
+  assertProviderModelCompatible(providerId, model, draftProvider);
+  const apiKeyEnv = providerEnvNameForSetup(config, providerId, currentProvider, request.apiKeyEnv, draftProvider);
+  if (requiresAuth(draftProvider) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   if (request.apiKey?.trim() && apiKeyEnv) {
     await saveProviderSecret(cwd, providerId, request.apiKey.trim(), apiKeyEnv);
     process.env[apiKeyEnv] = request.apiKey.trim();
@@ -173,6 +186,9 @@ export async function configureCockpitProvider(cwd: string, request: CockpitSetu
     models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
     base_url: baseUrl,
     api_key_env: apiKeyEnv,
+    api_format: apiFormat,
+    auth_header: authHeader,
+    extra_headers: extraHeaders,
     requestTimeoutMs: sanitizePositiveInt(request.requestTimeoutMs) ?? currentProvider.requestTimeoutMs ?? 60_000,
     maxRetries: sanitizeNonNegativeInt(request.maxRetries) ?? currentProvider.maxRetries ?? 1
   };
@@ -193,17 +209,23 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
   const providerId = normalizeProviderId(request.provider);
   const currentProvider = providerConfigForSetup(config, providerId);
   const apiKey = request.apiKey?.trim() ?? "";
-  const apiKeyEnv = sanitizeEnvName(request.apiKeyEnv) ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
-  if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
   const model = canonicalModelForProvider(providerId, request.model ?? currentProvider.model);
   if (!model) throw new Error("At least one model id is required.");
   const baseUrl = sanitizeBaseUrl(request.baseUrl) ?? currentProvider.base_url;
   if (!baseUrl) throw new Error("Base URL is required for this provider.");
-  assertProviderModelCompatible(providerId, model, { ...currentProvider, base_url: baseUrl });
+  const apiFormat = sanitizeApiFormat(request.apiFormat) ?? currentProvider.api_format;
+  const authHeader = sanitizeAuthHeader(request.authHeader) ?? currentProvider.auth_header;
+  const extraHeaders = sanitizeExtraHeaders(request.extraHeaders) ?? currentProvider.extra_headers ?? {};
+  const draftProvider = { ...currentProvider, base_url: baseUrl, api_format: apiFormat, auth_header: authHeader, extra_headers: extraHeaders };
+  const apiKeyEnv = providerEnvNameForSetup(config, providerId, currentProvider, request.apiKeyEnv, draftProvider);
+  if (requiresAuth(draftProvider) && !apiKeyEnv) throw new Error("API key env var name is required for this provider.");
+  assertProviderModelCompatible(providerId, model, draftProvider);
   if (apiKey) {
+    if (!apiKeyEnv) throw new Error("API key env var name is required before saving a key.");
     await saveProviderSecret(cwd, providerId, apiKey, apiKeyEnv);
     process.env[apiKeyEnv] = apiKey;
-  } else if (requiresAuth(currentProvider)) {
+  } else if (requiresAuth(draftProvider)) {
+    if (!apiKeyEnv) throw new Error("API key env var name is required for this provider.");
     const localEnv = readLocalEnvMap(cwd);
     const existingKey = process.env[apiKeyEnv] ?? localEnv.get(apiKeyEnv) ?? getProviderSecret(cwd, providerId)?.apiKey;
     if (!existingKey) throw new Error("API key is required unless an existing key is configured for this env var.");
@@ -219,6 +241,9 @@ export async function saveCockpitProviderKey(cwd: string, request: CockpitProvid
         models: mergeProviderModels(currentProvider.models, [{ id: model, label: model }]),
         base_url: baseUrl,
         api_key_env: apiKeyEnv,
+        api_format: apiFormat,
+        auth_header: authHeader,
+        extra_headers: extraHeaders,
         requestTimeoutMs: sanitizePositiveInt(request.requestTimeoutMs) ?? currentProvider.requestTimeoutMs ?? 60_000,
         maxRetries: sanitizeNonNegativeInt(request.maxRetries) ?? currentProvider.maxRetries ?? 1
       }
@@ -428,6 +453,9 @@ function providerReadiness(id: string, provider: ProviderConfig, localEnv: Map<s
     keySource,
     maskedKey: keyValue ? maskSecret(keyValue) : undefined,
     authRequired,
+    apiFormat: provider.api_format,
+    authHeader: provider.auth_header,
+    extraHeaders: provider.extra_headers ?? {},
     requestTimeoutMs: provider.requestTimeoutMs ?? 60_000,
     maxRetries: provider.maxRetries ?? 1
   };
@@ -462,6 +490,18 @@ function mergeProviderModels(
 
 function requiresAuth(provider: ProviderConfig): boolean {
   return provider.auth_header !== "none";
+}
+
+function providerEnvNameForSetup(
+  config: TomorrowEdgeConfig,
+  providerId: string,
+  currentProvider: ProviderConfig,
+  requestedApiKeyEnv: string | undefined,
+  provider: ProviderConfig
+): string | undefined {
+  const requested = sanitizeEnvName(requestedApiKeyEnv);
+  if (requiresAuth(provider)) return requested ?? currentProvider.api_key_env ?? defaultEnvNameFor(providerId);
+  return requested ?? config.providers[providerId]?.api_key_env;
 }
 
 function providerConfigForSetup(config: TomorrowEdgeConfig, providerId: string): ProviderConfig {
@@ -504,6 +544,25 @@ function sanitizeEnvName(value?: string): string | undefined {
   if (!trimmed) return undefined;
   if (!/^[A-Z_][A-Z0-9_]*$/.test(trimmed)) throw new Error("Env var name must use uppercase letters, numbers, and underscores.");
   return trimmed;
+}
+
+function sanitizeApiFormat(value?: ProviderApiFormat): ProviderApiFormat | undefined {
+  if (value === undefined) return undefined;
+  if (value === "openai_chat" || value === "legacy_chat") return value;
+  throw new Error("Provider API format must be openai_chat or legacy_chat.");
+}
+
+function sanitizeAuthHeader(value?: ProviderAuthHeader): ProviderAuthHeader | undefined {
+  if (value === undefined) return undefined;
+  if (value === "bearer" || value === "api-key" || value === "none") return value;
+  throw new Error("Provider auth header must be bearer, api-key, or none.");
+}
+
+function sanitizeExtraHeaders(value?: Record<string, string>): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  return Object.fromEntries(Object.entries(value)
+    .map(([key, headerValue]) => [key.trim(), headerValue.trim()])
+    .filter(([key, headerValue]) => key && headerValue));
 }
 
 function sanitizeBaseUrl(value?: string): string | undefined {
