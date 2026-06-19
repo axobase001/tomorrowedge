@@ -1,10 +1,11 @@
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   deleteProviderSecret,
   loadEncryptedSecretsIntoEnv,
+  ProviderSecretStoreUnreadableError,
   readProviderSecrets,
   saveProviderSecret,
   secretStorePath
@@ -41,6 +42,67 @@ describe("encrypted provider secret manager", () => {
       else process.env.TOMORROWEDGE_SECRET_PASSPHRASE = previousPassphrase;
       if (previousEnv === undefined) delete process.env.TEST_SECRET_OPENROUTER;
       else process.env.TEST_SECRET_OPENROUTER = previousEnv;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed instead of overwriting an encrypted store when the passphrase is wrong", async () => {
+    const cwd = await mkdtemp("tedge-secret-store-wrong-passphrase-");
+    const previousPassphrase = process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+    try {
+      process.env.TOMORROWEDGE_SECRET_PASSPHRASE = "pass-one";
+      await saveProviderSecret(cwd, "openrouter", "test-secret-openrouter-key", "TEST_SECRET_OPENROUTER");
+      const filePath = secretStorePath(cwd);
+      const originalCiphertext = await readFile(filePath, "utf8");
+
+      process.env.TOMORROWEDGE_SECRET_PASSPHRASE = "pass-two";
+      expect(readProviderSecrets(cwd).size).toBe(0);
+      await expect(saveProviderSecret(cwd, "deepseek", "test-secret-deepseek-key", "TEST_SECRET_DEEPSEEK")).rejects.toThrow(ProviderSecretStoreUnreadableError);
+      expect(await readFile(filePath, "utf8")).toBe(originalCiphertext);
+
+      process.env.TOMORROWEDGE_SECRET_PASSPHRASE = "pass-one";
+      const recovered = readProviderSecrets(cwd);
+      expect(recovered.get("openrouter")?.apiKey).toBe("test-secret-openrouter-key");
+      expect(recovered.has("deepseek")).toBe(false);
+    } finally {
+      if (previousPassphrase === undefined) delete process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+      else process.env.TOMORROWEDGE_SECRET_PASSPHRASE = previousPassphrase;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed instead of overwriting a corrupted encrypted store", async () => {
+    const cwd = await mkdtemp("tedge-secret-store-corrupted-");
+    const previousPassphrase = process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+    try {
+      process.env.TOMORROWEDGE_SECRET_PASSPHRASE = "test-secret-passphrase";
+      const filePath = secretStorePath(cwd);
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, "{ not json", "utf8");
+
+      expect(readProviderSecrets(cwd).size).toBe(0);
+      await expect(saveProviderSecret(cwd, "openrouter", "test-secret-openrouter-key", "TEST_SECRET_OPENROUTER")).rejects.toThrow(ProviderSecretStoreUnreadableError);
+      expect(await readFile(filePath, "utf8")).toBe("{ not json");
+    } finally {
+      if (previousPassphrase === undefined) delete process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+      else process.env.TOMORROWEDGE_SECRET_PASSPHRASE = previousPassphrase;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("still saves provider keys on a first-run empty store", async () => {
+    const cwd = await mkdtemp("tedge-secret-store-first-run-");
+    const previousPassphrase = process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+    try {
+      process.env.TOMORROWEDGE_SECRET_PASSPHRASE = "test-secret-passphrase";
+      expect(readProviderSecrets(cwd).size).toBe(0);
+
+      await saveProviderSecret(cwd, "openrouter", "test-secret-openrouter-key", "TEST_SECRET_OPENROUTER");
+
+      expect(readProviderSecrets(cwd).get("openrouter")?.apiKey).toBe("test-secret-openrouter-key");
+    } finally {
+      if (previousPassphrase === undefined) delete process.env.TOMORROWEDGE_SECRET_PASSPHRASE;
+      else process.env.TOMORROWEDGE_SECRET_PASSPHRASE = previousPassphrase;
       await rm(cwd, { recursive: true, force: true });
     }
   });
