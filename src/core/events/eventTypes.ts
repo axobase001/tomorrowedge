@@ -596,6 +596,16 @@ export type DelegatedTaskResultEvent = BaseEvent & {
   failureSignals?: string[];
 };
 
+export type DelegatedExecutionModeEvent = BaseEvent & {
+  type: "delegated_execution_mode";
+  executionMode: "native_governance" | "external_command" | "mixed" | "native_fallback";
+  delegatedTaskCount: number;
+  externalResultCount: number;
+  commandAdapterCount: number;
+  syntheticEvidence: boolean;
+  summary: string;
+};
+
 export type StrategyMutationRuntimeEvent = BaseEvent & {
   type: "strategy_mutation";
   mutationId: string;
@@ -897,6 +907,7 @@ export type TomorrowEdgeEvent =
   | TaskOwnershipAssignmentEvent
   | TaskOwnershipReassignmentEvent
   | DelegatedTaskResultEvent
+  | DelegatedExecutionModeEvent
   | StrategyMutationRuntimeEvent
   | StrategySelectionDecisionEvent
   | CouncilReplanEvent

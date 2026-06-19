@@ -120,6 +120,8 @@ export function eventSummary(event: TomorrowEdgeEvent): string {
       return `${event.taskNodeId} ${event.oldOwnerAgentId} -> ${event.newOwnerAgentId} ${event.assignedProvider}${event.assignedModel ? `/${event.assignedModel}` : ""} trigger=${event.trigger}: ${event.reason}`;
     case "delegated_task_result":
       return `${event.taskNodeId} ${event.status} by ${event.ownerAgentId}: ${event.summary}`;
+    case "delegated_execution_mode":
+      return `${event.executionMode} delegated=${event.delegatedTaskCount} external=${event.externalResultCount} synthetic=${event.syntheticEvidence ? "yes" : "no"}: ${event.summary}`;
     case "strategy_mutation":
       return `${event.mutationType} ${event.selected ? "selected" : "candidate"} trigger=${event.trigger}: ${event.reason}`;
     case "strategy_selection_decision":

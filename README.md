@@ -148,6 +148,8 @@ Read the full design in [Canopus Runtime](docs/canopus_runtime.md).
 
 A high-level engineering task enters a Chief Agent first. The Chief Agent can convene Council Members for critique, gap fill, alternative planning, and task claims. The council forms a consensus TaskGraph. Each core task node receives an owner agent, provider, model, and assignment reason. TomorrowEdge then delegates execution while EvidenceGate, BudgetGate, Debate v2, Objective Contract, Strategy Memory, and the event ledger govern the run. Final delivery returns to the Chief Agent for review and judge.
 
+Default Sirius fixture/native runs are governed delegation runs: they produce TaskGraph ownership, evidence packets, artifacts, mutation events, and Chief review, but they do not claim concrete file patches or shell test execution unless a configured command adapter, MCP adapter, or Canopus shell path actually performs that work. The trace now records `delegated_execution_mode` so users can distinguish native governance evidence from command-backed execution artifacts.
+
 ```mermaid
 flowchart LR
   User["High-level task"] --> Chief["Chief Agent"]
@@ -167,7 +169,7 @@ Core Sirius modules:
 - **AgentCapabilityProfile** makes every model or external agent replaceable by capability, role, trust, cost, latency, and adapter support.
 - **Agent Council Planning** records critique, gap fill, alternative planning, task claims, and consensus moves.
 - **Task Ownership Assignment** gives every core TaskGraph node an `ownerAgentId`, `assignedProvider`, `assignedModel`, and `assignmentReason`.
-- **Delegated Execution Runtime** executes owned nodes while preserving Objective Contract, TaskGraph, RoleGraph, EvidenceGate, BudgetGate, Debate v2, Strategy Memory, and Trace Ledger.
+- **Delegated Execution Runtime** executes or simulates owned nodes while preserving Objective Contract, TaskGraph, RoleGraph, EvidenceGate, BudgetGate, Debate v2, Strategy Memory, Trace Ledger, and explicit execution-mode evidence.
 - **Bounded Strategy Mutation** can split tasks, switch owner agents, add reviewers/judges, increase debate, or trigger council replan without mutating safety boundaries.
 - **Chief Final Review / Judge** returns the deliverable to the Chief Agent before completion.
 

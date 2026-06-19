@@ -102,6 +102,8 @@ npm run dev -- canopus report --cwd examples/canopus/simple_bugfix_runtime --run
 
 用户给出一个高层软件工程任务后，任务先进入 Chief Agent。Chief Agent 可以召集 Council Members 进行 critique、gap fill、alternative plan 和 task claim。Council 形成 consensus TaskGraph。每个核心 TaskNode 会得到 owner agent、provider、model 和 assignment reason。随后 TomorrowEdge 委派执行，同时由 EvidenceGate、BudgetGate、Debate v2、Objective Contract、Strategy Memory 和事件账本治理整个流程。最终交付会回到 Chief Agent 做 final review / judge。
 
+默认 Sirius fixture/native 运行是治理型委派运行：它会产出 TaskGraph ownership、evidence packet、artifact、mutation event 和 Chief review，但除非配置的 command adapter、MCP adapter 或 Canopus shell 路径实际执行工作，否则不会声称已经产生真实文件 patch 或 shell test 结果。trace 会记录 `delegated_execution_mode`，用于区分 native governance evidence 和 command-backed execution artifact。
+
 ```mermaid
 flowchart LR
   User["高层任务"] --> Chief["Chief Agent"]
@@ -121,7 +123,7 @@ Sirius 核心模块：
 - **AgentCapabilityProfile**：按能力、角色、信任、成本、延迟和 adapter 支持替换模型或外部 Agent。
 - **Agent Council Planning**：记录 critique、gap fill、alternative planning、task claim 和 consensus move。
 - **Task Ownership Assignment**：每个核心 TaskGraph node 都有 `ownerAgentId`、`assignedProvider`、`assignedModel` 和 `assignmentReason`。
-- **Delegated Execution Runtime**：委派执行节点，同时保留 Objective Contract、TaskGraph、RoleGraph、EvidenceGate、BudgetGate、Debate v2、Strategy Memory 和 Trace Ledger。
+- **Delegated Execution Runtime**：执行或模拟委派节点，同时保留 Objective Contract、TaskGraph、RoleGraph、EvidenceGate、BudgetGate、Debate v2、Strategy Memory、Trace Ledger 和明确的 execution-mode evidence。
 - **Bounded Strategy Mutation**：失败时可以 split task、switch owner agent、add reviewer/judge、increase debate 或 council replan，但不能改变安全边界。
 - **Chief Final Review / Judge**：交付前必须回到 Chief Agent 做最终审查。
 

@@ -1,95 +1,104 @@
 # Roadmap
 
-## 0.5.x Experience Polish / Cockpit Hardening
+Authoritative roadmap for TomorrowEdge 1.6.3 Canopus and the post-1.6 line.
+This document describes current product direction, not historical 0.x release
+planning.
+
+## 1.6.x Canopus Convergence Hardening
+
+Current focus:
+
+- Keep `tedge canopus` and the `tedge control` compatibility alias aligned.
+- Make Objective Contract, AcceptanceMatrix, ConvergencePolicy, and RunState
+  behavior visible in CLI output, reports, and persisted artifacts.
+- Preserve the rule that AgentBridge workers can propose or perform work, but
+  blocking acceptance checks decide convergence.
+- Keep `mock`, `noop`, `shell`, and `sirius-council` adapters covered by
+  deterministic tests.
+- Strengthen failure reporting for budget exhaustion, adapter failure,
+  acceptance-check failure, and incomplete execution.
 
 Acceptance criteria:
 
-- README has a 3-minute no-key tryout path.
-- TUI layout, screenshots, and docs present the same restrained cockpit style.
-- Full/partial/restricted semantics and `shell.policy` are easy to understand.
-- Trace/export quality makes fallback, repair, shell output, and artifact refs
-  inspectable.
-- MCP bridge status is explicit: Codex experimental, Claude Code wrapper
-  required, mock stable, custom MCP experimental.
+- Canopus examples validate and run without provider credentials.
+- `npm run test:control`, `npm run build`, and `npm run docs:status` stay low
+  cost and release-gate friendly.
+- Reports distinguish action success, convergence success, blocked checks, and
+  incomplete runs.
 
-## 0.6.x Real External Agent Workflows
+## Sirius Council Clarity
 
-0.6.0 starts this track with the architecture base:
+Sirius remains the experimental council-governance runtime inside the current
+product line.
 
-- Context projection separates full runtime artifacts from provider-visible
-  previews.
-- Evidence packets give reviewer/judge roles structured coding evidence.
-- Routing, budget, fallback, projection, stop reason, and trace completeness
-  diagnostics are recorded in the event ledger.
-- External-agent invocation now has typed task/result envelope contracts.
+Current focus:
 
-Acceptance criteria:
-
-- Codex CLI role runner has a documented, reproducible demo path.
-- Claude Code wrapper path is documented with a local stdio MCP wrapper.
-- External role normalize failures are visible in the event ledger before
-  native fallback.
-- External agent cost accounting is visible in TUI and exports.
-- Role-bound execution demos cover planner, coder, reviewer, judge, and repairer.
-
-## 0.7.x Benchmark Demo
+- Make delegated execution mode explicit in trace, final summary, and docs.
+- Distinguish native governance evidence from command-backed execution
+  artifacts.
+- Keep Chief selection, Council moves, TaskGraph ownership, delegated task
+  results, bounded Strategy Mutation, and Chief final review visible in the
+  cockpit and CLI.
+- Maintain the packaged mock config path as a reproducible no-key demo.
 
 Acceptance criteria:
 
-- Public benchmark demo compares strong single-agent, cheap single-model, and
-  TomorrowEdge multi-model cockpit workflows.
-- Include at least one substantial migration or repair task such as C++ to Rust,
-  state-machine generation, or UI reconstruction from screenshot.
-- Report quality, cost, time, trace completeness, and repair visibility.
-- Publish a hero figure that explains capability routing and auditability.
+- Fixture/native Sirius runs do not imply real patch or shell execution unless
+  command, MCP, or Canopus shell artifacts exist.
+- `npm run test:council` verifies execution-mode trace fields and packaged mock
+  config behavior.
+- README, capability status, and council docs use the same semantics.
 
-## 0.2 Usable CLI
+## Provider And Routing Reliability
 
-Acceptance criteria:
+Current focus:
 
-- First-run config can be completed without overwriting user files.
-- `tedge doctor` gives actionable provider/config fixes.
-- Full/partial shell execution has hard safety boundaries.
-- Events and artifacts are redacted by default.
-- Context selection is task-relevant rather than alphabetical.
-- Package metadata, CI smoke, and pack dry-run are release-ready.
-
-## 0.3 Trusted Full Mode
+- Keep provider diagnostics actionable without requiring live credentials.
+- Preserve static fallback catalogs while making stale/live catalog status clear.
+- Improve OpenAI-compatible, DeepSeek, Kimi, MiMo, OpenRouter, Ollama,
+  Anthropic, Gemini, and custom relay setup paths.
+- Expand model compatibility checks where provider-specific model ids drift.
 
 Acceptance criteria:
 
-- Command risk policy is configurable per repo/team.
-- Verification supports a multi-step test plan.
-- Cost budgets support per-run and daily caps.
-- Undo/replay/export explain decisions, not only raw events.
+- Provider setup errors identify the provider, model, API format, auth header,
+  and suggested fix.
+- Model catalog refresh is provider-scoped and does not leak options across
+  role assignments.
+- CLI and GUI provider readiness use the same normalized provider semantics.
 
-## 0.4 Live TUI Workflow
+## Local Cockpit Usability
 
-Acceptance criteria:
+Current focus:
 
-- Executor emits live progress events.
-- TUI updates while agents run.
-- Patch/shell/repair approval loops are usable without leaving the TUI.
-- Artifact navigation and rerun/undo are available inside the cockpit.
-
-## 0.5 Provider Beta
-
-Acceptance criteria:
-
-- Provider smoke matrix covers OpenRouter, DeepSeek, MiMo, Ollama,
-  OpenAI-compatible, Kimi-compatible, Anthropic, and Gemini providers.
-- Native Anthropic and Gemini adapters have direct connection tests and unit
-  coverage; real-key smoke coverage is expanded over time.
-- Model routing explanations include capability, cost, privacy, fallback, and
-  user override reasons.
-
-## 1.0 Product Beta
+- Keep React Cockpit as the primary GUI and the local HTML fallback as a
+  compatible constrained client.
+- Improve task/session visibility, cancellation, run-mode preflight, key setup,
+  role assignment, and trace inspection.
+- Keep English as the default browser language while preserving Chinese UI
+  coverage.
+- Treat GUI design tokens and fallback token parity as CI-checked surfaces.
 
 Acceptance criteria:
 
-- Team policy is supported.
-- GitHub PR workflow can reuse TomorrowEdge reports.
-- Strategy memory can influence routing under explicit user control.
-- Plugin extension points are documented and stable.
-- Product docs are split into Quickstart, Concepts, Config, Providers, Safety,
-  TUI, Examples, Troubleshooting, and Release.
+- Multi-run workflows keep prior sessions visible and recoverable.
+- Full-autonomy runs require visible preflight confirmation.
+- Stop/cancel controls persist canceled runs as aborted sessions.
+- `npm run test:ui`, `npm run web:build`, and `npm run e2e:cockpit` cover the
+  main GUI contract.
+
+## Release Hygiene
+
+Current focus:
+
+- Keep README, CHANGELOG, ROADMAP, capability status, and promise-map language
+  aligned with the package version.
+- Keep package smoke, pack dry-run, docs status, secret scan, and audit checks
+  suitable for every release candidate.
+- Prefer small contract tests for documented commands and public examples.
+
+Acceptance criteria:
+
+- `npm run docs:status` catches stale version or stale phase wording in ROADMAP.
+- Public docs do not document commands that the CLI parser rejects.
+- `npm run verify` remains the broad local release gate.
