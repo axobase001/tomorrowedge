@@ -5,7 +5,11 @@ TomorrowEdge has two first-class cockpit surfaces:
 - Browser GUI: Four-Zone Quiet Cockpit for local workflow supervision.
 - Ink TUI: keyboard-driven terminal cockpit for dense terminal use.
 
-Default UI language: Chinese (`zh-CN`).
+Authoritative browser GUI design contract: `docs/GUI_DESIGN_SYSTEM.md`.
+
+Default browser GUI language: English (`en`) with a Chinese (`zh`) selector in
+the React cockpit. The embedded fallback cockpit is English-only and declares
+`lang="en"` until it gains the React i18n runtime.
 
 ## GUI v1.1 Direction
 

@@ -7,7 +7,7 @@ type MarkdownBlock =
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "paragraph"; text: string };
 
-export function MarkdownContent({ content, className = "", t }: { content: string; className?: string; t?: Translator }) {
+export function MarkdownContent({ content, className = "", t }: { content: string; className?: string; t: Translator }) {
   return (
     <div className={`te-markdown ${className}`.trim()} data-testid="markdown-content">
       {parseMarkdown(stripAnsi(content)).map((block, index) => renderBlock(block, index, t))}
@@ -15,13 +15,13 @@ export function MarkdownContent({ content, className = "", t }: { content: strin
   );
 }
 
-function renderBlock(block: MarkdownBlock, index: number, t?: Translator): ReactNode {
+function renderBlock(block: MarkdownBlock, index: number, t: Translator): ReactNode {
   if (block.type === "code") {
     return (
       <figure className="te-code-block" data-testid="markdown-code-block" key={index}>
         <figcaption>
           <span>{block.language || "code"}</span>
-          <button type="button" className="te-code-copy" data-testid="markdown-copy-code" onClick={() => copyCode(block.content)}>{t ? t("markdown.copy") : "Copy"}</button>
+          <button type="button" className="te-code-copy" data-testid="markdown-copy-code" onClick={() => copyCode(block.content)}>{t("markdown.copy")}</button>
         </figcaption>
         <pre><code>{block.content}</code></pre>
       </figure>

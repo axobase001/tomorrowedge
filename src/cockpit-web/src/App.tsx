@@ -25,6 +25,7 @@ export type AppProps = {
   testCommand: string;
   repairOnFail: boolean;
   fixtureFailingPatch: boolean;
+  fullAutonomyConfirmed: boolean;
   busy: boolean;
   statusMessage?: string;
   setupStatus?: CockpitSetupStatus;
@@ -42,6 +43,7 @@ export type AppProps = {
   onTestCommandChange: (command: string) => void;
   onRepairOnFailChange: (enabled: boolean) => void;
   onFixtureFailingPatchChange: (enabled: boolean) => void;
+  onFullAutonomyConfirmedChange: (enabled: boolean) => void;
   onConversationTargetChange: (target: string) => void;
   onLanguageChange: (language: GuiLanguage) => void;
   onConfigureSetup: (request: CockpitSetupRequest) => void;
@@ -54,6 +56,7 @@ export type AppProps = {
   onOpenKeyManager: () => void;
   onCloseKeyManager: () => void;
   onRun: () => void;
+  onCancelRun: () => void;
   onRefresh: () => void;
   onNewTask: () => void;
   onSelectSession: (sessionId: string) => void;
@@ -76,6 +79,7 @@ export function App({
   testCommand,
   repairOnFail,
   fixtureFailingPatch,
+  fullAutonomyConfirmed,
   busy,
   statusMessage,
   setupStatus,
@@ -93,6 +97,7 @@ export function App({
   onTestCommandChange,
   onRepairOnFailChange,
   onFixtureFailingPatchChange,
+  onFullAutonomyConfirmedChange,
   onConversationTargetChange,
   onLanguageChange,
   onConfigureSetup,
@@ -105,6 +110,7 @@ export function App({
   onOpenKeyManager,
   onCloseKeyManager,
   onRun,
+  onCancelRun,
   onRefresh,
   onNewTask,
   onSelectSession,
@@ -114,10 +120,10 @@ export function App({
   onOpenDrawer,
   onCloseDrawer
 }: AppProps) {
-  const canRun = goal.trim().length > 0 && !busy;
+  const canRun = goal.trim().length > 0 && !busy && (accessMode !== "full" || fullAutonomyConfirmed);
   return (
     <main className="te-shell" data-testid="cockpit-shell">
-      <TopBar viewModel={viewModel} busy={busy} canRun={canRun} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onRefresh={onRefresh} />
+      <TopBar viewModel={viewModel} accessMode={accessMode} busy={busy} canRun={canRun} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onCancelRun={onCancelRun} onRefresh={onRefresh} />
       <section className="te-grid" data-testid="cockpit-grid">
         <TaskListPanel tasks={viewModel.tasks} sessions={sessions} selectedSession={selectedSession} t={t} onSelectSession={onSelectSession} onNewTask={onNewTask} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <WorkflowPanel viewModel={viewModel} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
@@ -133,6 +139,7 @@ export function App({
         testCommand={testCommand}
         repairOnFail={repairOnFail}
         fixtureFailingPatch={fixtureFailingPatch}
+        fullAutonomyConfirmed={fullAutonomyConfirmed}
         busy={busy}
         statusMessage={statusMessage}
         t={t}
@@ -142,8 +149,10 @@ export function App({
         onTestCommandChange={onTestCommandChange}
         onRepairOnFailChange={onRepairOnFailChange}
         onFixtureFailingPatchChange={onFixtureFailingPatchChange}
+        onFullAutonomyConfirmedChange={onFullAutonomyConfirmedChange}
         onTargetChange={onConversationTargetChange}
         onSubmit={onRun}
+        onCancelRun={onCancelRun}
       />
       <DetailDrawer viewModel={viewModel} open={drawerOpen} t={t} onClose={onCloseDrawer} />
       {keyManagerOpen ? (

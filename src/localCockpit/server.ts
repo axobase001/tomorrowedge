@@ -231,6 +231,12 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "GET" && liveEventsMatch) {
       return sendLiveEvents(cwd, response, decodeURIComponent(liveEventsMatch[1]));
     }
+    const cancelRunMatch = /^\/api\/runs\/([^/]+)\/cancel$/.exec(url.pathname);
+    if (request.method === "POST" && cancelRunMatch) {
+      const sessionId = parseRequiredSessionId(decodeURIComponent(cancelRunMatch[1]), "run cancellation requires sessionId");
+      const result = await cancelCockpitRun(cwd, sessionId, configPath);
+      return sendJson(response, 200, result);
+    }
     const artifactMatch = /^\/api\/sessions\/([^/]+)\/artifacts\/(.+)$/.exec(url.pathname);
     if (request.method === "GET" && artifactMatch) {
       return sendArtifact(cwd, response, decodeURIComponent(artifactMatch[1]), decodeURIComponent(artifactMatch[2]));
@@ -247,6 +253,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const workspace = await prepareRunWorkspace(cwd, { fixtureMode: runFlags.fixtureMode, forceFixtureWorkspace: runFlags.fixtureMode });
       const runContext = buildRunContext(workspace, requestedRunMode, runFlags, body);
       const liveState = createLiveState(sessionId, goal, config, accessMode, runContext);
+      cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
       const options: OfflineGraphOptions = {
         fixtureMode: runFlags.fixtureMode,
         accessMode,
@@ -264,6 +271,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
           : prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
         sessionId,
         onEvent: (event) => {
+          if (cockpitEventBus.isCanceled(sessionId)) return;
           applyLiveEvent(liveState, event);
           cockpitEventBus.emitEvent(sessionId, event);
           cockpitEventBus.setSnapshot({ sessionId, state: liveState, done: false });
@@ -282,11 +290,13 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         : runCockpitBackend(createOrchestrationBackend(config), workspace.executionCwd, goal, options);
       void runPromise
         .then(async (state) => {
+          if (cockpitEventBus.isCanceled(sessionId)) return;
           const stateWithContext = attachRunContext(state, runContext);
           await saveSession(cwd, stateWithContext, { failureMemory: config.failure_memory });
           cockpitEventBus.setSnapshot({ sessionId: stateWithContext.sessionId, state: stateWithContext, done: true });
         })
         .catch(async (error) => {
+          if (cockpitEventBus.isCanceled(sessionId)) return;
           const message = error instanceof Error ? error.message : String(error);
           const failedState = attachRunContext(markLiveRunFailed(liveState, message), runContext);
           try {
@@ -373,6 +383,28 @@ async function runCockpitBackend(
     throw new Error(`Backend ${backend.id} completed without producing a native graph state.`);
   }
   return backend.runGraph(executionCwd, goal, options);
+}
+
+async function cancelCockpitRun(cwd: string, sessionId: string, configPath?: string): Promise<{ status: string; message: string; viewModel: ReturnType<typeof buildCockpitViewModel> }> {
+  cockpitEventBus.cancelSession(sessionId);
+  const snapshot = cockpitEventBus.getSnapshot(sessionId);
+  const state = snapshot?.state ?? (await loadRequiredSession(cwd, sessionId)).state;
+  if (state.finalSummary && state.finalSummary.result !== "aborted") {
+    return {
+      status: "not_running",
+      message: "Run already finished.",
+      viewModel: buildCockpitViewModel(cwd, state, { source: snapshot ? "live" : "saved" })
+    };
+  }
+  const canceledState = markLiveRunCanceled(state, "User canceled the run from the cockpit.");
+  const { config } = await resolveRuntimeConfig(cwd, { configPath });
+  await saveSession(cwd, canceledState, { failureMemory: config.failure_memory });
+  cockpitEventBus.setSnapshot({ sessionId: canceledState.sessionId, state: canceledState, done: true });
+  return {
+    status: "canceled",
+    message: "Run canceled by user.",
+    viewModel: buildCockpitViewModel(cwd, canceledState, { source: "saved", connectionState: "disconnected", stale: false })
+  };
 }
 
 function resolveRunFlags(runMode: CockpitRunMode, body: Record<string, unknown>, config: TomorrowEdgeConfig): { fixtureMode: boolean; livePatch: boolean; liveAdvisory: boolean } {
@@ -493,6 +525,42 @@ export function markLiveRunFailed(state: AgentGraphState, error: string): AgentG
       evidence: state.events.length ? [`${state.events.length} event(s) recorded before workflow failure`] : [],
       risksRemaining: [error],
       suggestedCommitMessage: `chore: investigate ${state.changedFiles[0] ?? "workflow"} failure`
+    }
+  };
+}
+
+export function markLiveRunCanceled(state: AgentGraphState, reason: string): AgentGraphState {
+  const timestamp = new Date().toISOString();
+  const stopEvent: TomorrowEdgeEvent = {
+    id: `event_cancel_${timestamp.replace(/[^0-9]/g, "")}`,
+    timestamp,
+    sessionId: state.sessionId,
+    role: "runner",
+    provider: "local_cockpit",
+    model: "run_control",
+    mode: state.access.mode,
+    phase: "execution",
+    type: "workflow_stop_reason",
+    reason,
+    result: "aborted"
+  };
+  const alreadyCanceled = state.finalSummary?.result === "aborted"
+    || state.events.some((event) => event.type === "workflow_stop_reason" && event.result === "aborted" && event.reason === reason);
+  return {
+    ...state,
+    workflowBlockedReason: reason,
+    events: alreadyCanceled ? state.events : [...state.events, stopEvent],
+    agents: state.agents.map((agent) => agent.status === "running" ? { ...agent, status: "failed", summary: reason } : agent),
+    finalSummary: {
+      task: state.goal,
+      result: "aborted",
+      userReply: "I stopped this workflow after the user canceled it from the cockpit.",
+      userReplySource: "blocked",
+      changedFiles: state.changedFiles,
+      testsRun: state.runResults.map((result) => result.command),
+      evidence: ["User cancellation was recorded in the cockpit event ledger."],
+      risksRemaining: [reason],
+      suggestedCommitMessage: "chore: stop cockpit run"
     }
   };
 }

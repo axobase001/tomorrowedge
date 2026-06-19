@@ -1,6 +1,6 @@
 ﻿export function renderCockpitHtml(nonce = ""): string {
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -28,6 +28,7 @@
         <span id="mode-chip" class="chip chip-blue">partial</span>
         <span id="session-chip" class="chip">session latest</span>
         <button id="run-top" class="quiet-run" title="Run current command">Run</button>
+        <button id="stop-run" class="danger-button" title="Stop current run" hidden>Stop run</button>
         <button id="refresh" class="icon-button" title="Refresh client state">Refresh</button>
       </div>
     </header>
@@ -82,6 +83,7 @@
           <option value="restricted">restricted</option>
           <option value="full">full</option>
         </select>
+        <label id="full-preflight" class="check full-preflight" hidden><input id="full-preflight-confirm" type="checkbox" /> full mode may auto-apply patch, run shell, repair, and write trace</label>
         <select id="target" title="Target role">
           <option value="core">target: core</option>
           <option value="planner">target: planner</option>
@@ -516,6 +518,16 @@ textarea {
   font: 11px var(--mono);
   white-space: nowrap;
 }
+.full-preflight {
+  flex: 1 1 260px;
+  max-width: 420px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 44%, var(--border));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--warning) 8%, var(--alt));
+  color: var(--warning);
+  white-space: normal;
+}
 .quiet-optional { opacity: 0.62; }
 .drawer {
   position: fixed;
@@ -700,11 +712,14 @@ let liveSource = null;
 let liveEventsBuffer = [];
 let liveReloadTimer = null;
 let drawerOpener = null;
+let running = false;
 
 el("refresh").addEventListener("click", () => load());
 el("run-top").addEventListener("click", runWorkflow);
+el("stop-run").addEventListener("click", cancelWorkflow);
 el("new-task").addEventListener("click", () => {
   selectedSession = "latest";
+  setRunning(false);
   renderEmpty("Ready for a new task.");
   el("goal").focus();
 });
@@ -713,6 +728,12 @@ el("sessions").addEventListener("change", (event) => {
   loadViewModel(selectedSession);
 });
 el("run").addEventListener("click", runWorkflow);
+el("access-mode").addEventListener("change", () => {
+  el("full-preflight-confirm").checked = false;
+  updateRunControls();
+});
+el("full-preflight-confirm").addEventListener("change", updateRunControls);
+el("goal").addEventListener("input", updateRunControls);
 el("goal").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
   event.preventDefault();
@@ -723,6 +744,7 @@ el("close-drawer").addEventListener("click", () => closeDrawer());
 el("drawer-backdrop").addEventListener("mousedown", () => closeDrawer());
 document.addEventListener("keydown", trapDrawerFocus, true);
 
+updateRunControls();
 load();
 
 async function load() {
@@ -743,28 +765,70 @@ async function loadViewModel(id) {
 }
 
 async function runWorkflow() {
+  if (running) return cancelWorkflow();
   const goal = el("goal").value.trim();
   if (!goal) {
     renderEmpty("Describe a task before starting a workflow.");
     return;
   }
-  el("run").disabled = true;
+  if (el("access-mode").value === "full" && !el("full-preflight-confirm").checked) {
+    renderEmpty("Confirm full autonomy before starting this run.");
+    updateRunControls();
+    return;
+  }
+  setRunning(true);
   renderEmpty("Task submitted. Waiting for live events...");
-  const response = await fetch(withToken("/api/runs"), {
-    method: "POST",
-    headers: apiHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({
-      goal,
-      accessMode: el("access-mode").value,
-      fixtureMode: el("fixture-mode").checked,
-      approvePatch: el("approve-patch").checked,
-      approveShell: el("approve-shell").checked,
-      to: el("target").value
-    })
-  });
-  const payload = await response.json();
-  selectedSession = payload.sessionId || "latest";
-  connectLive(selectedSession);
+  try {
+    const response = await fetch(withToken("/api/runs"), {
+      method: "POST",
+      headers: apiHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({
+        goal,
+        accessMode: el("access-mode").value,
+        fixtureMode: el("fixture-mode").checked,
+        approvePatch: el("approve-patch").checked,
+        approveShell: el("approve-shell").checked,
+        to: el("target").value
+      })
+    });
+    const payload = await response.json();
+    selectedSession = payload.sessionId || "latest";
+    el("full-preflight-confirm").checked = false;
+    updateRunControls();
+    connectLive(selectedSession);
+  } catch (error) {
+    setRunning(false);
+    renderEmpty("Run failed: " + (error?.message || String(error)));
+  }
+}
+
+async function cancelWorkflow() {
+  if (!running) return;
+  const sessionId = selectedSession && selectedSession !== "latest" ? selectedSession : currentVm?.sessionId;
+  if (liveSource) {
+    liveSource.close();
+    liveSource = null;
+  }
+  if (!sessionId) {
+    setRunning(false);
+    renderEmpty("No active session is available to cancel.");
+    return;
+  }
+  renderEmpty("Stopping workflow...");
+  try {
+    const response = await fetch(withToken("/api/runs/" + encodeURIComponent(sessionId) + "/cancel"), {
+      method: "POST",
+      headers: apiHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({})
+    });
+    const payload = await response.json();
+    setRunning(false);
+    if (payload.viewModel) render(payload.viewModel);
+    else await loadViewModel(sessionId);
+  } catch (error) {
+    setRunning(false);
+    renderEmpty("Cancel failed: " + (error?.message || String(error)));
+  }
 }
 
 function connectLive(sessionId) {
@@ -786,12 +850,29 @@ function connectLive(sessionId) {
     }
     if (payload.snapshot?.done) {
       liveSource.close();
-      el("run").disabled = false;
+      setRunning(false);
     }
   });
   liveSource.onerror = () => {
-    el("run").disabled = false;
+    setRunning(false);
   };
+}
+
+function setRunning(value) {
+  running = value;
+  updateRunControls();
+}
+
+function updateRunControls() {
+  const fullMode = el("access-mode").value === "full";
+  const confirmed = el("full-preflight-confirm").checked;
+  const hasGoal = Boolean(el("goal").value.trim());
+  el("full-preflight").hidden = !fullMode;
+  el("run").disabled = running || !hasGoal || (fullMode && !confirmed);
+  el("run-top").disabled = running || !hasGoal || (fullMode && !confirmed);
+  el("stop-run").hidden = !running;
+  el("run").textContent = fullMode ? "Run full autonomy" : el("access-mode").value === "restricted" ? "Inspect only" : "Run supervised";
+  el("run-top").textContent = fullMode ? "Run full autonomy" : "Run";
 }
 
 function scheduleLiveViewModelRefresh(sessionId) {
@@ -822,6 +903,7 @@ function render(vm) {
   renderDrawer(el("drawer").classList.contains("open"));
   bindApprovalButtons(vm.currentApproval);
   bindDrawerButtons();
+  updateRunControls();
 }
 
 function renderEmpty(message) {
@@ -834,6 +916,7 @@ function renderEmpty(message) {
   el("telemetry").innerHTML = renderTelemetry({ plannerModel:"-", coderModel:"-", reviewerModel:"-", judgeModel:"-", providerSummary:"offline", inputTokens:0, outputTokens:0, totalTokens:0, dispatched:0, running:0, completed:0, waiting:0, failed:0, patchWaiting:false, shellWaiting:false, fallbackCount:0, realBudgetDecisions:0, simulatedBudgetDecisions:0, realStrongAgentCallsUsed:0, simulatedStrongAgentCallsUsed:0 });
   el("trace-count").textContent = "0 events";
   el("trace-strip").innerHTML = "";
+  updateRunControls();
 }
 
 function renderLiveEvents(sessionId, events) {

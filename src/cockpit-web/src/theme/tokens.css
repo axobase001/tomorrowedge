@@ -90,6 +90,11 @@ button {
   cursor: pointer;
 }
 button:disabled { cursor: wait; opacity: 0.6; }
+.te-danger-button {
+  border-color: color-mix(in srgb, var(--te-danger) 58%, var(--te-border));
+  color: var(--te-danger);
+  background: color-mix(in srgb, var(--te-danger) 8%, var(--te-control-bg));
+}
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -773,6 +778,27 @@ select[aria-invalid="true"] {
   color: var(--te-muted);
   font: 11px var(--te-mono);
 }
+.te-full-preflight {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: minmax(140px, auto) minmax(0, 1fr) minmax(220px, auto);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--te-warning) 44%, var(--te-border));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--te-warning) 8%, var(--te-soft));
+  color: var(--te-muted);
+  font: 12px/1.35 var(--te-mono);
+}
+.te-full-preflight strong {
+  color: var(--te-warning);
+}
+.te-full-preflight p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .te-run-settings {
   grid-column: 2 / -1;
   min-width: 0;
@@ -1252,8 +1278,12 @@ select[aria-invalid="true"] {
   .te-composer {
     grid-template-columns: minmax(0, 1fr);
   }
+  .te-full-preflight,
   .te-run-settings {
     grid-column: 1;
+  }
+  .te-full-preflight {
+    grid-template-columns: minmax(0, 1fr);
   }
   .te-run-settings[open] {
     grid-template-columns: minmax(0, 1fr);
