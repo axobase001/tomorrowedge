@@ -32,6 +32,17 @@ type EncryptedSecretFile = {
 const serviceName = "tomorrowedge-provider-secrets";
 const cipherName = "aes-256-gcm";
 
+export class ProviderSecretStoreUnreadableError extends Error {
+  readonly filePath: string;
+
+  constructor(filePath: string, cause: unknown) {
+    super(`Encrypted provider secrets are unreadable at ${filePath}; refusing to overwrite the existing store. Resolve the passphrase/key state or perform an explicit secret-store reset before saving new keys.`);
+    this.name = "ProviderSecretStoreUnreadableError";
+    this.filePath = filePath;
+    this.cause = cause;
+  }
+}
+
 export function secretStorePath(cwd: string): string {
   const configured = process.env.TOMORROWEDGE_SECRET_STORE_PATH?.trim();
   if (configured) return path.resolve(configured);
@@ -39,6 +50,15 @@ export function secretStorePath(cwd: string): string {
 }
 
 export function readProviderSecrets(cwd: string): ProviderSecretMap {
+  try {
+    return readProviderSecretsStrict(cwd);
+  } catch (error) {
+    log("warn", providerSecretReadErrorMessage(error));
+    return new Map();
+  }
+}
+
+export function readProviderSecretsStrict(cwd: string): ProviderSecretMap {
   const filePath = secretStorePath(cwd);
   if (!existsSync(filePath)) return new Map();
   try {
@@ -49,8 +69,7 @@ export function readProviderSecrets(cwd: string): ProviderSecretMap {
       provider
     }]));
   } catch (error) {
-    log("warn", `Encrypted provider secrets could not be read: ${error instanceof Error ? error.message : String(error)}`);
-    return new Map();
+    throw new ProviderSecretStoreUnreadableError(filePath, error);
   }
 }
 
@@ -63,7 +82,7 @@ export async function saveProviderSecret(cwd: string, provider: string, apiKey: 
   const trimmedKey = apiKey.trim();
   if (!providerId) throw new Error("Provider id is required.");
   if (!trimmedKey) throw new Error("API key is required.");
-  const current = readProviderSecrets(cwd);
+  const current = readProviderSecretsStrict(cwd);
   const record: ProviderSecretRecord = {
     provider: providerId,
     apiKey: trimmedKey,
@@ -77,7 +96,7 @@ export async function saveProviderSecret(cwd: string, provider: string, apiKey: 
 
 export async function deleteProviderSecret(cwd: string, provider: string): Promise<ProviderSecretRecord | undefined> {
   const providerId = normalizeProviderId(provider);
-  const current = readProviderSecrets(cwd);
+  const current = readProviderSecretsStrict(cwd);
   const previous = current.get(providerId);
   if (!previous) return undefined;
   current.delete(providerId);
@@ -190,4 +209,12 @@ function defaultEnvNameFor(providerId: string): string {
 
 function normalizeProviderId(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+}
+
+function providerSecretReadErrorMessage(error: unknown): string {
+  if (error instanceof ProviderSecretStoreUnreadableError) {
+    const cause = error.cause instanceof Error ? error.cause.message : String(error.cause ?? "unknown error");
+    return `Encrypted provider secrets could not be read from ${error.filePath}: ${cause}. Existing secrets were treated as unavailable; write operations will fail closed.`;
+  }
+  return `Encrypted provider secrets could not be read: ${error instanceof Error ? error.message : String(error)}`;
 }
