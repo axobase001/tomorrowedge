@@ -230,6 +230,16 @@ export async function startCockpitRun(request: CockpitRunRequest, options: Cockp
   return response.json() as Promise<{ sessionId: string; status: string }>;
 }
 
+export async function cancelCockpitRun(sessionId: string, options: CockpitApiOptions): Promise<{ status: string; message: string; viewModel?: CockpitViewModel }> {
+  const response = await fetch(apiUrl(`/api/runs/${encodeURIComponent(sessionId)}/cancel`, options), {
+    method: "POST",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify({})
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<{ status: string; message: string; viewModel?: CockpitViewModel }>;
+}
+
 export async function applyCockpitApproval(intent: CockpitApprovalIntent, options: CockpitApiOptions): Promise<{ status: string; message: string; viewModel?: CockpitViewModel }> {
   const response = await fetch(apiUrl("/api/approvals", options), {
     method: "POST",

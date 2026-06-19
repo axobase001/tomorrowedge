@@ -12,6 +12,7 @@ import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/provi
 import { providerRuntimeErrors } from "../../src/cockpit-web/src/providerRuntimeValidation.js";
 import { buildCockpitRunRequest, describeCockpitRunPreview } from "../../src/cockpit-web/src/runRequest.js";
 import type { CockpitViewModel } from "../../src/cockpit/contracts.js";
+import type { AccessMode } from "../../src/config/schema.js";
 import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 import { staticModelIdsForProvider } from "../../src/providers/staticModels.js";
 
@@ -248,6 +249,30 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("data-testid=\"composer-run-settings\"");
     expect(html).toContain("data-testid=\"composer-test-command\"");
     expect(html).toContain("partial");
+  });
+
+  it("requires a visible full-autonomy preflight before full-mode runs", () => {
+    const blocked = renderApp(sampleViewModel(), { goal: "fix and verify the project", accessMode: "full" });
+    const confirmed = renderApp(sampleViewModel(), { goal: "fix and verify the project", accessMode: "full", fullAutonomyConfirmed: true });
+
+    expect(blocked).toContain("data-testid=\"composer-full-preflight\"");
+    expect(blocked).toContain("auto-apply patches");
+    expect(blocked).toContain("run shell commands");
+    expect(blocked).toContain("execute the repair loop");
+    expect(blocked).toContain("write trace artifacts");
+    expect(blocked).toContain("data-testid=\"composer-full-preflight-check\"");
+    expect(blocked).toMatch(/<button[^>]*disabled=""[^>]*data-testid="composer-submit"|<button[^>]*data-testid="composer-submit"[^>]*disabled=""/);
+    expect(confirmed).toContain("Run full autonomy");
+    expect(confirmed).not.toMatch(/<button[^>]*data-testid="composer-submit"[^>]*disabled=""/);
+  });
+
+  it("exposes stop controls while a cockpit run is busy", () => {
+    const html = renderApp(sampleViewModel(), { goal: "long running task", busy: true });
+
+    expect(html).toContain("data-testid=\"topbar-cancel-run\"");
+    expect(html).toContain("data-testid=\"composer-cancel-run\"");
+    expect(html).toContain("Stop run");
+    expect(html).not.toContain("data-testid=\"composer-submit\"");
   });
 
   it("enables repair loops for full-mode GUI runs", () => {
@@ -857,6 +882,9 @@ describe("cockpit web React surface", () => {
   it("keeps GUI CSS dark-mode aware and avoids fallback hard min-width locks", () => {
     const tokens = readFileSync(path.join(process.cwd(), "src", "cockpit-web", "src", "theme", "tokens.css"), "utf8");
     const fallback = renderCockpitHtml();
+    const designSystem = readFileSync(path.join(process.cwd(), "docs", "GUI_DESIGN_SYSTEM.md"), "utf8");
+    const styleDoc = readFileSync(path.join(process.cwd(), "docs", "UI_STYLE.md"), "utf8");
+    const deviationDoc = readFileSync(path.join(process.cwd(), "docs", "ui", "gui-v1.1", "implementation_deviation.md"), "utf8");
     const tinyLmCss = readFileSync(path.join(process.cwd(), "examples", "tiny-local-lm", "public", "styles.css"), "utf8");
     const sampleCss = readFileSync(path.join(process.cwd(), "tests", "fixtures", "sample-repo-react-ui", "src", "style.css"), "utf8");
     const siteCss = readFileSync(path.join(process.cwd(), "docs", "site", "tomorrowedge.css"), "utf8");
@@ -874,30 +902,50 @@ describe("cockpit web React surface", () => {
     expect(siteCss).toContain("--focus-ring");
     expect(siteCss).toContain("button:focus-visible");
     expect(fallback).toContain("prefers-color-scheme: dark");
+    expect(fallback).toContain('<html lang="en">');
     expect(fallback).toContain("id=\"drawer-backdrop\"");
     expect(fallback).toContain("role=\"dialog\"");
     expect(fallback).toContain("trapDrawerFocus");
+    expect(fallback).toContain("id=\"stop-run\"");
+    expect(fallback).toContain("id=\"full-preflight\"");
+    expect(fallback).toContain("/cancel");
     expect(fallback).not.toContain("min-width: 1080px");
     expect(fallback).not.toContain("min-width: 980px");
+    expect(styleDoc).toContain("docs/GUI_DESIGN_SYSTEM.md");
+    expect(styleDoc).toContain("Default browser GUI language: English");
+    expect(deviationDoc).toContain("fallback remains English-only");
+    for (const token of ["--te-bg", "--te-surface", "--te-border", "--te-text", "--te-warning", "--te-danger"]) {
+      expect(tokens).toContain(token);
+      expect(designSystem).toContain(token);
+    }
+    for (const fallbackToken of ["--bg", "--surface", "--border", "--text", "--warning", "--danger"]) {
+      expect(fallback).toContain(fallbackToken);
+      expect(designSystem).toContain(fallbackToken);
+    }
+    for (const requiredState of ["focus-visible", "disabled", "loading", "waiting-approval", "running", "disconnected"]) {
+      expect(designSystem).toContain(requiredState);
+    }
   });
 });
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean; accessMode: AccessMode; fullAutonomyConfirmed: boolean }> = {}): string {
   const language = overrides.language ?? "en";
   const t = createTranslator(language);
+  const accessMode = overrides.accessMode ?? "partial";
   return renderToStaticMarkup(
     React.createElement(App, {
       viewModel,
       sessions: [{ sessionId: "session_test", createdAt: "2026-06-07T00:00:00.000Z", eventCount: 1, artifactCount: 0, goal: "test" }],
       selectedSession: "session_test",
       goal: overrides.goal ?? "",
-      accessMode: "partial",
+      accessMode,
       runMode: "auto",
       runPreview: "auto -> fixture · sample fixture workspace",
       conversationTarget: "core",
       testCommand: "",
       repairOnFail: false,
       fixtureFailingPatch: false,
+      fullAutonomyConfirmed: overrides.fullAutonomyConfirmed ?? false,
       busy: overrides.busy ?? false,
       statusMessage: overrides.statusMessage,
       setupStatus: {
@@ -953,6 +1001,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onTestCommandChange: () => undefined,
       onRepairOnFailChange: () => undefined,
       onFixtureFailingPatchChange: () => undefined,
+      onFullAutonomyConfirmedChange: () => undefined,
       onConversationTargetChange: () => undefined,
       onLanguageChange: () => undefined,
       onConfigureSetup: () => undefined,
@@ -965,6 +1014,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onOpenKeyManager: () => undefined,
       onCloseKeyManager: () => undefined,
       onRun: () => undefined,
+      onCancelRun: () => undefined,
       onRefresh: () => undefined,
       onNewTask: () => undefined,
       onSelectSession: () => undefined,

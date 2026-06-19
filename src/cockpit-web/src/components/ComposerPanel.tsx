@@ -15,6 +15,7 @@ export function ComposerPanel({
   testCommand,
   repairOnFail,
   fixtureFailingPatch,
+  fullAutonomyConfirmed,
   busy,
   statusMessage,
   t,
@@ -24,8 +25,10 @@ export function ComposerPanel({
   onTestCommandChange,
   onRepairOnFailChange,
   onFixtureFailingPatchChange,
+  onFullAutonomyConfirmedChange,
   onTargetChange,
-  onSubmit
+  onSubmit,
+  onCancelRun
 }: {
   goal: string;
   accessMode: AccessMode;
@@ -35,6 +38,7 @@ export function ComposerPanel({
   testCommand: string;
   repairOnFail: boolean;
   fixtureFailingPatch: boolean;
+  fullAutonomyConfirmed: boolean;
   busy: boolean;
   statusMessage?: string;
   t: Translator;
@@ -44,20 +48,24 @@ export function ComposerPanel({
   onTestCommandChange: (command: string) => void;
   onRepairOnFailChange: (enabled: boolean) => void;
   onFixtureFailingPatchChange: (enabled: boolean) => void;
+  onFullAutonomyConfirmedChange: (enabled: boolean) => void;
   onTargetChange: (target: string) => void;
   onSubmit: () => void;
+  onCancelRun: () => void;
 }) {
   const isEmpty = goal.trim().length === 0;
+  const needsFullPreflight = accessMode === "full";
+  const canSubmit = !busy && !isEmpty && (!needsFullPreflight || fullAutonomyConfirmed);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    if (isEmpty) return;
+    if (!canSubmit) return;
     onSubmit();
   };
 
   return (
-    <form className="te-panel te-composer" onSubmit={(event) => { event.preventDefault(); if (!isEmpty) onSubmit(); }} data-testid="composer">
+    <form className="te-panel te-composer" onSubmit={(event) => { event.preventDefault(); if (canSubmit) onSubmit(); }} data-testid="composer">
       <strong>{t("composer.title")}</strong>
       <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder={t("composer.placeholder")} data-testid="composer-input" />
       {isEmpty && <span data-testid="composer-validation-hint">{t("composer.empty")}</span>}
@@ -103,6 +111,21 @@ export function ComposerPanel({
         </select>
       </label>
       {runPreview ? <span className="te-run-preview" data-testid="composer-run-preview">{runPreview}</span> : null}
+      {needsFullPreflight ? (
+        <section className="te-full-preflight" data-testid="composer-full-preflight" aria-live="polite">
+          <strong>{t("composer.fullPreflightTitle")}</strong>
+          <p>{t("composer.fullPreflightBody")}</p>
+          <label className="te-run-settings-check">
+            <input
+              type="checkbox"
+              checked={fullAutonomyConfirmed}
+              onChange={(event) => onFullAutonomyConfirmedChange(event.target.checked)}
+              data-testid="composer-full-preflight-check"
+            />
+            <span>{t("composer.fullPreflightConfirm")}</span>
+          </label>
+        </section>
+      ) : null}
       <details className="te-run-settings" data-testid="composer-run-settings">
         <summary>{t("composer.runSettings")}</summary>
         <label>
@@ -134,9 +157,19 @@ export function ComposerPanel({
         </label>
       </details>
       {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
-      <button type="submit" disabled={busy || isEmpty} data-testid="composer-submit">{t("composer.send")}</button>
+      {busy ? (
+        <button type="button" className="te-danger-button" onClick={onCancelRun} data-testid="composer-cancel-run">{t("composer.cancelRun")}</button>
+      ) : (
+        <button type="submit" disabled={!canSubmit} data-testid="composer-submit">{submitLabel(accessMode, t)}</button>
+      )}
     </form>
   );
+}
+
+function submitLabel(accessMode: AccessMode, t: Translator): string {
+  if (accessMode === "full") return t("composer.runFull");
+  if (accessMode === "restricted") return t("composer.runRestricted");
+  return t("composer.runSupervised");
 }
 
 function normalizeComposerTarget(value: string): ComposerTarget {

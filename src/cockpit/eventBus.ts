@@ -12,6 +12,7 @@ export type CockpitRunSnapshot = {
 export class CockpitEventBus {
   private readonly emitter = new EventEmitter();
   private readonly snapshots = new Map<string, CockpitRunSnapshot>();
+  private readonly canceledSessions = new Set<string>();
 
   emitEvent(sessionId: string, event: TomorrowEdgeEvent): void {
     this.emitter.emit(sessionId, { kind: "event", event });
@@ -20,6 +21,14 @@ export class CockpitEventBus {
   setSnapshot(snapshot: CockpitRunSnapshot): void {
     this.snapshots.set(snapshot.sessionId, snapshot);
     this.emitter.emit(snapshot.sessionId, { kind: "snapshot", snapshot });
+  }
+
+  cancelSession(sessionId: string): void {
+    this.canceledSessions.add(sessionId);
+  }
+
+  isCanceled(sessionId: string): boolean {
+    return this.canceledSessions.has(sessionId);
   }
 
   getSnapshot(sessionId: string): CockpitRunSnapshot | undefined {

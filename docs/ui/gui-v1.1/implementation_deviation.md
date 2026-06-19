@@ -8,6 +8,13 @@
   is explicitly a future scaffold, not a second source of truth. Both surfaces
   use `src/cockpit/contracts.ts` and `src/cockpit/viewModel.ts` as the shared
   component/view-model contract.
+- The React cockpit is bilingual through `src/cockpit-web/src/i18n.ts`. The
+  embedded fallback remains English-only for now and therefore declares
+  `<html lang="en">`; it must not claim a Chinese language contract until it has
+  a fallback i18n runtime.
+- React tokens use the `--te-*` namespace while fallback tokens remain shorter
+  inline aliases. `docs/GUI_DESIGN_SYSTEM.md` is the required mapping and parity
+  checklist for this difference.
 - v1.1 review hardening connects browser approval buttons to real Node-side
   workflow actions. The browser still sends only an intent; Node applies or
   rejects patches/shell commands, saves the session, and pushes the updated

@@ -50,6 +50,7 @@ describe("local cockpit server", () => {
       expect(server.openUrl).not.toContain("nonce=");
       expect(health.ok).toBe(true);
       expect(html).toContain("TomorrowEdge GUI Client");
+      expect(html).toContain('<html lang="en">');
       expect(html).toContain("__TOMORROWEDGE_COCKPIT__");
       expect(html).not.toContain('searchParams.get("nonce")');
       expect(html).toContain('href="/icon.svg"');
@@ -67,6 +68,9 @@ describe("local cockpit server", () => {
       expect(html).toContain('event.key !== "Enter"');
       expect(html).toContain("event.shiftKey");
       expect(html).toContain("event.isComposing");
+      expect(html).toContain('id="stop-run"');
+      expect(html).toContain('id="full-preflight"');
+      expect(html).toContain('/api/runs/" + encodeURIComponent(sessionId) + "/cancel');
       expect(html).not.toContain("telemetry-table");
       expect(sessions).toEqual([]);
       expect(cookieSessions).toEqual([]);
@@ -527,6 +531,48 @@ describe("local cockpit server", () => {
 
       expect(session.state.changedFiles).toContain("index.js");
       expect(rootIndex).toContain("root should stay unchanged");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("records browser run cancellation as an aborted session event", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-cancel-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial" })
+      });
+      const startPayload = await response.json() as { sessionId: string };
+
+      expect(response.status).toBe(202);
+      expect(startPayload.sessionId).toMatch(/^session_/);
+
+      const cancelResponse = await fetch(`${server.url}/api/runs/${startPayload.sessionId}/cancel?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const cancelPayload = await cancelResponse.json() as { status: string; message: string; viewModel: { status: string; rawEvents: Array<{ type: string; result?: string; reason?: string }> } };
+      const session = await fetch(`${server.url}/api/sessions/${startPayload.sessionId}?nonce=${server.nonce}`).then((item) => item.json()) as { state: { finalSummary?: { result: string }; events: Array<{ type: string; result?: string; reason?: string }> } };
+
+      expect(cancelResponse.status).toBe(200);
+      expect(cancelPayload.status).toBe("canceled");
+      expect(cancelPayload.message).toContain("canceled");
+      expect(cancelPayload.viewModel.status).toBe("failed");
+      expect(cancelPayload.viewModel.rawEvents).toContainEqual(expect.objectContaining({
+        type: "workflow_stop_reason",
+        result: "aborted",
+        reason: "User canceled the run from the cockpit."
+      }));
+      expect(session.state.finalSummary?.result).toBe("aborted");
+      expect(session.state.events).toContainEqual(expect.objectContaining({
+        type: "workflow_stop_reason",
+        result: "aborted"
+      }));
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
