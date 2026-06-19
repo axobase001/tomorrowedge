@@ -4,6 +4,8 @@ import { createRequire } from "node:module";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { AgentGraphState } from "../../src/core/agentGraph/state.js";
+import { saveSession } from "../../src/core/memory/sessionMemory.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../../package.json") as { version: string };
@@ -48,7 +50,7 @@ describe("CLI contract", () => {
     });
   }, 15_000);
 
-  it.each(["run", "council", "canopus", "control", "client", "desktop", "models", "trace"])("keeps %s command help available", async (command) => {
+  it.each(["run", "council", "canopus", "control", "client", "desktop", "models", "trace", "sessions"])("keeps %s command help available", async (command) => {
     const result = await execa("tsx", ["src/cli/index.ts", command, "--help"], {
       cwd: process.cwd(),
       preferLocal: true
@@ -56,6 +58,64 @@ describe("CLI contract", () => {
 
     expect(result.stdout).toContain(`Usage: tedge ${command}`);
   }, 15_000);
+
+  it("keeps README command-map inspection and Sirius config examples registered", async () => {
+    const commands = [
+      ["client", "--help"],
+      ["desktop", "--help"],
+      ["run", "--help"],
+      ["run", "--agent-council", "--help"],
+      ["council", "run", "--help"],
+      ["models", "--help"],
+      ["trace", "--help"],
+      ["sessions", "inspect", "--help"],
+      ["policy", "inspect", "--help"],
+      ["policy", "evolve", "--help"],
+      ["skills", "list", "--help"],
+      ["mcp", "serve", "--help"]
+    ];
+
+    for (const args of commands) {
+      const result = await execa("tsx", ["src/cli/index.ts", ...args], {
+        cwd: process.cwd(),
+        preferLocal: true
+      });
+
+      expect(result.stdout, args.join(" ")).toContain("Usage: tedge");
+    }
+
+    const runHelp = await execa("tsx", ["src/cli/index.ts", "run", "--help"], {
+      cwd: process.cwd(),
+      preferLocal: true
+    });
+    const councilHelp = await execa("tsx", ["src/cli/index.ts", "council", "run", "--help"], {
+      cwd: process.cwd(),
+      preferLocal: true
+    });
+
+    expect(runHelp.stdout).toContain("--config <path>");
+    expect(councilHelp.stdout).toContain("--config <path>");
+  }, 30_000);
+
+  it("inspects the latest saved session from the documented sessions command", async () => {
+    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "tedge-cli-sessions-inspect-"));
+    try {
+      await saveSession(outputRoot, sampleSessionState());
+      const result = await execa("tsx", ["src/cli/index.ts", "sessions", "inspect", "latest", "--cwd", outputRoot, "--json"], {
+        cwd: process.cwd(),
+        preferLocal: true
+      });
+      const payload = JSON.parse(result.stdout) as { schemaVersion: string; sessionId: string; goal: string; result: string; eventCount: number };
+
+      expect(payload.schemaVersion).toBe("tomorrowedge-session-inspect/v1");
+      expect(payload.sessionId).toBe("session_cli_contract");
+      expect(payload.goal).toBe("inspect a saved session");
+      expect(payload.result).toBe("completed");
+      expect(payload.eventCount).toBe(1);
+    } finally {
+      await rm(outputRoot, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   it("keeps memory subcommand options local to the subcommand", async () => {
     const failures = await execa("tsx", ["src/cli/index.ts", "memory", "failures", "--limit", "1", "--include-stale", "--json"], {
@@ -158,3 +218,70 @@ describe("CLI contract", () => {
     }
   }, 60_000);
 });
+
+function sampleSessionState(): AgentGraphState {
+  return {
+    sessionId: "session_cli_contract",
+    goal: "inspect a saved session",
+    routing: {
+      mode: "balanced",
+      privacyLocked: false,
+      assignments: [],
+      fallbacks: []
+    },
+    access: {
+      mode: "partial",
+      cloudAllowed: false,
+      patchApproved: false,
+      shellApproved: false,
+      repairApproved: false,
+      description: "test"
+    },
+    events: [{
+      id: "event_summary",
+      timestamp: "2026-06-19T00:00:00.000Z",
+      type: "summary",
+      phase: "summary",
+      summary: "Session completed.",
+      result: "completed"
+    } as AgentGraphState["events"][number]],
+    eventArtifacts: [],
+    providerViews: [],
+    evidencePackets: [],
+    agents: [],
+    candidates: [],
+    repairCandidates: [],
+    debateRounds: [],
+    modelNotes: [],
+    usageSummary: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0
+    },
+    workflowKind: "patch",
+    budgetRuntime: {
+      strongAgentCallsUsed: 0,
+      estimatedCostUsd: 0
+    },
+    budgetStatuses: [],
+    changedFiles: ["src/example.ts"],
+    runResults: [],
+    approvals: {
+      patchApproved: false,
+      shellApproved: false,
+      repairApproved: false
+    },
+    finalSummary: {
+      task: "inspect a saved session",
+      result: "completed",
+      userReply: "done",
+      userReplySource: "system",
+      changedFiles: ["src/example.ts"],
+      testsRun: ["npm test"],
+      evidence: ["event_summary"],
+      risksRemaining: [],
+      suggestedCommitMessage: "test: inspect session"
+    }
+  };
+}
