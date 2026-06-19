@@ -262,7 +262,7 @@ describe("cockpit web React surface", () => {
     expect(blocked).toContain("write trace artifacts");
     expect(blocked).toContain("data-testid=\"composer-full-preflight-check\"");
     expect(blocked).toMatch(/<button[^>]*disabled=""[^>]*data-testid="composer-submit"|<button[^>]*data-testid="composer-submit"[^>]*disabled=""/);
-    expect(confirmed).toContain("Run full autonomy");
+    expect(confirmed).toContain("Start full task");
     expect(confirmed).not.toMatch(/<button[^>]*data-testid="composer-submit"[^>]*disabled=""/);
   });
 
@@ -637,7 +637,7 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("data-testid=\"language-selector\"");
     expect(html).toContain("Language");
-    expect(html).toContain("Command");
+    expect(html).toContain("New task");
     expect(html).toContain("Telemetry");
   });
 
@@ -646,7 +646,7 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("语言");
     expect(html).toContain("任务");
-    expect(html).toContain("命令");
+    expect(html).toContain("新任务");
     expect(html).toContain("密钥与角色管理");
     expect(html).toContain("至少连接一个模型");
   });
@@ -785,6 +785,34 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("read the quantum folder and summarize structure");
     expect(html).toContain("completed");
+  });
+
+  it("renders saved sessions as visible history with result and metadata", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TaskListPanel, {
+        tasks: [],
+        sessions: [
+          { sessionId: "session_first", createdAt: "2026-06-07T00:00:00.000Z", eventCount: 2, artifactCount: 1, goal: "first small prompt", result: "completed" },
+          { sessionId: "session_second", createdAt: "2026-06-07T00:05:00.000Z", eventCount: 3, artifactCount: 2, goal: "second real request", result: "failed" }
+        ],
+        selectedSession: "session_second",
+        t: createTranslator("en"),
+        onSelectSession: () => undefined,
+        onNewTask: () => undefined,
+        onRenameSession: () => undefined,
+        onDeleteSession: () => undefined
+      })
+    );
+
+    expect(html).toContain("data-testid=\"session-history\"");
+    expect((html.match(/data-testid="session-history-item"/g) ?? []).length).toBe(2);
+    expect(html).toContain("first small prompt");
+    expect(html).toContain("second real request");
+    expect(html).toContain("completed");
+    expect(html).toContain("failed");
+    expect(html).toContain("2026-06-07 00:00");
+    expect(html).toContain("2 events / 1 artifacts");
+    expect(html).toContain("aria-current=\"true\"");
   });
 
   it("renders approval history in the detail drawer", () => {
