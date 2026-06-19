@@ -83,6 +83,7 @@ describe("Sirius Agent Council Governance Runtime", () => {
       "council_consensus",
       "task_ownership_assignment",
       "delegated_task_result",
+      "delegated_execution_mode",
       "strategy_mutation",
       "strategy_selection_decision",
       "chief_final_review",
@@ -110,6 +111,11 @@ describe("Sirius Agent Council Governance Runtime", () => {
     expect(latestRustResult?.ownerAgentId).toBe(state.strategyMutations?.[0]?.newOwnerAgentId);
     expect(state.finalChiefReview?.decision).toBe("approve_delivery");
     expect(state.finalSummary?.result).toBe("completed");
+    expect(state.events.find((event) => event.type === "delegated_execution_mode")).toMatchObject({
+      executionMode: "native_governance",
+      syntheticEvidence: true
+    });
+    expect(state.finalSummary?.userReply).toContain("Delegated execution mode:");
   });
 
   it("uses the Sirius trace completeness rubric for council runs", async () => {
@@ -167,6 +173,10 @@ describe("Sirius Agent Council Governance Runtime", () => {
     expect(externalEvents.length).toBeGreaterThan(0);
     expect(state.events.some((event) => event.type === "external_agent_result" && event.summary.includes("mock command handled"))).toBe(true);
     expect(state.delegatedTaskResults?.some((result) => result.artifactRefs.some((ref) => ref.includes("external_agent_response")))).toBe(true);
+    expect(state.events.find((event) => event.type === "delegated_execution_mode")).toMatchObject({
+      executionMode: expect.stringMatching(/external_command|mixed/),
+      syntheticEvidence: expect.any(Boolean)
+    });
     expect(state.finalChiefReview?.decision).toBe("approve_delivery");
   });
 

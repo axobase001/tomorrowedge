@@ -326,10 +326,22 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     requiredRevisions: finalChiefReview.requiredRevisions,
     source: finalChiefReview.source
   });
+  const delegatedExecutionMode = summarizeDelegatedExecutionMode(config, delegatedResults);
+  ledger.append({
+    type: "delegated_execution_mode",
+    phase: "delivery",
+    executionMode: delegatedExecutionMode.executionMode,
+    delegatedTaskCount: delegatedExecutionMode.delegatedTaskCount,
+    externalResultCount: delegatedExecutionMode.externalResultCount,
+    commandAdapterCount: delegatedExecutionMode.commandAdapterCount,
+    syntheticEvidence: delegatedExecutionMode.syntheticEvidence,
+    summary: delegatedExecutionMode.summary
+  });
   const deliverableRef = ledger.writeArtifact("deliverable", JSON.stringify({
     goal,
     taskGraph,
     delegatedResults,
+    delegatedExecutionMode,
     finalChiefReview
   }, null, 2), "json");
   if (finalChiefReview.decision === "approve_delivery") {
@@ -366,7 +378,7 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     result: finalChiefReview.decision === "approve_delivery" ? "completed" : "partially_completed"
   });
 
-  return partialState({ cwd, goal, access, objectiveContract, chiefAgent, chiefDecision, council: { ...council, consensusTaskGraph: taskGraph, consensusPlan: council.consensusPlan ? { ...council.consensusPlan, taskGraph } : council.consensusPlan }, taskGraph, ledger, budgetRuntime, strategyGenome: selectedStrategy, delegatedResults, evidencePackets, mutations, strategySelection, finalChiefReview });
+  return partialState({ cwd, goal, access, objectiveContract, chiefAgent, chiefDecision, council: { ...council, consensusTaskGraph: taskGraph, consensusPlan: council.consensusPlan ? { ...council.consensusPlan, taskGraph } : council.consensusPlan }, taskGraph, ledger, budgetRuntime, strategyGenome: selectedStrategy, delegatedResults, evidencePackets, mutations, strategySelection, finalChiefReview, delegatedExecutionModeSummary: delegatedExecutionMode.summary });
 }
 
 async function executeDelegatedNode(input: {
@@ -639,6 +651,7 @@ function partialState(input: {
   mutations: StrategyMutationEvent[];
   strategySelection?: StrategySelectionDecision;
   finalChiefReview?: ReturnType<typeof runFinalChiefReview>;
+  delegatedExecutionModeSummary?: string;
 }): AgentGraphState {
   const plan = input.council.consensusPlan ? { ...input.council.consensusPlan, taskGraph: input.taskGraph } : undefined;
   const traceCompleteness = computeTraceCompleteness(input.ledger.events, { workflowKind: "sirius_council", plan });
@@ -705,8 +718,8 @@ function partialState(input: {
       task: input.goal,
       result: input.finalChiefReview.decision === "approve_delivery" ? "completed" : "partially_completed",
       userReply: input.finalChiefReview.decision === "approve_delivery"
-        ? `Chief ${input.chiefAgent.id} approved delivery after council governance and delegated execution.`
-        : `Chief ${input.chiefAgent.id} requested revision: ${input.finalChiefReview.requiredRevisions.join("; ")}`,
+        ? `Chief ${input.chiefAgent.id} approved delivery after council governance and delegated execution. Delegated execution mode: ${input.delegatedExecutionModeSummary ?? "not recorded"}.`
+        : `Chief ${input.chiefAgent.id} requested revision: ${input.finalChiefReview.requiredRevisions.join("; ")} Delegated execution mode: ${input.delegatedExecutionModeSummary ?? "not recorded"}.`,
       userReplySource: "system",
       changedFiles: [],
       testsRun: [],
@@ -715,6 +728,43 @@ function partialState(input: {
       suggestedCommitMessage: "feat: deliver Sirius governed agent council run"
     } : undefined,
     traceCompleteness
+  };
+}
+
+type DelegatedExecutionModeSummary = {
+  executionMode: "native_governance" | "external_command" | "mixed" | "native_fallback";
+  delegatedTaskCount: number;
+  externalResultCount: number;
+  commandAdapterCount: number;
+  syntheticEvidence: boolean;
+  summary: string;
+};
+
+function summarizeDelegatedExecutionMode(config: TomorrowEdgeConfig, delegatedResults: DelegatedTaskResult[]): DelegatedExecutionModeSummary {
+  const delegatedTaskCount = delegatedResults.length;
+  const externalResultCount = delegatedResults.filter((result) =>
+    result.artifactRefs.some((ref) => ref.includes("external_agent_response") || ref.includes("external_agent_result"))
+  ).length;
+  const commandAdapterCount = Object.values(config.external_agents).filter((agent) => agent.enabled && Boolean(agent.command)).length;
+  const externalAssignments = delegatedResults.filter((result) => result.provider.startsWith("external:")).length;
+  const executionMode = externalResultCount === 0
+    ? commandAdapterCount && externalAssignments ? "native_fallback" : "native_governance"
+    : externalResultCount === delegatedTaskCount ? "external_command" : "mixed";
+  const syntheticEvidence = externalResultCount < delegatedTaskCount;
+  const summary = executionMode === "external_command"
+    ? "Every delegated task result is backed by configured external command adapter artifacts."
+    : executionMode === "mixed"
+      ? "Some delegated task results are backed by external command adapters; remaining results use native governance evidence."
+      : executionMode === "native_fallback"
+        ? "Delegated tasks were assigned to external providers, but no delegated command result was accepted; native governance evidence remains authoritative."
+        : "Delegated tasks used the native governance path with synthetic evidence packets; this is a planning/governance result, not proof of concrete patch or shell execution.";
+  return {
+    executionMode,
+    delegatedTaskCount,
+    externalResultCount,
+    commandAdapterCount,
+    syntheticEvidence,
+    summary
   };
 }
 

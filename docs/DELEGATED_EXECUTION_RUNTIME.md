@@ -20,6 +20,7 @@ Delegated execution emits:
 - `budget_decision`
 - `evidence_packet`
 - `delegated_task_result`
+- `delegated_execution_mode`
 - `task_node_result`
 
 BudgetGate decides whether a call is allowed before execution. EvidencePacket
@@ -33,6 +34,19 @@ runner and passes the task/context envelope through stdin plus
 refs are recorded as `external_agent_*` events and linked back into the
 delegated task evidence. If no command is configured, the profile remains a
 configured/mock capability node for deterministic tests and planning.
+
+Final summaries and deliverable artifacts include a delegated execution mode:
+
+- `native_governance`: native governance and synthetic evidence packets;
+- `external_command`: every delegated result is backed by command-adapter
+  artifacts;
+- `mixed`: command-backed and native-governance results both appear;
+- `native_fallback`: an external assignment did not produce an accepted command
+  result and native governance evidence remains authoritative.
+
+This distinction is intentional. A native/fixture Sirius run is a governed
+planning and evidence artifact unless command, MCP, or Canopus shell execution
+produces concrete patch/test artifacts.
 
 ## Failure Handling
 

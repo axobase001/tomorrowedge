@@ -52,6 +52,7 @@ TomorrowEdge workflows:
 - `council_consensus`
 - `task_ownership_assignment`
 - `delegated_task_result`
+- `delegated_execution_mode`
 - `strategy_mutation`
 - `strategy_selection_decision`
 - `council_replan`
@@ -85,6 +86,18 @@ Interpret source fields literally:
 - `source = native` means the deterministic TomorrowEdge governance path
   produced the structure. It is the fixture/fallback path, not proof that a
   real Codex, Claude Code, GPT, DeepSeek, or MiMo process reviewed the run.
+
+Delegated task delivery is also mode-tagged:
+
+- `delegated_execution_mode.executionMode = native_governance` means delegated
+  nodes completed through native governance and synthetic evidence packets.
+- `delegated_execution_mode.executionMode = external_command` means every
+  delegated task result is backed by configured command-adapter artifacts.
+- `delegated_execution_mode.executionMode = mixed` means some delegated results
+  are command-backed and some are native governance evidence.
+- `delegated_execution_mode.executionMode = native_fallback` means an external
+  assignment did not produce an accepted command result, so native governance
+  evidence remains authoritative.
 
 The external text does not silently rewrite the safety boundary. Objective
 Contract, EvidenceGate, BudgetGate, TaskGraph ownership, and final delivery

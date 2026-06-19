@@ -12,6 +12,8 @@ const statusPath = path.join(cwd, "docs", "CAPABILITY_STATUS.md");
 const statusText = readFileSync(statusPath, "utf8");
 const promiseMapPath = path.join(cwd, "docs", "README_PROMISE_MAP.md");
 const promiseMapText = readFileSync(promiseMapPath, "utf8");
+const roadmapPath = path.join(cwd, "docs", "ROADMAP.md");
+const roadmapText = readFileSync(roadmapPath, "utf8");
 const requiredCapabilities = [
   "Offline fixture/mock workflow",
   "Access modes and full-access trace",
@@ -31,7 +33,7 @@ for (const capability of requiredCapabilities) {
   if (!statusText.includes(capability)) failures.push(`docs/CAPABILITY_STATUS.md is missing capability: ${capability}`);
 }
 
-const staleDocs = ["docs/PRODUCTIZATION_BASELINE.md", "docs/SCOPE_STATUS.md", "README.md"];
+const staleDocs = ["docs/PRODUCTIZATION_BASELINE.md", "docs/SCOPE_STATUS.md", "README.md", "docs/ROADMAP.md"];
 for (const relativePath of staleDocs) {
   const text = readFileSync(path.join(cwd, relativePath), "utf8");
   const stale = text.match(/TomorrowEdge\s+0\.[0-9]+\.[0-9]+/g);
@@ -40,6 +42,17 @@ for (const relativePath of staleDocs) {
 
 if (!promiseMapText.includes(`TomorrowEdge ${packageJson.version}`)) {
   failures.push(`docs/README_PROMISE_MAP.md must mention TomorrowEdge ${packageJson.version}.`);
+}
+
+const requiredRoadmapMarkers = [
+  `TomorrowEdge ${packageJson.version}`,
+  "Canopus Convergence Hardening",
+  "Sirius Council Clarity",
+  "delegated execution mode"
+];
+
+for (const marker of requiredRoadmapMarkers) {
+  if (!roadmapText.includes(marker)) failures.push(`docs/ROADMAP.md is missing current roadmap marker: ${marker}`);
 }
 
 const requiredPromiseIds = [
