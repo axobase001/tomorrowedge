@@ -7,7 +7,7 @@ import { tuiCommand } from "./commands/tui.js";
 import { configCommand } from "./commands/config.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { modelsCommand } from "./commands/models.js";
-import { replayCommand, sessionsCommand } from "./commands/replay.js";
+import { replayCommand, sessionsCommand, sessionsInspectCommand } from "./commands/replay.js";
 import { undoCommand } from "./commands/undo.js";
 import { modeCommand } from "./commands/mode.js";
 import { prefsCommand } from "./commands/prefs.js";
@@ -298,7 +298,15 @@ program
   .option("--check-name <name>", "check run name", "TomorrowEdge report")
   .action((sessionId: string, options: { repo?: string; pr?: string; sha?: string; dryRun?: boolean; postComment?: boolean; postCheck?: boolean; checkName?: string }) => githubReportCommand(cwd, sessionId, options));
 
-program.command("sessions").description("List saved local sessions").action(() => sessionsCommand(cwd));
+const sessions = program.command("sessions").description("List or inspect saved local sessions").action(() => sessionsCommand(cwd));
+sessions
+  .command("inspect")
+  .description("Inspect a saved local session summary")
+  .argument("[session-id]", "session id or latest", "latest")
+  .option("--json", "print raw JSON")
+  .option("--cwd <path>", "project/session root to inspect")
+  .option("--workdir <path>", "alias for --cwd")
+  .action((sessionId: string, options: { json?: boolean; cwd?: string; workdir?: string }) => sessionsInspectCommand(cwd, sessionId, { ...options, cwd: options.cwd ?? options.workdir }));
 
 const memory = program
   .command("memory")
