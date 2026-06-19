@@ -36,6 +36,32 @@ export function TaskListPanel({
           <option key={session.sessionId} value={session.sessionId}>{sessionLabel(session)}</option>
         ))}
       </select>
+      {sessions.length ? (
+        <section className="te-session-history" aria-label={t("tasks.sessionHistory")} data-testid="session-history">
+          {sessions.map((session) => {
+            const selectedSessionItem = session.sessionId === selectedSession;
+            return (
+              <button
+                type="button"
+                key={session.sessionId}
+                className={selectedSessionItem ? "selected" : ""}
+                aria-current={selectedSessionItem ? "true" : undefined}
+                onClick={() => onSelectSession(session.sessionId)}
+                data-testid="session-history-item"
+              >
+                <span>
+                  <strong title={sessionTitle(session)}>{clipSessionTitle(sessionTitle(session))}</strong>
+                  <small>{formatSessionTime(session.createdAt)}</small>
+                </span>
+                <span className="te-session-meta">
+                  <span className="te-chip te-chip-blue">{session.result ?? t("status.pending")}</span>
+                  <small>{t("tasks.sessionCounts", { events: session.eventCount ?? 0, artifacts: session.artifactCount ?? 0 })}</small>
+                </span>
+              </button>
+            );
+          })}
+        </section>
+      ) : null}
       {selected ? (
         <div className="te-session-actions" data-testid="session-actions">
           <button type="button" onClick={() => {
@@ -63,8 +89,21 @@ export function TaskListPanel({
 }
 
 function sessionLabel(session: CockpitSessionSummary): string {
-  const title = session.goal?.trim() ? session.goal.trim() : session.sessionId;
-  const clipped = title.length > 54 ? `${title.slice(0, 51)}...` : title;
+  const title = sessionTitle(session);
+  const clipped = clipSessionTitle(title);
   const result = session.result ? ` · ${session.result}` : "";
   return `${clipped}${result}`;
+}
+
+function sessionTitle(session: CockpitSessionSummary): string {
+  return session.goal?.trim() ? session.goal.trim() : session.sessionId;
+}
+
+function clipSessionTitle(title: string): string {
+  return title.length > 54 ? `${title.slice(0, 51)}...` : title;
+}
+
+function formatSessionTime(createdAt: string): string {
+  if (!createdAt.includes("T")) return createdAt;
+  return `${createdAt.slice(0, 10)} ${createdAt.slice(11, 16)}`;
 }

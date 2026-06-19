@@ -65,9 +65,9 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     if (defaultLanguage !== "en") throw new Error(`expected default GUI language to be en, got ${defaultLanguage}`);
     await page.selectOption("[data-testid='language-selector']", "zh");
     await page.waitForFunction(() => window.localStorage.getItem("tomorrowedge.guiLanguage") === "zh", undefined, { timeout: 5_000 });
-    await page.waitForSelector("text=命令", { timeout: 5_000 });
+    await page.waitForSelector("text=新任务", { timeout: 5_000 });
     await page.selectOption("[data-testid='language-selector']", "en");
-    await page.waitForSelector("text=Command", { timeout: 5_000 });
+    await page.waitForSelector("text=New task", { timeout: 5_000 });
     await assertVisibleTestIds(page, [
       "topbar",
       "task-panel",
@@ -137,7 +137,10 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await assertVisibleTestIds(page, ["keymgr-save-roles"], "key manager role contract");
     await page.keyboard.press("Escape");
     await page.waitForSelector("[data-testid='key-role-manager']", { state: "detached", timeout: 5_000 });
-    await page.fill("[data-testid='composer-input']", "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.");
+    const firstTaskTitle = "Create a deliberately long GUI e2e task title that should remain readable without horizontal overflow while the fixture workflow reaches approval.";
+    const firstTaskHistoryLabel = "Create a deliberately long GUI e2e task title";
+    const secondTaskTitle = "GUI e2e second task history check";
+    await page.fill("[data-testid='composer-input']", firstTaskTitle);
     await page.press("[data-testid='composer-input']", "Enter");
     await page.waitForSelector("[data-testid='approval-card']", { timeout: 20_000 });
     await assertAtLeastOneVisible(page, "task-card", "running task list");
@@ -188,6 +191,11 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
       const taskPanel = document.querySelector("[data-testid='task-panel']")?.textContent?.toLowerCase() ?? "";
       return workflow.includes("completed") || workflow.includes("done") || taskPanel.includes("done") || taskPanel.includes("completed");
     }, undefined, { timeout: 20_000 });
+    await assertVisibleTestIds(page, ["session-history"], "session history after first run");
+    await page.fill("[data-testid='composer-input']", secondTaskTitle);
+    await page.press("[data-testid='composer-input']", "Enter");
+    await assertSessionHistoryRecoverable(page, firstTaskHistoryLabel, secondTaskTitle);
+    await page.screenshot({ path: path.join(artifactDir, "session-history-two-runs.png"), fullPage: true });
     await page.screenshot({ path: path.join(artifactDir, "approval-flow-completed.png"), fullPage: true });
   });
 
@@ -267,6 +275,26 @@ async function assertAtLeastOneVisible(page: Page, id: string, label: string): P
     if (await page.locator(`[data-testid='${id}']`).nth(index).isVisible().catch(() => false)) return;
   }
   throw new Error(`${label} has no visible data-testid='${id}' element`);
+}
+
+async function assertSessionHistoryRecoverable(page: Page, firstTitle: string, secondTitle: string): Promise<void> {
+  await page.waitForFunction(({ firstTitle: first, secondTitle: second }) => {
+    const items = [...document.querySelectorAll("[data-testid='session-history-item']")];
+    const texts = items.map((item) => item.textContent ?? "");
+    return items.length >= 2 && texts.some((text) => text.includes(first)) && texts.some((text) => text.includes(second));
+  }, { firstTitle, secondTitle }, { timeout: 10_000 });
+
+  const selectedCount = await page.locator("[data-testid='session-history-item'][aria-current='true']").count();
+  if (selectedCount !== 1) {
+    throw new Error(`session history should expose one selected item, found ${selectedCount}`);
+  }
+
+  await page.locator("[data-testid='session-history-item']").filter({ hasText: firstTitle }).first().click();
+  await page.waitForFunction((title) => {
+    const item = [...document.querySelectorAll("[data-testid='session-history-item']")]
+      .find((candidate) => (candidate.textContent ?? "").includes(title));
+    return item?.getAttribute("aria-current") === "true";
+  }, firstTitle, { timeout: 10_000 });
 }
 
 async function assertDialogSemantics(page: Page, id: string, label: string): Promise<void> {

@@ -228,6 +228,53 @@ select[aria-invalid="true"] {
   padding: 0 7px;
   font-size: 11px;
 }
+.te-session-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 0;
+}
+.te-session-history button {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 4px;
+  background: var(--te-surface);
+  color: var(--te-text);
+  text-align: left;
+  padding: 7px;
+}
+.te-session-history button:hover {
+  border-color: color-mix(in srgb, var(--te-blue) 32%, var(--te-border-soft));
+}
+.te-session-history button.selected {
+  border-color: color-mix(in srgb, var(--te-blue) 44%, transparent);
+  background: var(--te-selected);
+}
+.te-session-history span {
+  min-width: 0;
+}
+.te-session-history strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.te-session-history small {
+  display: block;
+  margin-top: 3px;
+  color: var(--te-muted);
+  font-size: 10px;
+}
+.te-session-meta {
+  justify-self: end;
+  text-align: right;
+}
 .te-task-list {
   display: flex;
   flex-direction: column;
