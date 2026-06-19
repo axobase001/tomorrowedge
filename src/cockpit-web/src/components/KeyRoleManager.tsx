@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CockpitExternalAgentOption,
   CockpitProviderApiFormat,
@@ -28,6 +28,7 @@ type KeyRoleManagerProps = {
   onSaveRoleAssignments: (assignments: CockpitRoleAssignment[]) => void;
   onTestProvider: (provider: string) => void;
   onListProviderModels: (provider: string) => Promise<CockpitProviderModelOption[]>;
+  initialTab?: "keys" | "roles";
 };
 
 export function KeyRoleManager({
@@ -41,7 +42,8 @@ export function KeyRoleManager({
   onDeleteProviderKey,
   onSaveRoleAssignments,
   onTestProvider,
-  onListProviderModels
+  onListProviderModels,
+  initialTab = "keys"
 }: KeyRoleManagerProps) {
   const roleProviders = useMemo(() => setupStatus?.providers ?? [], [setupStatus]);
   const providers = useMemo(() => roleProviders.filter(isManageableProvider), [roleProviders]);
@@ -52,7 +54,7 @@ export function KeyRoleManager({
     ? setupStatus.selectedProvider
     : undefined;
   const initialProvider = selectedKeyProvider ?? setupStatus?.recommendedProvider ?? providerIds[0] ?? "openrouter";
-  const [tab, setTab] = useState<"keys" | "roles">("keys");
+  const [tab, setTab] = useState<"keys" | "roles">(initialTab);
   const [provider, setProvider] = useState(initialProvider);
   const normalizedProvider = normalizeProviderId(provider);
   const selectedProvider = providers.find((item) => item.id === normalizedProvider);
@@ -66,10 +68,11 @@ export function KeyRoleManager({
   const [requestTimeoutMs, setRequestTimeoutMs] = useState(String(initialDraft.requestTimeoutMs));
   const [maxRetries, setMaxRetries] = useState(String(initialDraft.maxRetries));
   const [apiKey, setApiKey] = useState("");
-  const [catalogModels, setCatalogModels] = useState<CockpitProviderModelOption[]>([]);
+  const [catalogModelsByProvider, setCatalogModelsByProvider] = useState<Record<string, CockpitProviderModelOption[]>>({});
   const [catalogMessage, setCatalogMessage] = useState("");
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
+  const keyCustomModelInputRef = useRef<HTMLInputElement | null>(null);
   const runtimeErrors = providerRuntimeErrors({ requestTimeoutMs, maxRetries });
   const extraHeadersDraft = parseExtraHeadersDraft(extraHeadersText);
   const authRequiresKey = authHeader !== "none";
@@ -95,7 +98,6 @@ export function KeyRoleManager({
     setRequestTimeoutMs(String(nextDraft.requestTimeoutMs));
     setMaxRetries(String(nextDraft.maxRetries));
     setApiKey("");
-    setCatalogModels([]);
     setCatalogMessage("");
   }, [provider, providers]);
 
@@ -112,9 +114,15 @@ export function KeyRoleManager({
     requestTimeoutMs,
     maxRetries
   });
+  const catalogModels = catalogModelsByProvider[normalizedProvider] ?? [];
   const modelOptions = modelOptionIds(normalizedProvider, selectedProvider?.model, [...(selectedProvider?.models ?? []), ...catalogModels]);
   const selectedModelChoice = modelOptions.includes(model) ? model : "__custom";
-  const resultTone = connectionResult?.status === "ok" ? "te-chip-green" : connectionResult?.status === "missing_key" || connectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
+  const keyModelIsCustom = selectedModelChoice === "__custom";
+  const visibleConnectionResult = tab === "keys" && connectionResult && normalizeProviderId(connectionResult.id) === normalizedProvider ? connectionResult : undefined;
+  const resultTone = visibleConnectionResult?.status === "ok" ? "te-chip-green" : visibleConnectionResult?.status === "missing_key" || visibleConnectionResult?.status === "failed" ? "te-chip-red" : "te-chip-amber";
+  useEffect(() => {
+    if (keyModelIsCustom) keyCustomModelInputRef.current?.focus();
+  }, [keyModelIsCustom]);
   const startRelayProfile = () => {
     const nextProvider = nextRelayProviderId(providerIds);
     setProvider(nextProvider);
@@ -125,7 +133,6 @@ export function KeyRoleManager({
     setAuthHeader("bearer");
     setExtraHeadersText("{}");
     setApiKey("");
-    setCatalogModels([]);
     setCatalogMessage("");
   };
 
@@ -182,12 +189,18 @@ export function KeyRoleManager({
                 <span>{t("keymgr.model")}</span>
                 <div className="te-model-picker">
                   <select value={selectedModelChoice} onChange={(event) => {
-                    if (event.target.value !== "__custom") setModel(event.target.value);
+                    if (event.target.value === "__custom") {
+                      if (modelOptions.includes(model)) setModel("");
+                    } else {
+                      setModel(event.target.value);
+                    }
                   }} data-testid="keymgr-model-select">
                     {modelOptions.map((item) => <option key={item} value={item}>{item}</option>)}
                     <option value="__custom">{t("keymgr.customModel")}</option>
                   </select>
-                  <input value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
+                  {keyModelIsCustom ? (
+                    <input ref={keyCustomModelInputRef} value={model} onChange={(event) => setModel(event.target.value)} data-testid="keymgr-model" />
+                  ) : null}
                 </div>
               </label>
               <label>
@@ -291,7 +304,10 @@ export function KeyRoleManager({
                 setCatalogBusy(true);
                 try {
                   const options = await onListProviderModels(normalizedProvider);
-                  setCatalogModels(options);
+                  setCatalogModelsByProvider((current) => ({
+                    ...current,
+                    [normalizedProvider]: options
+                  }));
                   const stale = options.some((item) => item.stale);
                   const cached = options.some((item) => item.cached);
                   setCatalogMessage(
@@ -322,29 +338,40 @@ export function KeyRoleManager({
           <section className="te-keymgr-body">
             <p>{t("keymgr.rolesIntro")}</p>
             <div className="te-role-list" data-testid="keymgr-role-list">
-              {assignments.length ? assignments.map((assignment) => (
-                <div key={assignment.role} className="te-role-row">
-                  <strong>{assignment.role}</strong>
-                  <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, roleProviders, assignment.model) }))}>
-                    {roleProviderOptions(roleProviderIds, externalAgents, assignment.provider).map((item) => (
-                      <option key={item} value={item}>{labelProvider(item, externalAgents)}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={roleModelOptionIds(assignment.provider, roleProviders, assignment.model).includes(assignment.model) ? assignment.model : "__custom"}
-                    onChange={(event) => {
-                      if (event.target.value !== "__custom") setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }));
-                    }}
-                    data-testid={`keymgr-role-model-select-${assignment.role}`}
-                  >
-                    {roleModelOptionIds(assignment.provider, roleProviders, assignment.model).map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                    <option value="__custom">{t("keymgr.customModel")}</option>
-                  </select>
-                  <input value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
-                </div>
-              )) : (
+              {assignments.length ? assignments.map((assignment) => {
+                const roleModelOptions = roleModelOptionIds(assignment.provider, roleProviders, assignment.model, catalogModelsByProvider);
+                const selectedRoleModelChoice = roleModelOptions.includes(assignment.model) ? assignment.model : "__custom";
+                const roleModelIsCustom = selectedRoleModelChoice === "__custom";
+                return (
+                  <div key={assignment.role} className="te-role-row">
+                    <strong>{assignment.role}</strong>
+                    <select value={assignment.provider} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { provider: event.target.value, model: defaultModelFor(event.target.value, roleProviders, assignment.model) }))}>
+                      {roleProviderOptions(roleProviderIds, externalAgents, assignment.provider).map((item) => (
+                        <option key={item} value={item}>{labelProvider(item, externalAgents)}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedRoleModelChoice}
+                      onChange={(event) => {
+                        if (event.target.value === "__custom") {
+                          if (roleModelOptions.includes(assignment.model)) setAssignments((current) => updateAssignment(current, assignment.role, { model: "" }));
+                        } else {
+                          setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }));
+                        }
+                      }}
+                      data-testid={`keymgr-role-model-select-${assignment.role}`}
+                    >
+                      {roleModelOptions.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                      <option value="__custom">{t("keymgr.customModel")}</option>
+                    </select>
+                    {roleModelIsCustom ? (
+                      <input autoFocus value={assignment.model} onChange={(event) => setAssignments((current) => updateAssignment(current, assignment.role, { model: event.target.value }))} data-testid={`keymgr-role-model-${assignment.role}`} />
+                    ) : null}
+                  </div>
+                );
+              }) : (
                 <EmptyState title={t("state.noRoleAssignments")} detail={t("state.noRoleAssignmentsDetail")} testId="keymgr-roles-empty-state" />
               )}
             </div>
@@ -355,9 +382,9 @@ export function KeyRoleManager({
           </section>
         )}
         {message ? <p className="te-setup-message" data-testid="keymgr-message">{message}</p> : null}
-        {connectionResult ? (
+        {visibleConnectionResult ? (
           <p className="te-setup-message" data-testid="keymgr-connection">
-            <span className={`te-chip ${resultTone}`}>{connectionResult.status}</span> {formatProviderConnectionMessage(connectionResult, t)}
+            <span className={`te-chip ${resultTone}`}>{visibleConnectionResult.status}</span> {formatProviderConnectionMessage(visibleConnectionResult, t)}
           </p>
         ) : null}
     </ModalSurface>
@@ -440,13 +467,18 @@ export function modelOptionIds(provider: string, configuredModel: string | undef
   ].filter((item): item is string => Boolean(item)))];
 }
 
-export function roleModelOptionIds(provider: string, providers: Array<{ id: string; model: string; models?: CockpitProviderModelOption[] }>, currentModel: string): string[] {
+export function roleModelOptionIds(
+  provider: string,
+  providers: Array<{ id: string; model: string; models?: CockpitProviderModelOption[] }>,
+  _currentModel: string,
+  catalogModelsByProvider: Record<string, CockpitProviderModelOption[]> = {}
+): string[] {
   if (provider === "auto" || provider.startsWith("external:")) return ["auto"];
   const providerId = normalizeProviderId(provider);
   const selectedProvider = providers.find((item) => item.id === providerId);
   return modelOptionIds(providerId, selectedProvider?.model, [
     ...(selectedProvider?.models ?? []),
-    ...(currentModel && currentModel !== "auto" ? [{ id: currentModel, label: currentModel, source: "config" as const }] : [])
+    ...(catalogModelsByProvider[providerId] ?? [])
   ]);
 }
 

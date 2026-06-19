@@ -117,7 +117,7 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
     await assertVisibleTestIds(page, [
       "keymgr-tab-keys",
       "keymgr-provider",
-      "keymgr-model",
+      "keymgr-model-select",
       "keymgr-base-url",
       "keymgr-env",
       "keymgr-key",
@@ -126,6 +126,9 @@ async function runCockpitFlow(browser: Browser, url: string): Promise<void> {
       "keymgr-test-key",
       "keymgr-delete-key"
     ], "key manager key contract");
+    await assertHiddenTestIds(page, ["keymgr-model"], "known model custom input contract");
+    await page.selectOption("[data-testid='keymgr-model-select']", "__custom");
+    await assertVisibleTestIds(page, ["keymgr-model"], "custom model input contract");
     await assertDialogSemantics(page, "key-role-manager", "key manager");
     await assertFocusRemainsInside(page, "key-role-manager", "key manager", 18);
     await touchOptionalTestIds(page, ["keymgr-message", "keymgr-connection", "keymgr-models-message"]);
@@ -244,6 +247,17 @@ async function assertVisibleTestIds(page: Page, ids: string[], label: string): P
   }
   if (missing.length) {
     throw new Error(`${label} missing visible data-testid(s): ${missing.join(", ")}`);
+  }
+}
+
+async function assertHiddenTestIds(page: Page, ids: string[], label: string): Promise<void> {
+  const visibleIds: string[] = [];
+  for (const id of ids) {
+    const visible = await page.locator(`[data-testid='${id}']`).first().isVisible().catch(() => false);
+    if (visible) visibleIds.push(id);
+  }
+  if (visibleIds.length) {
+    throw new Error(`${label} has unexpectedly visible data-testid(s): ${visibleIds.join(", ")}`);
   }
 }
 

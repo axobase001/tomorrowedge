@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { App } from "../../src/cockpit-web/src/App.js";
-import { canSaveProviderConfig, modelOptionIds, providerFormDefaults, roleModelOptionIds, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
+import { canSaveProviderConfig, KeyRoleManager, modelOptionIds, providerFormDefaults, roleModelOptionIds, roleProviderOptions } from "../../src/cockpit-web/src/components/KeyRoleManager.js";
 import { ReceiptModal } from "../../src/cockpit-web/src/components/ReceiptModal.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
@@ -405,6 +405,51 @@ describe("cockpit web React surface", () => {
     expect(open).toContain("data-testid=\"keymgr-tab-roles\"");
   });
 
+  it("shows one model picker by default in the API key manager", () => {
+    const html = renderKeyRoleManager();
+
+    expect(html).toContain("data-testid=\"keymgr-model-select\"");
+    expect(html).not.toContain("data-testid=\"keymgr-model\"");
+  });
+
+  it("shows the custom model input only for custom API key model values", () => {
+    const html = renderKeyRoleManager({ selectedModel: "team/custom-model" });
+
+    expect(html).toContain("data-testid=\"keymgr-model-select\"");
+    expect(html).toContain("data-testid=\"keymgr-model\"");
+    expect(html).toContain("team/custom-model");
+  });
+
+  it("shows one model picker per role unless the role uses a custom model", () => {
+    const html = renderKeyRoleManager({ initialTab: "roles" });
+    const custom = renderKeyRoleManager({
+      initialTab: "roles",
+      roleAssignments: [{ role: "planner", provider: "openrouter", model: "team/custom-role-model" }]
+    });
+
+    expect(html).toContain("data-testid=\"keymgr-role-model-select-planner\"");
+    expect(html).not.toContain("data-testid=\"keymgr-role-model-planner\"");
+    expect(custom).toContain("data-testid=\"keymgr-role-model-planner\"");
+    expect(custom).toContain("team/custom-role-model");
+  });
+
+  it("scopes API key connection warnings to the active key tab and provider", () => {
+    const warning = {
+      id: "openrouter",
+      status: "missing_key" as const,
+      reason: "missing_key",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      message: "API key is missing."
+    };
+    const keyTab = renderKeyRoleManager({ connectionResult: warning });
+    const roleTab = renderKeyRoleManager({ initialTab: "roles", connectionResult: warning });
+    const otherProvider = renderKeyRoleManager({ selectedProvider: "deepseek", connectionResult: warning });
+
+    expect(keyTab).toContain("data-testid=\"keymgr-connection\"");
+    expect(roleTab).not.toContain("data-testid=\"keymgr-connection\"");
+    expect(otherProvider).not.toContain("data-testid=\"keymgr-connection\"");
+  });
+
   it("keeps provider model drafts isolated by provider defaults", () => {
     const providers = [
       { id: "openrouter", model: "moonshotai/kimi-k2.6:free", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY" },
@@ -528,6 +573,24 @@ describe("cockpit web React surface", () => {
         { id: "qwen/qwen3-coder:free", label: "Qwen", source: "config" }
       ]
     }], "qwen/qwen3-coder:free")).toContain("qwen/qwen3-coder:free");
+  });
+
+  it("exposes refreshed provider catalog models to matching role pickers only", () => {
+    const providers = [{
+      id: "openrouter",
+      model: "moonshotai/kimi-k2.6:free",
+      models: [{ id: "moonshotai/kimi-k2.6:free", label: "Kimi", source: "config" as const }]
+    }, {
+      id: "deepseek",
+      model: "deepseek-chat",
+      models: [{ id: "deepseek-chat", label: "DeepSeek Chat", source: "config" as const }]
+    }];
+    const catalog = {
+      openrouter: [{ id: "openai/gpt-5.2", label: "GPT 5.2", source: "catalog" as const }]
+    };
+
+    expect(roleModelOptionIds("openrouter", providers, "moonshotai/kimi-k2.6:free", catalog)).toContain("openai/gpt-5.2");
+    expect(roleModelOptionIds("deepseek", providers, "deepseek-chat", catalog)).not.toContain("openai/gpt-5.2");
   });
 
   it("renders the role assignment tab entry in the key manager", () => {
@@ -927,6 +990,76 @@ describe("cockpit web React surface", () => {
     }
   });
 });
+
+type KeyRoleManagerComponentProps = React.ComponentProps<typeof KeyRoleManager>;
+
+function renderKeyRoleManager(overrides: Partial<{
+  initialTab: "keys" | "roles";
+  selectedProvider: string;
+  selectedModel: string;
+  roleAssignments: NonNullable<KeyRoleManagerComponentProps["setupStatus"]>["roleAssignments"];
+  connectionResult: KeyRoleManagerComponentProps["connectionResult"];
+}> = {}): string {
+  const t = createTranslator("en");
+  return renderToStaticMarkup(
+    React.createElement(KeyRoleManager, {
+      setupStatus: {
+        needsSetup: true,
+        recommendedProvider: "openrouter",
+        configPath: ".tomorrowedge/config.yaml",
+        providers: [{
+          id: "openrouter",
+          enabled: false,
+          model: "moonshotai/kimi-k2.6:free",
+          models: [{ id: "moonshotai/kimi-k2.6:free", label: "Kimi", source: "config" }],
+          baseUrl: "https://openrouter.ai/api/v1",
+          apiKeyEnv: "OPENROUTER_API_KEY",
+          keyConfigured: false,
+          keySource: "missing",
+          authRequired: true,
+          apiFormat: "openai_chat",
+          authHeader: "bearer",
+          extraHeaders: {},
+          requestTimeoutMs: 60000,
+          maxRetries: 1
+        }, {
+          id: "deepseek",
+          enabled: false,
+          model: "deepseek-chat",
+          models: [{ id: "deepseek-chat", label: "DeepSeek Chat", source: "config" }],
+          baseUrl: "https://api.deepseek.com/v1",
+          apiKeyEnv: "DEEPSEEK_API_KEY",
+          keyConfigured: false,
+          keySource: "missing",
+          authRequired: true,
+          apiFormat: "openai_chat",
+          authHeader: "bearer",
+          extraHeaders: {},
+          requestTimeoutMs: 60000,
+          maxRetries: 1
+        }],
+        externalAgents: [],
+        roleAssignments: overrides.roleAssignments ?? [
+          { role: "planner", provider: "openrouter", model: "moonshotai/kimi-k2.6:free" },
+          { role: "reviewer", provider: "deepseek", model: "deepseek-chat" }
+        ],
+        selectedProvider: overrides.selectedProvider ?? "openrouter",
+        selectedModel: overrides.selectedModel
+      },
+      busy: false,
+      message: undefined,
+      connectionResult: overrides.connectionResult,
+      t,
+      onClose: () => undefined,
+      onSaveProviderKey: () => undefined,
+      onDeleteProviderKey: () => undefined,
+      onSaveRoleAssignments: () => undefined,
+      onTestProvider: () => undefined,
+      onListProviderModels: async () => [],
+      initialTab: overrides.initialTab
+    })
+  );
+}
 
 function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean; accessMode: AccessMode; fullAutonomyConfirmed: boolean }> = {}): string {
   const language = overrides.language ?? "en";
