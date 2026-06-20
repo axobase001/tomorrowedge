@@ -63,6 +63,7 @@ Do not put a personal primary key into demo or CI configs.
 Current configured endpoints:
 
 - OpenRouter: `https://openrouter.ai/api/v1`
+- Requesty: `https://router.requesty.ai/v1`
 - DeepSeek: `https://api.deepseek.com`
 - Kimi/Moonshot: `https://api.moonshot.ai/v1` with default model `kimi-k2.6`
 - Anthropic: `https://api.anthropic.com/v1` with native Messages API headers
@@ -130,6 +131,14 @@ providers:
         label: free onboarding
       - id: qwen/qwen3-coder:free
         label: cheap coder
+    api_format: openai_chat
+    auth_header: bearer
+    extra_headers: {}
+  requesty:
+    enabled: true
+    api_key_env: REQUESTY_API_KEY
+    base_url: https://router.requesty.ai/v1
+    model: openai/gpt-4o-mini
     api_format: openai_chat
     auth_header: bearer
     extra_headers: {}
