@@ -7,6 +7,39 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-06-20
+
+1.6.4 is a Canopus maintenance release focused on Cockpit approval correctness,
+auditable exports, benchmark session clarity, and the experimental
+Terminal-Bench 2.1 adapter entrypoint.
+
+### Added
+
+- Added a `tedge tbench` command group and packaged Harbor adapter files for
+  Terminal-Bench 2.1 smoke runs.
+- Added README and docs guidance for structured Terminal-Bench smoke usage,
+  hard-gate verification, and strong rescue routing.
+- Added structural document verification for report-style Cockpit approvals
+  when no shell verification command exists.
+
+### Changed
+
+- GUI session labels now include a stable discriminator and benchmark run label
+  so repeated runs with similar goals can be distinguished.
+- OpenAI-compatible OpenRouter reasoning suppression now avoids models that
+  require reasoning fields.
+- External command-agent JSON-RPC framing now recognizes Claude-style newline
+  framing in addition to Codex.
+
+### Fixed
+
+- Fixed empty shell approvals getting stuck when no verification command was
+  available.
+- Fixed MCP and CLI exports so `includeArtifacts` expands real per-run artifact
+  files instead of leaving placeholder references.
+- Fixed secret redaction overreach that could collapse audit-critical
+  deliverable paths and artifact refs into `[redacted]` placeholders.
+
 ## [1.6.3] - 2026-06-16
 
 1.6.3 is a Canopus provider/council routing patch release focused on structured

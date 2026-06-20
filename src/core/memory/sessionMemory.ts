@@ -14,6 +14,11 @@ export type SessionRecord = {
   state: AgentGraphState;
 };
 
+export type HydratedSessionArtifact = {
+  ref: string;
+  content: string;
+};
+
 export type LatestSessionPointer = {
   sessionId: string;
   updatedAt: string;
@@ -85,6 +90,19 @@ export async function loadLatestSession(cwd: string): Promise<SessionRecord> {
   const [latest] = await listSessions(cwd);
   if (!latest) throw new Error("No sessions found.");
   return latest;
+}
+
+export async function loadSessionArtifacts(cwd: string, sessionId: string): Promise<HydratedSessionArtifact[]> {
+  const session = await loadSession(cwd, sessionId);
+  const sessionDir = path.join(cwd, ".tomorrowedge", "sessions", session.sessionId);
+  const refs = [...new Set((session.state.eventArtifacts ?? []).map((artifact) => artifact.ref).filter(Boolean))];
+  const entries = await Promise.all(
+    refs.map(async (ref) => {
+      const content = await readFile(path.join(sessionDir, ref), "utf8").catch(() => "");
+      return content ? { ref, content } : undefined;
+    })
+  );
+  return entries.filter((entry): entry is HydratedSessionArtifact => Boolean(entry));
 }
 
 export async function renameSessionGoal(cwd: string, sessionId: string, goal: string): Promise<SessionRecord> {

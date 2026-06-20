@@ -1,6 +1,6 @@
 {
   "name": "@axobase001/tomorrowedge",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "Local orchestration, governance, and strategy-evolution runtime for heterogeneous Coding Agents.",
   "type": "module",
   "bin": {
@@ -45,7 +45,8 @@
     "desktop": "node scripts/tsx-dev.mjs desktop",
     "tui": "node scripts/tsx-dev.mjs tui",
     "smoke:real": "node scripts/tsx-dev.mjs models --real-smoke",
-    "screenshots:tui": "node scripts/capture-tui-screenshots.mjs"
+    "screenshots:tui": "node scripts/capture-tui-screenshots.mjs",
+    "tbench:smoke": "node scripts/tsx-dev.mjs tbench smoke --quiet"
   },
   "files": [
     "dist",
@@ -69,6 +70,8 @@
     "docs/CHIEF_AGENT_RUNTIME.md",
     "docs/DELEGATED_EXECUTION_RUNTIME.md",
     "docs/POLICY_EVOLUTION_RUNTIME.md",
+    "docs/TERMINAL_BENCH_RUNTIME.md",
+    "scripts/tbench",
     "scripts/secret-scan.ts",
     "examples/tiny-local-lm/ARCHITECTURE.md",
     "examples/tiny-local-lm/README.md",

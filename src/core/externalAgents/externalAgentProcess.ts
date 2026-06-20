@@ -44,7 +44,7 @@ export class ExternalAgentProcessClient {
   private readonly pending = new Map<number, { resolve: (value: JsonRpcResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 
   constructor(private readonly profile: ExternalAgentProfile, private readonly cwd: string) {
-    this.framing = isCodexCommand(profile.command) ? "newline" : "content-length";
+    this.framing = usesNewlineJsonRpcFraming(profile.command) ? "newline" : "content-length";
   }
 
   async start(): Promise<void> {
@@ -226,6 +226,11 @@ function proxyEnvForPort(port: number): Record<string, string> {
 export function isCodexCommand(command?: string): boolean {
   const name = command?.split(/[\\/]/).pop()?.toLowerCase() ?? "";
   return /^codex(?:\.(?:exe|cmd|bat|ps1))?$/.test(name);
+}
+
+function usesNewlineJsonRpcFraming(command?: string): boolean {
+  const name = command?.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+  return isCodexCommand(command) || /^claude(?:\.(?:exe|cmd|bat|ps1))?$/.test(name);
 }
 
 function drainContentLength(buffer: string): { item: string; rest: string } | undefined {

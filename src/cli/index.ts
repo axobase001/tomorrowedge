@@ -13,6 +13,7 @@ import { modeCommand } from "./commands/mode.js";
 import { prefsCommand } from "./commands/prefs.js";
 import { drillCommand } from "./commands/drill.js";
 import { benchmarkCommand } from "./commands/benchmark.js";
+import { tbenchGuideCommand, tbenchSmokeCommand } from "./commands/tbench.js";
 import { workflowCommand } from "./commands/workflow.js";
 import { memoryCommand, memoryCompactCommand, memoryDeleteCommand, memoryExplainCommand, memoryExportCommand, memoryFailuresCommand, memoryPreviewCommand, memoryShowCommand } from "./commands/memory.js";
 import { reviewExportCommand } from "./commands/reviewExport.js";
@@ -239,6 +240,34 @@ program
   .description("Run the offline quality-cost-trace benchmark demo")
   .option("--format <format>", "markdown or json", "markdown")
   .action((options: { format?: "json" | "markdown" }) => benchmarkCommand(cwd, options));
+
+const tbench = program.command("tbench").description("Run or inspect the Terminal-Bench 2.1 Harbor adapter");
+tbench
+  .command("runtime")
+  .description("Show the TomorrowEdge Terminal-Bench runtime contract and canonical smoke command")
+  .option("--json", "print machine-readable metadata")
+  .action((options: { json?: boolean }) => tbenchGuideCommand(cwd, options));
+tbench
+  .command("smoke")
+  .description("Run a one-task Terminal-Bench 2.1 Harbor smoke with the TomorrowEdge agent")
+  .option("--dataset <id>", "Harbor dataset id", "terminal-bench/terminal-bench-2-1")
+  .option("--limit <n>", "number of tasks to sample", "1")
+  .option("--n <n>", "trial count", "1")
+  .option("--output-dir <path>", "Harbor output directory", ".tomorrowedge/tbench/jobs")
+  .option("--job-name <name>", "Harbor job name", "tb21-tomorrowedge-smoke")
+  .option("--agent-import-path <path>", "Python import path for custom Harbor agent")
+  .option("--agent-timeout-multiplier <n>", "Harbor agent execution timeout multiplier")
+  .option("--primary-model <id>", "OpenRouter model id for the primary terminal execution agent")
+  .option("--advisor-model <id>", "OpenRouter model id for the pre-run strategy advisor")
+  .option("--strong-model <id>", "OpenRouter model id for strong rescue intervention")
+  .option("--escalation-after <n>", "invoke strong rescue after this many consecutive hard-gate failures")
+  .option("--max-strong-interventions <n>", "maximum strong rescue calls per task")
+  .option("--max-steps <n>", "maximum terminal action steps for the agent")
+  .option("--strong-max-tokens <n>", "max output tokens for each strong rescue call")
+  .option("--require-strong", "fail the trial if a configured strong rescue call returns no executable action")
+  .option("--dry-run", "print the harbor command without running it")
+  .option("--quiet", "pass -q to harbor")
+  .action((options: { dataset?: string; limit?: string; n?: string; outputDir?: string; jobName?: string; agentImportPath?: string; agentTimeoutMultiplier?: string; primaryModel?: string; advisorModel?: string; strongModel?: string; escalationAfter?: string; maxStrongInterventions?: string; maxSteps?: string; strongMaxTokens?: string; requireStrong?: boolean; dryRun?: boolean; quiet?: boolean }) => tbenchSmokeCommand(cwd, options));
 
 program
   .command("workflow")

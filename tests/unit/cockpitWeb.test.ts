@@ -814,6 +814,28 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("read the quantum folder and summarize structure");
     expect(html).toContain("completed");
+    expect(html).toContain("#n_abc123");
+  });
+
+  it("adds stable session discriminators for repeated benchmark-like sessions", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TaskListPanel, {
+        tasks: [],
+        sessions: [
+          { sessionId: "session_benchmark_alpha1111", createdAt: "2026-06-07T00:00:00.000Z", eventCount: 1, artifactCount: 0, goal: "Terminal-Bench write-compressor", result: "completed", discriminator: "alpha1111", runLabel: "bench:kimi" },
+          { sessionId: "session_benchmark_beta2222", createdAt: "2026-06-07T00:01:00.000Z", eventCount: 1, artifactCount: 0, goal: "Terminal-Bench write-compressor", result: "completed", discriminator: "beta2222", runLabel: "bench:glm" }
+        ],
+        selectedSession: "session_benchmark_beta2222",
+        t: createTranslator("en"),
+        onSelectSession: () => undefined,
+        onNewTask: () => undefined,
+        onRenameSession: () => undefined,
+        onDeleteSession: () => undefined
+      })
+    );
+
+    expect(html).toContain("bench:kimi #alpha1111");
+    expect(html).toContain("bench:glm #beta2222");
   });
 
   it("renders saved sessions as visible history with result and metadata", () => {

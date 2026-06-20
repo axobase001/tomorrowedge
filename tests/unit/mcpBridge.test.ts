@@ -147,6 +147,15 @@ describe("MCP Agent Bridge", () => {
       expect(exported.content).toContain("- return a - b;");
       expect(exported.content).toContain("+ return a + b;");
       expect(exported.content).toContain("RPC judge selected the reviewed patch.");
+
+      const exportedJson = structured(await rpc.send(stdin, 8, "tools/call", {
+        name: "tomorrowedge.export_session",
+        arguments: { sessionId: started.sessionId, format: "json", includeArtifacts: true }
+      })) as { format: string; content: string };
+      const parsedExport = JSON.parse(exportedJson.content) as { artifacts?: Record<string, string> };
+      expect(Object.values(parsedExport.artifacts ?? {}).join("\n")).toContain("- return a - b;");
+      expect(Object.values(parsedExport.artifacts ?? {}).join("\n")).toContain("+ return a + b;");
+      expect(Object.values(parsedExport.artifacts ?? {}).join("\n")).not.toContain("[stored in artifact file]");
     } finally {
       rpc.dispose();
       stdin.destroy();

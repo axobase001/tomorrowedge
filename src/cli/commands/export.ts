@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { loadLatestSession, loadSession } from "../../core/memory/sessionMemory.js";
+import { loadLatestSession, loadSession, loadSessionArtifacts } from "../../core/memory/sessionMemory.js";
 import { artifactRefs, renderEventMarkdown } from "../../core/events/eventRenderer.js";
 import type { TomorrowEdgeEvent } from "../../core/events/eventTypes.js";
 import { redactText } from "../../safety/secretScanner.js";
@@ -18,9 +18,13 @@ export async function exportCommand(cwd: string, sessionId: string, options: Exp
   const session = sessionId === "latest" ? await loadLatestSession(targetCwd) : await loadSession(targetCwd, sessionId);
   const sessionDir = resolveSessionDir(targetCwd, session.sessionId);
   const artifacts = await loadArtifacts(session.state.events, sessionDir);
+  const sessionArtifacts = Object.fromEntries(
+    (await loadSessionArtifacts(targetCwd, session.sessionId)).map((artifact) => [artifact.ref, redactText(artifact.content)] as const)
+  );
+  const expandedArtifacts = { ...sessionArtifacts, ...artifacts };
 
   if (options.format === "json") {
-    process.stdout.write(JSON.stringify(options.includeArtifacts ? { ...session, artifacts } : session, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(options.includeArtifacts ? { ...session, artifacts: expandedArtifacts } : session, null, 2) + "\n");
     return;
   }
 
@@ -63,7 +67,7 @@ ${renderEventMarkdown(state.events)}
 
 ## Artifact Details
 
-${renderArtifactDetails(state.events, artifacts)}
+${renderArtifactDetails(state.events, expandedArtifacts)}
 
 ## Patches
 

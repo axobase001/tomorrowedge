@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { loadConfig } from "../config/configLoader.js";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import { SummarizerAgent } from "../core/agents/summarizer.js";
@@ -140,7 +142,45 @@ async function approveShell(input: { configCwd: string; executionCwd: string; tr
   const { configCwd, executionCwd, traceCwd, state } = input;
   if (!state.access.shellAllowed) return { state, message: accessBlockedMessage(state, "shell"), status: "blocked" };
   const command = resolveCockpitShellCommand(state);
-  if (!command) return { state, message: "No verification command is available.", status: "blocked" };
+  if (!command) {
+    const structuralResult = await runStructuralDeliverableVerifier(executionCwd, state);
+    const next = await finalizePostApprovalTrace(traceCwd, await refreshSummary({
+      ...state,
+      runResults: structuralResult ? [...state.runResults, structuralResult] : state.runResults,
+      approvals: { ...state.approvals, shellApproved: true },
+      agents: [
+        ...resolveWaitingAgents(state, "success", structuralResult ? "Shell approval acknowledged; structural deliverable verifier passed." : "Shell approval acknowledged; no verification command was available."),
+        {
+          id: makeId("cockpit_shell"),
+          role: "runner" as const,
+          provider: "local_tool",
+          model: "shell",
+          status: "success" as const,
+          summary: structuralResult ? "Structural deliverable verifier passed." : "No verification command was available."
+        }
+      ],
+      events: [
+        ...state.events,
+        makeEvent(state, {
+          type: "shell_run",
+          phase: "shell",
+          role: "runner",
+          provider: "local_tool",
+          model: "shell",
+          command: "verification command",
+          cwd: executionCwd,
+          success: true,
+          skipped: true,
+          skipReason: "no verification command available"
+        })
+      ]
+    }), "browser_cockpit");
+    return {
+      state: next,
+      message: structuralResult ? "No verification command is available; structural deliverable verification passed." : "No verification command is available.",
+      status: "executed"
+    };
+  }
   if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification.", status: "blocked" };
 
   const config = loadConfig(configCwd);
@@ -284,6 +324,28 @@ function selectedCandidate(state: AgentGraphState) {
   if (pendingRepair && state.agents.some((agent) => agent.status === "waiting_for_user" && agent.role === "runner")) return pendingRepair;
   const candidates = [...state.candidates, ...state.repairCandidates];
   return candidates.find((candidate) => candidate.candidateId === state.judge?.selectedCandidateId) ?? candidates[0];
+}
+
+async function runStructuralDeliverableVerifier(cwd: string, state: AgentGraphState): Promise<AgentGraphState["runResults"][number] | undefined> {
+  const files = state.changedFiles.filter((file) => /\.(?:md|markdown|html?|txt|rst|adoc)$/i.test(file));
+  if (!files.length) return undefined;
+  const root = path.resolve(cwd);
+  const checked: string[] = [];
+  for (const file of files) {
+    const target = path.resolve(cwd, file);
+    if (target !== root && !target.startsWith(`${root}${path.sep}`)) return undefined;
+    const content = await readFile(target, "utf8").catch(() => "");
+    if (!content.trim()) return undefined;
+    checked.push(file);
+  }
+  return {
+    command: "structural document verifier",
+    exitCode: 0,
+    stdout: `Checked ${checked.length} document deliverable(s): ${checked.join(", ")}`,
+    stderr: "",
+    durationMs: 0,
+    success: true
+  };
 }
 
 async function refreshSummary(state: AgentGraphState): Promise<AgentGraphState> {

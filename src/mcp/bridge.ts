@@ -15,7 +15,7 @@ import { diagnoseExternalAgentProfile, type ExternalAgentDiagnostic } from "../c
 import { externalAgentIdFromProvider } from "../core/externalAgents/externalAgentRouter.js";
 import { ExternalAgentProcessClient, probeExternalAgent } from "../core/externalAgents/externalAgentProcess.js";
 import { runCommandExternalAgent } from "../core/externalAgents/runners/commandExternalAgentRunner.js";
-import { loadLatestSession, loadSession, writeLatestSessionPointer, type SessionRecord } from "../core/memory/sessionMemory.js";
+import { loadLatestSession, loadSession, loadSessionArtifacts, writeLatestSessionPointer, type SessionRecord } from "../core/memory/sessionMemory.js";
 import { agentRoles, type AgentRole, type AgentRunState } from "../schemas/agentTask.js";
 import type { JudgeDecision } from "../schemas/judge.js";
 import type { PatchCandidate } from "../schemas/patchCandidate.js";
@@ -287,13 +287,16 @@ export class TomorrowEdgeMcpBridge {
     return { sessionId: session.sessionId, events: session.state.events, markdown: renderEventMarkdown(session.state.events) };
   }
 
-  async exportSession(input: WorkflowRef & { format?: "json" | "markdown" } = {}): Promise<{ sessionId: string; format: "json" | "markdown"; content: string }> {
+  async exportSession(input: WorkflowRef & { format?: "json" | "markdown"; includeArtifacts?: boolean } = {}): Promise<{ sessionId: string; format: "json" | "markdown"; content: string }> {
     const session = await this.getWorkflowState(input);
     const format = input.format ?? "markdown";
+    const artifacts = await loadSessionArtifactMap(this.cwd, session.sessionId);
     return {
       sessionId: session.sessionId,
       format,
-      content: format === "json" ? JSON.stringify(session, null, 2) : renderMcpSessionMarkdown(session)
+      content: format === "json"
+        ? JSON.stringify(input.includeArtifacts ? { ...session, artifacts } : session, null, 2)
+        : renderMcpSessionMarkdown(session, artifacts)
     };
   }
 
@@ -322,7 +325,7 @@ export class TomorrowEdgeMcpBridge {
       case "tomorrowedge.get_trace":
         return this.getTrace(args as WorkflowRef);
       case "tomorrowedge.export_session":
-        return this.exportSession(args as WorkflowRef & { format?: "json" | "markdown" });
+        return this.exportSession(args as WorkflowRef & { format?: "json" | "markdown"; includeArtifacts?: boolean });
       default:
         throw new Error(`Unknown TomorrowEdge MCP tool: ${name}`);
     }
@@ -363,7 +366,11 @@ export class TomorrowEdgeMcpBridge {
   }
 }
 
-function renderMcpSessionMarkdown(session: SessionRecord): string {
+async function loadSessionArtifactMap(cwd: string, sessionId: string): Promise<Record<string, string>> {
+  return Object.fromEntries((await loadSessionArtifacts(cwd, sessionId)).map((artifact) => [artifact.ref, redactText(artifact.content)] as const));
+}
+
+function renderMcpSessionMarkdown(session: SessionRecord, artifacts: Record<string, string> = {}): string {
   const state = session.state;
   return `# TomorrowEdge MCP Session ${session.sessionId}
 
@@ -389,6 +396,10 @@ ${state.routing.assignments.map((item) => `- ${item.role}: ${item.provider}/${it
 
 ${renderEventMarkdown(state.events)}
 
+## Artifact Details
+
+${renderMcpArtifactDetails(artifacts)}
+
 ## Patches
 
 ${renderMcpPatches(state)}
@@ -405,6 +416,17 @@ ${state.finalSummary?.evidence.map((item) => `- ${item}`).join("\n") ?? "No fina
 
 ${state.finalSummary ? `${state.finalSummary.result}: ${state.finalSummary.suggestedCommitMessage}` : "No final summary."}
 `;
+}
+
+function renderMcpArtifactDetails(artifacts: Record<string, string>): string {
+  const sections = Object.entries(artifacts).map(([ref, content]) => `### ${ref}\n\n${codeFence(fenceLanguage(ref), trimForMarkdown(content.trimEnd()))}`);
+  return sections.join("\n\n") || "No artifact files available.";
+}
+
+function fenceLanguage(ref: string): string {
+  if (ref.includes("/diffs/") || ref.endsWith(".diff")) return "diff";
+  if (ref.endsWith(".json")) return "json";
+  return "text";
 }
 
 function renderMcpPatches(state: AgentGraphState): string {
@@ -523,7 +545,7 @@ export const mcpTools: McpToolDefinition[] = [
   tool("tomorrowedge.submit_review", "Submit an external review report.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, review: reviewReportInputJsonSchema }, ["sessionId", "externalAgentId", "review"]),
   tool("tomorrowedge.submit_judgment", "Submit an external judge decision.", { sessionId: { type: "string" }, externalAgentId: { type: "string" }, role: agentRoleJsonSchema, judgment: judgmentInputJsonSchema }, ["sessionId", "externalAgentId", "judgment"]),
   tool("tomorrowedge.get_trace", "Return the workflow event ledger.", { sessionId: { type: "string" } }),
-  tool("tomorrowedge.export_session", "Export a workflow session as JSON or markdown.", { sessionId: { type: "string" }, format: { type: "string", enum: ["json", "markdown"] } })
+  tool("tomorrowedge.export_session", "Export a workflow session as JSON or markdown.", { sessionId: { type: "string" }, format: { type: "string", enum: ["json", "markdown"] }, includeArtifacts: { type: "boolean" } })
 ];
 
 type CostUsageInput = {

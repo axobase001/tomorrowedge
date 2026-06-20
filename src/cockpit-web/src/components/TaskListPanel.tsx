@@ -121,7 +121,10 @@ function sessionLabel(session: CockpitSessionSummary): string {
   const title = sessionTitle(session);
   const clipped = clipSessionTitle(title);
   const result = session.result ? ` · ${session.result}` : "";
-  return `${clipped}${result}`;
+  const displayResult = session.result ? ` - ${session.result}` : result;
+  const run = session.runLabel ? ` - ${session.runLabel}` : "";
+  const discriminator = session.discriminator ?? session.sessionId.slice(-8);
+  return `${clipped}${displayResult}${run} #${discriminator}`;
 }
 
 function sessionTitle(session: CockpitSessionSummary): string {

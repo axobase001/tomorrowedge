@@ -147,7 +147,9 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         eventCount: session.eventCount ?? session.state.events?.length ?? 0,
         artifactCount: session.artifactCount ?? session.state.eventArtifacts?.length ?? 0,
         goal: session.state.goal,
-        result: session.state.finalSummary?.result
+        result: session.state.finalSummary?.result,
+        discriminator: session.sessionId.slice(-8),
+        runLabel: benchmarkSessionLabel(session.state.goal)
       })));
     }
     if (request.method === "GET" && url.pathname === "/api/setup/status") {
@@ -214,7 +216,9 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
         eventCount: session.eventCount ?? session.state.events?.length ?? 0,
         artifactCount: session.artifactCount ?? session.state.eventArtifacts?.length ?? 0,
         goal: session.state.goal,
-        result: session.state.finalSummary?.result
+        result: session.state.finalSummary?.result,
+        discriminator: session.sessionId.slice(-8),
+        runLabel: benchmarkSessionLabel(session.state.goal)
       })));
     }
     const viewModelMatch = /^\/api\/sessions\/([^/]+)\/view-model$/.exec(url.pathname);
@@ -863,6 +867,15 @@ async function loadRequiredSession(cwd: string, sessionId: string) {
 async function resolveMutableSessionId(cwd: string, sessionId: string): Promise<string> {
   const session = await loadRequiredSession(cwd, sessionId);
   return session.sessionId;
+}
+
+function benchmarkSessionLabel(goal?: string): string | undefined {
+  const text = goal?.trim();
+  if (!text) return undefined;
+  const benchmark = /\b(?:terminal-bench|benchmark|tbench)\b/i.exec(text);
+  if (!benchmark) return undefined;
+  const modelGroup = /\b(?:group|model(?:\s+group)?|route|cohort)\s*[:=]\s*([A-Za-z0-9_.-]+)/i.exec(text);
+  return modelGroup?.[1] ? `bench:${modelGroup[1]}` : "benchmark";
 }
 
 async function sendCockpitShell(response: ServerResponse, nonce: string, webRoot?: string | false): Promise<void> {

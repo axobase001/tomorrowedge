@@ -142,6 +142,24 @@ npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml
 
 Read the full design in [Canopus Runtime](docs/canopus_runtime.md).
 
+## Terminal-Bench 2.1 Adapter
+
+TomorrowEdge includes an experimental Harbor adapter for Terminal-Bench 2.1. It uses a structured terminal action runtime instead of free-form shell prose: models return JSON actions, generated files are uploaded explicitly, commands pass through a policy gate, and hard-gate verifier failures are classified before the next step.
+
+```bash
+tedge tbench runtime
+tedge tbench smoke --dry-run --quiet
+tedge tbench smoke --quiet \
+  --primary-model deepseek/deepseek-chat-v3.1 \
+  --advisor-model moonshotai/kimi-k2.7-code \
+  --strong-model z-ai/glm-5.1 \
+  --max-steps 20 \
+  --strong-max-tokens 4000 \
+  --require-strong
+```
+
+This is a smoke/evaluation adapter, not a score claim. Report Terminal-Bench scores only from completed Harbor job artifacts. See [Terminal-Bench Runtime](docs/TERMINAL_BENCH_RUNTIME.md).
+
 ## Sirius 1.5
 
 **Sirius** is the TomorrowEdge 1.5 release line. Its main runtime is the **Agent Council Governance Runtime**. Canopus keeps Sirius, but adds a convergence layer around unreliable agent execution.
@@ -434,7 +452,7 @@ A model that sees images does not need to be the model that writes code. A model
 
 ## Current Status
 
-Current version: `1.6.3`.
+Current version: `1.6.4`.
 
 Release line: Canopus.
 

@@ -1,6 +1,6 @@
 # README Promise Map
 
-Authoritative map for TomorrowEdge 1.6.3 README product promises. Use this
+Authoritative map for TomorrowEdge 1.6.4 README product promises. Use this
 file when strengthening README language: every user-visible promise should have
 an implementation owner plus either a validation command or a tracking issue.
 
@@ -45,6 +45,7 @@ an implementation owner plus either a validation command or a tracking issue.
 | canopus-runtime | Canopus treats agents as unreliable AgentBridge workers and adds ObjectiveContract-compatible target loading, AcceptanceMatrix checks, ConvergencePolicy bounds, RunState persistence, blocking-check veto semantics, pre/post-action convergence evaluation, run-baseline diff semantics, per-iteration evidence artifacts, Objective Contract adapter, public `objective/acceptance/convergence` schema aliases, the `tedge canopus` CLI, and the `tedge control` compatibility alias. | `src/core/controlPlane`, `src/core/canopus`, `src/cli/commands/control.ts`, `src/cli/index.ts`, `examples/canopus`, `examples/control_plane`, `docs/canopus_runtime.md`, `docs/agent_control_plane.md` | `npm run test:control`, `npm run build`, `npm run dev -- canopus validate examples/canopus/simple_bugfix_runtime/objective.yaml`, `npm run dev -- canopus run examples/canopus/simple_bugfix_runtime/objective.yaml --cwd examples/canopus/simple_bugfix_runtime --adapter shell --action-command "node fix-bug.mjs"` | 1.6.3 |
 | provider-structured-output | OpenAI-compatible provider calls can request JSON Schema structured output for workflow intent, task governance, model planning, scenario profiling, objective contracts, and live patch candidates, with same-model repair retry where invalid JSON is recoverable. | `src/core/model/structuredOutput.ts`, `src/providers/openaiCompatible.ts`, `src/core/goal`, `src/core/scenarios`, `src/core/contracts`, `src/core/model/livePatchGenerator.ts` | `npx vitest run tests/unit/providers.test.ts tests/unit/workflowIntentRouting.test.ts --fileParallelism=false` | 1.6.3 |
 | council-real-provider-routing | Sirius/Canopus council routing treats mock/fixture profiles as synthetic fallback agents, prefers configured real providers for automatic Chief selection, and allows DeepSeek to own judge work by default. | `src/core/agents/defaultCapabilityProfiles.ts`, `src/core/chiefAgent/chiefAgentRouter.ts` | `npx vitest run tests/unit/agentCouncilRuntime.test.ts --fileParallelism=false` | 1.6.3 |
+| terminal-bench-runtime | `tedge tbench runtime` and `tedge tbench smoke` expose the experimental Terminal-Bench 2.1 Harbor adapter with structured JSON actions, file upload handling, command-policy gates, verifier parsing, trace events, and strong-rescue routing. | `src/core/terminalBench`, `src/cli/commands/tbench.ts`, `scripts/tbench/tomorrowedge_harbor_agent.py`, `docs/TERMINAL_BENCH_RUNTIME.md` | `npx vitest run tests/unit/terminalBenchRuntime.test.ts --fileParallelism=false`, `npm run tbench:smoke -- --dry-run` | 1.6.4 |
 
 ## Desktop Entrypoint
 

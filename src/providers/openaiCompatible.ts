@@ -45,7 +45,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     const tokenField = this.options.apiFormat === "legacy_chat" ? "max_tokens" : "max_completion_tokens";
     if (req.maxCompletionTokens) body[tokenField] = req.maxCompletionTokens;
     if (req.responseFormat && req.responseFormat.type !== "text") body.response_format = req.responseFormat;
-    if (this.options.id === "openrouter" && req.responseFormat && req.responseFormat.type !== "text") {
+    if (this.options.id === "openrouter" && req.responseFormat && req.responseFormat.type !== "text" && !openRouterModelRequiresReasoning(req.model || this.options.defaultModel)) {
       body.reasoning = { effort: "none", exclude: true };
       body.reasoning_effort = "none";
     }
@@ -171,6 +171,10 @@ function parseOpenAICompatibleResponse(raw: string): OpenAICompatibleJson {
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
+}
+
+function openRouterModelRequiresReasoning(model: string | undefined): boolean {
+  return /kimi-k2\.7|reasoning|required-reasoning/i.test(model ?? "");
 }
 
 function isRetryableError(error: unknown): boolean {

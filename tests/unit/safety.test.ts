@@ -62,6 +62,23 @@ describe("safety", () => {
     expect(JSON.stringify(record)).not.toContain("sk-");
   });
 
+  it("preserves audit-critical deliverable paths while redacting content", () => {
+    const record = redactSessionRecord({
+      state: {
+        changedFiles: ["docs/benchmarks/runs/RunA20260619Alpha1234567890Report.md"],
+        candidates: [{
+          filesChanged: ["docs/benchmarks/runs/RunB20260619Beta1234567890Report.md"],
+          unifiedDiff: "OPENROUTER_API_KEY=sk-123456789012345678901234"
+        }]
+      }
+    });
+
+    const serialized = JSON.stringify(record);
+    expect(serialized).toContain("RunA20260619Alpha1234567890Report.md");
+    expect(serialized).toContain("RunB20260619Beta1234567890Report.md");
+    expect(serialized).not.toContain("sk-123456789012345678901234");
+  });
+
   it("blocks raw cloud context in privacy mode", () => {
     const decision = canSendToCloud("normal code", "privacy");
     expect(decision.allowed).toBe(false);

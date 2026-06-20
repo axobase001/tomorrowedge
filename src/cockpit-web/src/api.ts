@@ -10,6 +10,8 @@ export type CockpitSessionSummary = {
   artifactCount: number;
   goal?: string;
   result?: string;
+  discriminator?: string;
+  runLabel?: string;
 };
 
 export type CockpitApiOptions = {

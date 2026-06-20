@@ -47,11 +47,30 @@ export function redactText(content: string): string {
   return redacted;
 }
 
-export function redactValue<T>(value: T): T {
-  if (typeof value === "string") return redactText(value) as T;
-  if (Array.isArray(value)) return value.map((item) => redactValue(item)) as T;
+export function redactValue<T>(value: T, keyHint = ""): T {
+  if (typeof value === "string") return (preserveAuditPathValue(keyHint) ? value : redactText(value)) as T;
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, keyHint)) as T;
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactValue(item)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactValue(item, key)])) as T;
   }
   return value;
+}
+
+function preserveAuditPathValue(keyHint: string): boolean {
+  const key = keyHint.toLowerCase();
+  return key === "path"
+    || key === "filepath"
+    || key === "filename"
+    || key === "file"
+    || key === "ref"
+    || key === "diffref"
+    || key === "stdoutref"
+    || key === "stderrref"
+    || key === "summaryref"
+    || key === "traceref"
+    || key === "artifactref"
+    || key === "changedfiles"
+    || key === "fileschanged"
+    || key.endsWith("path")
+    || key.endsWith("ref");
 }
