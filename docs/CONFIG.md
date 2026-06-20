@@ -83,6 +83,14 @@ providers:
     api_format: openai_chat
     auth_header: bearer
     extra_headers: {}
+  requesty:
+    enabled: true
+    api_key_env: REQUESTY_API_KEY
+    base_url: https://router.requesty.ai/v1
+    model: openai/gpt-4o-mini
+    api_format: openai_chat
+    auth_header: bearer
+    extra_headers: {}
   mimo:
     enabled: true
     api_key_env: MIMO_API_KEY
