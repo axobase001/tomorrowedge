@@ -7,6 +7,20 @@ Changelog: newest changes first, grouped by release and by change type.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-06-20
+
+1.6.5 is a Terminal-Bench adapter hardening patch focused on making strong-agent
+rescue failures scoreable instead of infrastructure-errored.
+
+### Fixed
+
+- Fixed `TBENCH_REQUIRE_STRONG=1` so a later strong-agent timeout does not abort
+  the whole Harbor trial after at least one executable strong intervention has
+  already been accepted.
+- Terminal-Bench strong rescue failures are now recorded in trace metadata and
+  the run can proceed to normal verifier/reward handling instead of becoming a
+  `RuntimeError` trial.
+
 ## [1.6.4] - 2026-06-20
 
 1.6.4 is a Canopus maintenance release focused on Cockpit approval correctness,

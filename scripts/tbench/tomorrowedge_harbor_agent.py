@@ -116,6 +116,7 @@ async def run_terminal_agent(instruction: str, environment: BaseEnvironment, env
     consecutive_hard_gate_failures = 0
     consecutive_action_failures = 0
     strong_interventions = 0
+    accepted_strong_interventions = 0
     next_override: dict[str, object] | None = None
     usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": None}
     trace_events.append({
@@ -297,8 +298,9 @@ async def run_terminal_agent(instruction: str, environment: BaseEnvironment, env
                         model_timeout_sec=model_timeout,
                     )
                     if has_action:
+                        accepted_strong_interventions += 1
                         next_override = strong_payload
-                    elif require_strong:
+                    elif require_strong and accepted_strong_interventions == 0:
                         update_context(context, partial_result(transcript, stdout_tail, stderr_tail, step, primary_model, advisor_model, usage, trace_events))
                         raise RuntimeError("Required strong intervention returned no executable action.")
                 except Exception as error:
@@ -311,7 +313,7 @@ async def run_terminal_agent(instruction: str, environment: BaseEnvironment, env
                     })
                     transcript.append(f"strong_intervention_error({strong_model}): {str(error)[:1000]}")
                     update_context(context, partial_result(transcript, stdout_tail, stderr_tail, step, primary_model, advisor_model, usage, trace_events))
-                    if require_strong:
+                    if require_strong and accepted_strong_interventions == 0:
                         raise
             continue
         consecutive_action_failures = 0
@@ -429,8 +431,9 @@ async def run_terminal_agent(instruction: str, environment: BaseEnvironment, env
                         model_timeout_sec=model_timeout,
                     )
                     if has_action:
+                        accepted_strong_interventions += 1
                         next_override = strong_payload
-                    elif require_strong:
+                    elif require_strong and accepted_strong_interventions == 0:
                         update_context(context, partial_result(transcript, stdout_tail, stderr_tail, step, primary_model, advisor_model, usage, trace_events))
                         raise RuntimeError("Required strong intervention returned no executable action.")
                 except Exception as error:
@@ -443,7 +446,7 @@ async def run_terminal_agent(instruction: str, environment: BaseEnvironment, env
                     })
                     transcript.append(f"strong_intervention_error({strong_model}): {str(error)[:1000]}")
                     update_context(context, partial_result(transcript, stdout_tail, stderr_tail, step, primary_model, advisor_model, usage, trace_events))
-                    if require_strong:
+                    if require_strong and accepted_strong_interventions == 0:
                         raise
         update_context(context, partial_result(transcript, stdout_tail, stderr_tail, step, primary_model, advisor_model, usage, trace_events))
         if "TBENCH_VERIFY=PASS" in (verification.stdout or ""):

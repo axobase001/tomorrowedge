@@ -1,6 +1,6 @@
 # Roadmap
 
-Authoritative roadmap for TomorrowEdge 1.6.4 Canopus and the post-1.6 line.
+Authoritative roadmap for TomorrowEdge 1.6.5 Canopus and the post-1.6 line.
 This document describes current product direction, not historical 0.x release
 planning.
 
