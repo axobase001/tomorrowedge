@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CockpitExternalAgentOption,
   CockpitProviderApiFormat,
@@ -73,6 +73,8 @@ export function KeyRoleManager({
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [assignments, setAssignments] = useState<CockpitRoleAssignment[]>(setupStatus?.roleAssignments ?? []);
   const keyCustomModelInputRef = useRef<HTMLInputElement | null>(null);
+  const keysTabRef = useRef<HTMLButtonElement | null>(null);
+  const rolesTabRef = useRef<HTMLButtonElement | null>(null);
   const runtimeErrors = providerRuntimeErrors({ requestTimeoutMs, maxRetries });
   const extraHeadersDraft = parseExtraHeadersDraft(extraHeadersText);
   const authRequiresKey = authHeader !== "none";
@@ -135,6 +137,27 @@ export function KeyRoleManager({
     setApiKey("");
     setCatalogMessage("");
   };
+  const selectTab = (nextTab: "keys" | "roles") => {
+    setTab(nextTab);
+    requestAnimationFrame(() => {
+      (nextTab === "keys" ? keysTabRef : rolesTabRef).current?.focus();
+    });
+  };
+  const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      selectTab(tab === "keys" ? "roles" : "keys");
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      selectTab(tab === "keys" ? "roles" : "keys");
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      selectTab("keys");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      selectTab("roles");
+    }
+  };
 
   return (
     <ModalSurface
@@ -153,12 +176,34 @@ export function KeyRoleManager({
           </div>
           <button type="button" className="te-quiet-button" onClick={onClose} data-testid="keymgr-close">{t("keymgr.close")}</button>
         </header>
-        <nav className="te-keymgr-tabs" aria-label={t("keymgr.tabsLabel")}>
-          <button type="button" className={tab === "keys" ? "active" : ""} onClick={() => setTab("keys")} data-testid="keymgr-tab-keys">{t("keymgr.tabKeys")}</button>
-          <button type="button" className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")} data-testid="keymgr-tab-roles">{t("keymgr.tabRoles")}</button>
-        </nav>
+        <div className="te-keymgr-tabs" role="tablist" aria-label={t("keymgr.tabsLabel")} onKeyDown={onTabKeyDown}>
+          <button
+            type="button"
+            id="keymgr-tab-keys"
+            role="tab"
+            aria-selected={tab === "keys" ? "true" : "false"}
+            aria-controls="keymgr-panel-keys"
+            tabIndex={tab === "keys" ? 0 : -1}
+            ref={keysTabRef}
+            className={tab === "keys" ? "active" : ""}
+            onClick={() => setTab("keys")}
+            data-testid="keymgr-tab-keys"
+          >{t("keymgr.tabKeys")}</button>
+          <button
+            type="button"
+            id="keymgr-tab-roles"
+            role="tab"
+            aria-selected={tab === "roles" ? "true" : "false"}
+            aria-controls="keymgr-panel-roles"
+            tabIndex={tab === "roles" ? 0 : -1}
+            ref={rolesTabRef}
+            className={tab === "roles" ? "active" : ""}
+            onClick={() => setTab("roles")}
+            data-testid="keymgr-tab-roles"
+          >{t("keymgr.tabRoles")}</button>
+        </div>
         {tab === "keys" ? (
-          <section className="te-keymgr-body">
+          <section id="keymgr-panel-keys" className="te-keymgr-body" role="tabpanel" aria-labelledby="keymgr-tab-keys">
             <div className="te-keymgr-provider-tools">
               <p id="keymgr-intro">{t("keymgr.keysIntro")}</p>
               <button type="button" className="te-quiet-button" onClick={startRelayProfile} data-testid="keymgr-add-relay">{t("keymgr.addRelay")}</button>
@@ -335,8 +380,8 @@ export function KeyRoleManager({
             {catalogMessage ? <p className="te-setup-message" data-testid="keymgr-models-message">{catalogMessage}</p> : null}
           </section>
         ) : (
-          <section className="te-keymgr-body">
-            <p>{t("keymgr.rolesIntro")}</p>
+          <section id="keymgr-panel-roles" className="te-keymgr-body" role="tabpanel" aria-labelledby="keymgr-tab-roles">
+            <p id="keymgr-intro">{t("keymgr.rolesIntro")}</p>
             <div className="te-role-list" data-testid="keymgr-role-list">
               {assignments.length ? assignments.map((assignment) => {
                 const roleModelOptions = roleModelOptionIds(assignment.provider, roleProviders, assignment.model, catalogModelsByProvider);

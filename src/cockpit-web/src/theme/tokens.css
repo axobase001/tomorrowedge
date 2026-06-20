@@ -6,12 +6,12 @@
   --te-border: #d7e4ea;
   --te-border-strong: #b8cbd5;
   --te-text: #17212b;
-  --te-muted: #6b7a88;
+  --te-muted: #52616f;
   --te-blue: #6fafd2;
   --te-deep-blue: #2f6f92;
-  --te-success: #2f9d68;
-  --te-warning: #b7791f;
-  --te-danger: #c94a4a;
+  --te-success: #24784f;
+  --te-warning: #8a5a12;
+  --te-danger: #b63d3d;
   --te-control-bg: #ffffff;
   --te-panel-gradient-start: #ffffff;
   --te-panel-gradient-end: #f8fbfd;
@@ -25,7 +25,7 @@
   --te-mark-red: #d81f0d;
   --te-mark-ink: #050505;
   --te-mark-cyan: #25d7e8;
-  --te-focus-ring: var(--te-blue);
+  --te-focus-ring: #1f5f7f;
   --te-chip-blue-bg: #eaf5fb;
   --te-chip-blue-border: #b9d7e8;
   --te-chip-green-bg: #f0faf4;
@@ -64,6 +64,7 @@
     --te-shadow: rgba(0, 0, 0, 0.28);
     --te-modal-shadow: rgba(0, 0, 0, 0.42);
     --te-mark-ink: #e7eef4;
+    --te-focus-ring: #9fcfe9;
     --te-chip-blue-bg: transparent;
     --te-chip-green-bg: transparent;
     --te-chip-amber-bg: transparent;
@@ -72,13 +73,20 @@
 }
 
 * { box-sizing: border-box; }
+html,
+body,
+#root {
+  min-height: 100%;
+  height: 100%;
+}
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100dvh;
   background: var(--te-bg);
   color: var(--te-text);
   font-family: var(--te-sans);
   letter-spacing: 0;
+  overflow: hidden;
 }
 button, input, select, textarea { font: inherit; }
 button {
@@ -119,11 +127,14 @@ select[aria-invalid="true"] {
 }
 
 .te-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   display: grid;
-  grid-template-rows: 50px minmax(0, 1fr) 40px 86px;
+  grid-template-rows: minmax(44px, auto) minmax(0, 1fr) minmax(36px, auto) minmax(72px, auto);
   gap: 10px;
   padding: 0 10px 10px;
+  overflow: hidden;
 }
 .te-topbar {
   display: flex;
@@ -190,12 +201,14 @@ select[aria-invalid="true"] {
 
 .te-grid {
   min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(220px, 19.5%) minmax(520px, 1fr) minmax(230px, 20.5%);
   gap: 10px;
 }
 .te-panel {
   min-width: 0;
+  min-height: 0;
   border: 1px solid var(--te-border);
   border-radius: 6px;
   background: var(--te-surface);
@@ -213,15 +226,40 @@ select[aria-invalid="true"] {
 }
 .te-panel h2, .te-panel h3 { margin: 0; }
 .te-panel h2 { font-size: 15px; }
+.te-task-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr) auto minmax(120px, 0.72fr);
+}
 .te-task-panel select {
   width: calc(100% - 24px);
   margin: 10px 12px 0;
   min-height: 30px;
 }
+.te-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 8px 12px 4px;
+}
+.te-section-heading h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--te-text);
+  font: 12px var(--te-mono);
+}
+.te-section-heading span {
+  flex: 0 0 auto;
+  color: var(--te-muted);
+  font: 10.5px var(--te-mono);
+}
 .te-session-actions {
   display: flex;
   gap: 6px;
-  margin: 7px 12px 0;
+  margin: 7px 12px 2px;
 }
 .te-session-actions button {
   min-height: 26px;
@@ -229,10 +267,18 @@ select[aria-invalid="true"] {
   font-size: 11px;
 }
 .te-session-history {
+  min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 10px 0;
+  padding: 4px 10px 8px;
+}
+.te-session-section {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-bottom: 1px solid var(--te-border-soft);
 }
 .te-session-history button {
   width: 100%;
@@ -275,13 +321,19 @@ select[aria-invalid="true"] {
   justify-self: end;
   text-align: right;
 }
+.te-current-tasks {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
 .te-task-list {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 10px;
   overflow: auto;
-  max-height: calc(100vh - 210px);
+  max-height: none;
 }
 .te-task-list article {
   border: 1px solid transparent;
@@ -324,8 +376,9 @@ select[aria-invalid="true"] {
 }
 
 .te-workflow {
+  min-height: 0;
   display: grid;
-  grid-template-rows: 44px 70px minmax(0, 1fr);
+  grid-template-rows: minmax(44px, auto) minmax(64px, auto) minmax(0, 1fr);
 }
 .te-workflow > header > div {
   display: flex;
@@ -336,22 +389,46 @@ select[aria-invalid="true"] {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
+  margin: 0;
   padding: 12px 14px;
   border-bottom: 1px solid var(--te-border);
   background: var(--te-soft);
+  list-style: none;
 }
-.te-spine span {
+.te-spine li {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: grid;
+  gap: 2px;
   text-align: center;
   color: var(--te-muted);
   font: 11px var(--te-mono);
 }
+.te-spine li > span,
+.te-spine li > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-spine li > small {
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
 .te-spine .done { color: var(--te-success); }
 .te-spine .running, .te-spine .waiting { color: var(--te-deep-blue); font-weight: 700; }
-.te-spine .failed { color: var(--te-danger); }
+.te-spine .failed { color: var(--te-danger); font-weight: 700; }
+.te-spine-empty {
+  grid-column: 1 / -1;
+}
+.te-workflow-body {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+}
+.te-workflow-body > .te-loading-state {
+  margin: 12px 14px 0;
+}
 .te-governance-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -549,6 +626,8 @@ select[aria-invalid="true"] {
 .te-approval footer { margin-top: 16px; }
 
 .te-telemetry {
+  min-height: 0;
+  overflow: auto;
   padding-bottom: 12px;
 }
 .te-metric {
@@ -797,7 +876,7 @@ select[aria-invalid="true"] {
 @keyframes te-spin { to { transform: rotate(360deg); } }
 .te-composer {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) repeat(3, minmax(112px, 150px)) minmax(0, 220px) auto;
+  grid-template-columns: 112px minmax(160px, 1fr) minmax(136px, 180px) repeat(3, minmax(108px, 150px)) minmax(0, 220px) minmax(110px, auto);
   gap: 8px;
   align-items: center;
   padding: 8px 10px;
@@ -808,6 +887,11 @@ select[aria-invalid="true"] {
   resize: none;
   padding: 8px 10px;
   line-height: 1.35;
+}
+.te-composer > button[data-testid="composer-submit"],
+.te-composer > button[data-testid="composer-cancel-run"] {
+  grid-column: 8;
+  grid-row: 1;
 }
 .te-composer-status {
   max-width: 280px;
@@ -915,6 +999,7 @@ select[aria-invalid="true"] {
 .te-chip {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   min-height: 22px;
   padding: 2px 7px;
   border: 1px solid var(--te-border);
@@ -933,6 +1018,13 @@ select[aria-invalid="true"] {
 .te-chip-green { border-color: var(--te-chip-green-border); color: var(--te-success); background: var(--te-chip-green-bg); }
 .te-chip-amber { border-color: var(--te-chip-amber-border); color: var(--te-warning); background: var(--te-chip-amber-bg); }
 .te-chip-red { border-color: var(--te-chip-red-border); color: var(--te-danger); background: var(--te-chip-red-bg); }
+.te-chip-signal {
+  flex: 0 0 auto;
+  padding-right: 4px;
+  border-right: 1px solid currentColor;
+  font-weight: 700;
+  font-size: 9px;
+}
 
 .te-drawer-backdrop {
   position: fixed;
@@ -1135,7 +1227,8 @@ select[aria-invalid="true"] {
   background: transparent;
   color: var(--te-muted);
 }
-.te-keymgr-tabs button.active {
+.te-keymgr-tabs button.active,
+.te-keymgr-tabs [role="tab"][aria-selected="true"] {
   color: var(--te-deep-blue);
   box-shadow: inset 0 -2px 0 var(--te-deep-blue);
 }
@@ -1304,26 +1397,74 @@ select[aria-invalid="true"] {
 }
 
 @media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    overflow: auto;
+  }
   .te-shell {
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
     grid-template-rows: auto auto auto auto;
+    overflow: visible;
   }
   .te-topbar, .te-topbar-status {
     flex-wrap: wrap;
   }
-  .te-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .te-topbar {
+    grid-row: 1;
   }
-  .te-task-list {
-    max-height: 220px;
+  .te-composer {
+    grid-row: 2;
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    border: 1px solid var(--te-border);
+    border-radius: 6px;
+    background: var(--te-surface);
+  }
+  .te-grid {
+    grid-row: 3;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+  .te-trace {
+    grid-row: 4;
   }
   .te-workflow {
-    grid-template-rows: auto auto auto;
+    order: 1;
+  }
+  .te-task-panel {
+    order: 2;
+    max-height: min(440px, 60dvh);
+    grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr) auto minmax(96px, 0.65fr);
+  }
+  .te-telemetry {
+    order: 3;
+    max-height: min(420px, 56dvh);
+  }
+  .te-task-list {
+    max-height: none;
+  }
+  .te-workflow {
+    grid-template-rows: auto auto minmax(0, auto);
   }
   .te-spine {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .te-composer {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .te-composer > button[data-testid="composer-submit"],
+  .te-composer > button[data-testid="composer-cancel-run"] {
+    grid-column: 1;
+    grid-row: auto;
   }
   .te-full-preflight,
   .te-run-settings {

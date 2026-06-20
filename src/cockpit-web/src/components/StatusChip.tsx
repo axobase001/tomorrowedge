@@ -10,5 +10,18 @@ export function StatusChip({ status, t }: { status: string; t?: Translator }) {
       : lowered.includes("done") || lowered.includes("pass") || lowered.includes("low")
         ? "green"
         : "blue";
-  return <span className={`te-chip te-chip-${tone}`}>{t ? translateKnownValue(t, status) : status}</span>;
+  const label = t ? translateKnownValue(t, status) : status;
+  return (
+    <span className={`te-chip te-chip-${tone} te-status-chip`}>
+      <span className="te-chip-signal" aria-hidden="true">{signalForTone(tone)}</span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function signalForTone(tone: "blue" | "green" | "amber" | "red"): string {
+  if (tone === "green") return "OK";
+  if (tone === "amber") return "WAIT";
+  if (tone === "red") return "ERR";
+  return "INFO";
 }
