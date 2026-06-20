@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import type { CockpitTaskSummary } from "../../../cockpit/contracts.js";
 import type { CockpitSessionSummary } from "../api.js";
 import type { Translator } from "../i18n.js";
@@ -25,6 +26,17 @@ export function TaskListPanel({
 }) {
   const selectedInList = sessions.some((session) => session.sessionId === selectedSession);
   const selected = sessions.find((session) => session.sessionId === selectedSession);
+  const selectRelativeSession = (event: KeyboardEvent<HTMLButtonElement>, index: number, direction: -1 | 1) => {
+    if (!sessions.length) return;
+    event.preventDefault();
+    const nextIndex = Math.min(Math.max(index + direction, 0), sessions.length - 1);
+    const nextSession = sessions[nextIndex];
+    onSelectSession(nextSession.sessionId);
+    requestAnimationFrame(() => {
+      const nextButton = document.querySelectorAll<HTMLButtonElement>("[data-testid='session-history-item']")[nextIndex];
+      nextButton?.focus();
+    });
+  };
 
   return (
     <aside className="te-panel te-task-panel" data-testid="task-panel">
@@ -37,29 +49,40 @@ export function TaskListPanel({
         ))}
       </select>
       {sessions.length ? (
-        <section className="te-session-history" aria-label={t("tasks.sessionHistory")} data-testid="session-history">
-          {sessions.map((session) => {
-            const selectedSessionItem = session.sessionId === selectedSession;
-            return (
-              <button
-                type="button"
-                key={session.sessionId}
-                className={selectedSessionItem ? "selected" : ""}
-                aria-current={selectedSessionItem ? "true" : undefined}
-                onClick={() => onSelectSession(session.sessionId)}
-                data-testid="session-history-item"
-              >
-                <span>
-                  <strong title={sessionTitle(session)}>{clipSessionTitle(sessionTitle(session))}</strong>
-                  <small>{formatSessionTime(session.createdAt)}</small>
-                </span>
-                <span className="te-session-meta">
-                  <span className="te-chip te-chip-blue">{session.result ?? t("status.pending")}</span>
-                  <small>{t("tasks.sessionCounts", { events: session.eventCount ?? 0, artifacts: session.artifactCount ?? 0 })}</small>
-                </span>
-              </button>
-            );
-          })}
+        <section className="te-session-section" aria-labelledby="te-recent-runs-title">
+          <div className="te-section-heading">
+            <h3 id="te-recent-runs-title">{t("tasks.recentRuns")}</h3>
+            <span>{t("tasks.recentRunsCount", { count: sessions.length })}</span>
+          </div>
+          <div className="te-session-history" aria-label={t("tasks.recentRuns")} data-testid="session-history">
+            {sessions.map((session, index) => {
+              const selectedSessionItem = session.sessionId === selectedSession;
+              return (
+                <button
+                  type="button"
+                  key={session.sessionId}
+                  className={selectedSessionItem ? "selected" : ""}
+                  aria-current={selectedSessionItem ? "true" : undefined}
+                  tabIndex={selectedSessionItem ? 0 : -1}
+                  onClick={() => onSelectSession(session.sessionId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") selectRelativeSession(event, index, 1);
+                    if (event.key === "ArrowUp") selectRelativeSession(event, index, -1);
+                  }}
+                  data-testid="session-history-item"
+                >
+                  <span>
+                    <strong title={sessionTitle(session)}>{clipSessionTitle(sessionTitle(session))}</strong>
+                    <small>{formatSessionTime(session.createdAt)}</small>
+                  </span>
+                  <span className="te-session-meta">
+                    <span className="te-chip te-chip-blue">{session.result ?? t("status.pending")}</span>
+                    <small>{t("tasks.sessionCounts", { events: session.eventCount ?? 0, artifacts: session.artifactCount ?? 0 })}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
       ) : null}
       {selected ? (
@@ -73,17 +96,23 @@ export function TaskListPanel({
           }}>{t("tasks.delete")}</button>
         </div>
       ) : null}
-      <div className="te-task-list">
-        {tasks.length ? tasks.map((task) => (
-          <article key={task.id} className={task.selected ? "selected" : ""} data-testid="task-card">
-            <div><strong title={task.title}>{task.title}</strong><StatusChip status={task.status} t={t} /></div>
-            <p>{task.reminder}</p>
-            <small>{task.updatedAt}</small>
-          </article>
-        )) : (
-          <EmptyState title={t("state.noTasks")} detail={t("state.noTasksDetail")} testId="task-empty-state" />
-        )}
-      </div>
+      <section className="te-current-tasks" aria-labelledby="te-current-tasks-title">
+        <div className="te-section-heading">
+          <h3 id="te-current-tasks-title">{t("tasks.currentTasks")}</h3>
+          <span>{t("tasks.currentTasksCount", { count: tasks.length })}</span>
+        </div>
+        <div className="te-task-list">
+          {tasks.length ? tasks.map((task) => (
+            <article key={task.id} className={task.selected ? "selected" : ""} data-testid="task-card">
+              <div><strong title={task.title}>{task.title}</strong><StatusChip status={task.status} t={t} /></div>
+              <p>{task.reminder}</p>
+              <small>{task.updatedAt}</small>
+            </article>
+          )) : (
+            <EmptyState title={t("state.noTasks")} detail={t("state.noTasksDetail")} testId="task-empty-state" />
+          )}
+        </div>
+      </section>
     </aside>
   );
 }

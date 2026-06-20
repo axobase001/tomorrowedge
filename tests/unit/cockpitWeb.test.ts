@@ -45,9 +45,31 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("Waiting for patch approval");
     expect(html).toContain("data-testid=\"approval-approve\"");
+    expect(html).toContain("Approve patch");
     expect(html).toContain("data-testid=\"approval-reject\"");
+    expect(html).toContain("Reject patch");
     expect(html).toContain("data-testid=\"approval-open-drawer\"");
     expect(html).toContain("te-drawer open");
+  });
+
+  it("renders shell approval actions with explicit command targets", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      currentApproval: {
+        id: "shell:npm_test",
+        kind: "shell",
+        title: "Waiting for shell command approval",
+        status: "waiting",
+        command: "npm test",
+        filesChanged: [],
+        riskLevel: "medium",
+        testStatus: "not_run",
+        summary: "Run verification before applying the patch."
+      }
+    });
+
+    expect(html).toContain("Approve shell command");
+    expect(html).toContain("Reject shell command");
   });
 
   it("renders explicit empty states for blank cockpit sections", () => {
@@ -598,6 +620,13 @@ describe("cockpit web React surface", () => {
 
     expect(html).toContain("data-testid=\"keymgr-tab-roles\"");
     expect(html).toContain("Role Assign");
+    expect(html).toContain("role=\"tablist\"");
+    expect(html).toContain("role=\"tab\"");
+    expect(html).toContain("aria-selected=\"true\"");
+    expect(html).toContain("aria-controls=\"keymgr-panel-keys\"");
+    expect(html).toContain("role=\"tabpanel\"");
+    expect(html).toContain("aria-labelledby=\"keymgr-tab-keys\"");
+    expect(html).toContain("tabindex=\"-1\"");
   });
 
   it("offers configured external agents as GUI role providers", () => {
@@ -805,7 +834,13 @@ describe("cockpit web React surface", () => {
     );
 
     expect(html).toContain("data-testid=\"session-history\"");
+    expect(html).toContain("Recent runs");
+    expect(html).toContain("Current tasks");
+    expect(html).toContain("2 saved");
+    expect(html).toContain("0 current");
     expect((html.match(/data-testid="session-history-item"/g) ?? []).length).toBe(2);
+    expect((html.match(/tabindex="-1"/g) ?? []).length).toBe(1);
+    expect(html).toContain("tabindex=\"0\"");
     expect(html).toContain("first small prompt");
     expect(html).toContain("second real request");
     expect(html).toContain("completed");
@@ -813,6 +848,14 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("2026-06-07 00:00");
     expect(html).toContain("2 events / 1 artifacts");
     expect(html).toContain("aria-current=\"true\"");
+  });
+
+  it("renders status chips with visible non-color signals", () => {
+    const html = renderApp(sampleViewModel());
+
+    expect(html).toContain("te-status-chip");
+    expect(html).toContain("te-chip-signal");
+    expect(html).toContain(">WAIT</span>");
   });
 
   it("renders approval history in the detail drawer", () => {

@@ -126,6 +126,11 @@ export function ComposerPanel({
           </label>
         </section>
       ) : null}
+      {busy ? (
+        <button type="button" className="te-danger-button" onClick={onCancelRun} data-testid="composer-cancel-run">{t("composer.cancelRun")}</button>
+      ) : (
+        <button type="submit" disabled={!canSubmit} data-testid="composer-submit">{submitLabel(accessMode, t)}</button>
+      )}
       <details className="te-run-settings" data-testid="composer-run-settings">
         <summary>{t("composer.runSettings")}</summary>
         <label>
@@ -157,11 +162,6 @@ export function ComposerPanel({
         </label>
       </details>
       {statusMessage ? <span className="te-composer-status" data-testid="composer-status">{statusMessage}</span> : null}
-      {busy ? (
-        <button type="button" className="te-danger-button" onClick={onCancelRun} data-testid="composer-cancel-run">{t("composer.cancelRun")}</button>
-      ) : (
-        <button type="submit" disabled={!canSubmit} data-testid="composer-submit">{submitLabel(accessMode, t)}</button>
-      )}
     </form>
   );
 }

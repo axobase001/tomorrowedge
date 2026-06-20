@@ -26,12 +26,13 @@ client keeps inline tokens in `src/localCockpit/html.ts`, mapped as follows:
 | Border | `--te-border` | `--border` | `#d7e4ea` |
 | Strong border | `--te-border-strong` | `--border-strong` | `#b8cbd5` |
 | Primary text | `--te-text` | `--text` | `#17212b` |
-| Muted text | `--te-muted` | `--muted` | `#6b7a88` |
+| Muted text | `--te-muted` | `--muted` | `#52616f` |
 | Primary blue | `--te-blue` | `--blue` | `#6fafd2` |
 | Deep blue | `--te-deep-blue` | `--deep-blue` | `#2f6f92` |
-| Success | `--te-success` | `--success` | `#2f9d68` |
-| Warning | `--te-warning` | `--warning` | `#b7791f` |
-| Danger | `--te-danger` | `--danger` | `#c94a4a` |
+| Success | `--te-success` | `--success` | `#24784f` |
+| Warning | `--te-warning` | `--warning` | `#8a5a12` |
+| Danger | `--te-danger` | `--danger` | `#b63d3d` |
+| Focus ring | `--te-focus-ring` | n/a | `#1f5f7f` |
 
 Both surfaces must keep dark-mode tokens, `focus-visible` rings, and
 `prefers-reduced-motion` handling.
@@ -40,10 +41,11 @@ Both surfaces must keep dark-mode tokens, `focus-visible` rings, and
 
 - Top bar: brand, workspace, mode/session chips, language or fallback status,
   key management, run action, stop action while running, refresh.
-- Task queue: saved sessions, current task, rename/delete controls in React,
-  empty state.
+- Task queue: saved sessions under Recent runs, active work under Current tasks,
+  bounded internal scrolling, rename/delete controls in React, empty state.
 - Workflow spine: Plan, Route, Edit, Review, Test, Judge, Approve with pending,
   running, waiting, done, and failed states.
+- Status chips: visible text signal plus color. Do not rely on hue alone.
 - Approval card: summary-first risk/test/file metadata, approve/reject/review
   controls, drawer path for details.
 - Telemetry: cost, budget, tokens, route summary, strong-call count, receipt
