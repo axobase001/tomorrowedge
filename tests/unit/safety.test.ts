@@ -79,6 +79,23 @@ describe("safety", () => {
     expect(serialized).not.toContain("sk-123456789012345678901234");
   });
 
+  it("preserves run context workspaces needed for approval continuation", () => {
+    const record = redactSessionRecord({
+      state: {
+        runContext: {
+          executionCwd: "/tmp/tedge-fixture-demo-RunA20260619Alpha1234567890",
+          fixtureWorkspace: "/tmp/tedge-fixture-demo-RunB20260619Beta1234567890"
+        },
+        eventArtifacts: [{ content: "OPENAI_API_KEY=sk-123456789012345678901234" }]
+      }
+    });
+
+    const serialized = JSON.stringify(record);
+    expect(serialized).toContain("tedge-fixture-demo-RunA20260619Alpha1234567890");
+    expect(serialized).toContain("tedge-fixture-demo-RunB20260619Beta1234567890");
+    expect(serialized).not.toContain("sk-123456789012345678901234");
+  });
+
   it("blocks raw cloud context in privacy mode", () => {
     const decision = canSendToCloud("normal code", "privacy");
     expect(decision.allowed).toBe(false);
