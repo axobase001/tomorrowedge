@@ -1,0 +1,108 @@
+/*
+ * Cockpit semantic token contract (PROPOSAL).
+ *
+ * This file is intentionally NOT imported from any component.
+ * It ships alongside docs/design/COCKPIT_VISUAL_LANGUAGE.md as the
+ * machine-readable counterpart of the design language proposal for issue
+ * #531. A follow-up PR will wire it into the runtime once the contract has
+ * been reviewed.
+ *
+ * Layering intent:
+ *   tokens.css            -> base palette + component CSS (existing)
+ *   tokens.semantic.css   -> semantic mapping built on top of base (this file)
+ *   (future) tokens.dark.css
+ *   (future) tokens.density.css
+ *
+ * All values map to existing base tokens to keep the proposal additive.
+ */
+
+@layer te-semantic {
+  :root {
+    /* --- Surfaces -------------------------------------------------------- */
+    --te-color-surface-page: var(--te-bg);
+    --te-color-surface-1: var(--te-surface);
+    --te-color-surface-2: var(--te-alt);
+    --te-color-surface-3: var(--te-soft);
+    --te-color-surface-floating: var(--te-surface);
+    --te-color-surface-modal: var(--te-surface);
+    --te-color-surface-danger: color-mix(in srgb, var(--te-danger) 6%, var(--te-surface));
+
+    /* --- Text ------------------------------------------------------------ */
+    --te-color-text-primary: var(--te-text);
+    --te-color-text-secondary: var(--te-muted);
+    --te-color-text-inverse: #ffffff;
+    --te-color-text-accent: var(--te-deep-blue);
+
+    /* --- Borders --------------------------------------------------------- */
+    --te-color-border-subtle: var(--te-border-soft);
+    --te-color-border-default: var(--te-border);
+    --te-color-border-strong: var(--te-border-strong);
+    --te-color-border-focus: var(--te-focus-ring);
+    --te-color-border-danger: var(--te-danger);
+
+    /* --- States ---------------------------------------------------------- */
+    --te-color-state-info: var(--te-deep-blue);
+    --te-color-state-success: var(--te-success);
+    --te-color-state-warning: var(--te-warning);
+    --te-color-state-danger: var(--te-danger);
+    --te-color-state-neutral: var(--te-muted);
+
+    /* --- Council / role colours ----------------------------------------- */
+    --te-color-role-chief: var(--te-deep-blue);
+    --te-color-role-member: var(--te-blue);
+    --te-color-role-reviewer: var(--te-warning);
+    --te-color-role-judge: var(--te-danger);
+    --te-color-role-worker: var(--te-muted);
+
+    /* --- Elevation ------------------------------------------------------- */
+    --te-elevation-0: 0 0 0 1px var(--te-color-border-subtle);
+    --te-elevation-1:
+      0 1px 0 0 var(--te-color-border-subtle),
+      0 1px 2px var(--te-shadow);
+    --te-elevation-2:
+      0 6px 16px var(--te-shadow),
+      0 0 0 1px var(--te-color-border-subtle);
+    --te-elevation-3:
+      0 14px 32px var(--te-modal-shadow),
+      0 0 0 1px var(--te-color-border-default);
+    --te-elevation-4:
+      0 24px 70px var(--te-modal-shadow),
+      0 0 0 1px var(--te-color-border-default);
+    --te-elevation-danger:
+      0 0 0 1px var(--te-color-border-danger),
+      0 12px 28px color-mix(in srgb, var(--te-danger) 24%, transparent);
+
+    /* --- Radius ---------------------------------------------------------- */
+    --te-radius-xs: 4px;
+    --te-radius-sm: 5px;
+    --te-radius-md: 7px;
+    --te-radius-lg: 12px;
+    --te-radius-pill: 999px;
+
+    /* --- Spacing (4px grid) --------------------------------------------- */
+    --te-space-1: 4px;
+    --te-space-2: 8px;
+    --te-space-3: 12px;
+    --te-space-4: 16px;
+    --te-space-5: 20px;
+    --te-space-6: 24px;
+    --te-space-7: 32px;
+    --te-space-8: 40px;
+
+    /* --- Typography ------------------------------------------------------ */
+    --te-font-display: 600 22px/1.25 var(--te-sans);
+    --te-font-title: 600 15px/1.35 var(--te-sans);
+    --te-font-body: 400 13px/1.55 var(--te-sans);
+    --te-font-caption: 500 11px/1.4 var(--te-mono);
+    --te-font-mono: 400 12px/1.5 var(--te-mono);
+
+    /* --- Motion ---------------------------------------------------------- */
+    --te-motion-fast: 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    --te-motion-standard: 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    --te-motion-emphasis: 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+
+    /* --- Focus ring ------------------------------------------------------ */
+    --te-ring-default: 0 0 0 3px color-mix(in srgb, var(--te-focus-ring) 24%, transparent);
+    --te-ring-danger: 0 0 0 3px color-mix(in srgb, var(--te-danger) 28%, transparent);
+  }
+}
