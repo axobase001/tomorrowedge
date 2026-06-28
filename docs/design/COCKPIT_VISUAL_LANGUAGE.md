@@ -56,16 +56,21 @@ introduces a clear layering, while keeping the existing file as the
 ```
 theme/
   tokens.css                  # existing — base palette + component CSS (unchanged)
+  tokens.polish.css           # NEW (polish pass 1) — additive @layer te-polish refinement
   tokens.semantic.css         # NEW — semantic mapping built on top of base
   (future) tokens.dark.css    # dark-mode overrides recalibrated for contrast
   (future) tokens.density.css # density variants (comfortable / compact)
   (future) primitives/        # framework-free visual primitives
 ```
 
-Only `tokens.semantic.css` is introduced in this PR. It is **not yet
-imported**, because importing it would change runtime CSS and risk breaking
-the Cockpit Playwright smoke. It is shipped as a reviewable contract first;
-a follow-up PR will wire it in once it has been reviewed.
+`tokens.polish.css` is wired into `App.tsx` and refines hover / focus / shadow
+/ scrollbar / ligature appearance without changing any element's box, layout,
+or DOM contract. See the file header for the full constraint list.
+
+`tokens.semantic.css` is **not yet imported**, because importing it would
+change runtime CSS and risk breaking the Cockpit Playwright smoke. It is
+shipped as a reviewable contract first; a follow-up PR will wire it in once
+it has been reviewed.
 
 ### 3.1 Semantic surfaces
 

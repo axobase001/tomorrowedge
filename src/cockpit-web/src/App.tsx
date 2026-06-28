@@ -12,6 +12,7 @@ import { BottomTraceSheet } from "./components/BottomTraceSheet.js";
 import { DetailDrawer } from "./components/DetailDrawer.js";
 import type { GuiLanguage, Translator } from "./i18n.js";
 import "./theme/tokens.css";
+import "./theme/tokens.polish.css";
 
 export type AppProps = {
   viewModel: CockpitViewModel;
