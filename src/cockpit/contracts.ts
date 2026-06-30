@@ -261,6 +261,16 @@ export type CockpitTraceItem = {
   summary: string;
 };
 
+export type CockpitConversationTurn = {
+  id: string;
+  timestamp: string;
+  speaker: "user" | "assistant" | "system";
+  target: string;
+  summary: string;
+  continuation: boolean;
+  artifactRef?: string;
+};
+
 export type CockpitMemoryInfluenceCard = {
   id: string;
   stage: "premortem" | "coder_constraints" | "review_guard" | "repair_context";
@@ -385,6 +395,7 @@ export type CockpitViewModel = {
   taskOwnership?: CockpitTaskOwnershipSummary;
   policyMutations?: CockpitPolicyMutationSummary;
   finalReview?: CockpitFinalReviewSummary;
+  conversation: CockpitConversationTurn[];
   currentApproval?: CockpitApproval;
   main: {
     title: string;
@@ -423,6 +434,19 @@ export type CockpitRunRequest = {
   testCommand?: string;
   fixtureFailingPatch?: boolean;
   to?: string;
+};
+
+export type CockpitSessionMessageRequest = {
+  message: string;
+  target?: string;
+};
+
+export type CockpitSessionMessageResponse = {
+  sessionId: string;
+  status: "recorded";
+  turnId: string;
+  contextArtifactRef: string;
+  viewModel: CockpitViewModel;
 };
 
 export type CockpitApprovalIntent = {

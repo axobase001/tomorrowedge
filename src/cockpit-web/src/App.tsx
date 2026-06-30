@@ -20,6 +20,7 @@ export type AppProps = {
   goal: string;
   accessMode: AccessMode;
   runMode: CockpitRunMode;
+  submitMode: "new_task" | "continue_session";
   runPreview?: string;
   conversationTarget: string;
   testCommand: string;
@@ -40,6 +41,7 @@ export type AppProps = {
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onRunModeChange: (mode: CockpitRunMode) => void;
+  onSubmitModeChange: (mode: "new_task" | "continue_session") => void;
   onTestCommandChange: (command: string) => void;
   onRepairOnFailChange: (enabled: boolean) => void;
   onFixtureFailingPatchChange: (enabled: boolean) => void;
@@ -74,6 +76,7 @@ export function App({
   goal,
   accessMode,
   runMode,
+  submitMode,
   runPreview,
   conversationTarget,
   testCommand,
@@ -94,6 +97,7 @@ export function App({
   onGoalChange,
   onAccessModeChange,
   onRunModeChange,
+  onSubmitModeChange,
   onTestCommandChange,
   onRepairOnFailChange,
   onFixtureFailingPatchChange,
@@ -120,7 +124,10 @@ export function App({
   onOpenDrawer,
   onCloseDrawer
 }: AppProps) {
-  const canRun = goal.trim().length > 0 && !busy && (accessMode !== "full" || fullAutonomyConfirmed);
+  const canContinueSession = Boolean(viewModel.sessionId && selectedSession !== "latest");
+  const canRun = goal.trim().length > 0 && !busy && (submitMode === "continue_session"
+    ? canContinueSession
+    : accessMode !== "full" || fullAutonomyConfirmed);
   return (
     <main className="te-shell" data-testid="cockpit-shell">
       <TopBar viewModel={viewModel} accessMode={accessMode} busy={busy} canRun={canRun} language={language} t={t} onLanguageChange={onLanguageChange} onOpenKeys={onOpenKeyManager} onRun={onRun} onCancelRun={onCancelRun} onRefresh={onRefresh} />
@@ -134,6 +141,8 @@ export function App({
         goal={goal}
         accessMode={accessMode}
         runMode={runMode}
+        submitMode={submitMode}
+        canContinueSession={canContinueSession}
         runPreview={runPreview}
         target={conversationTarget}
         testCommand={testCommand}
@@ -146,6 +155,7 @@ export function App({
         onGoalChange={onGoalChange}
         onAccessModeChange={onAccessModeChange}
         onRunModeChange={onRunModeChange}
+        onSubmitModeChange={onSubmitModeChange}
         onTestCommandChange={onTestCommandChange}
         onRepairOnFailChange={onRepairOnFailChange}
         onFixtureFailingPatchChange={onFixtureFailingPatchChange}

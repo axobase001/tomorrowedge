@@ -48,6 +48,7 @@ trace diagnostics.
 - `GET /api/sessions/:id/view-model`
 - `GET /api/sessions/:id/events`
 - `GET /api/sessions/:id/artifacts/:ref`
+- `POST /api/sessions/:id/messages`
 - `GET /api/runs/:id/events/live`
 - `POST /api/runs`
 - `POST /api/approvals`
@@ -75,6 +76,14 @@ run. The stream emits a `ready` event first, then `event` messages for live
 ledger updates and `snapshot` messages with the current state plus ViewModel.
 When a snapshot is marked done, clients should close the stream and refresh the
 persisted session ViewModel.
+
+`POST /api/sessions/:id/messages` records a follow-up message in an existing
+session and returns the updated ViewModel. This is the first session-continuation
+contract: it appends a redacted user turn, a bounded context projection artifact,
+and a system acknowledgement to the same event ledger. It does not yet dispatch a
+provider-backed follow-up run or perform model-specific context-window packing;
+clients should keep offering `POST /api/runs` for new workflows and treat message
+append as non-mutating continuation context.
 
 `POST /api/approvals` executes browser approval actions through the Node
 cockpit runtime. Supported actions are:

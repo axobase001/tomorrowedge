@@ -229,6 +229,9 @@ export type ConversationMessageEvent = BaseEvent & {
   targetKind: "core" | "role" | "debate" | "external_agent";
   messageRef: string;
   summary: string;
+  speaker?: "user" | "assistant" | "system";
+  turnId?: string;
+  continuation?: boolean;
 };
 
 export type WorkflowIntentEvent = BaseEvent & {

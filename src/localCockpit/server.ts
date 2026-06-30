@@ -4,6 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OfflineGraphOptions } from "../core/agentGraph/executor.js";
+import { appendSessionContinuation } from "../core/conversation/sessionContinuation.js";
 import { deleteSession, loadLatestSession, loadSession, listSessions, renameSessionGoal, saveSession } from "../core/memory/sessionMemory.js";
 import { NativeBackend } from "../core/orchestration/nativeBackend.js";
 import { createOrchestrationBackend } from "../core/orchestration/registry.js";
@@ -221,6 +222,31 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "GET" && viewModelMatch) {
       const session = await loadRequiredSession(cwd, decodeURIComponent(viewModelMatch[1]));
       return sendJson(response, 200, buildCockpitViewModel(cwd, session.state, { source: "saved" }));
+    }
+    const sessionMessageMatch = /^\/api\/sessions\/([^/]+)\/messages$/.exec(url.pathname);
+    if (request.method === "POST" && sessionMessageMatch) {
+      const sessionId = await resolveMutableSessionId(cwd, decodeURIComponent(sessionMessageMatch[1]));
+      const body = await readJsonBody(request);
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message) throw new HttpError(400, "message_required", "Session continuation requires a non-empty message.");
+      const session = await loadRequiredSession(cwd, sessionId);
+      const { config } = await resolveRuntimeConfig(cwd, { task: session.state.goal, configPath });
+      const result = appendSessionContinuation({
+        state: session.state,
+        message,
+        target: typeof body.target === "string" ? body.target : undefined,
+        config
+      });
+      await saveSession(cwd, result.state);
+      const viewModel = buildCockpitViewModel(cwd, result.state, { source: "saved", stale: false });
+      cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: true });
+      return sendJson(response, 200, {
+        sessionId: result.state.sessionId,
+        status: "recorded",
+        turnId: result.turnId,
+        contextArtifactRef: result.contextArtifactRef,
+        viewModel
+      });
     }
     const eventsMatch = /^\/api\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (request.method === "GET" && eventsMatch) {

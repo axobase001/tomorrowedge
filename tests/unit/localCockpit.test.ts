@@ -6,6 +6,7 @@ import { parseServePort } from "../../src/cli/commands/serve.js";
 import { loadConfig, writeConfig } from "../../src/config/configLoader.js";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
+import { createConversationSession } from "../../src/core/conversation/conversationSession.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { markLiveRunFailed, startLocalCockpitServer } from "../../src/localCockpit/server.js";
 import { clearCockpitProviderModelCache, listCockpitProviderModels } from "../../src/localCockpit/setup.js";
@@ -177,6 +178,54 @@ describe("local cockpit server", () => {
 
       expect(vm.workflow.map((step) => step.label)).toEqual(["Plan", "Route", "Edit", "Review", "Test", "Judge", "Approve"]);
       expect(vm.currentApproval?.kind).toBe("patch");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records follow-up messages in the selected saved session", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-continuation-"));
+    const state = createConversationSession({ message: "summarize this repository", target: "core", config: defaultConfig });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const empty = await fetch(`${server.url}/api/sessions/${state.sessionId}/messages?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: "   " })
+      });
+      const emptyPayload = await empty.json() as { error: string };
+
+      expect(empty.status).toBe(400);
+      expect(emptyPayload.error).toBe("message_required");
+
+      const response = await fetch(`${server.url}/api/sessions/${state.sessionId}/messages?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: "please continue from the previous summary", target: "reviewer" })
+      });
+      const payload = await response.json() as { sessionId: string; status: string; turnId: string; contextArtifactRef: string; viewModel: { sessionId: string; conversation: Array<{ speaker: string; continuation: boolean; summary: string }>; rawEvents: Array<{ type: string; policySummary?: string }> } };
+      const reloaded = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as typeof payload.viewModel;
+      const context = await fetch(`${server.url}/api/sessions/${state.sessionId}/artifacts/${encodeURIComponent(payload.contextArtifactRef)}?nonce=${server.nonce}`).then((item) => item.text());
+
+      expect(response.status).toBe(200);
+      expect(payload.status).toBe("recorded");
+      expect(payload.sessionId).toBe(state.sessionId);
+      expect(payload.turnId).toMatch(/^turn_/);
+      expect(payload.contextArtifactRef).toContain("artifacts/context_projection/");
+      expect(payload.viewModel.conversation).toContainEqual(expect.objectContaining({
+        speaker: "user",
+        continuation: true,
+        summary: expect.stringContaining("please continue")
+      }));
+      expect(payload.viewModel.rawEvents).toContainEqual(expect.objectContaining({
+        type: "context_projection",
+        policySummary: expect.stringContaining("bounded")
+      }));
+      expect(reloaded.conversation.length).toBe(payload.viewModel.conversation.length);
+      expect(context).toContain("Session Continuation Context");
+      expect(context).toContain("please continue from the previous summary");
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

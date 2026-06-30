@@ -5,6 +5,7 @@ import type { CockpitApprovalIntent, CockpitRunMode, CockpitViewModel } from "..
 import type { AccessMode } from "../../config/schema.js";
 import {
   applyCockpitApproval,
+  appendCockpitSessionMessage,
   cancelCockpitRun,
   cockpitLiveEventsUrl,
   configureCockpitSetup,
@@ -71,6 +72,7 @@ const emptyViewModel: CockpitViewModel = {
   approvals: [],
   approvalHistory: [],
   capabilities: [],
+  conversation: [],
   main: { title: "Ready for a new task", subtitle: "Waiting for command", body: "", filesChanged: [] },
   trace: [],
   rawEvents: [],
@@ -89,6 +91,7 @@ function CockpitWebRoot() {
   const [goal, setGoal] = useState("");
   const [accessMode, setAccessMode] = useState<AccessMode>("partial");
   const [runMode, setRunMode] = useState<CockpitRunMode>("auto");
+  const [submitMode, setSubmitMode] = useState<"new_task" | "continue_session">("new_task");
   const [conversationTarget, setConversationTarget] = useState("core");
   const [testCommand, setTestCommand] = useState("");
   const [repairOnFail, setRepairOnFail] = useState(false);
@@ -244,19 +247,33 @@ function CockpitWebRoot() {
       setStatusMessage(t("composer.empty"));
       return;
     }
-    if (accessMode === "full" && !fullAutonomyConfirmed) {
+    const continueMode = submitMode === "continue_session";
+    if (!continueMode && accessMode === "full" && !fullAutonomyConfirmed) {
       setStatusMessage(t("composer.fullPreflightRequired"));
       return;
     }
     setBusy(true);
-    const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
-    if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
-      setBusy(false);
-      setStatusMessage(t("status.readyNewTask"));
-      return;
-    }
-    setStatusMessage(statusForRunRequest(request.runMode ?? "auto", Boolean(request.livePatch || request.liveAdvisory || request.liveVision), t));
     try {
+      if (continueMode) {
+        const sessionId = viewModel.sessionId ?? (selectedSessionRef.current !== "latest" ? selectedSessionRef.current : undefined);
+        if (!sessionId) throw new Error(t("status.continueUnavailable"));
+        const payload = await appendCockpitSessionMessage(sessionId, { message: goal, target: conversationTarget }, apiOptions);
+        setViewModel(payload.viewModel);
+        setSessions(await listCockpitSessions(apiOptions));
+        updateSelectedSession(payload.sessionId);
+        setGoal("");
+        setFullAutonomyConfirmed(false);
+        setStatusMessage(t("status.continuationRecorded"));
+        setBusy(false);
+        return;
+      }
+      const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
+      if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
+        setBusy(false);
+        setStatusMessage(t("status.readyNewTask"));
+        return;
+      }
+      setStatusMessage(statusForRunRequest(request.runMode ?? "auto", Boolean(request.livePatch || request.liveAdvisory || request.liveVision), t));
       const payload = await startCockpitRun(request, apiOptions);
       updateSelectedSession(payload.sessionId);
       setGoal("");
@@ -267,7 +284,7 @@ function CockpitWebRoot() {
       setBusy(false);
       setStatusMessage(t("status.runFailed", { message: errorMessage(error) }));
     }
-  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, effectiveRepairOnFail, fixtureFailingPatch, fullAutonomyConfirmed, goal, runMode, setupReady, t, testCommand, updateSelectedSession]);
+  }, [accessMode, apiOptions, busy, connectLive, conversationTarget, effectiveRepairOnFail, fixtureFailingPatch, fullAutonomyConfirmed, goal, runMode, setupReady, submitMode, t, testCommand, updateSelectedSession, viewModel.sessionId]);
 
   const cancelRun = useCallback(async () => {
     if (!busy) return;
@@ -446,6 +463,7 @@ function CockpitWebRoot() {
     setGoal("");
     setAccessMode("partial");
     setRunMode("auto");
+    setSubmitMode("new_task");
     setConversationTarget("core");
     setTestCommand("");
     setRepairOnFail(false);
@@ -462,6 +480,7 @@ function CockpitWebRoot() {
       goal={goal}
       accessMode={accessMode}
       runMode={runMode}
+      submitMode={submitMode}
       runPreview={`${runPreview.label} · ${runPreview.detail}`}
       conversationTarget={conversationTarget}
       testCommand={testCommand}
@@ -482,6 +501,7 @@ function CockpitWebRoot() {
       onGoalChange={setGoal}
       onAccessModeChange={updateAccessMode}
       onRunModeChange={setRunMode}
+      onSubmitModeChange={setSubmitMode}
       onTestCommandChange={setTestCommand}
       onRepairOnFailChange={setRepairOnFail}
       onFixtureFailingPatchChange={setFixtureFailingPatch}

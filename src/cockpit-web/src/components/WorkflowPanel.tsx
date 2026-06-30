@@ -51,6 +51,20 @@ export function WorkflowPanel({ viewModel, busy, t, onApproval, onOpenDrawer }: 
             <div><span>{t("workflow.final")}</span><strong>{viewModel.finalReview?.decision ?? "-"}</strong></div>
           </section>
         ) : null}
+        {viewModel.conversation.length ? (
+          <section className="te-conversation-strip" data-testid="conversation-strip" aria-label={t("workflow.conversation")}>
+            <h3>{t("workflow.conversation")}</h3>
+            <ol>
+              {viewModel.conversation.slice(-4).map((turn, index) => (
+                <li key={`${turn.id}-${index}`} className={`te-conversation-${turn.speaker}`}>
+                  <span>{turn.speaker}</span>
+                  <p>{turn.summary}</p>
+                  {turn.continuation ? <small>{t("workflow.continuation")}</small> : null}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
         {viewModel.currentApproval ? (
           <ApprovalPanel approval={viewModel.currentApproval} busy={busy} t={t} onApproval={onApproval} onOpenDrawer={onOpenDrawer} />
         ) : (
