@@ -10,6 +10,8 @@ export function ComposerPanel({
   goal,
   accessMode,
   runMode,
+  submitMode,
+  canContinueSession,
   runPreview,
   target,
   testCommand,
@@ -22,6 +24,7 @@ export function ComposerPanel({
   onGoalChange,
   onAccessModeChange,
   onRunModeChange,
+  onSubmitModeChange,
   onTestCommandChange,
   onRepairOnFailChange,
   onFixtureFailingPatchChange,
@@ -33,6 +36,8 @@ export function ComposerPanel({
   goal: string;
   accessMode: AccessMode;
   runMode: CockpitRunMode;
+  submitMode: "new_task" | "continue_session";
+  canContinueSession: boolean;
   runPreview?: string;
   target: string;
   testCommand: string;
@@ -45,6 +50,7 @@ export function ComposerPanel({
   onGoalChange: (goal: string) => void;
   onAccessModeChange: (mode: AccessMode) => void;
   onRunModeChange: (mode: CockpitRunMode) => void;
+  onSubmitModeChange: (mode: "new_task" | "continue_session") => void;
   onTestCommandChange: (command: string) => void;
   onRepairOnFailChange: (enabled: boolean) => void;
   onFixtureFailingPatchChange: (enabled: boolean) => void;
@@ -54,8 +60,9 @@ export function ComposerPanel({
   onCancelRun: () => void;
 }) {
   const isEmpty = goal.trim().length === 0;
-  const needsFullPreflight = accessMode === "full";
-  const canSubmit = !busy && !isEmpty && (!needsFullPreflight || fullAutonomyConfirmed);
+  const continueMode = submitMode === "continue_session";
+  const needsFullPreflight = !continueMode && accessMode === "full";
+  const canSubmit = !busy && !isEmpty && (!continueMode || canContinueSession) && (!needsFullPreflight || fullAutonomyConfirmed);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
@@ -69,6 +76,19 @@ export function ComposerPanel({
       <strong>{t("composer.title")}</strong>
       <textarea value={goal} onChange={(event) => onGoalChange(event.target.value)} onKeyDown={onKeyDown} placeholder={t("composer.placeholder")} data-testid="composer-input" />
       {isEmpty && <span data-testid="composer-validation-hint">{t("composer.empty")}</span>}
+      <label className="te-mode-control">
+        <span>{t("composer.submitMode")}</span>
+        <select
+          value={submitMode}
+          onChange={(event) => onSubmitModeChange(event.target.value === "continue_session" ? "continue_session" : "new_task")}
+          title={t("composer.submitModeHelp")}
+          aria-label={t("composer.submitMode")}
+          data-testid="composer-submit-mode"
+        >
+          <option value="new_task">{t("composer.submitModeNew")}</option>
+          <option value="continue_session" disabled={!canContinueSession}>{t("composer.submitModeContinue")}</option>
+        </select>
+      </label>
       <label className="te-mode-control">
         <span>{t("composer.mode")}</span>
         <select
@@ -110,7 +130,7 @@ export function ComposerPanel({
           {composerTargets.map((item) => <option value={item} key={item}>{item}</option>)}
         </select>
       </label>
-      {runPreview ? <span className="te-run-preview" data-testid="composer-run-preview">{runPreview}</span> : null}
+      {runPreview ? <span className="te-run-preview" data-testid="composer-run-preview">{continueMode ? t("composer.continuePreview") : runPreview}</span> : null}
       {needsFullPreflight ? (
         <section className="te-full-preflight" data-testid="composer-full-preflight" aria-live="polite">
           <strong>{t("composer.fullPreflightTitle")}</strong>
@@ -129,7 +149,7 @@ export function ComposerPanel({
       {busy ? (
         <button type="button" className="te-danger-button" onClick={onCancelRun} data-testid="composer-cancel-run">{t("composer.cancelRun")}</button>
       ) : (
-        <button type="submit" disabled={!canSubmit} data-testid="composer-submit">{submitLabel(accessMode, t)}</button>
+        <button type="submit" disabled={!canSubmit} data-testid="composer-submit">{submitLabel(accessMode, continueMode, t)}</button>
       )}
       <details className="te-run-settings" data-testid="composer-run-settings">
         <summary>{t("composer.runSettings")}</summary>
@@ -166,7 +186,8 @@ export function ComposerPanel({
   );
 }
 
-function submitLabel(accessMode: AccessMode, t: Translator): string {
+function submitLabel(accessMode: AccessMode, continueMode: boolean, t: Translator): string {
+  if (continueMode) return t("composer.continueSession");
   if (accessMode === "full") return t("composer.runFull");
   if (accessMode === "restricted") return t("composer.runRestricted");
   return t("composer.runSupervised");

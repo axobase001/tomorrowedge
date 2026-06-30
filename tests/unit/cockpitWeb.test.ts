@@ -264,6 +264,7 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("run a smoke task");
     expect(html).toContain("Workflow running...");
     expect(html).toContain("data-testid=\"composer-input\"");
+    expect(html).toContain("data-testid=\"composer-submit-mode\"");
     expect(html).toContain("data-testid=\"composer-mode\"");
     expect(html).toContain("data-testid=\"composer-run-mode\"");
     expect(html).toContain("data-testid=\"composer-target\"");
@@ -271,6 +272,36 @@ describe("cockpit web React surface", () => {
     expect(html).toContain("data-testid=\"composer-run-settings\"");
     expect(html).toContain("data-testid=\"composer-test-command\"");
     expect(html).toContain("partial");
+  });
+
+  it("renders session continuation controls and recent turns", () => {
+    const html = renderApp({
+      ...sampleViewModel(),
+      conversation: [{
+        id: "turn_1",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        speaker: "user",
+        target: "reviewer",
+        summary: "follow-up to reviewer: explain the previous patch",
+        continuation: true,
+        artifactRef: "artifacts/conversation_messages/turn_1.txt"
+      }, {
+        id: "turn_1",
+        timestamp: "2026-06-07T00:00:01.000Z",
+        speaker: "assistant",
+        target: "reviewer",
+        summary: "Continuation context captured; follow-up execution is not yet dispatched.",
+        continuation: true
+      }]
+    }, { goal: "explain the previous patch", submitMode: "continue_session" });
+
+    expect(html).toContain("data-testid=\"composer-submit-mode\"");
+    expect(html).toContain("continue session");
+    expect(html).toContain("record follow-up in the selected session");
+    expect(html).toContain("Continue session");
+    expect(html).toContain("data-testid=\"conversation-strip\"");
+    expect(html).toContain("follow-up to reviewer");
+    expect(html).toContain("continued");
   });
 
   it("requires a visible full-autonomy preflight before full-mode runs", () => {
@@ -1154,7 +1185,7 @@ function renderKeyRoleManager(overrides: Partial<{
   );
 }
 
-function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean; accessMode: AccessMode; fullAutonomyConfirmed: boolean }> = {}): string {
+function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: string; statusMessage: string; setupVisible: boolean; keyManagerOpen: boolean; language: GuiLanguage; busy: boolean; drawerOpen: boolean; accessMode: AccessMode; fullAutonomyConfirmed: boolean; submitMode: "new_task" | "continue_session" }> = {}): string {
   const language = overrides.language ?? "en";
   const t = createTranslator(language);
   const accessMode = overrides.accessMode ?? "partial";
@@ -1166,6 +1197,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       goal: overrides.goal ?? "",
       accessMode,
       runMode: "auto",
+      submitMode: overrides.submitMode ?? "new_task",
       runPreview: "auto -> fixture · sample fixture workspace",
       conversationTarget: "core",
       testCommand: "",
@@ -1224,6 +1256,7 @@ function renderApp(viewModel: CockpitViewModel, overrides: Partial<{ goal: strin
       onGoalChange: () => undefined,
       onAccessModeChange: () => undefined,
       onRunModeChange: () => undefined,
+      onSubmitModeChange: () => undefined,
       onTestCommandChange: () => undefined,
       onRepairOnFailChange: () => undefined,
       onFixtureFailingPatchChange: () => undefined,
@@ -1340,6 +1373,7 @@ function sampleViewModel(): CockpitViewModel {
       readiness: "1 provider(s): fixture.",
       refs: ["src/core/routing/policies.ts"]
     }],
+    conversation: [],
     objectiveContract: {
       contractId: "contract_test",
       scenarioType: "debugging",

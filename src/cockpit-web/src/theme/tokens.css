@@ -465,6 +465,49 @@ select[aria-invalid="true"] {
   border-radius: 6px;
   background: var(--te-surface);
 }
+.te-conversation-strip {
+  display: grid;
+  gap: 8px;
+  margin: 12px 14px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--te-alt) 62%, var(--te-surface));
+}
+.te-conversation-strip h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.te-conversation-strip ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.te-conversation-strip li {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  min-height: 28px;
+  padding: 6px 8px;
+  border: 1px solid var(--te-border-soft);
+  border-radius: 5px;
+  background: var(--te-surface);
+}
+.te-conversation-strip span,
+.te-conversation-strip small {
+  color: var(--te-muted);
+  font: 10.5px var(--te-mono);
+}
+.te-conversation-strip p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .te-main p, .te-approval p {
   color: var(--te-muted);
   line-height: 1.45;

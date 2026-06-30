@@ -1,4 +1,4 @@
-import type { CockpitApprovalIntent, CockpitRunRequest, CockpitViewModel } from "../../cockpit/contracts.js";
+import type { CockpitApprovalIntent, CockpitRunRequest, CockpitSessionMessageRequest, CockpitSessionMessageResponse, CockpitViewModel } from "../../cockpit/contracts.js";
 
 export type CockpitProviderApiFormat = "openai_chat" | "legacy_chat";
 export type CockpitProviderAuthHeader = "bearer" | "api-key" | "none";
@@ -230,6 +230,16 @@ export async function startCockpitRun(request: CockpitRunRequest, options: Cockp
   });
   if (!response.ok) throw new Error(await response.text());
   return response.json() as Promise<{ sessionId: string; status: string }>;
+}
+
+export async function appendCockpitSessionMessage(sessionId: string, request: CockpitSessionMessageRequest, options: CockpitApiOptions): Promise<CockpitSessionMessageResponse> {
+  const response = await fetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, options), {
+    method: "POST",
+    headers: apiHeaders(options, { "content-type": "application/json" }),
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<CockpitSessionMessageResponse>;
 }
 
 export async function cancelCockpitRun(sessionId: string, options: CockpitApiOptions): Promise<{ status: string; message: string; viewModel?: CockpitViewModel }> {

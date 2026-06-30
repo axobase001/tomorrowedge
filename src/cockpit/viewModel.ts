@@ -1,7 +1,7 @@
 ﻿import path from "node:path";
 import type { AgentGraphState } from "../core/agentGraph/state.js";
 import type { TomorrowEdgeEvent } from "../core/events/eventTypes.js";
-import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitErrorLoopTimelineItem, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
+import type { CockpitApproval, CockpitApprovalHistoryItem, CockpitConnectionState, CockpitConversationTurn, CockpitErrorLoopTimelineItem, CockpitMemoryInfluenceCard, CockpitRouteSummary, CockpitSessionSource, CockpitTelemetry, CockpitViewModel, CockpitWorkflowStep } from "./contracts.js";
 import { buildCapabilityDashboard } from "./capabilityRegistry.js";
 import { eventSummary, inferWorkflowStage, isMissingPatchDeliverable, sessionTitle, workspaceLabel } from "./sessionSelectors.js";
 import { resolveCockpitShellCommand } from "./verificationCommand.js";
@@ -68,6 +68,7 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
     taskOwnership: buildTaskOwnershipSummary(state),
     policyMutations: buildPolicyMutationSummary(state),
     finalReview: buildFinalReviewSummary(state),
+    conversation: buildConversationTimeline(state),
     currentApproval,
     main,
     trace: (state?.events ?? []).slice(-80).reverse().map((event) => ({
@@ -84,6 +85,21 @@ export function buildCockpitViewModel(cwd: string, state?: AgentGraphState, opti
       kind: artifact.ref.split(/[\\/]/)[1] ?? "artifact"
     }))
   };
+}
+
+function buildConversationTimeline(state?: AgentGraphState): CockpitConversationTurn[] {
+  return (state?.events ?? [])
+    .filter((event) => event.type === "conversation_message")
+    .map((event) => ({
+      id: event.turnId ?? event.id,
+      timestamp: event.timestamp,
+      speaker: event.speaker ?? "user",
+      target: event.target,
+      summary: eventSummary(event),
+      continuation: Boolean(event.continuation),
+      artifactRef: event.messageRef
+    }))
+    .slice(-24);
 }
 
 function buildObjectiveContractSummary(state?: AgentGraphState): CockpitViewModel["objectiveContract"] {
