@@ -248,29 +248,34 @@ function CockpitWebRoot() {
       return;
     }
     const continueMode = submitMode === "continue_session";
-    if (!continueMode && accessMode === "full" && !fullAutonomyConfirmed) {
+    if (accessMode === "full" && !fullAutonomyConfirmed) {
       setStatusMessage(t("composer.fullPreflightRequired"));
       return;
     }
     setBusy(true);
     try {
+      const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
+      if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
+        setBusy(false);
+        setStatusMessage(t("status.readyNewTask"));
+        return;
+      }
       if (continueMode) {
         const sessionId = viewModel.sessionId ?? (selectedSessionRef.current !== "latest" ? selectedSessionRef.current : undefined);
         if (!sessionId) throw new Error(t("status.continueUnavailable"));
-        const payload = await appendCockpitSessionMessage(sessionId, { message: goal, target: conversationTarget }, apiOptions);
+        const payload = await appendCockpitSessionMessage(sessionId, { ...request, message: goal, target: conversationTarget, mode: "followup_run" }, apiOptions);
         setViewModel(payload.viewModel);
         setSessions(await listCockpitSessions(apiOptions));
         updateSelectedSession(payload.sessionId);
         setGoal("");
         setFullAutonomyConfirmed(false);
-        setStatusMessage(t("status.continuationRecorded"));
-        setBusy(false);
-        return;
-      }
-      const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
-      if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
-        setBusy(false);
-        setStatusMessage(t("status.readyNewTask"));
+        if (payload.status === "started") {
+          setStatusMessage(t("status.workflowRunning"));
+          connectLive(payload.sessionId);
+        } else {
+          setStatusMessage(t("status.continuationRecorded"));
+          setBusy(false);
+        }
         return;
       }
       setStatusMessage(statusForRunRequest(request.runMode ?? "auto", Boolean(request.livePatch || request.liveAdvisory || request.liveVision), t));

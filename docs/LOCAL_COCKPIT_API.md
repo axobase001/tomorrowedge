@@ -80,10 +80,22 @@ persisted session ViewModel.
 `POST /api/sessions/:id/messages` records a follow-up message in an existing
 session and returns the updated ViewModel. This is the first session-continuation
 contract: it appends a redacted user turn, a bounded context projection artifact,
-and a system acknowledgement to the same event ledger. It does not yet dispatch a
-provider-backed follow-up run or perform model-specific context-window packing;
-clients should keep offering `POST /api/runs` for new workflows and treat message
-append as non-mutating continuation context.
+and a system acknowledgement to the same event ledger.
+
+The request accepts `mode`:
+
+- `conversation` keeps the original non-mutating behavior and only records the
+  follow-up turn plus bounded context.
+- `followup_run` starts a governed continuation run with the same `sessionId`.
+  The follow-up run uses the redacted context projection, streams through the
+  existing `/api/runs/:id/events/live` channel, and merges its events, artifacts,
+  and final summary back into the selected session instead of creating a new
+  session card.
+
+`followup_run` also accepts the run-control fields used by `POST /api/runs`
+(`runMode`, `accessMode`, `livePatch`, `liveAdvisory`, `liveVision`,
+`testCommand`, and approval flags). Clients should keep offering `POST
+/api/runs` for unrelated new workflows.
 
 `POST /api/approvals` executes browser approval actions through the Node
 cockpit runtime. Supported actions are:

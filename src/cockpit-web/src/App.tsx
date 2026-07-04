@@ -127,7 +127,7 @@ export function App({
 }: AppProps) {
   const canContinueSession = Boolean(viewModel.sessionId && selectedSession !== "latest");
   const canRun = goal.trim().length > 0 && !busy && (submitMode === "continue_session"
-    ? canContinueSession
+    ? canContinueSession && (accessMode !== "full" || fullAutonomyConfirmed)
     : accessMode !== "full" || fullAutonomyConfirmed);
   return (
     <main className="te-shell" data-testid="cockpit-shell">

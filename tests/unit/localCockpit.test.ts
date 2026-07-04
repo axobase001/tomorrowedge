@@ -232,6 +232,44 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("runs follow-up messages in the same saved session when requested", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-followup-run-"));
+    const state = createConversationSession({ message: "summarize this repository", target: "core", config: defaultConfig });
+    await saveSession(cwd, state);
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await fetch(`${server.url}/api/sessions/${state.sessionId}/messages?nonce=${server.nonce}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: "now turn that summary into an implementation plan",
+          target: "planner",
+          mode: "followup_run",
+          runMode: "fixture",
+          accessMode: "restricted"
+        })
+      });
+      const payload = await response.json() as { sessionId: string; status: string; turnId: string; contextArtifactRef: string; viewModel: { sessionId: string } };
+      const reloaded = await waitForSessionEventCount(server.url, server.nonce, state.sessionId, state.events.length + 6);
+
+      expect(response.status).toBe(202);
+      expect(payload.status).toBe("started");
+      expect(payload.sessionId).toBe(state.sessionId);
+      expect(payload.viewModel.sessionId).toBe(state.sessionId);
+      expect(reloaded.state.sessionId).toBe(state.sessionId);
+      expect(reloaded.state.events).toContainEqual(expect.objectContaining({
+        type: "context_projection",
+        policySummary: expect.stringContaining("dispatching")
+      }));
+      expect(reloaded.state.events.some((event) => event.type === "access_mode")).toBe(true);
+      expect(reloaded.state.finalSummary?.evidence[0]).toContain(`Continuation turn ${payload.turnId}`);
+      expect(reloaded.state.finalSummary?.evidence[0]).toContain(payload.contextArtifactRef);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("renames and deletes saved sessions through the local cockpit API", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-session-manage-"));
     await cp(path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic"), cwd, { recursive: true });
@@ -1823,6 +1861,18 @@ async function waitForLatestSession(url: string, nonce: string): Promise<{ state
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("Timed out waiting for latest cockpit session.");
+}
+
+async function waitForSessionEventCount(url: string, nonce: string, sessionId: string, minEvents: number): Promise<{ state: { sessionId: string; events: Array<{ type: string; policySummary?: string }>; finalSummary?: { evidence: string[] } } }> {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await fetch(`${url}/api/sessions/${sessionId}?nonce=${nonce}`);
+    if (response.status === 200) {
+      const session = await response.json() as { state: { sessionId: string; events: Array<{ type: string; policySummary?: string }>; finalSummary?: { evidence: string[] } } };
+      if (session.state.events.length >= minEvents && session.state.finalSummary) return session;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for cockpit session ${sessionId}.`);
 }
 
 async function readOptionalFile(filePath: string): Promise<string> {

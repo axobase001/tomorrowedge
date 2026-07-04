@@ -234,13 +234,89 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const message = typeof body.message === "string" ? body.message.trim() : "";
       if (!message) throw new HttpError(400, "message_required", "Session continuation requires a non-empty message.");
       const session = await loadRequiredSession(cwd, sessionId);
-      const { config } = await resolveRuntimeConfig(cwd, { task: session.state.goal, configPath });
+      const continuationMode = parseContinuationMode(body.mode);
+      const { prefs, memoryHints, config } = await resolveRuntimeConfig(cwd, { task: session.state.goal, configPath });
       const result = appendSessionContinuation({
         state: session.state,
         message,
         target: typeof body.target === "string" ? body.target : undefined,
+        mode: continuationMode,
         config
       });
+      if (continuationMode === "followup_run") {
+        const requestedRunMode = parseRunMode(body.runMode);
+        const accessMode = parseAccessMode(body.accessMode) ?? result.state.access.mode ?? prefs.accessMode ?? config.project.access_mode;
+        const runFlags = resolveRunFlags(requestedRunMode, body, config);
+        const workspace = await prepareContinuationWorkspace(cwd, result.state, runFlags);
+        const runContext = buildRunContext(workspace, requestedRunMode, runFlags, body);
+        const followupGoal = buildContinuationRunGoal(result.state, message, typeof body.target === "string" ? body.target : undefined, result.contextArtifactRef);
+        const liveState = cloneGraphState({ ...result.state, finalSummary: undefined });
+        cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: liveState, done: false });
+        const options: OfflineGraphOptions = {
+          fixtureMode: runFlags.fixtureMode,
+          accessMode,
+          livePatch: runFlags.livePatch,
+          liveAdvisory: runFlags.liveAdvisory,
+          liveVision: Boolean(body.liveVision),
+          fixtureFailingPatch: Boolean(body.fixtureFailingPatch),
+          approvePatch: Boolean(body.approvePatch),
+          approveShell: Boolean(body.approveShell),
+          repairOnFail: Boolean(body.repairOnFail),
+          approveRepair: Boolean(body.approveRepair),
+          conversationTarget: typeof body.target === "string" ? body.target : "core",
+          testCommand: typeof body.testCommand === "string" && body.testCommand.trim()
+            ? body.testCommand.trim()
+            : result.state.runContext?.testCommand ?? prefs.preferredTestCommand ?? (config.strategy_memory.suggest_test_command ? memoryHints?.preferredTestCommand : undefined),
+          sessionId: result.state.sessionId,
+          onEvent: (event) => {
+            if (cockpitEventBus.isCanceled(result.state.sessionId)) return;
+            applyLiveEvent(liveState, event);
+            cockpitEventBus.emitEvent(result.state.sessionId, event);
+            cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: liveState, done: false });
+          }
+        };
+        runContext.testCommand = options.testCommand;
+        const runPromise = requestedRunMode === "council"
+          ? runAgentCouncilGovernance(workspace.executionCwd, followupGoal, config, {
+            accessMode,
+            fixtureMode: runFlags.fixtureMode,
+            approvePatch: Boolean(body.approvePatch),
+            approveShell: Boolean(body.approveShell),
+            sessionId: result.state.sessionId,
+            onEvent: options.onEvent
+          })
+          : runCockpitBackend(createOrchestrationBackend(config), workspace.executionCwd, followupGoal, options);
+        void runPromise
+          .then(async (runState) => {
+            if (cockpitEventBus.isCanceled(result.state.sessionId)) return;
+            const mergedState = mergeContinuationRunState(result.state, attachRunContext(runState, runContext), runContext, result.turnId, result.contextArtifactRef);
+            await saveSession(cwd, mergedState, { failureMemory: config.failure_memory });
+            cockpitEventBus.setSnapshot({ sessionId: mergedState.sessionId, state: mergedState, done: true });
+          })
+          .catch(async (error) => {
+            if (cockpitEventBus.isCanceled(result.state.sessionId)) return;
+            const messageText = error instanceof Error ? error.message : String(error);
+            const failedState = mergeContinuationRunState(result.state, attachRunContext(markLiveRunFailed(liveState, messageText), runContext), runContext, result.turnId, result.contextArtifactRef);
+            try {
+              await saveSession(cwd, failedState, { failureMemory: config.failure_memory });
+            } catch (saveError) {
+              log("warn", `Failed to save failed continuation session ${result.state.sessionId}: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
+            }
+            cockpitEventBus.setSnapshot({
+              sessionId: failedState.sessionId,
+              state: failedState,
+              done: true,
+              error: messageText
+            });
+          });
+        return sendJson(response, 202, {
+          sessionId: result.state.sessionId,
+          status: "started",
+          turnId: result.turnId,
+          contextArtifactRef: result.contextArtifactRef,
+          viewModel: buildCockpitViewModel(cwd, liveState, { source: "live", stale: false })
+        });
+      }
       await saveSession(cwd, result.state);
       const viewModel = buildCockpitViewModel(cwd, result.state, { source: "saved", stale: false });
       cockpitEventBus.setSnapshot({ sessionId: result.state.sessionId, state: result.state, done: true });
@@ -530,6 +606,122 @@ function attachRunContext(state: AgentGraphState, runContext: AgentGraphState["r
   return { ...state, runContext };
 }
 
+async function prepareContinuationWorkspace(
+  cwd: string,
+  state: AgentGraphState,
+  runFlags: ReturnType<typeof resolveRunFlags>
+): Promise<{ executionCwd: string; fixtureWorkspace?: string }> {
+  const executionCwd = resolveApprovalExecutionCwd(cwd, state);
+  const reusable = await stat(executionCwd).then((item) => item.isDirectory()).catch(() => false);
+  if (reusable) {
+    return {
+      executionCwd,
+      fixtureWorkspace: state.runContext?.fixtureWorkspace
+    };
+  }
+  return prepareRunWorkspace(cwd, { fixtureMode: runFlags.fixtureMode, forceFixtureWorkspace: runFlags.fixtureMode });
+}
+
+function buildContinuationRunGoal(state: AgentGraphState, message: string, target: string | undefined, contextArtifactRef: string): string {
+  return [
+    "Continue the existing TomorrowEdge cockpit session.",
+    "",
+    `Original goal: ${state.goal}`,
+    `Session: ${state.sessionId}`,
+    `Target: ${target ?? state.conversationTarget?.id ?? "core"}`,
+    `Continuation context artifact: ${contextArtifactRef}`,
+    "",
+    "Use the recorded bounded context projection and the existing session ledger as prior context.",
+    "",
+    "User follow-up:",
+    message
+  ].join("\n");
+}
+
+function cloneGraphState(state: AgentGraphState): AgentGraphState {
+  return {
+    ...state,
+    runContext: state.runContext ? { ...state.runContext } : undefined,
+    routing: {
+      ...state.routing,
+      assignments: [...state.routing.assignments],
+      fallbacks: [...state.routing.fallbacks]
+    },
+    access: { ...state.access },
+    events: [...state.events],
+    eventArtifacts: [...state.eventArtifacts],
+    providerViews: [...state.providerViews],
+    evidencePackets: [...state.evidencePackets],
+    agents: [...state.agents],
+    candidates: [...state.candidates],
+    repairCandidates: [...state.repairCandidates],
+    debateRounds: [...state.debateRounds],
+    modelNotes: [...state.modelNotes],
+    usageSummary: { ...state.usageSummary },
+    budgetRuntime: { ...state.budgetRuntime },
+    budgetStatuses: [...state.budgetStatuses],
+    changedFiles: [...state.changedFiles],
+    runResults: [...state.runResults],
+    approvals: { ...state.approvals },
+    finalSummary: state.finalSummary
+      ? {
+        ...state.finalSummary,
+        changedFiles: [...state.finalSummary.changedFiles],
+        testsRun: [...state.finalSummary.testsRun],
+        evidence: [...state.finalSummary.evidence],
+        risksRemaining: [...state.finalSummary.risksRemaining]
+      }
+      : undefined
+  };
+}
+
+function mergeContinuationRunState(
+  baseState: AgentGraphState,
+  runState: AgentGraphState,
+  runContext: AgentGraphState["runContext"],
+  turnId: string,
+  contextArtifactRef: string
+): AgentGraphState {
+  const finalSummary = runState.finalSummary
+    ? {
+      ...runState.finalSummary,
+      task: baseState.goal,
+      changedFiles: [...new Set([...baseState.changedFiles, ...runState.finalSummary.changedFiles])],
+      testsRun: [...new Set([...(baseState.finalSummary?.testsRun ?? []), ...runState.finalSummary.testsRun])],
+      evidence: [
+        `Continuation turn ${turnId} executed with bounded context ${contextArtifactRef}.`,
+        ...runState.finalSummary.evidence
+      ],
+      risksRemaining: runState.finalSummary.risksRemaining
+    }
+    : baseState.finalSummary;
+  return {
+    ...runState,
+    sessionId: baseState.sessionId,
+    goal: baseState.goal,
+    runContext,
+    events: [...baseState.events, ...runState.events],
+    eventArtifacts: [...baseState.eventArtifacts, ...runState.eventArtifacts],
+    providerViews: [...baseState.providerViews, ...runState.providerViews],
+    evidencePackets: [...baseState.evidencePackets, ...runState.evidencePackets],
+    agents: [...baseState.agents, ...runState.agents],
+    candidates: [...baseState.candidates, ...runState.candidates],
+    repairCandidates: [...baseState.repairCandidates, ...runState.repairCandidates],
+    debateRounds: [...baseState.debateRounds, ...runState.debateRounds],
+    modelNotes: [...baseState.modelNotes, ...runState.modelNotes],
+    usageSummary: {
+      inputTokens: baseState.usageSummary.inputTokens + runState.usageSummary.inputTokens,
+      outputTokens: baseState.usageSummary.outputTokens + runState.usageSummary.outputTokens,
+      totalTokens: baseState.usageSummary.totalTokens + runState.usageSummary.totalTokens,
+      estimatedCostUsd: (baseState.usageSummary.estimatedCostUsd ?? 0) + (runState.usageSummary.estimatedCostUsd ?? 0)
+    },
+    budgetStatuses: [...baseState.budgetStatuses, ...runState.budgetStatuses],
+    changedFiles: [...new Set([...baseState.changedFiles, ...runState.changedFiles])],
+    runResults: [...baseState.runResults, ...runState.runResults],
+    finalSummary
+  };
+}
+
 function resolveApprovalExecutionCwd(projectCwd: string, state: AgentGraphState): string {
   const executionCwd = state.runContext?.executionCwd;
   if (!executionCwd) return projectCwd;
@@ -728,6 +920,12 @@ function parseRunMode(value: unknown): CockpitRunMode {
   if (value === undefined) return "auto";
   if (value === "auto" || value === "fixture" || value === "offline" || value === "live" || value === "council") return value;
   throw new HttpError(400, "invalid_run_mode", "runMode must be auto, fixture, offline, live, or council.");
+}
+
+function parseContinuationMode(value: unknown): "conversation" | "followup_run" {
+  if (value === undefined) return "conversation";
+  if (value === "conversation" || value === "followup_run") return value;
+  throw new HttpError(400, "invalid_continuation_mode", "mode must be conversation or followup_run.");
 }
 
 function isMutatingMethod(method?: string): boolean {

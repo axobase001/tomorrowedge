@@ -439,11 +439,23 @@ export type CockpitRunRequest = {
 export type CockpitSessionMessageRequest = {
   message: string;
   target?: string;
+  mode?: "conversation" | "followup_run";
+  accessMode?: AccessMode;
+  runMode?: CockpitRunMode;
+  livePatch?: boolean;
+  liveAdvisory?: boolean;
+  liveVision?: boolean;
+  approvePatch?: boolean;
+  approveShell?: boolean;
+  approveRepair?: boolean;
+  repairOnFail?: boolean;
+  testCommand?: string;
+  fixtureFailingPatch?: boolean;
 };
 
 export type CockpitSessionMessageResponse = {
   sessionId: string;
-  status: "recorded";
+  status: "recorded" | "started";
   turnId: string;
   contextArtifactRef: string;
   viewModel: CockpitViewModel;

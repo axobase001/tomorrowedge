@@ -9,6 +9,7 @@ export type SessionContinuationInput = {
   state: AgentGraphState;
   message: string;
   target?: string;
+  mode?: "conversation" | "followup_run";
   config: TomorrowEdgeConfig;
 };
 
@@ -27,6 +28,7 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
   const turnId = makeId("turn");
   const timestamp = new Date().toISOString();
   const mode = input.state.access.mode;
+  const continuationMode = input.mode ?? "conversation";
   const contextProjection = buildContinuationProjection(input.state, message, target.id);
   const contextArtifactRef = continuationArtifactRef("context_projection", turnId, "md");
   const messageRef = continuationArtifactRef("conversation_messages", turnId, "txt");
@@ -34,9 +36,11 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
   const projected = clipText(redactText(contextProjection), maxProjectedChars);
   const sanitizedMessage = redactText(message);
   const assistantBody = [
-    "Continuation recorded in this session.",
+    continuationMode === "followup_run" ? "Continuation run started in this session." : "Continuation recorded in this session.",
     "",
-    "This initial continuation path preserves the selected session context, target, and bounded projection for a later follow-up run. It does not yet dispatch a provider call or mutate files."
+    continuationMode === "followup_run"
+      ? "This continuation path preserves the selected session context, target, and bounded projection before dispatching the follow-up through the governed run pipeline."
+      : "This continuation path preserves the selected session context, target, and bounded projection without dispatching a provider call or mutating files."
   ].join("\n");
   const base = {
     timestamp,
@@ -66,7 +70,9 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
       projectedArtifacts: [contextArtifactRef],
       tokenEstimate: estimateTokens(projected),
       omittedBytes: Math.max(0, contextProjection.length - projected.length),
-      policySummary: "Session continuation uses a bounded, redacted projection of goal, final summary, recent messages, trace, evidence, and artifacts. Provider dispatch is intentionally deferred."
+      policySummary: continuationMode === "followup_run"
+        ? "Session continuation uses a bounded, redacted projection of goal, final summary, recent messages, trace, evidence, and artifacts before dispatching a governed follow-up run."
+        : "Session continuation uses a bounded, redacted projection of goal, final summary, recent messages, trace, evidence, and artifacts. Provider dispatch is intentionally deferred."
     },
     {
       ...base,
@@ -79,7 +85,9 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
       speaker: "assistant",
       turnId,
       continuation: true,
-      summary: "Continuation context captured; follow-up execution is not yet dispatched."
+      summary: continuationMode === "followup_run"
+        ? "Continuation context captured; follow-up run started."
+        : "Continuation context captured; follow-up execution is not yet dispatched."
     }
   ];
   const artifacts: EventArtifact[] = [
@@ -87,7 +95,7 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
     { ref: contextArtifactRef, content: projected },
     { ref: assistantRef, content: assistantBody }
   ];
-  const continuationReply = buildContinuationReply(input.state, sanitizedMessage, target.id);
+  const continuationReply = buildContinuationReply(input.state, sanitizedMessage, target.id, continuationMode);
   return {
     turnId,
     contextArtifactRef,
@@ -111,7 +119,7 @@ export function appendSessionContinuation(input: SessionContinuationInput): Sess
         ],
         risksRemaining: [
           ...(input.state.finalSummary?.risksRemaining ?? []),
-          "Continuation currently records bounded context and message history only; provider-backed follow-up execution remains planned work."
+          ...(continuationMode === "followup_run" ? [] : ["Continuation currently records bounded context and message history only; provider-backed follow-up execution remains planned work."])
         ],
         suggestedCommitMessage: input.state.finalSummary?.suggestedCommitMessage ?? "Record cockpit session continuation",
         statusBreakdown: input.state.finalSummary?.statusBreakdown
@@ -170,15 +178,21 @@ function buildContinuationProjection(state: AgentGraphState, message: string, ta
   ].join("\n");
 }
 
-function buildContinuationReply(state: AgentGraphState, message: string, targetId: string): string {
+function buildContinuationReply(state: AgentGraphState, message: string, targetId: string, mode: "conversation" | "followup_run"): string {
   const sections = [
-    "I recorded this follow-up in the selected session and prepared a bounded continuation context for later execution.",
+    mode === "followup_run"
+      ? "I recorded this follow-up in the selected session and started a governed continuation run with bounded context."
+      : "I recorded this follow-up in the selected session and prepared a bounded continuation context.",
     "",
     `Target: ${targetId}`,
-    `Follow-up: ${message}`,
-    "",
-    "Current limitation: this PR establishes the same-session message and context-projection contract. It does not yet perform provider-backed follow-up reasoning or model-specific context-window packing."
+    `Follow-up: ${message}`
   ];
+  if (mode === "conversation") {
+    sections.push(
+      "",
+      "This mode records the turn only; use followup_run mode to dispatch the continuation through the governed run pipeline."
+    );
+  }
   if (state.finalSummary?.userReply) {
     sections.push("", "Previous answer remains available in the session details.");
   }
