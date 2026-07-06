@@ -1,7 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { generateNativeObjectiveContract } from "../../src/core/contracts/contractGenerator.js";
 import { verifyAndRepairContract } from "../../src/core/contracts/contractVerifier.js";
@@ -12,7 +12,7 @@ import { loadBestPolicy, savePolicyScore } from "../../src/core/orchestrationPol
 import { defaultOrchestrationPolicy } from "../../src/core/orchestrationPolicy/orchestrationPolicy.js";
 import type { WorkflowIntentDecision } from "../../src/core/goal/workflowIntent.js";
 import type { ScenarioProfile } from "../../src/core/scenarios/scenarioTypes.js";
-import { addTrace, retrieveSimilar, retrieveSimilarWithDiagnostics } from "../../src/core/traces/traceStore.js";
+import { addTrace, readTraces, retrieveSimilar, retrieveSimilarWithDiagnostics } from "../../src/core/traces/traceStore.js";
 import type { ObjectiveTraceV1 } from "../../src/core/traces/objectiveTrace.js";
 
 describe("objective trace memory and policy evolution", () => {
@@ -27,6 +27,42 @@ describe("objective trace memory and policy evolution", () => {
       expect(similar.map((item) => item.traceId)).toEqual(["trace_test"]);
       expect(similar[0]?.outcome.lessons).toContain("Run verifier after patch.");
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes concurrent objective trace appends", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-objective-trace-concurrent-"));
+    try {
+      const traces = Array.from({ length: 20 }, (_, index) => makeTrace(`fix failing test ${index}`, "success", { traceId: `trace_${index}` }));
+
+      await Promise.all(traces.map((trace) => addTrace(cwd, trace)));
+      const persisted = await readTraces(cwd, { limit: 50, newestFirst: false });
+
+      expect(persisted.map((trace) => trace.traceId).sort()).toEqual(traces.map((trace) => trace.traceId).sort());
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when malformed objective trace lines are skipped", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-objective-trace-malformed-"));
+    const stderr: string[] = [];
+    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(((chunk: string | Uint8Array) => {
+      stderr.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
+    try {
+      await mkdir(path.join(cwd, ".tomorrowedge"), { recursive: true });
+      const trace = makeTrace("fix failing test", "success", { traceId: "valid_trace" });
+      await writeFile(path.join(cwd, ".tomorrowedge", "objective-traces.jsonl"), `{not-json}\n${JSON.stringify(trace)}\n`, "utf8");
+
+      const traces = await readTraces(cwd, { limit: 10, newestFirst: false });
+
+      expect(traces.map((item) => item.traceId)).toEqual(["valid_trace"]);
+      expect(stderr.join("")).toContain("Ignoring malformed objective trace line 1");
+    } finally {
+      writeSpy.mockRestore();
       await rm(cwd, { recursive: true, force: true });
     }
   });

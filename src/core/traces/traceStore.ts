@@ -4,6 +4,8 @@ import type { ScenarioProfile, ScenarioType } from "../scenarios/scenarioTypes.j
 import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import type { ObjectiveTraceV1 } from "./objectiveTrace.js";
 import { scoreTraceUtility } from "./traceScorer.js";
+import { withFileLock } from "../persistence/fileLock.js";
+import { log } from "../../utils/logger.js";
 
 export type TraceRetrievalPolicy = Pick<OrchestrationPolicyGenome["tracePolicy"],
   "preferRecent" | "preferSuccessTraces" | "preferFailureTraces" | "avoidStaleTraces">;
@@ -15,21 +17,25 @@ export type TraceRetrievalDiagnostics = {
 };
 
 export async function addTrace(cwd: string, trace: ObjectiveTraceV1): Promise<void> {
-  const traces = await readTraces(cwd, { limit: 10_000, newestFirst: false });
-  const next = [...traces.filter((item) => item.traceId !== trace.traceId), trace].slice(-1000);
-  await writeTraceFile(cwd, next);
+  await withFileLock(traceFile(cwd), async () => {
+    const traces = await readTraces(cwd, { limit: 10_000, newestFirst: false });
+    const next = [...traces.filter((item) => item.traceId !== trace.traceId), trace].slice(-1000);
+    await writeTraceFile(cwd, next);
+  });
 }
 
 export async function readTraces(cwd: string, options: { limit?: number; newestFirst?: boolean; scenarioType?: ScenarioType } = {}): Promise<ObjectiveTraceV1[]> {
-  const content = await readFile(traceFile(cwd), "utf8").catch(() => "");
+  const filePath = traceFile(cwd);
+  const content = await readFile(filePath, "utf8").catch(() => "");
   const traces = content
     .split(/\r?\n/)
     .filter(Boolean)
-    .flatMap((line) => {
+    .flatMap((line, index) => {
       try {
         const parsed = JSON.parse(line) as ObjectiveTraceV1;
         return parsed.schemaVersion === "objective-trace/v1" ? [parsed] : [];
-      } catch {
+      } catch (error) {
+        log("warn", `Ignoring malformed objective trace line ${index + 1} in ${path.relative(cwd, filePath) || filePath}: ${error instanceof Error ? error.message : String(error)}`);
         return [];
       }
     })

@@ -5,7 +5,7 @@ import path from "node:path";
 import { defaultConfig } from "../../src/config/defaultConfig.js";
 import { runOfflineGraph } from "../../src/core/agentGraph/executor.js";
 import { saveSession } from "../../src/core/memory/sessionMemory.js";
-import { buildStrategyMemoryHints, compactFailureMemories, deleteFailureMemory, explainFailureMemories, previewLearnedTaskMemory, readFailureMemories, readLearnedTaskMemory, showFailureMemory } from "../../src/core/memory/taskMemory.js";
+import { appendLearnedTaskMemory, buildStrategyMemoryHints, compactFailureMemories, deleteFailureMemory, explainFailureMemories, previewLearnedTaskMemory, readFailureMemories, readLearnedTaskMemory, showFailureMemory } from "../../src/core/memory/taskMemory.js";
 import { memoryCommand } from "../../src/cli/commands/memory.js";
 import { saveProjectPreferences } from "../../src/core/memory/preferences.js";
 
@@ -31,6 +31,37 @@ describe("learned task memory", () => {
       expect(records[0]?.routingMode).toBe("balanced");
       expect(records[0]?.verificationCommands).toContain("npm test");
       expect(records[0]?.goalFingerprint).toMatch(/^[0-9a-f]+$/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes concurrent learned task memory appends", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-task-memory-concurrent-"));
+    try {
+      const base = await runOfflineGraph(cwd, "summarize project structure", defaultConfig);
+      const expectedGoals = Array.from({ length: 16 }, (_, index) => `preserve concurrent memory record ${index}`);
+
+      await Promise.all(expectedGoals.map((goal, index) => appendLearnedTaskMemory(cwd, {
+        ...base,
+        sessionId: `session_memory_${index}`,
+        goal,
+        runResults: [],
+        finalSummary: {
+          task: goal,
+          result: "completed",
+          changedFiles: [`file-${index}.ts`],
+          testsRun: ["npm test"],
+          evidence: ["Command passed: npm test"],
+          risksRemaining: [],
+          suggestedCommitMessage: "fix: test"
+        }
+      })));
+
+      const records = await readLearnedTaskMemory(cwd, 50, { newestFirst: false, includeStale: true });
+
+      expect(records).toHaveLength(expectedGoals.length);
+      expect(records.map((record) => record.goalPreview).sort()).toEqual([...expectedGoals].sort());
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
