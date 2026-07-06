@@ -6,6 +6,7 @@ import type { AgentRole } from "../../schemas/agentTask.js";
 import { redactText } from "../../safety/secretScanner.js";
 import type { EventPhase, OutcomeMismatchType } from "../events/eventTypes.js";
 import { classifyProviderError, type ProviderErrorCategory } from "../../safety/providerRedaction.js";
+import { withFileLock } from "../persistence/fileLock.js";
 
 export type TaskMemory = {
   preferredTestCommands: string[];
@@ -218,11 +219,14 @@ export const defaultFailureMemoryPolicy: FailureMemoryPolicy = {
 export async function appendLearnedTaskMemory(cwd: string, state: AgentGraphState, options: { failureMemory?: FailureMemoryPolicyInput } = {}): Promise<void> {
   const preview = await previewLearnedTaskMemory(cwd, state, options);
   if (!preview.record || !preview.wouldWrite) return;
-  const dir = path.join(cwd, ".tomorrowedge");
-  await mkdir(dir, { recursive: true });
-  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
-  const merged = mergeLearnedMemory(records, preview.record);
-  await writeTaskMemoryFile(cwd, merged);
+  const record = preview.record;
+  await withFileLock(taskMemoryFile(cwd), async () => {
+    const dir = path.join(cwd, ".tomorrowedge");
+    await mkdir(dir, { recursive: true });
+    const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+    const merged = mergeLearnedMemory(records, record);
+    await writeTaskMemoryFile(cwd, merged);
+  });
 }
 
 export async function previewLearnedTaskMemory(cwd: string, state: AgentGraphState, options: { failureMemory?: FailureMemoryPolicyInput } = {}): Promise<FailureMemoryPreview> {
@@ -827,26 +831,30 @@ export async function showFailureMemory(cwd: string, id: string, options: { incl
 }
 
 export async function deleteFailureMemory(cwd: string, id: string): Promise<boolean> {
-  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
-  const next = records.filter((record) => {
-    const failure = normalizeFailureRecord(record, cwd);
-    return failure.id !== id && failure.goalFingerprint !== id;
+  return withFileLock(taskMemoryFile(cwd), async () => {
+    const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+    const next = records.filter((record) => {
+      const failure = normalizeFailureRecord(record, cwd);
+      return failure.id !== id && failure.goalFingerprint !== id;
+    });
+    if (next.length === records.length) return false;
+    await writeTaskMemoryFile(cwd, next);
+    return true;
   });
-  if (next.length === records.length) return false;
-  await writeTaskMemoryFile(cwd, next);
-  return true;
 }
 
 export async function compactFailureMemories(cwd: string, options: { keepStale?: boolean; limit?: number } = {}): Promise<{ before: number; after: number; removed: number }> {
-  const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
-  const nonFailure = records.filter((record) => !isFailureMemoryLike(record));
-  const failures = records.filter(isFailureMemoryLike);
-  const keptFailures = failures
-    .filter((record) => options.keepStale || !normalizeFailureRecord(record, cwd).stale)
-    .slice(-(options.limit ?? 10_000));
-  const kept = [...nonFailure, ...keptFailures].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  await writeTaskMemoryFile(cwd, kept);
-  return { before: records.length, after: kept.length, removed: records.length - kept.length };
+  return withFileLock(taskMemoryFile(cwd), async () => {
+    const records = await readLearnedTaskMemory(cwd, 10_000, { newestFirst: false, includeStale: true });
+    const nonFailure = records.filter((record) => !isFailureMemoryLike(record));
+    const failures = records.filter(isFailureMemoryLike);
+    const keptFailures = failures
+      .filter((record) => options.keepStale || !normalizeFailureRecord(record, cwd).stale)
+      .slice(-(options.limit ?? 10_000));
+    const kept = [...nonFailure, ...keptFailures].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    await writeTaskMemoryFile(cwd, kept);
+    return { before: records.length, after: kept.length, removed: records.length - kept.length };
+  });
 }
 
 export async function explainFailureMemories(cwd: string, task: string, options: { limit?: number } = {}): Promise<FailureMemoryExplanation> {
@@ -1247,7 +1255,11 @@ function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemor
 async function writeTaskMemoryFile(cwd: string, records: LearnedTaskMemory[]): Promise<void> {
   const dir = path.join(cwd, ".tomorrowedge");
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "task-memory.jsonl"), records.map((record) => JSON.stringify(normalizeLearnedTaskMemory(record))).join("\n") + "\n", "utf8");
+  await writeFile(taskMemoryFile(cwd), records.map((record) => JSON.stringify(normalizeLearnedTaskMemory(record))).join("\n") + "\n", "utf8");
+}
+
+function taskMemoryFile(cwd: string): string {
+  return path.join(cwd, ".tomorrowedge", "task-memory.jsonl");
 }
 
 async function buildMemoryScope(cwd: string, policy?: FailureMemoryPolicy): Promise<MemoryScope> {
