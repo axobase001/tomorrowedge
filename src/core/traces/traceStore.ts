@@ -1,10 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ScenarioProfile, ScenarioType } from "../scenarios/scenarioTypes.js";
 import type { OrchestrationPolicyGenome } from "../orchestrationPolicy/orchestrationPolicy.js";
 import type { ObjectiveTraceV1 } from "./objectiveTrace.js";
 import { scoreTraceUtility } from "./traceScorer.js";
 import { withFileLock } from "../persistence/fileLock.js";
+import { writeFileAtomic } from "../persistence/atomicWrite.js";
 import { log } from "../../utils/logger.js";
 
 export type TraceRetrievalPolicy = Pick<OrchestrationPolicyGenome["tracePolicy"],
@@ -118,7 +119,7 @@ export async function sampleByScenario(cwd: string, scenarioType: ScenarioType, 
 
 async function writeTraceFile(cwd: string, traces: ObjectiveTraceV1[]): Promise<void> {
   await mkdir(path.join(cwd, ".tomorrowedge"), { recursive: true });
-  await writeFile(traceFile(cwd), traces.map((trace) => JSON.stringify(trace)).join("\n") + "\n", "utf8");
+  await writeFileAtomic(traceFile(cwd), traces.map((trace) => JSON.stringify(trace)).join("\n") + "\n");
 }
 
 function traceFile(cwd: string): string {

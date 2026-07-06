@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { StatusSpec } from "./specs.js";
+import { writeFileAtomic } from "../persistence/atomicWrite.js";
 
 export class StatusStore {
   readonly runDir: string;
@@ -33,8 +34,8 @@ export class StatusStore {
   async writeStatus(status: StatusSpec): Promise<void> {
     await this.initialize();
     await writeFile(this.tracePath, JSON.stringify(status) + "\n", { encoding: "utf8", flag: "a" });
-    await writeFile(this.latestPath, JSON.stringify(status, null, 2), "utf8");
-    await writeFile(this.progressPath, renderProgressMarkdown(status), "utf8");
+    await writeFileAtomic(this.latestPath, JSON.stringify(status, null, 2));
+    await writeFileAtomic(this.progressPath, renderProgressMarkdown(status));
   }
 
   async readLatest(): Promise<StatusSpec> {
