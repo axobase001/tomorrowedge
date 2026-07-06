@@ -321,7 +321,7 @@ function CockpitWebRoot() {
         setBusy(false);
         return;
       }
-      const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch });
+      const request = buildCockpitRunRequest({ goal, accessMode, setupReady, runMode, target: conversationTarget, testCommand, repairOnFail: effectiveRepairOnFail, fixtureFailingPatch, fullAutonomyConfirmed });
       if (request.runMode === "auto" && (request.livePatch || request.liveAdvisory || request.liveVision) && !window.confirm(t("composer.autoLiveConfirm"))) {
         setBusy(false);
         setStatusMessage(t("status.readyNewTask"));

@@ -10,6 +10,7 @@ export type CockpitRunRequestInput = {
   testCommand?: string;
   repairOnFail?: boolean;
   fixtureFailingPatch?: boolean;
+  fullAutonomyConfirmed?: boolean;
 };
 
 export type CockpitRunPreview = {
@@ -28,7 +29,8 @@ export function buildCockpitRunRequest({
   target = "core",
   testCommand,
   repairOnFail,
-  fixtureFailingPatch
+  fixtureFailingPatch,
+  fullAutonomyConfirmed
 }: CockpitRunRequestInput): CockpitRunRequest {
   const trimmedGoal = goal.trim();
   if (!trimmedGoal) throw new Error("goal_required");
@@ -46,6 +48,7 @@ export function buildCockpitRunRequest({
     liveVision: false,
     repairOnFail: resolvedRepairOnFail,
     approveRepair: fullAutonomy && resolvedRepairOnFail,
+    fullAutonomyConfirmed: fullAutonomy ? Boolean(fullAutonomyConfirmed) : undefined,
     testCommand: trimmedTestCommand || undefined,
     fixtureFailingPatch: Boolean(fixtureFailingPatch),
     to: target.trim() || "core"

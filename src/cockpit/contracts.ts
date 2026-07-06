@@ -431,6 +431,7 @@ export type CockpitRunRequest = {
   approveShell?: boolean;
   approveRepair?: boolean;
   repairOnFail?: boolean;
+  fullAutonomyConfirmed?: boolean;
   testCommand?: string;
   fixtureFailingPatch?: boolean;
   to?: string;
