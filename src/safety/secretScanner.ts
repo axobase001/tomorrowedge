@@ -6,7 +6,8 @@ export type SecretFinding = {
 
 const patterns: Array<[string, RegExp]> = [
   ["private_key", /-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----/],
-  ["api_key_assignment", /\b[A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)\b\s*=\s*['"]?[^'"\s]+/i],
+  ["api_key_assignment", /\b[A-Z0-9_]*(?:API[_-]?KEY|ACCESS[_-]?TOKEN|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|PRIVATE[_-]?KEY)[A-Z0-9_]*\b\s*=\s*['"]?[^'"\s,}]{8,}/],
+  ["api_key_assignment", /\b(?!authorization\b)(?![A-Za-z0-9_]*(?:env|header|name|id)\b)[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|token|secret|password|passwd|credential|auth|private[_-]?key)[A-Za-z0-9_]*\b\s*[:=]\s*(["'`])[^"'`\r\n]{8,}\1/i],
   ["bearer_token", /Bearer\s+[A-Za-z0-9._~+/=-]{20,}/],
   ["connection_string", /\b(?:postgres|mysql|mongodb|redis):\/\/[^/\s:]+:[^@\s]+@/i],
   ["aws_access_key", /\bAKIA[0-9A-Z]{16}\b/],

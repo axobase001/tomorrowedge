@@ -13,6 +13,7 @@ const packageJson = require("../../../package.json") as { version: string };
 
 export type DoctorOptions = {
   json?: boolean;
+  strict?: boolean;
 };
 
 export type DoctorDiagnostic = {
@@ -44,6 +45,7 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
   };
   if (options.json) {
     process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
+    applyStrictExitCode(diagnostics, options);
     return;
   }
   process.stdout.write("TomorrowEdge doctor\n");
@@ -64,6 +66,13 @@ export async function doctorCommand(cwd: string, options: DoctorOptions = {}): P
   for (const diagnostic of diagnostics) {
     process.stdout.write(`- ${diagnostic.id}: ${diagnostic.status}; ${diagnostic.checks.join("; ")}\n`);
     if (diagnostic.fix) process.stdout.write(`  fix: ${diagnostic.fix}\n`);
+  }
+  applyStrictExitCode(diagnostics, options);
+}
+
+function applyStrictExitCode(diagnostics: DoctorDiagnostic[], options: DoctorOptions): void {
+  if (options.strict && diagnostics.some((diagnostic) => diagnostic.status === "error")) {
+    process.exitCode = 1;
   }
 }
 

@@ -138,6 +138,7 @@ describe("config loader", () => {
   it("prints actionable doctor provider diagnostics as JSON", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-doctor-"));
     const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
+    const originalExitCode = process.exitCode;
     try {
       delete process.env.OPENROUTER_API_KEY;
       await captureStdout(() => initCommand(cwd, { provider: "openrouter" }));
@@ -151,9 +152,14 @@ describe("config loader", () => {
       expect(fixture?.status).toBe("ready");
       expect(openrouter?.status).toBe("error");
       expect(openrouter?.fix).toContain("OPENROUTER_API_KEY");
+
+      process.exitCode = undefined;
+      await captureStdout(() => doctorCommand(cwd, { json: true, strict: true }));
+      expect(process.exitCode).toBe(1);
     } finally {
       if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
       else process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+      process.exitCode = originalExitCode;
       await rm(cwd, { recursive: true, force: true });
     }
   });

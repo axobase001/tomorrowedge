@@ -13,7 +13,21 @@ import { createEventLedger } from "../../src/core/events/eventLedger.js";
 
 describe("safety", () => {
   it("detects secret-like assignments", () => {
-    expect(scanSecrets("OPENAI_API_KEY=sk-test").length).toBe(1);
+    expect(scanSecrets("OPENAI_API_KEY=sk-test-value").length).toBe(1);
+  });
+
+  it("detects camelCase and generic credential assignments", () => {
+    const content = [
+      "apiKey = 'sk-test-key'",
+      "privateKey: '-----BEGIN PRIVATE KEY-----'",
+      "credential = 'gateway-secret'",
+      "auth: 'session-token'",
+      "passwd = 'database-password'"
+    ].join("\n");
+
+    expect(scanSecrets(content).filter((finding) => finding.kind === "api_key_assignment")).toHaveLength(5);
+    expect(redactText(content)).not.toContain("gateway-secret");
+    expect(redactText(content)).not.toContain("session-token");
   });
 
   it("detects common provider tokens and redacts text", () => {

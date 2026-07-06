@@ -31,7 +31,7 @@
     "verify": "npm test && npm run build && npm run web:build && npm run docs:status && npm run secrets:scan && npm run audit:check && npm run pack:dry",
     "release:verify": "npm run verify && npm run package:smoke && npm run pack:dry:strict",
     "site:serve": "node scripts/serve-site.mjs",
-    "smoke:cli": "tsx src/cli/index.ts --help && tsx src/cli/index.ts doctor --json",
+    "smoke:cli": "tsx src/cli/index.ts --help && tsx src/cli/index.ts doctor --json --strict",
     "audit:check": "tsx scripts/audit-check.ts",
     "docs:status": "tsx scripts/docs-status-check.ts",
     "secrets:scan": "tsx scripts/secret-scan.ts",
