@@ -5,6 +5,7 @@ export type RunResult = {
   stderr: string;
   durationMs: number;
   success: boolean;
+  timedOut?: boolean;
   skipped?: boolean;
   skipReason?: string;
 };

@@ -327,6 +327,8 @@ const messages = {
     "view.liveSession": "Live session",
     "view.connected": "Connected",
     "view.disconnected": "Disconnected",
+    "view.reconnecting": "Reconnecting",
+    "view.reconnectingStatus": "Reconnecting live event stream (attempt {count})",
     "view.running": "Running"
   },
   zh: {
@@ -650,6 +652,8 @@ const messages = {
     "view.liveSession": "实时会话",
     "view.connected": "已连接",
     "view.disconnected": "已断开",
+    "view.reconnecting": "正在重连",
+    "view.reconnectingStatus": "实时事件流正在重连（第 {count} 次）",
     "view.running": "运行中"
   }
 } as const;
@@ -677,6 +681,7 @@ export function translateKnownValue(t: Translator, value: string): string {
     "Live session": "view.liveSession",
     "Connected": "view.connected",
     "Disconnected": "view.disconnected",
+    "Reconnecting": "view.reconnecting",
     "Running": "view.running",
     "Fixture": "topbar.fixture",
     "Snapshot": "topbar.snapshot",

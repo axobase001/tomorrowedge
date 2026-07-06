@@ -257,7 +257,8 @@ async function runShell(command: string, cwd: string, timeoutMs: number): Promis
     return {
       exitCode: result.exitCode,
       stdout: result.stdout,
-      stderr: result.stderr
+      stderr: result.stderr,
+      error: result.timedOut ? `timed out after ${timeoutMs}ms` : undefined
     };
   } catch (error) {
     return {

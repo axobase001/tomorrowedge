@@ -1145,6 +1145,10 @@ async function runCandidatePhase(runtime: OfflineGraphRuntime, state: AgentGraph
     for (const candidateRole of completedCandidateRoles) {
       recordRoleNodeExecutionResult(state, ledger, candidateRole, "success", `${candidateRole} produced live patch candidate(s)`);
     }
+    if (label === "livePatch" && result.value.candidates.length === 0) {
+      const reason = "live patch produced no valid candidates";
+      recordRoleNodeExecutionResult(state, ledger, "coder_a", "blocked", reason, [], reason);
+    }
     if (result.value.notes.length) {
       state.modelNotes.push(...result.value.notes);
       refreshUsageSummary(state);
@@ -1215,6 +1219,11 @@ async function runCoderRoleNode(runtime: OfflineGraphRuntime, state: AgentGraphS
         state.modelNotes.push(...livePatchResult.notes);
         refreshUsageSummary(state);
         recordModelNoteEvents(ledger, livePatchResult.notes, state.usageSummary);
+      }
+      if (validCandidates.length === 0) {
+        const reason = "live patch produced no valid candidates";
+        recordRoleNodeExecutionResult(state, ledger, role, "blocked", reason, [], reason);
+        return;
       }
       const completedRoles = new Set(validCandidates.map((candidate) => candidate.agentId as AgentRole));
       for (const completedRole of completedRoles) {

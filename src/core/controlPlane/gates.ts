@@ -249,7 +249,7 @@ async function runShellCommand(command: string, cwd: string, timeoutMs: number):
     exitCode: result.exitCode,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: false,
+    timedOut: Boolean(result.timedOut),
     error: null
   };
 }

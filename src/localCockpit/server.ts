@@ -57,6 +57,7 @@ export type LocalCockpitHandle = {
 };
 
 const maxJsonBodyBytes = 1_000_000;
+const defaultSseHeartbeatMs = 15_000;
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
 export async function startLocalCockpitServer(cwd: string, options: LocalCockpitServerOptions = {}): Promise<LocalCockpitHandle> {
@@ -1073,6 +1074,10 @@ function sendLiveEvents(cwd: string, response: ServerResponse, sessionId: string
     response.write(`data: ${JSON.stringify(data)}\n\n`);
   };
   write("ready", { sessionId });
+  const heartbeat = setInterval(() => {
+    response.write(": keepalive\n\n");
+  }, cockpitSseHeartbeatMs());
+  heartbeat.unref?.();
   const snapshot = cockpitEventBus.getSnapshot(sessionId);
   if (snapshot) write("snapshot", { snapshot, viewModel: buildCockpitViewModel(cwd, snapshot.state, { source: "live", connectionState: "connected", stale: false }) });
   const unsubscribe = cockpitEventBus.subscribe(sessionId, (message) => {
@@ -1082,7 +1087,15 @@ function sendLiveEvents(cwd: string, response: ServerResponse, sessionId: string
       write(kind, snapshotMessage ? { ...message, viewModel: buildCockpitViewModel(cwd, snapshotMessage.snapshot.state, { source: "live", connectionState: "connected", stale: false }) } : message);
     }
   });
-  response.on("close", unsubscribe);
+  response.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+}
+
+function cockpitSseHeartbeatMs(): number {
+  const parsed = Number(process.env.TOMORROWEDGE_COCKPIT_SSE_HEARTBEAT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultSseHeartbeatMs;
 }
 
 function send(response: ServerResponse, status: number, body: string | Buffer, contentType: string): void {

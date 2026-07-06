@@ -29,6 +29,7 @@ import {
   type CockpitSetupStatus
 } from "./api.js";
 import { createTranslator, normalizeLanguage, type GuiLanguage } from "./i18n.js";
+import { liveReconnectDelayMs } from "./liveReconnect.js";
 import { buildCockpitRunRequest, describeCockpitRunPreview } from "./runRequest.js";
 
 const emptyViewModel: CockpitViewModel = {
@@ -107,8 +108,10 @@ function CockpitWebRoot() {
   const [setupConnectionResult, setSetupConnectionResult] = useState<CockpitProviderConnectionResult | undefined>(undefined);
   const [keyManagerOpen, setKeyManagerOpen] = useState(false);
   const liveSource = useRef<EventSource | undefined>(undefined);
+  const liveReconnectTimer = useRef<number | undefined>(undefined);
   const selectedSessionRef = useRef("latest");
   const setupDismissedRef = useRef(readSetupDismissed());
+  const connectLiveRef = useRef<(sessionId: string, attempt?: number) => void>(() => undefined);
 
   const updateLanguage = useCallback((nextLanguage: GuiLanguage) => {
     setLanguage(nextLanguage);
@@ -121,6 +124,10 @@ function CockpitWebRoot() {
   }, []);
 
   const closeLiveSource = useCallback(() => {
+    if (liveReconnectTimer.current !== undefined) {
+      window.clearTimeout(liveReconnectTimer.current);
+      liveReconnectTimer.current = undefined;
+    }
     liveSource.current?.close();
     liveSource.current = undefined;
   }, []);
@@ -177,17 +184,47 @@ function CockpitWebRoot() {
     return closeLiveSource;
   }, [closeLiveSource, refresh]);
 
-  const connectLive = useCallback((sessionId: string) => {
-    closeLiveSource();
+  const connectLive = useCallback((sessionId: string, attempt = 0) => {
+    if (liveReconnectTimer.current !== undefined) {
+      window.clearTimeout(liveReconnectTimer.current);
+      liveReconnectTimer.current = undefined;
+    }
+    liveSource.current?.close();
+    liveSource.current = undefined;
     const source = new EventSource(cockpitLiveEventsUrl(sessionId, apiOptions));
     liveSource.current = source;
     let liveRunningCostUsd = 0;
+    source.onopen = () => {
+      setViewModel((current) => ({
+        ...current,
+        sessionId: current.sessionId ?? sessionId,
+        sessionMeta: {
+          ...current.sessionMeta,
+          source: "live",
+          sourceLabel: "Live session",
+          connectionState: "connected",
+          connectionLabel: "Connected",
+          stale: false,
+          reconnectAttempts: 0,
+          message: undefined
+        }
+      }));
+    };
     source.addEventListener("snapshot", (message) => {
       const payload = JSON.parse(message.data) as { viewModel?: CockpitViewModel; snapshot?: { done?: boolean } };
-      if (payload.viewModel) setViewModel(payload.viewModel);
+      if (payload.viewModel) {
+        setViewModel({
+          ...payload.viewModel,
+          sessionMeta: {
+            ...payload.viewModel.sessionMeta,
+            reconnectAttempts: 0
+          }
+        });
+      }
       if (payload.snapshot?.done) {
         setBusy(false);
         source.close();
+        if (liveSource.current === source) liveSource.current = undefined;
         void loadCompletedRun(sessionId).catch((error) => setStatusMessage(errorMessage(error)));
       }
     });
@@ -208,7 +245,9 @@ function CockpitWebRoot() {
           sourceLabel: "Live session",
           connectionState: "connected",
           connectionLabel: "Connected",
-          stale: false
+          stale: false,
+          reconnectAttempts: 0,
+          message: undefined
         },
         telemetry: liveRunningCostUsd > 0 ? {
           ...current.telemetry,
@@ -224,19 +263,34 @@ function CockpitWebRoot() {
       }));
     });
     source.onerror = () => {
-      setBusy(false);
+      if (liveSource.current !== source) return;
+      source.close();
+      liveSource.current = undefined;
+      const nextAttempt = attempt + 1;
+      setBusy(true);
       setViewModel((current) => ({
         ...current,
         sessionMeta: {
           ...current.sessionMeta,
-          connectionState: "disconnected",
-          connectionLabel: "Disconnected",
-          message: "Live event stream disconnected."
+          source: "live",
+          sourceLabel: "Live session",
+          connectionState: "reconnecting",
+          connectionLabel: "Reconnecting",
+          stale: false,
+          reconnectAttempts: nextAttempt,
+          message: t("view.reconnectingStatus", { count: nextAttempt })
         }
       }));
-      setStatusMessage(t("view.disconnected"));
+      setStatusMessage(t("view.reconnectingStatus", { count: nextAttempt }));
+      liveReconnectTimer.current = window.setTimeout(() => {
+        connectLiveRef.current(sessionId, nextAttempt);
+      }, liveReconnectDelayMs(nextAttempt));
     };
-  }, [apiOptions, closeLiveSource, loadCompletedRun, t]);
+  }, [apiOptions, loadCompletedRun, t]);
+
+  useEffect(() => {
+    connectLiveRef.current = connectLive;
+  }, [connectLive]);
 
   const run = useCallback(async () => {
     if (busy) {
