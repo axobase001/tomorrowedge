@@ -7,6 +7,7 @@ export type ShellExecutionOptions = {
   approved: boolean;
   policy?: ShellPolicy;
   verificationAllowlist?: string[];
+  timeoutMs?: number;
 };
 
 export async function runApprovedCommand(cwd: string, command: string, approvedOrOptions: boolean | ShellExecutionOptions): Promise<RunResult> {
@@ -25,7 +26,7 @@ export async function runApprovedCommand(cwd: string, command: string, approvedO
     shell: false,
     preferLocal: true,
     reject: false,
-    timeout: 10 * 60 * 1000
+    timeout: options.timeoutMs ?? 10 * 60 * 1000
   });
   return {
     command,

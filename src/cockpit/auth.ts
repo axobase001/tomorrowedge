@@ -46,3 +46,35 @@ export function isAllowedBrowserOrigin(request: IncomingMessage): boolean {
     return false;
   }
 }
+
+export function isAllowedCockpitHost(request: IncomingMessage, options: { host: string; port: number }): boolean {
+  const host = request.headers.host;
+  if (!host || Array.isArray(host)) return false;
+  const parsed = parseHostHeader(host);
+  if (!parsed) return false;
+  if (parsed.port !== undefined && parsed.port !== options.port) return false;
+  if (parsed.port === undefined && options.port !== 80) return false;
+  const hostname = normalizeHostname(parsed.hostname);
+  const bindHost = normalizeHostname(options.host);
+  return isLoopbackHostname(hostname) || hostname === bindHost;
+}
+
+function parseHostHeader(host: string): { hostname: string; port?: number } | undefined {
+  if (/[/?#\s]/.test(host)) return undefined;
+  try {
+    const parsed = new URL(`http://${host}`);
+    const port = parsed.port ? Number(parsed.port) : undefined;
+    if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65_535)) return undefined;
+    return { hostname: parsed.hostname, port };
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
