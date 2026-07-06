@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentGraphState } from "../agentGraph/state.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
@@ -7,6 +7,7 @@ import { redactText } from "../../safety/secretScanner.js";
 import type { EventPhase, OutcomeMismatchType } from "../events/eventTypes.js";
 import { classifyProviderError, type ProviderErrorCategory } from "../../safety/providerRedaction.js";
 import { withFileLock } from "../persistence/fileLock.js";
+import { writeFileAtomic } from "../persistence/atomicWrite.js";
 
 export type TaskMemory = {
   preferredTestCommands: string[];
@@ -1255,7 +1256,7 @@ function mergeLearnedMemory(records: LearnedTaskMemory[], next: LearnedTaskMemor
 async function writeTaskMemoryFile(cwd: string, records: LearnedTaskMemory[]): Promise<void> {
   const dir = path.join(cwd, ".tomorrowedge");
   await mkdir(dir, { recursive: true });
-  await writeFile(taskMemoryFile(cwd), records.map((record) => JSON.stringify(normalizeLearnedTaskMemory(record))).join("\n") + "\n", "utf8");
+  await writeFileAtomic(taskMemoryFile(cwd), records.map((record) => JSON.stringify(normalizeLearnedTaskMemory(record))).join("\n") + "\n");
 }
 
 function taskMemoryFile(cwd: string): string {
