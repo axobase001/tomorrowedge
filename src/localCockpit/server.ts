@@ -134,7 +134,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { ok: true, service: "tomorrowedge-local-cockpit" });
     }
-    if (url.pathname.startsWith("/api/") && !isAuthorizedCockpitRequest(request, url, nonce)) {
+    if (url.pathname.startsWith("/api/") && !isAuthorizedCockpitRequest(request, nonce)) {
       return sendJson(response, 403, { error: "forbidden", message: "Missing or invalid local cockpit access token." });
     }
     if (url.pathname.startsWith("/api/") && isMutatingMethod(request.method) && !isAllowedBrowserOrigin(request)) {

@@ -292,7 +292,7 @@ program
   .option("--limit <n>", "number of free/low-cost recommendations to print")
   .action((options: { realSmoke?: boolean; smokeSuite?: boolean; refreshFree?: boolean; configureFree?: string; freeFirst?: boolean; connectionTest?: boolean; provider?: string; limit?: string }) => modelsCommand(cwd, options));
 
-program.command("doctor").description("Check local configuration and provider readiness").option("--json", "print machine-readable diagnostics").action((options: { json?: boolean }) => doctorCommand(cwd, options));
+program.command("doctor").description("Check local configuration and provider readiness").option("--json", "print machine-readable diagnostics").option("--strict", "exit non-zero when diagnostics contain errors").action((options: { json?: boolean; strict?: boolean }) => doctorCommand(cwd, options));
 
 program.command("replay").description("Replay a saved local session").argument("<session-id>", "session id without .json").action((sessionId: string) => replayCommand(cwd, sessionId));
 

@@ -11,6 +11,14 @@ import { saveSession } from "../../src/core/memory/sessionMemory.js";
 import { markLiveRunFailed, startLocalCockpitServer } from "../../src/localCockpit/server.js";
 import { clearCockpitProviderModelCache, listCockpitProviderModels } from "../../src/localCockpit/setup.js";
 
+type TestCockpitServer = Awaited<ReturnType<typeof startLocalCockpitServer>>;
+
+function cockpitFetch(server: TestCockpitServer, pathName: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("x-tomorrowedge-token", server.nonce);
+  return fetch(`${server.url}${pathName}`, { ...init, headers });
+}
+
 async function withEnvOverrides<T>(overrides: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
@@ -44,7 +52,7 @@ describe("local cockpit server", () => {
       const html = await shell.text();
       const icon = await fetch(`${server.url}/icon.svg`).then((response) => response.text());
       const manifest = await fetch(`${server.url}/manifest.webmanifest`).then((response) => response.json()) as { name: string; icons: Array<{ src: string }> };
-      const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((response) => response.json()) as unknown[];
+      const sessions = await cockpitFetch(server, `/api/sessions`).then((response) => response.json()) as unknown[];
       const cookieSessions = await fetch(`${server.url}/api/sessions`, { headers: { cookie: shell.headers.get("set-cookie") ?? "" } }).then((response) => response.json()) as unknown[];
 
       expect(server.openUrl).toBe(server.url);
@@ -174,7 +182,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const vm = await fetch(`${server.url}/api/sessions/latest/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { workflow: Array<{ label: string }>; currentApproval?: { kind: string } };
+      const vm = await cockpitFetch(server, `/api/sessions/latest/view-model`).then((response) => response.json()) as { workflow: Array<{ label: string }>; currentApproval?: { kind: string } };
 
       expect(vm.workflow.map((step) => step.label)).toEqual(["Plan", "Route", "Edit", "Review", "Test", "Judge", "Approve"]);
       expect(vm.currentApproval?.kind).toBe("patch");
@@ -190,7 +198,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const empty = await fetch(`${server.url}/api/sessions/${state.sessionId}/messages?nonce=${server.nonce}`, {
+      const empty = await cockpitFetch(server, `/api/sessions/${state.sessionId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: "   " })
@@ -200,14 +208,14 @@ describe("local cockpit server", () => {
       expect(empty.status).toBe(400);
       expect(emptyPayload.error).toBe("message_required");
 
-      const response = await fetch(`${server.url}/api/sessions/${state.sessionId}/messages?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/sessions/${state.sessionId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: "please continue from the previous summary", target: "reviewer" })
       });
       const payload = await response.json() as { sessionId: string; status: string; turnId: string; contextArtifactRef: string; viewModel: { sessionId: string; conversation: Array<{ speaker: string; continuation: boolean; summary: string }>; rawEvents: Array<{ type: string; policySummary?: string }> } };
-      const reloaded = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as typeof payload.viewModel;
-      const context = await fetch(`${server.url}/api/sessions/${state.sessionId}/artifacts/${encodeURIComponent(payload.contextArtifactRef)}?nonce=${server.nonce}`).then((item) => item.text());
+      const reloaded = await cockpitFetch(server, `/api/sessions/${state.sessionId}/view-model`).then((item) => item.json()) as typeof payload.viewModel;
+      const context = await cockpitFetch(server, `/api/sessions/${state.sessionId}/artifacts/${encodeURIComponent(payload.contextArtifactRef)}`).then((item) => item.text());
 
       expect(response.status).toBe(200);
       expect(payload.status).toBe("recorded");
@@ -239,24 +247,24 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const rename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, {
+      const rename = await cockpitFetch(server, `/api/sessions/${state.sessionId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "renamed smoke session" })
       });
       const renamed = await rename.json() as { goal: string; viewModel?: { goal: string } };
-      const afterRename = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`).then((response) => response.json()) as { state: { goal: string } };
+      const afterRename = await cockpitFetch(server, `/api/sessions/${state.sessionId}`).then((response) => response.json()) as { state: { goal: string } };
 
       expect(rename.status).toBe(200);
       expect(renamed.goal).toBe("renamed smoke session");
       expect(renamed.viewModel?.goal).toBe("renamed smoke session");
       expect(afterRename.state.goal).toBe("renamed smoke session");
 
-      const missingConfirmation = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`, { method: "DELETE" });
+      const missingConfirmation = await cockpitFetch(server, `/api/sessions/${state.sessionId}`, { method: "DELETE" });
       const confirmationError = await missingConfirmation.json() as { error: string };
-      const deleted = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}&confirmed=true`, { method: "DELETE" });
+      const deleted = await cockpitFetch(server, `/api/sessions/${state.sessionId}?confirmed=true`, { method: "DELETE" });
       const sessions = await deleted.json() as Array<{ sessionId: string }>;
-      const missing = await fetch(`${server.url}/api/sessions/${state.sessionId}?nonce=${server.nonce}`);
+      const missing = await cockpitFetch(server, `/api/sessions/${state.sessionId}`);
 
       expect(missingConfirmation.status).toBe(400);
       expect(confirmationError.error).toBe("delete_session_confirmation_required");
@@ -293,7 +301,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
@@ -306,7 +314,7 @@ describe("local cockpit server", () => {
       expect(payload.viewModel.currentApproval?.kind).toBe("shell");
       expect(payload.viewModel.main.filesChanged).toContain("index.js");
 
-      const shellResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const shellResponse = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: payload.viewModel.currentApproval?.id })
@@ -352,7 +360,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, patchedState);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:test" })
@@ -410,7 +418,7 @@ describe("local cockpit server", () => {
     });
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:test" })
@@ -442,7 +450,7 @@ describe("local cockpit server", () => {
     const before = await readFile(path.join(cwd, "index.js"), "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:not-current" })
@@ -466,19 +474,19 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const vm = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((response) => response.json()) as { currentApproval?: { id: string } };
-      await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const vm = await cockpitFetch(server, `/api/sessions/${state.sessionId}/view-model`).then((response) => response.json()) as { currentApproval?: { id: string } };
+      await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
       });
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_shell", approvalId: "shell:not-current" })
       });
       const payload = await response.json() as { error: string };
-      const after = await fetch(`${server.url}/api/sessions/${state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as { main: { testStatus?: string }; rawEvents: Array<{ type: string }> };
+      const after = await cockpitFetch(server, `/api/sessions/${state.sessionId}/view-model`).then((item) => item.json()) as { main: { testStatus?: string }; rawEvents: Array<{ type: string }> };
 
       expect(response.status).toBe(409);
       expect(payload.error).toBe("approval_mismatch");
@@ -498,7 +506,7 @@ describe("local cockpit server", () => {
     const before = await readFile(path.join(cwd, "index.js"), "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch" })
@@ -533,7 +541,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, brokenState);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const first = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const first = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
@@ -546,7 +554,7 @@ describe("local cockpit server", () => {
       expect(payload.viewModel.main.title).toBe("Failure diagnosis");
       expect(payload.viewModel.main.body).toContain("Patch apply failed");
 
-      const second = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const second = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "approve_patch", approvalId: "patch:fixture_candidate_a" })
@@ -568,7 +576,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, action: "request_re_review", feedback: "please review again" })
@@ -590,7 +598,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-json-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{not-json"
@@ -609,7 +617,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-access-mode-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "fix failing test", accessMode: "totally-open" })
@@ -628,7 +636,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-mode-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "fix failing test", runMode: "cloudish" })
@@ -647,13 +655,13 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-council-run-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "rewrite this application in Rust", runMode: "council", accessMode: "full" })
       });
       expect(response.status).toBe(202);
-      const session = await waitForLatestSession(server.url, server.nonce);
+      const session = await waitForLatestSession(server);
 
       expect(session.state.events.map((event) => event.type)).toEqual(expect.arrayContaining([
         "chief_agent_selected",
@@ -679,13 +687,13 @@ describe("local cockpit server", () => {
     await writeFile(path.join(cwd, "index.js"), "module.exports = { add: () => 'root should stay unchanged' };\n", "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial", approvePatch: true })
       });
       expect(response.status).toBe(202);
-      const session = await waitForLatestSession(server.url, server.nonce);
+      const session = await waitForLatestSession(server);
       const rootIndex = await readFile(path.join(cwd, "index.js"), "utf8");
 
       expect(session.state.changedFiles).toContain("index.js");
@@ -700,7 +708,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-cancel-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial" })
@@ -710,13 +718,13 @@ describe("local cockpit server", () => {
       expect(response.status).toBe(202);
       expect(startPayload.sessionId).toMatch(/^session_/);
 
-      const cancelResponse = await fetch(`${server.url}/api/runs/${startPayload.sessionId}/cancel?nonce=${server.nonce}`, {
+      const cancelResponse = await cockpitFetch(server, `/api/runs/${startPayload.sessionId}/cancel`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({})
       });
       const cancelPayload = await cancelResponse.json() as { status: string; message: string; viewModel: { status: string; rawEvents: Array<{ type: string; result?: string; reason?: string }> } };
-      const session = await fetch(`${server.url}/api/sessions/${startPayload.sessionId}?nonce=${server.nonce}`).then((item) => item.json()) as { state: { finalSummary?: { result: string }; events: Array<{ type: string; result?: string; reason?: string }> } };
+      const session = await cockpitFetch(server, `/api/sessions/${startPayload.sessionId}`).then((item) => item.json()) as { state: { finalSummary?: { result: string }; events: Array<{ type: string; result?: string; reason?: string }> } };
 
       expect(cancelResponse.status).toBe(200);
       expect(cancelPayload.status).toBe("canceled");
@@ -746,20 +754,20 @@ describe("local cockpit server", () => {
     await writeFile(path.join(cwd, "index.js"), "module.exports = { add: () => 'root should stay unchanged' };\n", "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "partial" })
       });
       expect(response.status).toBe(202);
-      const session = await waitForLatestSession(server.url, server.nonce);
-      const vm = await fetch(`${server.url}/api/sessions/${session.state.sessionId}/view-model?nonce=${server.nonce}`).then((item) => item.json()) as { currentApproval?: { id: string; kind: string } };
+      const session = await waitForLatestSession(server);
+      const vm = await cockpitFetch(server, `/api/sessions/${session.state.sessionId}/view-model`).then((item) => item.json()) as { currentApproval?: { id: string; kind: string } };
 
       expect(session.state.runContext?.fixtureWorkspace).toBeTruthy();
       expect(session.state.runContext?.executionCwd).toBe(session.state.runContext?.fixtureWorkspace);
       expect(vm.currentApproval?.kind).toBe("patch");
 
-      const patchResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const patchResponse = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: session.state.sessionId, action: "approve_patch", approvalId: vm.currentApproval?.id })
@@ -773,7 +781,7 @@ describe("local cockpit server", () => {
       expect(patchPayload.viewModel.main.filesChanged).toContain("index.js");
       expect(rootIndexAfterPatch).toContain("root should stay unchanged");
 
-      const shellResponse = await fetch(`${server.url}/api/approvals?nonce=${server.nonce}`, {
+      const shellResponse = await cockpitFetch(server, `/api/approvals`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId: session.state.sessionId, action: "approve_shell", approvalId: patchPayload.viewModel.currentApproval?.id })
@@ -797,13 +805,13 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-run-target-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "review architecture and suggest improvements, do not edit", runMode: "offline", accessMode: "restricted", to: "reviewer" })
       });
       expect(response.status).toBe(202);
-      const session = await waitForLatestSession(server.url, server.nonce);
+      const session = await waitForLatestSession(server);
       const target = session.state.events.find((event) => event.type === "conversation_target") as { target?: string } | undefined;
       const modelCalls = session.state.events.filter((event) => event.type === "model_call");
 
@@ -822,13 +830,13 @@ describe("local cockpit server", () => {
     await writeFile(path.join(cwd, ".tomorrowedge", "preferences.json"), JSON.stringify({ accessMode: "full" }), "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "list files and summarize structure", runMode: "offline" })
       });
       expect(response.status).toBe(202);
-      const session = await waitForLatestSession(server.url, server.nonce);
+      const session = await waitForLatestSession(server);
 
       expect(session.state.access.mode).toBe("full");
     } finally {
@@ -842,7 +850,7 @@ describe("local cockpit server", () => {
       const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-setup-"));
       const server = await startLocalCockpitServer(cwd, { port: 0 });
       try {
-        const before = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { needsSetup: boolean; recommendedProvider: string; selectedProvider?: string; selectedModel?: string; providers: Array<{ id: string; keyConfigured: boolean }> };
+        const before = await cockpitFetch(server, `/api/setup/status`).then((response) => response.json()) as { needsSetup: boolean; recommendedProvider: string; selectedProvider?: string; selectedModel?: string; providers: Array<{ id: string; keyConfigured: boolean }> };
 
         expect(before.needsSetup).toBe(true);
         expect(before.recommendedProvider).toBe("openrouter");
@@ -850,7 +858,7 @@ describe("local cockpit server", () => {
         expect(before.selectedModel).toBeUndefined();
         expect(before.providers.some((provider) => provider.id === "openrouter" && provider.keyConfigured === false)).toBe(true);
 
-        const response = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+        const response = await cockpitFetch(server, `/api/setup/configure`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -885,7 +893,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-keys-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -912,9 +920,9 @@ describe("local cockpit server", () => {
       expect(secretsFile).toContain("encrypted_file");
       expect(secretsFile).not.toContain("test-panel-openrouter-key");
 
-      const missingConfirmation = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, { method: "DELETE" });
+      const missingConfirmation = await cockpitFetch(server, `/api/setup/keys/openrouter`, { method: "DELETE" });
       const confirmationError = await missingConfirmation.json() as { error: string };
-      const deleteResponse = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}&confirmed=true`, { method: "DELETE" });
+      const deleteResponse = await cockpitFetch(server, `/api/setup/keys/openrouter?confirmed=true`, { method: "DELETE" });
       const afterDelete = await deleteResponse.json() as { providers: Array<{ id: string; enabled: boolean; keyConfigured: boolean }> };
       const secretsFileAfterDelete = await readOptionalFile(path.join(cwd, ".tomorrowedge", "secrets.enc"));
 
@@ -937,7 +945,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-deepseek-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/deepseek?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/deepseek`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -966,7 +974,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-only-save-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const first = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      const first = await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -975,7 +983,7 @@ describe("local cockpit server", () => {
           apiKey: "test-model-only-key"
         })
       });
-      const second = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      const second = await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1007,7 +1015,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-provider-runtime-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1040,7 +1048,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-only-missing-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1065,7 +1073,7 @@ describe("local cockpit server", () => {
       const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-model-list-"));
       const server = await startLocalCockpitServer(cwd, { port: 0 });
       try {
-        const response = await fetch(`${server.url}/api/setup/models?provider=deepseek&nonce=${server.nonce}`);
+        const response = await cockpitFetch(server, `/api/setup/models?provider=deepseek`);
         const models = await response.json() as Array<{ id: string; source: string; isFree?: boolean }>;
 
         expect(response.status).toBe(200);
@@ -1242,7 +1250,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-provider-mismatch-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/openai_compatible?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/openai_compatible`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1269,7 +1277,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-role-mismatch-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const setupResponse = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+      const setupResponse = await cockpitFetch(server, `/api/setup/configure`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1284,7 +1292,7 @@ describe("local cockpit server", () => {
       expect(setupResponse.status).toBe(400);
       expect(setupPayload.message).toContain("does not match provider deepseek");
 
-      const roleResponse = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+      const roleResponse = await cockpitFetch(server, `/api/setup/roles`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1309,7 +1317,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-compatible-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/openai_compatible?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/openai_compatible`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1339,7 +1347,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-custom-gateway-key-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/team-relay?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/team-relay`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1397,7 +1405,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-no-auth-gateway-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/keys/local-relay?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/keys/local-relay`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1457,7 +1465,7 @@ describe("local cockpit server", () => {
     });
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+      const status = await cockpitFetch(server, `/api/setup/status`).then((response) => response.json()) as {
         needsSetup: boolean;
         selectedProvider?: string;
         selectedModel?: string;
@@ -1502,7 +1510,7 @@ describe("local cockpit server", () => {
     });
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as {
+      const status = await cockpitFetch(server, `/api/setup/status`).then((response) => response.json()) as {
         needsSetup: boolean;
         selectedProvider?: string;
         selectedModel?: string;
@@ -1526,7 +1534,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-roles-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      await fetch(`${server.url}/api/setup/keys/openrouter?nonce=${server.nonce}`, {
+      await cockpitFetch(server, `/api/setup/keys/openrouter`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1535,7 +1543,7 @@ describe("local cockpit server", () => {
           apiKey: "test-role-panel-key"
         })
       });
-      const response = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/roles`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1577,7 +1585,7 @@ describe("local cockpit server", () => {
     });
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const status = await fetch(`${server.url}/api/setup/status?nonce=${server.nonce}`).then((response) => response.json()) as { externalAgents: Array<{ id: string; provider: string; name: string }> };
+      const status = await cockpitFetch(server, `/api/setup/status`).then((response) => response.json()) as { externalAgents: Array<{ id: string; provider: string; name: string }> };
 
       expect(status.externalAgents).toContainEqual(expect.objectContaining({
         id: "codex",
@@ -1585,7 +1593,7 @@ describe("local cockpit server", () => {
         name: "Codex"
       }));
 
-      const response = await fetch(`${server.url}/api/setup/roles?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/roles`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1610,7 +1618,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-setup-model-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/setup/configure?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/setup/configure`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ provider: "openrouter", model: "" })
@@ -1625,14 +1633,16 @@ describe("local cockpit server", () => {
     }
   });
 
-  it("rejects multibyte invalid cockpit tokens without throwing", async () => {
+  it("rejects query-string cockpit tokens without throwing", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-token-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
       const badNonce = encodeURIComponent(`${server.nonce.slice(0, -1)}好`);
       const response = await fetch(`${server.url}/api/sessions?nonce=${badNonce}`);
+      const queryOnly = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`);
 
       expect(response.status).toBe(403);
+      expect(queryOnly.status).toBe(403);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
@@ -1660,13 +1670,13 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-empty-run-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "   " })
       });
       const payload = await response.json() as { error: string };
-      const sessions = await fetch(`${server.url}/api/sessions?nonce=${server.nonce}`).then((item) => item.json()) as unknown[];
+      const sessions = await cockpitFetch(server, `/api/sessions`).then((item) => item.json()) as unknown[];
 
       expect(response.status).toBe(400);
       expect(payload.error).toBe("goal_required");
@@ -1681,7 +1691,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-origin-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/runs?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: "http://evil.example" },
         body: JSON.stringify({ goal: "fix failing test" })
@@ -1700,7 +1710,7 @@ describe("local cockpit server", () => {
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
       const absoluteRef = encodeURIComponent(path.resolve(cwd, "outside.txt"));
-      const response = await fetch(`${server.url}/api/sessions/session_test/artifacts/${absoluteRef}?nonce=${server.nonce}`);
+      const response = await cockpitFetch(server, `/api/sessions/session_test/artifacts/${absoluteRef}`);
 
       expect(response.status).toBe(400);
     } finally {
@@ -1715,7 +1725,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/sessions/${state.sessionId}/artifacts/events.jsonl?nonce=${server.nonce}`);
+      const response = await cockpitFetch(server, `/api/sessions/${state.sessionId}/artifacts/events.jsonl`);
       const payload = await response.json() as { error: string };
 
       expect(response.status).toBe(400);
@@ -1733,7 +1743,7 @@ describe("local cockpit server", () => {
     await writeFile(path.join(sessionDir, "secret.txt"), "OPENAI_API_KEY=sk-123456789012345678901234", "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const text = await fetch(`${server.url}/api/sessions/session_api_redact/artifacts/artifacts/stdout/secret.txt?nonce=${server.nonce}`).then((response) => response.text());
+      const text = await cockpitFetch(server, `/api/sessions/session_api_redact/artifacts/artifacts/stdout/secret.txt`).then((response) => response.text());
 
       expect(text).toContain("[redacted]");
       expect(text).not.toContain("sk-");
@@ -1747,7 +1757,7 @@ describe("local cockpit server", () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-mcp-session-required-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/mcp/register?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/mcp/register`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: "codex", name: "Codex", allowedRoles: ["reviewer"] })
@@ -1768,7 +1778,7 @@ describe("local cockpit server", () => {
     await saveSession(cwd, state);
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await fetch(`${server.url}/api/mcp/register?nonce=${server.nonce}`, {
+      const response = await cockpitFetch(server, `/api/mcp/register`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1781,7 +1791,7 @@ describe("local cockpit server", () => {
         })
       });
       const payload = await response.json() as { sessionId?: string; profile?: { id?: string; allowedRoles?: string[] } };
-      const events = await fetch(`${server.url}/api/sessions/${state.sessionId}/events?nonce=${server.nonce}`).then((item) => item.json()) as Array<{ type: string; externalAgentId?: string }>;
+      const events = await cockpitFetch(server, `/api/sessions/${state.sessionId}/events`).then((item) => item.json()) as Array<{ type: string; externalAgentId?: string }>;
 
       expect(response.status).toBe(200);
       expect(payload.sessionId).toBe(state.sessionId);
@@ -1813,9 +1823,9 @@ describe("local cockpit server", () => {
   });
 });
 
-async function waitForLatestSession(url: string, nonce: string): Promise<{ state: { sessionId: string; runContext?: { executionCwd?: string; fixtureWorkspace?: string }; access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } }> {
+async function waitForLatestSession(server: TestCockpitServer): Promise<{ state: { sessionId: string; runContext?: { executionCwd?: string; fixtureWorkspace?: string }; access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } }> {
   for (let attempt = 0; attempt < 80; attempt += 1) {
-    const response = await fetch(`${url}/api/sessions/latest?nonce=${nonce}`);
+    const response = await cockpitFetch(server, "/api/sessions/latest");
     if (response.status === 200) {
       const session = await response.json() as { state: { sessionId: string; runContext?: { executionCwd?: string; fixtureWorkspace?: string }; access: { mode: string }; events: Array<{ type: string }>; changedFiles: string[]; finalSummary?: { result: string } } };
       if (session.state.finalSummary) return session;

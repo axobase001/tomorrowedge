@@ -2,11 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { log } from "../utils/logger.js";
 
-export function isAuthorizedCockpitRequest(request: IncomingMessage, url: URL, nonce: string): boolean {
+export function isAuthorizedCockpitRequest(request: IncomingMessage, nonce: string): boolean {
   const provided = request.headers["x-tomorrowedge-token"]
     ?? request.headers.authorization?.replace(/^Bearer\s+/i, "")
     ?? nonceFromCookie(request)
-    ?? url.searchParams.get("nonce")
     ?? "";
   const presented = Array.isArray(provided) ? provided[0] : provided;
   if (!presented) return false;
