@@ -75,6 +75,18 @@ describe("TUI approval actions", () => {
     expect(blockedUndo.message).toContain("restricted");
   }, 15_000);
 
+  it("uses the verification allowlist by default for full-mode TUI shell approval", async () => {
+    const initial = await runOfflineGraph(tempRoot, "fix failing test", defaultConfig, { provider: "fixture" });
+    const applied = await approveSelectedPatch(tempRoot, initial);
+    const fullModeGraph = {
+      ...applied.graph,
+      access: { ...applied.graph.access, mode: "full" as const, shellAllowed: true, shellApproved: true },
+      plan: applied.graph.plan ? { ...applied.graph.plan, verificationCommands: ["git --version"] } : applied.graph.plan
+    };
+
+    await expect(approveTestCommand(tempRoot, fullModeGraph)).rejects.toThrow(/Shell command blocked/);
+  }, 15_000);
+
   it("honors configured shell policy and verification allowlist in TUI shell approval", async () => {
     const config = {
       ...defaultConfig,

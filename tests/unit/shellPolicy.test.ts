@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assessShellCommand, parseShellCommand } from "../../src/safety/shellGuard.js";
 import { runApprovedCommand } from "../../src/core/tools/shellTool.js";
+import { effectiveShellPolicy } from "../../src/core/tools/shellPolicy.js";
 
 describe("shell policy", () => {
   it("keeps verification allowlist separate from unrestricted parsing", () => {
@@ -15,5 +16,18 @@ describe("shell policy", () => {
 
   it("requires approval before any shell policy can run", async () => {
     await expect(runApprovedCommand(process.cwd(), "node --version", { approved: false, policy: "unrestricted" })).rejects.toThrow("approval required");
+  });
+
+  it("defaults approved shell execution to the verification allowlist", async () => {
+    expect(effectiveShellPolicy(undefined)).toBe("verification_allowlist");
+    await expect(runApprovedCommand(process.cwd(), "git --version", { approved: true })).rejects.toThrow(/safe verification allowlist/);
+    await expect(runApprovedCommand(process.cwd(), "curl --version", { approved: true })).rejects.toThrow(/dangerous executable blocked/);
+  });
+
+  it("allows explicit unrestricted shell policy as an opt-in", async () => {
+    const result = await runApprovedCommand(process.cwd(), "git --version", { approved: true, policy: "unrestricted" });
+
+    expect(result.success).toBe(true);
+    expect(result.stdout).toContain("git version");
   });
 });

@@ -14,6 +14,7 @@ import { SummarizerAgent } from "../agents/summarizer.js";
 import { applyUnifiedDiffWithResult } from "../patch/patchApplier.js";
 import { validateUnifiedDiff } from "../patch/patchValidator.js";
 import { ModelRouter } from "../routing/router.js";
+import { effectiveShellPolicy } from "../tools/shellPolicy.js";
 import { runTestCommand } from "../verifier/testRunner.js";
 import { evidenceFromRun } from "../verifier/evidenceMatcher.js";
 import type { AgentGraphState } from "./state.js";
@@ -4732,11 +4733,9 @@ function canContinueAutonomy(config: TomorrowEdgeConfig, state: AgentGraphState,
 }
 
 function shellExecutionOptions(config: TomorrowEdgeConfig, access: AgentGraphState["access"]) {
-  const configuredPolicy = config.shell.policy;
-  const policy = configuredPolicy ?? (access.mode === "full" ? "unrestricted" : "approval_required");
   return {
     approved: access.shellAllowed && access.shellApproved,
-    policy,
+    policy: effectiveShellPolicy(config.shell.policy),
     verificationAllowlist: config.shell.verification_allowlist
   };
 }
