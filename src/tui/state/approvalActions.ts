@@ -6,6 +6,7 @@ import { SummarizerAgent } from "../../core/agents/summarizer.js";
 import { restoreLatestUndoSnapshot } from "../../core/patch/undoManager.js";
 import { loadConfig } from "../../config/configLoader.js";
 import { finalizePostApprovalTrace } from "../../core/traces/postApprovalFinalizer.js";
+import { effectiveShellPolicy } from "../../core/tools/shellPolicy.js";
 import { makeId } from "../../utils/ids.js";
 
 export type TuiActionResult = {
@@ -68,7 +69,7 @@ export async function approveTestCommand(cwd: string, graph: AgentGraphState): P
   const config = loadConfig(cwd);
   const result = await runTestCommand(cwd, command, {
     approved: true,
-    policy: config.shell.policy ?? (graph.access.mode === "full" ? "unrestricted" : "verification_allowlist"),
+    policy: effectiveShellPolicy(config.shell.policy),
     verificationAllowlist: config.shell.verification_allowlist
   });
   const stdoutRef = writeArtifact(graph, "stdout", result.stdout || "", "txt");

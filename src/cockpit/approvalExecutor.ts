@@ -8,6 +8,7 @@ import { restoreLatestUndoSnapshot } from "../core/patch/undoManager.js";
 import { runTestCommand } from "../core/verifier/testRunner.js";
 import { evidenceFromRun } from "../core/verifier/evidenceMatcher.js";
 import { finalizePostApprovalTrace } from "../core/traces/postApprovalFinalizer.js";
+import { effectiveShellPolicy } from "../core/tools/shellPolicy.js";
 import { makeId } from "../utils/ids.js";
 import type { CockpitApprovalIntent } from "./contracts.js";
 import { resolveCockpitShellCommand } from "./verificationCommand.js";
@@ -184,8 +185,41 @@ async function approveShell(input: { configCwd: string; executionCwd: string; tr
   if (!state.changedFiles.length) return { state, message: "Apply a patch before running shell verification.", status: "blocked" };
 
   const config = loadConfig(configCwd);
-  const policy = config.shell.policy ?? (state.access.mode === "full" ? "unrestricted" : "verification_allowlist");
-  const result = await runTestCommand(executionCwd, command, { approved: true, policy, verificationAllowlist: config.shell.verification_allowlist });
+  const policy = effectiveShellPolicy(config.shell.policy);
+  let result: Awaited<ReturnType<typeof runTestCommand>>;
+  try {
+    result = await runTestCommand(executionCwd, command, { approved: true, policy, verificationAllowlist: config.shell.verification_allowlist });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const blocked = withFailureSummary({
+      ...state,
+      agents: [
+        ...resolveWaitingAgents(state, "failed", `Shell approval blocked: ${command}`),
+        {
+          id: makeId("cockpit_shell_blocked"),
+          role: "runner" as const,
+          provider: "local_tool",
+          model: "shell",
+          status: "failed" as const,
+          summary: message
+        }
+      ],
+      events: [
+        ...state.events,
+        makeEvent(state, {
+          type: "shell_run",
+          phase: "shell",
+          role: "runner",
+          provider: "local_tool",
+          model: "shell",
+          command,
+          cwd: executionCwd,
+          error: message
+        })
+      ]
+    }, message);
+    return { state: blocked, message, status: "blocked" };
+  }
   const stdoutRef = writeArtifact(state, "stdout", result.stdout || "", "txt");
   const stderrRef = writeArtifact(state, "stderr", result.stderr || "", "txt");
   const summarized = await refreshSummary({

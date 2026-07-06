@@ -198,6 +198,54 @@ describe("offline agent graph", () => {
     }
   });
 
+  it("applies the verification allowlist to default full-mode shell execution", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-shell-policy-full-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, {
+        fixtureMode: true,
+        accessMode: "full",
+        approvePatch: true,
+        approveShell: true,
+        testCommand: "git --version"
+      });
+      const shellRun = state.events.find((event) => event.type === "shell_run" && event.command === "git --version");
+
+      expect(state.runResults).toEqual([]);
+      expect(shellRun).toMatchObject({
+        type: "shell_run",
+        error: expect.stringContaining("safe verification allowlist")
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("applies the verification allowlist to approved partial-mode shell execution", async () => {
+    const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-shell-policy-partial-"));
+    await cp(source, cwd, { recursive: true });
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", defaultConfig, {
+        fixtureMode: true,
+        accessMode: "partial",
+        approvePatch: true,
+        approveShell: true,
+        testCommand: "git --version"
+      });
+      const shellRun = state.events.find((event) => event.type === "shell_run" && event.command === "git --version");
+
+      expect(state.runResults).toEqual([]);
+      expect(shellRun).toMatchObject({
+        type: "shell_run",
+        error: expect.stringContaining("safe verification allowlist")
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("records high-risk risk_map evidence before security review and passes it to reviewer", async () => {
     const source = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-risk-map-"));

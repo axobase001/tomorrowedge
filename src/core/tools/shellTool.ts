@@ -3,6 +3,7 @@ import { execa, type Result } from "execa";
 import type { RunResult } from "../../schemas/evidence.js";
 import type { ShellPolicy } from "../../config/schema.js";
 import { assessShellCommand, parseShellCommand } from "../../safety/shellGuard.js";
+import { effectiveShellPolicy } from "./shellPolicy.js";
 
 const defaultTimeoutMs = 10 * 60 * 1000;
 const defaultForceKillAfterDelayMs = 1000;
@@ -20,7 +21,8 @@ export async function runApprovedCommand(cwd: string, command: string, approvedO
   if (!options.approved) {
     throw new Error("Shell command blocked: approval required.");
   }
-  const risk = options.policy === "verification_allowlist" ? assessShellCommand(command, options.verificationAllowlist) : parseShellCommand(command);
+  const policy = effectiveShellPolicy(options.policy);
+  const risk = policy === "verification_allowlist" ? assessShellCommand(command, options.verificationAllowlist) : parseShellCommand(command);
   if (!risk.allowed || !risk.argv?.length) {
     throw new Error(`Shell command blocked: ${risk.reason}.`);
   }
