@@ -747,6 +747,26 @@ describe("local cockpit server", () => {
     }
   });
 
+  it("rejects full-mode browser runs without server-side confirmation", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-full-confirm-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const response = await cockpitFetch(server, `/api/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "fix failing test", runMode: "fixture", accessMode: "full" })
+      });
+      const payload = await response.json() as { error: string; message: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toBe("full_mode_confirmation_required");
+      expect(payload.message).toContain("fullAutonomyConfirmed=true");
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
   it("can start a Sirius Agent Council run from the GUI API", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-council-run-"));
     const server = await startLocalCockpitServer(cwd, { port: 0 });
@@ -754,7 +774,7 @@ describe("local cockpit server", () => {
       const response = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ goal: "rewrite this application in Rust", runMode: "council", accessMode: "full" })
+        body: JSON.stringify({ goal: "rewrite this application in Rust", runMode: "council", accessMode: "full", fullAutonomyConfirmed: true })
       });
       expect(response.status).toBe(202);
       const session = await waitForLatestSession(server);
@@ -926,10 +946,20 @@ describe("local cockpit server", () => {
     await writeFile(path.join(cwd, ".tomorrowedge", "preferences.json"), JSON.stringify({ accessMode: "full" }), "utf8");
     const server = await startLocalCockpitServer(cwd, { port: 0 });
     try {
-      const response = await cockpitFetch(server, `/api/runs`, {
+      const unconfirmed = await cockpitFetch(server, `/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ goal: "list files and summarize structure", runMode: "offline" })
+      });
+      const rejection = await unconfirmed.json() as { error: string };
+
+      expect(unconfirmed.status).toBe(400);
+      expect(rejection.error).toBe("full_mode_confirmation_required");
+
+      const response = await cockpitFetch(server, `/api/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ goal: "list files and summarize structure", runMode: "offline", fullAutonomyConfirmed: true })
       });
       expect(response.status).toBe(202);
       const session = await waitForLatestSession(server);

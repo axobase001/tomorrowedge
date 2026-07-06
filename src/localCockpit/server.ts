@@ -284,6 +284,7 @@ async function routeRequest(cwd: string, request: IncomingMessage, response: Ser
       const sessionId = `session_${randomBytes(8).toString("hex")}`;
       const requestedRunMode = parseRunMode(body.runMode);
       const accessMode = parseAccessMode(body.accessMode) ?? prefs.accessMode ?? config.project.access_mode;
+      requireFullAutonomyConfirmation(accessMode, body);
       const runFlags = resolveRunFlags(requestedRunMode, body, config);
       const workspace = await prepareRunWorkspace(cwd, { fixtureMode: runFlags.fixtureMode, forceFixtureWorkspace: runFlags.fixtureMode });
       const runContext = buildRunContext(workspace, requestedRunMode, runFlags, body);
@@ -733,6 +734,12 @@ function parseRunMode(value: unknown): CockpitRunMode {
   if (value === undefined) return "auto";
   if (value === "auto" || value === "fixture" || value === "offline" || value === "live" || value === "council") return value;
   throw new HttpError(400, "invalid_run_mode", "runMode must be auto, fixture, offline, live, or council.");
+}
+
+function requireFullAutonomyConfirmation(accessMode: AccessMode, body: Record<string, unknown>): void {
+  if (accessMode !== "full") return;
+  if (body.fullAutonomyConfirmed === true) return;
+  throw new HttpError(400, "full_mode_confirmation_required", "Full autonomy runs require server-side fullAutonomyConfirmed=true.");
 }
 
 function isMutatingMethod(method?: string): boolean {

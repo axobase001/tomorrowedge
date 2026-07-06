@@ -343,14 +343,15 @@ describe("cockpit web React surface", () => {
     expect(html).not.toContain("data-testid=\"composer-submit\"");
   });
 
-  it("enables repair loops for full-mode GUI runs", () => {
-    expect(buildCockpitRunRequest({ goal: "fix failing test", accessMode: "full", setupReady: true })).toMatchObject({
+  it("enables repair loops for confirmed full-mode GUI runs", () => {
+    expect(buildCockpitRunRequest({ goal: "fix failing test", accessMode: "full", setupReady: true, fullAutonomyConfirmed: true })).toMatchObject({
       accessMode: "full",
       fixtureMode: false,
       livePatch: true,
       liveAdvisory: true,
       repairOnFail: true,
       approveRepair: true,
+      fullAutonomyConfirmed: true,
       to: "core"
     });
   });
@@ -359,7 +360,8 @@ describe("cockpit web React surface", () => {
     expect(buildCockpitRunRequest({ goal: "fix failing test", accessMode: "partial", setupReady: true })).toMatchObject({
       accessMode: "partial",
       repairOnFail: false,
-      approveRepair: false
+      approveRepair: false,
+      fullAutonomyConfirmed: undefined
     });
   });
 
@@ -393,13 +395,14 @@ describe("cockpit web React surface", () => {
       liveAdvisory: true,
       to: "planner"
     });
-    expect(buildCockpitRunRequest({ goal: "rewrite this app in Rust", accessMode: "full", setupReady: false, runMode: "council", target: "core" })).toMatchObject({
+    expect(buildCockpitRunRequest({ goal: "rewrite this app in Rust", accessMode: "full", setupReady: false, runMode: "council", target: "core", fullAutonomyConfirmed: true })).toMatchObject({
       runMode: "council",
       fixtureMode: false,
       livePatch: false,
       liveAdvisory: false,
       repairOnFail: true,
       approveRepair: true,
+      fullAutonomyConfirmed: true,
       to: "core"
     });
   });
@@ -1110,6 +1113,7 @@ describe("cockpit web React surface", () => {
     expect(fallback).toContain("trapDrawerFocus");
     expect(fallback).toContain("id=\"stop-run\"");
     expect(fallback).toContain("id=\"full-preflight\"");
+    expect(fallback).toContain("fullAutonomyConfirmed");
     expect(fallback).toContain("/cancel");
     expect(fallback).not.toContain("min-width: 1080px");
     expect(fallback).not.toContain("min-width: 980px");

@@ -796,6 +796,7 @@ async function runWorkflow() {
       body: JSON.stringify({
         goal,
         accessMode: el("access-mode").value,
+        fullAutonomyConfirmed: el("access-mode").value === "full" && el("full-preflight-confirm").checked,
         fixtureMode: el("fixture-mode").checked,
         approvePatch: el("approve-patch").checked,
         approveShell: el("approve-shell").checked,
