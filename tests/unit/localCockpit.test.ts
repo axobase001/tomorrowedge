@@ -58,6 +58,28 @@ async function withEnvOverrides<T>(overrides: Record<string, string | undefined>
   }
 }
 
+async function readResponseUntil(response: Response, needle: string, timeoutMs: number): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("response body is not readable");
+  const decoder = new TextDecoder();
+  let text = "";
+  const deadline = Date.now() + timeoutMs;
+  try {
+    while (!text.includes(needle) && Date.now() < deadline) {
+      const remaining = Math.max(1, deadline - Date.now());
+      const next = await Promise.race([
+        reader.read(),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), remaining))
+      ]);
+      if (next === "timeout" || next.done) break;
+      text += decoder.decode(next.value, { stream: true });
+    }
+    return text;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
 describe("local cockpit server", () => {
   it("accepts port 0 in CLI port parsing for OS-assigned ports", () => {
     expect(parseServePort("0")).toBe(0);
@@ -109,6 +131,27 @@ describe("local cockpit server", () => {
       await server.close();
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("keeps live event streams warm with heartbeat comments", async () => {
+    await withEnvOverrides({ TOMORROWEDGE_COCKPIT_SSE_HEARTBEAT_MS: "5" }, async () => {
+      const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-heartbeat-"));
+      const server = await startLocalCockpitServer(cwd, { port: 0, webRoot: false });
+      const controller = new AbortController();
+      try {
+        const response = await cockpitFetch(server, "/api/runs/run_heartbeat/events/live", { signal: controller.signal });
+        const body = await readResponseUntil(response, ": keepalive", 1000);
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toContain("text/event-stream");
+        expect(body).toContain("event: ready");
+        expect(body).toContain(": keepalive");
+      } finally {
+        controller.abort();
+        await server.close();
+        await rm(cwd, { recursive: true, force: true });
+      }
+    });
   });
 
   it("serves the React cockpit build when web assets are available", async () => {

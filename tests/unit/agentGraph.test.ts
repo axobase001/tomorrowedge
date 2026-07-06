@@ -821,6 +821,58 @@ describe("offline agent graph", () => {
       expect(state.budgetRuntime.realStrongAgentCallsUsed).toBe(0);
   });
 
+  it("blocks the live patch coder node when no valid candidates remain", async () => {
+    const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            summary: "Unsafe env edit.",
+            filesChanged: [".env"],
+            unifiedDiff: "--- a/.env\n+++ b/.env\n@@ -0,0 +1 @@\n+SECRET=1\n",
+            testPlan: ["npm test"],
+            knownTradeoffs: ["touches ignored secret material"],
+            estimatedRisk: "low"
+          })
+        }
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 10 }
+    }), { status: 200, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+    const config = {
+      ...defaultConfig,
+      providers: {
+        ...defaultConfig.providers,
+        openai_compatible: {
+          ...defaultConfig.providers.openai_compatible,
+          enabled: true,
+          api_key_env: "",
+          base_url: "http://provider.test/v1",
+          model: "live-test-model",
+          auth_header: "none" as const
+        }
+      },
+      agents: {
+        ...defaultConfig.agents,
+        coder_a: { provider: "openai_compatible", model: "live-test-model" },
+        coder_b: { provider: "openai_compatible", model: "live-test-model" }
+      }
+    };
+    try {
+      const state = await runOfflineGraph(cwd, "fix failing test", config, { fixtureMode: true, livePatch: true });
+
+      expect(state.candidates).toEqual([]);
+      expect(state.roleGraphExecution?.nodes.coder_a?.status).toBe("blocked");
+      expect(state.roleGraphExecution?.results).toContainEqual(expect.objectContaining({
+        role: "coder_a",
+        status: "blocked",
+        summary: "live patch produced no valid candidates"
+      }));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("blocks live patch through the unified model invocation budget gate", async () => {
     const cwd = path.join(process.cwd(), "tests", "fixtures", "sample-repo-basic");
     const config = {

@@ -711,6 +711,7 @@ let currentVm = null;
 let liveSource = null;
 let liveEventsBuffer = [];
 let liveReloadTimer = null;
+let liveReconnectTimer = null;
 let drawerOpener = null;
 let running = false;
 
@@ -719,12 +720,22 @@ el("run-top").addEventListener("click", runWorkflow);
 el("stop-run").addEventListener("click", cancelWorkflow);
 el("new-task").addEventListener("click", () => {
   selectedSession = "latest";
+  clearLiveReconnect();
+  if (liveSource) {
+    liveSource.close();
+    liveSource = null;
+  }
   setRunning(false);
   renderEmpty("Ready for a new task.");
   el("goal").focus();
 });
 el("sessions").addEventListener("change", (event) => {
   selectedSession = event.target.value || "latest";
+  clearLiveReconnect();
+  if (liveSource) {
+    liveSource.close();
+    liveSource = null;
+  }
   loadViewModel(selectedSession);
 });
 el("run").addEventListener("click", runWorkflow);
@@ -809,6 +820,7 @@ async function cancelWorkflow() {
     liveSource.close();
     liveSource = null;
   }
+  clearLiveReconnect();
   if (!sessionId) {
     setRunning(false);
     renderEmpty("No active session is available to cancel.");
@@ -831,10 +843,16 @@ async function cancelWorkflow() {
   }
 }
 
-function connectLive(sessionId) {
+function connectLive(sessionId, attempt = 0) {
+  clearLiveReconnect();
   if (liveSource) liveSource.close();
-  liveEventsBuffer = [];
+  if (attempt === 0) liveEventsBuffer = [];
   liveSource = new EventSource(withToken("/api/runs/" + encodeURIComponent(sessionId) + "/events/live"));
+  liveSource.onopen = () => {
+    if (!currentVm) return;
+    currentVm = { ...currentVm, sessionMeta: { ...currentVm.sessionMeta, source: "live", sourceLabel: "Live session", connectionState: "connected", connectionLabel: "Connected", stale: false, reconnectAttempts: 0, message: undefined } };
+    render(currentVm);
+  };
   liveSource.addEventListener("event", (message) => {
     const payload = JSON.parse(message.data);
     if (payload.event) liveEventsBuffer.push(payload.event);
@@ -850,12 +868,38 @@ function connectLive(sessionId) {
     }
     if (payload.snapshot?.done) {
       liveSource.close();
+      liveSource = null;
+      clearLiveReconnect();
       setRunning(false);
     }
   });
   liveSource.onerror = () => {
-    setRunning(false);
+    const nextAttempt = attempt + 1;
+    if (liveSource) liveSource.close();
+    liveSource = null;
+    setRunning(true);
+    renderReconnecting(sessionId, nextAttempt);
+    liveReconnectTimer = setTimeout(() => connectLive(sessionId, nextAttempt), liveReconnectDelayMs(nextAttempt));
   };
+}
+
+function clearLiveReconnect() {
+  if (liveReconnectTimer) clearTimeout(liveReconnectTimer);
+  liveReconnectTimer = null;
+}
+
+function liveReconnectDelayMs(attempt) {
+  return Math.min(5000, 500 * Math.pow(2, Math.min(Math.max(1, attempt) - 1, 4)));
+}
+
+function renderReconnecting(sessionId, attempt) {
+  const message = "Reconnecting live event stream (attempt " + attempt + ")";
+  if (currentVm) {
+    render({ ...currentVm, sessionId: currentVm.sessionId || sessionId, sessionMeta: { ...currentVm.sessionMeta, source: "live", sourceLabel: "Live session", connectionState: "reconnecting", connectionLabel: "Reconnecting", stale: false, reconnectAttempts: attempt, message } });
+  } else {
+    el("session-chip").textContent = "session " + sessionId.slice(0, 12);
+    el("status-text").textContent = message;
+  }
 }
 
 function setRunning(value) {
@@ -887,6 +931,7 @@ function scheduleLiveViewModelRefresh(sessionId) {
 }
 
 function render(vm) {
+  currentVm = vm;
   el("workspace").textContent = vm.workspace || "workspace";
   el("mode-chip").textContent = modeLabel(vm.accessMode);
   el("mode-chip").className = "chip " + (vm.accessMode === "full" ? "chip-blue" : vm.accessMode === "restricted" ? "chip-amber" : "chip-blue");

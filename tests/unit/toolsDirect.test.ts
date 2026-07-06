@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import path from "node:path";
 import { createUndoSnapshot, restoreUndoSnapshot } from "../../src/core/patch/undoManager.js";
@@ -66,4 +67,52 @@ describe("direct tool contracts", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("times out commands that ignore graceful termination and cleans child processes", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-tool-shell-timeout-"));
+    try {
+      await writeFile(path.join(cwd, "timeout-parent.cjs"), [
+        'const { spawn } = require("node:child_process");',
+        'const { writeFileSync } = require("node:fs");',
+        'const child = spawn(process.execPath, ["-e", "process.on(\'SIGTERM\', function() {}); setInterval(function() {}, 1000);"], { stdio: "ignore" });',
+        'writeFileSync("child.pid", String(child.pid || ""));',
+        'process.on("SIGTERM", function() {});',
+        'setInterval(function() {}, 1000);'
+      ].join("\n"), "utf8");
+
+      const started = Date.now();
+      const result = await runApprovedCommand(cwd, "node timeout-parent.cjs", {
+        approved: true,
+        policy: "verification_allowlist",
+        timeoutMs: 75,
+        forceKillAfterDelayMs: 25
+      });
+      const childPid = Number((await readFile(path.join(cwd, "child.pid"), "utf8")).trim());
+
+      expect(result.timedOut).toBe(true);
+      expect(result.exitCode).toBe(124);
+      expect(Date.now() - started).toBeLessThan(1500);
+      await waitForPidExit(childPid);
+      expect(isPidRunning(childPid)).toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
+
+async function waitForPidExit(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!isPidRunning(pid)) return;
+    await delay(25);
+  }
+}
+
+function isPidRunning(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

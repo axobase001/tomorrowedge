@@ -8,6 +8,7 @@ import { canSaveProviderConfig, KeyRoleManager, modelOptionIds, providerFormDefa
 import { ReceiptModal } from "../../src/cockpit-web/src/components/ReceiptModal.js";
 import { TaskListPanel } from "../../src/cockpit-web/src/components/TaskListPanel.js";
 import { createTranslator, type GuiLanguage } from "../../src/cockpit-web/src/i18n.js";
+import { liveReconnectDelayMs } from "../../src/cockpit-web/src/liveReconnect.js";
 import { formatProviderConnectionMessage } from "../../src/cockpit-web/src/providerConnectionMessage.js";
 import { providerRuntimeErrors } from "../../src/cockpit-web/src/providerRuntimeValidation.js";
 import { buildCockpitRunRequest, describeCockpitRunPreview } from "../../src/cockpit-web/src/runRequest.js";
@@ -17,6 +18,20 @@ import { renderCockpitHtml } from "../../src/localCockpit/html.js";
 import { staticModelIdsForProvider } from "../../src/providers/staticModels.js";
 
 describe("cockpit web React surface", () => {
+  it("caps live stream reconnect backoff", () => {
+    expect(liveReconnectDelayMs(1)).toBe(500);
+    expect(liveReconnectDelayMs(2)).toBe(1000);
+    expect(liveReconnectDelayMs(20)).toBe(5000);
+  });
+
+  it("ships fallback shell reconnect handling for live streams", () => {
+    const html = renderCockpitHtml("test-token");
+
+    expect(html).toContain("function liveReconnectDelayMs");
+    expect(html).toContain("Reconnecting live event stream");
+    expect(html).toContain("connectLive(sessionId, nextAttempt)");
+  });
+
   it("renders the geometric brand mark instead of the legacy text tile", () => {
     const html = renderApp(sampleViewModel());
 
