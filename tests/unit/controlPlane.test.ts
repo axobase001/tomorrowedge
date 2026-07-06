@@ -150,6 +150,20 @@ describe("Canopus Runtime gates and evaluator", () => {
     }
   });
 
+  it("rejects shell metacharacters in command gates", async () => {
+    const cwd = await tempDir("tedge-control-gate-metachar-");
+    try {
+      const gate = createGate({ id: "blocked", type: "command", command: `${nodePassCommand()} && ${nodeFailCommand()}`, timeout_sec: 10, required: true });
+      const result = await gate.run(gateContext(cwd));
+
+      expect(result.passed).toBe(false);
+      expect(result.error).toContain("Shell command blocked");
+      expect(result.error).toContain("metacharacters");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("checks file_exists gates", async () => {
     const cwd = await tempDir("tedge-control-file-exists-");
     try {
@@ -440,6 +454,21 @@ describe("Canopus Runtime status store and ConvergenceEngine", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   }, 40_000);
+
+  it("rejects shell metacharacters in the shell actuator adapter", async () => {
+    const cwd = await tempDir("tedge-control-adapter-metachar-");
+    try {
+      const adapter = new ShellAgentAdapter(`${nodePassCommand()} && ${nodeFailCommand()}`);
+      const result = await adapter.act(actionInput(cwd));
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Shell command blocked");
+      expect(result.error).toContain("metacharacters");
+      expect(result.commandsRun).toEqual([`${nodePassCommand()} && ${nodeFailCommand()}`]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 
   it("iteration_evidence_contains_pre_and_post_gate_results", async () => {
     const cwd = await runtimeFixtureCopy();
@@ -859,6 +888,23 @@ function gateContext(cwd: string, observed = { files_changed: [], changed_file_c
     evidenceDir: path.join(cwd, "evidence"),
     iteration: 1,
     observed
+  };
+}
+
+function actionInput(cwd: string): ControlPlaneActionInput {
+  const goal = goalWithCondition("unit_tests_pass", "test");
+  return {
+    cwd,
+    goal,
+    iteration: 1,
+    observed: { files_changed: [], changed_file_count: 0, git_available: false },
+    delta: {
+      missing_conditions: ["unit_tests_pass"],
+      satisfied_conditions: [],
+      regressions: [],
+      unknown_conditions: []
+    },
+    evidenceDir: path.join(cwd, "evidence")
   };
 }
 

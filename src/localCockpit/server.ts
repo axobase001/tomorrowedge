@@ -19,7 +19,7 @@ import { agentRoles, type AgentRole } from "../schemas/agentTask.js";
 import { redactText } from "../safety/secretScanner.js";
 import { buildCockpitViewModel } from "../cockpit/viewModel.js";
 import { cockpitEventBus } from "../cockpit/eventBus.js";
-import { isAllowedBrowserOrigin, isAuthorizedCockpitRequest } from "../cockpit/auth.js";
+import { isAllowedBrowserOrigin, isAllowedCockpitHost, isAuthorizedCockpitRequest } from "../cockpit/auth.js";
 import { recordApprovalIntent } from "../cockpit/approvals.js";
 import type { CockpitApprovalIntent, CockpitRunMode } from "../cockpit/contracts.js";
 import { safeArtifactPath } from "../cockpit/artifacts.js";
@@ -93,8 +93,9 @@ async function listenOnAvailablePort(cwd: string, host: string, requestedPort: n
 }
 
 async function listenOnce(cwd: string, host: string, port: number, nonce: string, webRoot: string | false | undefined, configPath?: string): Promise<{ server: Server; port: number }> {
+  let boundPort = port;
   const server = createServer((request, response) => {
-    void routeRequest(cwd, request, response, nonce, webRoot, configPath);
+    void routeRequest(cwd, request, response, nonce, { host, port: boundPort }, webRoot, configPath);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -107,7 +108,7 @@ async function listenOnce(cwd: string, host: string, port: number, nonce: string
     throw error;
   });
   const address = server.address();
-  const boundPort = typeof address === "object" && address ? address.port : port;
+  boundPort = typeof address === "object" && address ? address.port : port;
   return { server, port: boundPort };
 }
 
@@ -115,9 +116,12 @@ function isAddressInUse(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "EADDRINUSE");
 }
 
-async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string, webRoot?: string | false, configPath?: string): Promise<void> {
+async function routeRequest(cwd: string, request: IncomingMessage, response: ServerResponse, nonce: string, hostOptions: { host: string; port: number }, webRoot?: string | false, configPath?: string): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (!isAllowedCockpitHost(request, hostOptions)) {
+      return sendJson(response, 403, { error: "forbidden", message: "Invalid local cockpit Host header." });
+    }
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/cockpit")) {
       return sendCockpitShell(response, nonce, webRoot);
     }

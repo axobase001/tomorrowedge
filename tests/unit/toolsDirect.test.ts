@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createUndoSnapshot, restoreUndoSnapshot } from "../../src/core/patch/undoManager.js";
 import { readProjectFile, resolveInside } from "../../src/core/tools/fsTool.js";
 import { grepProject } from "../../src/core/tools/grepTool.js";
 import { runApprovedCommand } from "../../src/core/tools/shellTool.js";
@@ -17,6 +18,21 @@ describe("direct tool contracts", () => {
       expect(() => resolveInside(cwd, "../escape.txt")).toThrow(/escapes project root/);
     } finally {
       await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks undo restores through symlinked ancestors outside the project", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-tool-fs-"));
+    const outside = await mkdtemp(path.join(os.tmpdir(), "tedge-tool-outside-"));
+    try {
+      await mkdir(path.join(cwd, "links"));
+      await symlink(outside, path.join(cwd, "links", "outside"), "dir");
+      const snapshot = await createUndoSnapshot(cwd, "links/outside/escaped.txt", "escaped\n");
+
+      await expect(restoreUndoSnapshot(cwd, snapshot)).rejects.toThrow(/escapes project root/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 

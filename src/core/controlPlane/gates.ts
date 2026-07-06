@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { EvalSpec, EvaluationResult, GateResult, GateSpec, GoalSpec, ObservedWorkspaceState } from "./specs.js";
+import { runApprovedCommand } from "../tools/shellTool.js";
 
 export type GateContext = {
   cwd: string;
@@ -239,34 +239,17 @@ function failedGate(spec: GateSpec, error: string): GateResult {
   };
 }
 
-function runShellCommand(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean; error: string | null }> {
-  return new Promise((resolve) => {
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ exitCode: 1, stdout, stderr, timedOut, error: error.message });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, stdout, stderr, timedOut, error: null });
-    });
+async function runShellCommand(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean; error: string | null }> {
+  const result = await runApprovedCommand(cwd, command, {
+    approved: true,
+    policy: "verification_allowlist",
+    timeoutMs
   });
+  return {
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    timedOut: false,
+    error: null
+  };
 }

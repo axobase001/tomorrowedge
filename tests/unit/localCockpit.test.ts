@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cp, mkdir, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { parseServePort } from "../../src/cli/commands/serve.js";
@@ -17,6 +18,27 @@ function cockpitFetch(server: TestCockpitServer, pathName: string, init: Request
   const headers = new Headers(init.headers);
   headers.set("x-tomorrowedge-token", server.nonce);
   return fetch(`${server.url}${pathName}`, { ...init, headers });
+}
+
+function cockpitStatusWithHost(server: TestCockpitServer, pathName: string, host: string): Promise<number> {
+  const url = new URL(`${server.url}${pathName}`);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      hostname: url.hostname,
+      port: Number(url.port),
+      path: `${url.pathname}${url.search}`,
+      method: "GET",
+      headers: {
+        host,
+        "x-tomorrowedge-token": server.nonce
+      }
+    }, (response) => {
+      response.resume();
+      response.on("end", () => resolve(response.statusCode ?? 0));
+    });
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 async function withEnvOverrides<T>(overrides: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
@@ -169,6 +191,37 @@ describe("local cockpit server", () => {
 
       expect(denied.status).toBe(403);
       expect(allowed.status).toBe(200);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects API requests with non-allowlisted Host headers", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-host-"));
+    const server = await startLocalCockpitServer(cwd, { port: 0 });
+    try {
+      const accepted = await cockpitStatusWithHost(server, "/api/sessions", `localhost:${server.port}`);
+      const rejected = await cockpitStatusWithHost(server, "/api/sessions", `rebind.example:${server.port}`);
+
+      expect(accepted).toBe(200);
+      expect(rejected).toBe(403);
+    } finally {
+      await server.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("allows the configured non-loopback Host header", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "tedge-cockpit-bind-host-"));
+    const server = await startLocalCockpitServer(cwd, { host: "0.0.0.0", port: 0 });
+    try {
+      const accepted = await cockpitStatusWithHost({
+        ...server,
+        url: `http://127.0.0.1:${server.port}`
+      }, "/api/sessions", `0.0.0.0:${server.port}`);
+
+      expect(accepted).toBe(200);
     } finally {
       await server.close();
       await rm(cwd, { recursive: true, force: true });

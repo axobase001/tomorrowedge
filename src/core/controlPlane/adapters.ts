@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import { runAgentCouncilGovernance, type CouncilRunOptions } from "../council/councilRuntime.js";
 import type { ObjectiveContractV1 } from "../contracts/objectiveContract.js";
+import { runApprovedCommand } from "../tools/shellTool.js";
 import type { DesiredStateDiff, GoalSpec, ObservedWorkspaceState, StatusSpec } from "./specs.js";
 
 export type ControlPlaneActionInput = {
@@ -247,28 +247,24 @@ function buildCouncilGoal(input: ControlPlaneActionInput): string {
   ].join("\n");
 }
 
-function runShell(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; stdout: string; stderr: string; error?: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      resolve({ exitCode: 124, stdout, stderr, error: `timed out after ${timeoutMs}ms` });
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk) => {
-      stdout += String(chunk);
+async function runShell(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; stdout: string; stderr: string; error?: string }> {
+  try {
+    const result = await runApprovedCommand(cwd, command, {
+      approved: true,
+      policy: "verification_allowlist",
+      timeoutMs
     });
-    child.stderr?.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ exitCode: 1, stdout, stderr, error: error.message });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, stdout, stderr });
-    });
-  });
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr
+    };
+  } catch (error) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: "",
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
