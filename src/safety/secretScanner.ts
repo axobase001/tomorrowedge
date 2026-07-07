@@ -70,6 +70,8 @@ function preserveAuditPathValue(keyHint: string): boolean {
     || key === "summaryref"
     || key === "traceref"
     || key === "artifactref"
+    || key === "executioncwd"
+    || key === "fixtureworkspace"
     || key === "changedfiles"
     || key === "fileschanged"
     || key.endsWith("path")
