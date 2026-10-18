@@ -24,6 +24,7 @@ export async function classifyTaskGovernance(input: {
   plan: Plan;
   workflowIntent: WorkflowIntentDecision;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
@@ -34,6 +35,7 @@ export async function classifyTaskGovernance(input: {
   }
   const assignment = input.localOnly ? { provider: "mock", model: "mock-balanced" } : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",
@@ -131,6 +133,7 @@ async function repairTaskGovernanceResponse(input: {
   plan: Plan;
   workflowIntent: WorkflowIntentDecision;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
@@ -148,6 +151,7 @@ async function repairTaskGovernanceResponse(input: {
     evidence: ["task governance output invalid; requesting same-model structured JSON repair"]
   });
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",

@@ -15,6 +15,7 @@ export type LiveVisionInput = {
   goal: string;
   imagePaths: string[];
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger?: EventLedger;
 };
@@ -49,6 +50,7 @@ export async function runLiveVisionSpec(input: LiveVisionInput): Promise<LiveVis
   const prompt = buildVisionPrompt(input.goal, sources);
 
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "vision",

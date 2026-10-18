@@ -24,6 +24,7 @@ export async function profileScenarioWithModel(input: {
   accessMode: AccessMode;
   hasImageInputs?: boolean;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
@@ -32,6 +33,7 @@ export async function profileScenarioWithModel(input: {
     ? { provider: "mock", model: "mock-balanced" }
     : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",
@@ -135,6 +137,7 @@ async function repairScenarioProfile(input: {
   accessMode: AccessMode;
   hasImageInputs?: boolean;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
@@ -152,6 +155,7 @@ async function repairScenarioProfile(input: {
     evidence: [`scenario profile invalid: ${input.parseError ?? "unknown parse error"}`, "requesting same-model scenario profile repair"]
   });
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",

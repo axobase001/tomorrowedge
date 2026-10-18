@@ -7,7 +7,12 @@ export class FixtureProvider implements ModelProvider {
   name = "Fixture Provider";
   kind = "mock" as const;
 
-  constructor(private readonly fixtureDir = path.join(process.cwd(), "tests", "fixtures", "provider-responses")) {}
+  private readonly fixtureDir: string;
+
+  // Keep the explicit directory override compatible; derive the default from the run workspace.
+  constructor(fixtureDir?: string, cwd = process.cwd()) {
+    this.fixtureDir = fixtureDir ?? path.join(path.resolve(cwd), "tests", "fixtures", "provider-responses");
+  }
 
   async listModels(): Promise<ModelInfo[]> {
     return [{ id: "fixture-scripted", label: "Fixture Scripted Model" }];

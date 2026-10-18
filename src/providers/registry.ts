@@ -29,10 +29,10 @@ export class ProviderRegistry {
   }
 }
 
-export function createProviderRegistry(config: TomorrowEdgeConfig): ProviderRegistry {
+export function createProviderRegistry(config: TomorrowEdgeConfig, cwd = process.cwd()): ProviderRegistry {
   const registry = new ProviderRegistry();
   registry.register(new MockProvider());
-  registry.register(new FixtureProvider());
+  registry.register(new FixtureProvider(undefined, cwd));
 
   const openrouter = config.providers.openrouter;
   const openRouterKey = providerKey(config, "openrouter");
