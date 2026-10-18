@@ -159,6 +159,7 @@ async function runPatchPlan(input: LivePatchInput, plan: LivePatchPlan): Promise
 
 async function requestPatchJson(input: LivePatchInput, plan: LivePatchPlan, prompt: string, maxOutputTokens = plan.maxOutputTokens) {
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: plan.role,

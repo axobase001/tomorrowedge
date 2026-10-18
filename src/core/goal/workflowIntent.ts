@@ -22,6 +22,7 @@ export type WorkflowIntentDecision = {
 export async function classifyWorkflowIntent(input: {
   goal: string;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   fixtureMode?: boolean;
@@ -31,6 +32,7 @@ export async function classifyWorkflowIntent(input: {
     ? { provider: "mock", model: "mock-balanced" }
     : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",
@@ -139,6 +141,7 @@ function parseIntentResponse(content?: string): Omit<WorkflowIntentDecision, "pr
 async function repairWorkflowIntentResponse(input: {
   goal: string;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   fixtureMode?: boolean;
@@ -156,6 +159,7 @@ async function repairWorkflowIntentResponse(input: {
     evidence: ["workflow intent output invalid; requesting same-model structured JSON repair"]
   });
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",

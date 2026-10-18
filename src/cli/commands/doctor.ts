@@ -25,7 +25,7 @@ export type DoctorDiagnostic = {
 
 export async function doctorCommand(cwd: string, options: DoctorOptions = {}): Promise<void> {
   const config = loadConfig(cwd);
-  const registry = createProviderRegistry(config);
+  const registry = createProviderRegistry(config, cwd);
   const configPath = getConfigPath(cwd);
   const diagnostics = buildProviderDiagnostics(config);
   const git = await getGitStatus(cwd).catch(() => "not a git repository");

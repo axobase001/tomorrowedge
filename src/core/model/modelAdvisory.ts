@@ -85,6 +85,7 @@ async function runRoleAdvice(input: AdvisoryInput, plan: AdvisoryCallPlan): Prom
   }
 
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: plan.role,

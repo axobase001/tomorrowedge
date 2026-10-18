@@ -26,7 +26,7 @@ export async function modelsCommand(cwd: string, options: ModelsOptions = {}): P
     if (!options.realSmoke && !options.smokeSuite) return;
     config = loadConfig(cwd);
   }
-  const registry = createProviderRegistry(config);
+  const registry = createProviderRegistry(config, cwd);
   const providers = options.provider ? registry.list().filter((provider) => provider.id === options.provider) : registry.list();
   if (options.provider && !providers.length) {
     process.stdout.write(`No configured provider matched --provider ${options.provider}\n`);

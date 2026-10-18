@@ -55,6 +55,7 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
   const budgetRuntime = createBudgetRuntimeState();
   const availableAgents = buildAgentRuntimeProfiles(config);
   const workflowIntent = await classifyWorkflowIntent({
+    cwd,
     goal,
     config,
     router,
@@ -63,6 +64,7 @@ export async function runAgentCouncilGovernance(cwd: string, goal: string, confi
     localOnly: options.fixtureMode || !access.cloudAllowed
   });
   const scenarioProfileResult = await profileScenarioWithModel({
+    cwd,
     goal,
     workflowIntent,
     accessMode: access.mode,

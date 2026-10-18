@@ -22,6 +22,7 @@ export type NativeContractGeneratorInput = {
   scenarioProfile: ScenarioProfile;
   retrievedTraces: ObjectiveTraceV1[];
   config: TomorrowEdgeConfig;
+  cwd?: string;
   accessMode: AccessMode;
 };
 
@@ -116,6 +117,7 @@ export async function generateModelBackedObjectiveContract(input: NativeContract
   }
   const assignment = input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",
@@ -183,6 +185,7 @@ async function repairObjectiveContractResponse(input: NativeContractGeneratorInp
     evidence: ["objective contract output invalid; requesting same-model structured JSON repair"]
   });
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",

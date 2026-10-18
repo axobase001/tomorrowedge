@@ -14,12 +14,14 @@ const MODEL_PLANNER_REPAIR_MAX_COMPLETION_TOKENS = 1800;
 export async function createModelBackedPlan(input: {
   goal: string;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
 }): Promise<{ plan?: Plan; provider: string; model: string; fallbackUsed?: boolean; error?: string }> {
   const assignment = input.localOnly ? { provider: "mock", model: "mock-balanced" } : input.router.assignmentFor("planner");
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",
@@ -145,6 +147,7 @@ export function parsePlannerResponseWithDiagnostics(goal: string, content?: stri
 async function repairModelPlannerResponse(input: {
   goal: string;
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   ledger: EventLedger;
   localOnly?: boolean;
@@ -163,6 +166,7 @@ async function repairModelPlannerResponse(input: {
     evidence: [`planner output invalid: ${input.parseError ?? "unknown parse error"}`, "requesting same-model structured plan repair"]
   });
   const result = await chatWithProviderFallback({
+    cwd: input.cwd,
     config: input.config,
     router: input.router,
     role: "planner",

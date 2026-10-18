@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { TomorrowEdgeConfig } from "../../config/schema.js";
 import type { AgentRole } from "../../schemas/agentTask.js";
 import { createProviderRegistry } from "../../providers/registry.js";
@@ -22,11 +23,12 @@ export type ProviderFallbackResult = {
   fallbackReason?: string;
 };
 
-const registryCache = new WeakMap<TomorrowEdgeConfig, ProviderRegistry>();
+const registryCache = new WeakMap<TomorrowEdgeConfig, Map<string, ProviderRegistry>>();
 const blockedProviderCache = new WeakMap<EventLedger, Map<string, ProviderErrorCategory>>();
 
 export async function chatWithProviderFallback(input: {
   config: TomorrowEdgeConfig;
+  cwd?: string;
   router: ModelRouter;
   role: AgentRole;
   provider: string;
@@ -38,7 +40,7 @@ export async function chatWithProviderFallback(input: {
   markProviderUnavailable?: boolean;
 }): Promise<ProviderFallbackResult> {
   const primary = { provider: input.provider, model: input.model };
-  const primaryResult = await tryChat(input.config, input.role, primary.provider, primary.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true);
+  const primaryResult = await tryChat(input.config, input.role, primary.provider, primary.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true, input.cwd);
   const fallbackAllowed = input.allowFallback !== false;
   if (primaryResult.response || !fallbackAllowed || !input.config.routing.fallback || primary.provider === "local_tool") {
     return { ...primary, ...primaryResult };
@@ -64,7 +66,7 @@ export async function chatWithProviderFallback(input: {
     return { ...primary, error: reason, errorCategory: primaryResult.errorCategory, fallbackReason: primaryResult.error };
   }
 
-  const fallbackResult = await tryChat(input.config, input.role, fallback.provider, fallback.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true);
+  const fallbackResult = await tryChat(input.config, input.role, fallback.provider, fallback.model, input.buildRequest, input.ledger, input.markProviderUnavailable ?? true, input.cwd);
   if (!fallbackResult.response) {
     return {
       ...primary,
@@ -102,9 +104,10 @@ async function tryChat(
   model: string,
   buildRequest: (model: string, provider: string) => ChatRequest,
   ledger?: EventLedger,
-  markUnavailable = true
+  markUnavailable = true,
+  cwd = process.cwd()
 ): Promise<Pick<ProviderFallbackResult, "response" | "error" | "errorCategory">> {
-  const provider = cachedProviderRegistry(config).get(providerId);
+  const provider = cachedProviderRegistry(config, cwd).get(providerId);
   const requestId = makeId(`request_${role}`);
   const request = buildRequest(model, providerId);
   const promptRef = ledger?.writeArtifact("prompts", JSON.stringify(request.messages, null, 2), "json");
@@ -207,11 +210,14 @@ function markProviderBlocked(ledger: EventLedger, providerId: string, category: 
   });
 }
 
-function cachedProviderRegistry(config: TomorrowEdgeConfig): ProviderRegistry {
-  const cached = registryCache.get(config);
+function cachedProviderRegistry(config: TomorrowEdgeConfig, cwd: string): ProviderRegistry {
+  const workspace = path.resolve(cwd);
+  const registries = registryCache.get(config) ?? new Map<string, ProviderRegistry>();
+  const cached = registries.get(workspace);
   if (cached) return cached;
-  const registry = createProviderRegistry(config);
-  registryCache.set(config, registry);
+  const registry = createProviderRegistry(config, workspace);
+  registries.set(workspace, registry);
+  registryCache.set(config, registries);
   return registry;
 }
 

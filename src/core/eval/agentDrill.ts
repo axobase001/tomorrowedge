@@ -45,7 +45,7 @@ export async function runAgentDrill(cwd: string, task: string, config: TomorrowE
   const fixture = options.fixture ?? "sample-repo-basic";
   const fixtureRoot = path.join(cwd, "tests", "fixtures", fixture);
   const prompt = await buildPrompt(fixtureRoot, task);
-  const registry = createProviderRegistry(config);
+  const registry = createProviderRegistry(config, cwd);
   const providers = await selectProviders(registry.list(), options);
   if (!providers.length) {
     const requested = options.providers?.join(",") ?? "openrouter,deepseek,mimo";

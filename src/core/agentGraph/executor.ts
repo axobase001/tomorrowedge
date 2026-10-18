@@ -321,7 +321,7 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
     };
   }
   state.capabilityRoute = buildCapabilityRoute({ goal, imagePaths, router });
-  const workflowIntent = await classifyWorkflowIntent({ goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
+  const workflowIntent = await classifyWorkflowIntent({ cwd: runtime.cwd, goal, config, router, ledger, fixtureMode: options.fixtureMode || options.provider === "fixture", localOnly: !access.cloudAllowed });
   state.workflowKind = workflowIntent.workflowKind;
   ledger.append({
     type: "workflow_intent",
@@ -342,6 +342,7 @@ async function runRoutingIntentPhase(runtime: OfflineGraphRuntime, state: AgentG
 async function runContractPhase(runtime: OfflineGraphRuntime, state: AgentGraphState, workflowIntent: WorkflowIntentDecision): Promise<void> {
   const { access, config, cwd, goal, imagePaths, ledger, options, router } = runtime;
   const scenarioProfileResult = await profileScenarioWithModel({
+    cwd: runtime.cwd,
     goal,
     workflowIntent,
     accessMode: access.mode,
@@ -561,7 +562,7 @@ async function runVisionPhase(runtime: OfflineGraphRuntime, state: AgentGraphSta
         config.routing.max_cost_usd
       ));
       if (budgetStatus.status !== "blocked") {
-        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ goal, imagePaths, config, router, ledger }), {
+        const liveVision = await runAgentState(state, ledger, router, "vision", () => runLiveVisionSpec({ cwd: runtime.cwd, goal, imagePaths, config, router, ledger }), {
           agentKind: "live",
           config,
           budgetFallback: async () => {
@@ -682,7 +683,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     }
     if (plannerBudgetScope) {
       try {
-        modelPlan = await createModelBackedPlan({ goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
+        modelPlan = await createModelBackedPlan({ cwd: runtime.cwd, goal, config, router, ledger, localOnly: options.fixtureMode || !access.cloudAllowed });
         if (modelPlan.plan) {
           commitModelInvocationBudgetScope(state, plannerBudgetScope);
         } else {
@@ -729,6 +730,7 @@ async function runPlanningPhase(runtime: OfflineGraphRuntime, state: AgentGraphS
     throw new WorkflowBlockedError("Task governance model blocked before invocation; no local semantic fallback will be used.");
   }
   state.taskGovernance = await classifyTaskGovernance({
+    cwd: runtime.cwd,
     goal,
     plan: state.plan,
     workflowIntent,
@@ -2269,6 +2271,7 @@ async function buildReadOnlyUserReply(
   }
 
   const providerResult = await chatWithProviderFallback({
+    cwd: runtime.cwd,
     config: runtime.config,
     router: runtime.router,
     role: "summarizer",
